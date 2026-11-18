@@ -1,11 +1,11 @@
 // The detail screen's fullscreen and visual modes: the stage, the exit button, the camera bridge, and switching the
 // fullscreen view.
-import * as Photo from "../photography/controller.js";
-import * as Camera from "../lobby/lobby-camera.js";
+import * as ThumbnailCapture from "../thumbnail-capture/controller.js";
+import * as Camera from "../memorial-lobby/memorial-lobby-camera.js";
 import { specialFraming } from "./special-view.js";
 import * as NGUI from "../ui/ngui.js";
 import * as Loading from "../app/loading.js";
-import * as Lobby from "../lobby/lobby.js";
+import * as MemorialLobby from "../memorial-lobby/memorial-lobby.js";
 import * as Visual from "./visual-mode.js";
 import { spineBase } from "../core/api.js";
 import { T } from "../core/i18n.js";
@@ -18,10 +18,10 @@ import {
   tab,
   fullscreen,
   mainPlayer,
-  lobbyShot,
-  modelShot,
-  modelLib,
-  ModelLib,
+  memorialLobbyShot,
+  chibiShot,
+  chibiLib,
+  ChibiLib,
   frames,
   open,
   thumb,
@@ -32,8 +32,8 @@ import {
   changeInPlace,
   renderLeft,
   reload,
-  setLobbyShot,
-  setModelShot,
+  setMemorialLobbyShot,
+  setChibiShot,
   setFullscreenState,
   setTab,
 } from "./detail.js";
@@ -41,8 +41,8 @@ import { busy } from "./detail-actions.js";
 import { renderScreen } from "./detail-screen.js";
 import { detailViewport } from "./detail-portrait.js";
 import { openPopup } from "./detail-switchers.js";
-import { snapshotLobby } from "./detail-lobby-tab.js";
-import { photoSession, photoBridge } from "./detail-photo.js";
+import { snapshotMemorialLobby } from "./detail-memorial-lobby-tab.js";
+import { thumbnailSession, thumbnailBridge } from "./detail-thumbnail.js";
 
 // fullscreen memorial lobby: every UI part slides out its own way; the exit button hides when the pointer rests
 let idleTimer = null;
@@ -68,7 +68,7 @@ export async function setFullscreen(on, { switching = false } = {}) {
     const layout = await (layouts.visual ||= NGUI.layout("UICharacterVisualMode").catch(() => null));
     if (layout) await Visual.exitControl($("fs-exit"), layout);
     const control =
-      tab === "lobby" && previewAvailable(alt(), "portrait")
+      tab === "memorialLobby" && previewAvailable(alt(), "portrait")
         ? await Visual.prepareSwitch({
             layout,
             label: T("row.switch.portrait"),
@@ -83,24 +83,24 @@ export async function setFullscreen(on, { switching = false } = {}) {
     $("visual-ui").replaceChildren();
   }
   setStage(on);
-  if (!on || tab === "lobby") {
-    Lobby.frame(on ? "full" : "left");
-    Lobby.interactive(on);
+  if (!on || tab === "memorialLobby") {
+    MemorialLobby.frame(on ? "full" : "left");
+    MemorialLobby.interactive(on);
   }
-  if (!on || tab === "model") modelLib?.then((M) => M.frame(on ? "full" : "left"));
+  if (!on || tab === "chibi") chibiLib?.then((M) => M.frame(on ? "full" : "left"));
   showExit(on);
   if (!on) Camera.close(false);
-  await Photo.visualEntry(on);
-  await Camera.entry(on && tab === "lobby", cameraBridge);
+  await ThumbnailCapture.visualEntry(on);
+  await Camera.entry(on && tab === "memorialLobby", cameraBridge);
   if (!on) {
-    await photoBridge.release();
+    await thumbnailBridge.release();
     stillAfterFullscreen();
   }
 }
-// the camera framing's view of the detail page (lobby-camera.js)
-// source: what the lobby shows (the camera's art); saved: the student's lobby choices read again with the new one;
-// still: a saved camera's still, as its Switch Memorial Lobby card draws it; album: Switch Memorial Lobby itself,
-// resolved once it closed and what was chosen there is shown
+// the camera framing's view of the detail page (memorial-lobby-camera.js)
+// source: what the memorial lobby shows (the camera's art); saved: the student's memorial lobby choices read again with
+// the new one; still: a saved camera's still, as its Switch Memorial Lobby card draws it; album: Switch Memorial Lobby
+// itself, resolved once it closed and what was chosen there is shown
 export let albumClosed = null;
 const cameraBridge = {
   alt: () => altId,
@@ -145,7 +145,7 @@ export function setStage(on) {
       refocus: open,
       fallback: () =>
         [...$("ngui").querySelectorAll("button")].find(
-          (button) => button.getAttribute("aria-label") === T("lobby.fullscreen"),
+          (button) => button.getAttribute("aria-label") === T("memorialLobby.fullscreen"),
         ),
     });
 }
@@ -179,8 +179,8 @@ async function enterVisual({ switching = false } = {}) {
   const layout = await (layouts.visual ||= NGUI.layout("UICharacterVisualMode").catch(() => null));
   const strings = {
     reset: T("visual.reset"),
-    back: T("lobby.exit"),
-    switch: previewAvailable(alt(), "memorialLobby") ? T("row.switch.lobby") : null,
+    back: T("memorialLobby.exit"),
+    switch: previewAvailable(alt(), "memorialLobby") ? T("row.switch.memorialLobby") : null,
   };
   const parts = await Visual.prepare({ layout, bg: alt().background, strings }).catch((err) => {
     console.error(err);
@@ -205,7 +205,7 @@ async function enterVisual({ switching = false } = {}) {
     return;
   if (!alive()) return;
   setStage(true);
-  await Photo.visualEntry(true);
+  await ThumbnailCapture.visualEntry(true);
   showExit(!parts);
 }
 
@@ -218,11 +218,11 @@ async function switchFullscreenView() {
     fullscreenSwitching ||
     busy ||
     Loading.held() ||
-    photoSession ||
-    !["portrait", "lobby"].includes(tab)
+    thumbnailSession ||
+    !["portrait", "memorialLobby"].includes(tab)
   )
     return;
-  const target = tab === "portrait" ? "lobby" : "portrait",
+  const target = tab === "portrait" ? "memorialLobby" : "portrait",
     key = altId;
   if (!previewAvailable(alt(), switchKindOf(target))) return;
   const request = ++fullscreenRequest;
@@ -249,8 +249,8 @@ async function switchFullscreenView() {
     fullscreenSwitching = false;
   }
 }
-// the switch card's still is taken in the left framing: when fullscreen was entered before the lobby or the model was
-// in, the still is taken once the left framing is back
+// the switch card's still is taken in the left framing: when fullscreen was entered before the memorial lobby or the
+// chibi was in, the still is taken once the left framing is back
 async function stillAfterFullscreen() {
   const part = tab,
     key = altId;
@@ -259,18 +259,18 @@ async function stillAfterFullscreen() {
     !fullscreen &&
     tab === part &&
     altId === key &&
-    (part === "lobby"
-      ? !lobbyShot && !!Lobby.meta()
-      : part === "model" && !modelShot && !!$("model").querySelector(".model-view.ready"));
+    (part === "memorialLobby"
+      ? !memorialLobbyShot && !!MemorialLobby.meta()
+      : part === "chibi" && !chibiShot && !!$("chibi").querySelector(".chibi-view.ready"));
   if (!wanted()) return;
-  // the lobby draws the left view within a few frames (after its intro); the model glides there
-  const M = part === "model" ? await ModelLib() : null;
-  if (!M) await Lobby.introDone();
+  // the memorial lobby draws the left view within a few frames (after its intro); the chibi glides there
+  const M = part === "chibi" ? await ChibiLib() : null;
+  if (!M) await MemorialLobby.introDone();
   await (M ? M.settled() : frames(4));
   if (!wanted()) return;
-  if (M) setModelShot(M.snapshot());
-  else setLobbyShot(snapshotLobby());
-  if (M ? modelShot : lobbyShot) renderScreen();
+  if (M) setChibiShot(M.snapshot());
+  else setMemorialLobbyShot(snapshotMemorialLobby());
+  if (M ? chibiShot : memorialLobbyShot) renderScreen();
 }
 
 // Setters of state of detail-fullscreen.js for the other detail modules: an imported binding is read-only.

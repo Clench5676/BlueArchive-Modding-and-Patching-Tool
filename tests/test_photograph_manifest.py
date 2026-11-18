@@ -9,22 +9,22 @@ from types import SimpleNamespace
 import pytest
 
 from bmpt.core.errors import ServiceError
-from bmpt.library.photographs import Photographs
+from bmpt.library.thumbnails import Thumbnails
 from test_photographs import capture
 from test_webui import app, rpc, services  # noqa: F401  (fixtures)
 
 BAD = "b" * 32
 DIGEST = "d" * 64
-LOG = "bmpt.library.photographs"
+LOG = "bmpt.library.thumbnails"
 
 
-def family_of(key):
+def student_of(key):
     """Variants are `<family>:<alt>`; any other key is a variant the catalog does not list, its own family."""
     return key.split(":")[0] if key.startswith(("student", "other")) else key
 
 
-def store(root, family=family_of):
-    return Photographs(root, family)
+def store(root, student=student_of):
+    return Thumbnails(root, student)
 
 
 def manifest(gallery):
@@ -37,8 +37,8 @@ def put(gallery, data):
     return gallery.index.read_bytes()
 
 
-def row(key, variant="student:a", **extra):
-    return {"id": key, "variant": variant, "sha256": DIGEST, "number": 1, **extra}
+def row(key, alt="student:a", **extra):
+    return {"id": key, "variant": alt, "sha256": DIGEST, "number": 1, **extra}
 
 
 def base(**changes):
@@ -67,7 +67,7 @@ def test_a_bad_photo_record_costs_that_record_only_and_is_written_back_unchanged
     fresh = store(gallery.root.parent)
     with caplog.at_level(logging.WARNING, logger=LOG):
         for _ in range(3):
-            assert [entry["id"] for entry in fresh.list("student:a")["photos"]] == [good]
+            assert [entry["id"] for entry in fresh.list("student:a")["thumbnails"]] == [good]
     held = [record for record in caplog.records if "cannot be used" in record.getMessage()]
     assert len(held) == 5  # once per record, not at every read
     # every write keeps the held rows as they are, in their place
@@ -92,21 +92,21 @@ def test_a_held_record_cannot_be_used(gallery):
         gallery.select("student:a", BAD)
     with pytest.raises(ServiceError, match="thumbnail_missing"):
         gallery.delete("student:a", BAD)
-    assert gallery.list("student:a")["photos"] == []
+    assert gallery.list("student:a")["thumbnails"] == []
 
 
 def test_a_stale_selection_reads_as_the_default_and_stays_in_the_file(tmp_path, caplog):
-    families = {"student:a": "student", "gone-alt": "student"}  # the alt shares the family while the catalog lists it
-    gallery = store(tmp_path, lambda variant: families.get(variant, variant))
+    students = {"student:a": "student", "gone-alt": "student"}  # the alt shares the family while the catalog lists it
+    gallery = store(tmp_path, lambda alt: students.get(alt, alt))
     key = gallery.save("gone-alt", capture()[0], "portrait")["saved"]
     gallery.select("student:a", key)  # the photo of the alt, chosen for student A through the shared gallery
     assert gallery.selection("student:a") == key and gallery.app_url("student:a").endswith(key + ".png")
-    del families["gone-alt"]  # the alt leaves the catalog: its family is now itself
+    del students["gone-alt"]  # the alt leaves the catalog: its family is now itself
     with caplog.at_level(logging.WARNING, logger=LOG):
         for _ in range(3):
             assert gallery.selection("student:a") is None
             assert gallery.app_url("student:a") is None
-            assert gallery.list("student:a")["app"] is None and gallery.list("student:a")["photos"] == []
+            assert gallery.list("student:a")["app"] is None and gallery.list("student:a")["thumbnails"] == []
             assert gallery.has_selection("student:a") is False
     assert len([r for r in caplog.records if "cannot be used" in r.getMessage()]) == 1
     # an unrelated write leaves the row as it is
@@ -119,7 +119,7 @@ def test_a_stale_selection_reads_as_the_default_and_stays_in_the_file(tmp_path, 
     gallery.select("student:a", mine)
     assert gallery.selection("student:a") == mine and manifest(gallery)["selected"]["student:a"] == mine
     # the family returns: the row works again
-    families["gone-alt"] = "student"
+    students["gone-alt"] = "student"
     gallery.select("student:a", key)
     assert gallery.selection("student:a") == key
 
@@ -139,8 +139,8 @@ def test_a_selection_that_names_no_photo_is_held_and_kept(gallery):
 
 
 def test_deleting_a_photo_a_kept_row_names_is_refused(tmp_path):
-    families = {"student:a": "student", "student:b": "student", "student:z": "student"}
-    gallery = store(tmp_path, lambda variant: families.get(variant, variant))
+    students = {"student:a": "student", "student:b": "student", "student:z": "student"}
+    gallery = store(tmp_path, lambda alt: students.get(alt, alt))
     key = gallery.save("student:a", capture()[0], "portrait")["saved"]
     file = gallery.root / "images" / f"{key}.png"
     data = manifest(gallery)
@@ -152,7 +152,7 @@ def test_deleting_a_photo_a_kept_row_names_is_refused(tmp_path):
     del data["photos"][BAD]
     data["selected"]["gone-student"] = key  # a selection that names no usable photo's family but this file
     put(gallery, data)
-    del families["student:z"]
+    del students["student:z"]
     data["selected"]["student:z"] = key  # a selection that cannot be used now but names it
     put(gallery, data)
     with pytest.raises(ServiceError, match="thumbnail_in_use"):
@@ -222,7 +222,7 @@ def test_the_manifest_becomes_usable_again_when_it_is_fixed(gallery):
     with pytest.raises(ServiceError):
         gallery.list("student:a")
     gallery.index.write_text(json.dumps(base()))
-    assert gallery.list("student:a")["photos"] == []
+    assert gallery.list("student:a")["thumbnails"] == []
     assert gallery.save("student:a", capture()[0], "portrait")["saved"]
 
 
@@ -230,11 +230,11 @@ def test_the_manifest_becomes_usable_again_when_it_is_fixed(gallery):
 
 
 def catalog_with_dropped_alt(services):
-    # an alt the catalog does not list resolves to itself (Catalog.assignment_variant on an unknown key)
-    services.catalog.assignment_variant = lambda key: SimpleNamespace(family=key)
+    # an alt the catalog does not list resolves to itself (Catalog.assignment_alt on an unknown key)
+    services.catalog.assignment_alt = lambda key: SimpleNamespace(student=key)
 
 
-def test_a_stale_selection_keeps_family_get_and_roster_list_answering(app, services, caplog):
+def test_a_stale_selection_keeps_student_get_and_student_list_list_answering(app, services, caplog):
     catalog_with_dropped_alt(services)
     gallery = services.thumbnail_store
     key = gallery.save("dropped-alt", capture()[0], "portrait")["saved"]  # photo of an alt that left the catalog
@@ -243,15 +243,15 @@ def test_a_stale_selection_keeps_family_get_and_roster_list_answering(app, servi
     put(gallery, data)
     raw = gallery.index.read_bytes()
     with caplog.at_level(logging.WARNING):
-        family = rpc(app, "student.get", key="hoshino")
-        roster = rpc(app, "students.list")
-    assert "error" not in family and "error" not in roster
-    entries = [variant for item in roster["result"]["students"] for variant in item["alts"]]
-    assert entries and all("thumbnail" not in variant for variant in entries)
-    assert all("thumbnail" not in variant for variant in family["result"]["alts"])
+        student = rpc(app, "student.get", key="hoshino")
+        student_list = rpc(app, "students.list")
+    assert "error" not in student and "error" not in student_list
+    entries = [alt for item in student_list["result"]["students"] for alt in item["alts"]]
+    assert entries and all("thumbnail" not in alt for alt in entries)
+    assert all("thumbnail" not in alt for alt in student["result"]["alts"])
     assert gallery.index.read_bytes() == raw
     assert rpc(app, "thumbnails.list", alt="hoshino")["result"]["app"] is None
-    assert not [r for r in caplog.records if "Photograph lookup failed" in r.getMessage()]
+    assert not [r for r in caplog.records if "Thumbnail lookup failed" in r.getMessage()]
 
 
 def test_a_corrupt_manifest_leaves_every_student_list_working_and_the_file_unchanged(app, services, caplog):
@@ -260,13 +260,11 @@ def test_a_corrupt_manifest_leaves_every_student_list_working_and_the_file_uncha
     gallery.index.write_bytes(b"{ not json")
     with caplog.at_level(logging.WARNING):
         for _ in range(3):
-            family = rpc(app, "student.get", key="hoshino")
-            roster = rpc(app, "students.list")
-            assert "error" not in family and "error" not in roster
-    assert all("thumbnail" not in variant for item in roster["result"]["students"] for variant in item["alts"])
-    assert (
-        len([r for r in caplog.records if "Photograph lookup failed" in r.getMessage()]) == 1
-    )  # once, not per student
+            student = rpc(app, "student.get", key="hoshino")
+            student_list = rpc(app, "students.list")
+            assert "error" not in student and "error" not in student_list
+    assert all("thumbnail" not in alt for item in student_list["result"]["students"] for alt in item["alts"])
+    assert len([r for r in caplog.records if "Thumbnail lookup failed" in r.getMessage()]) == 1  # once, not per student
     # the photograph features themselves refuse, and nothing overwrites the file
     assert rpc(app, "thumbnails.list", alt="hoshino")["error"]["code"] == "thumbnail_library_invalid"
     assert rpc(app, "thumbnails.select", alt="hoshino", id=None)["error"]["code"] == "thumbnail_library_invalid"
@@ -279,7 +277,7 @@ def test_a_corrupt_manifest_leaves_every_student_list_working_and_the_file_uncha
     assert sorted(path.name for path in gallery.root.iterdir() if path.name != "index.lock") == ["index.json"]
 
 
-def test_variant_json_logs_again_only_after_the_lookup_recovered(app, services, caplog):
+def test_alt_json_logs_again_only_after_the_lookup_recovered(app, services, caplog):
     gallery = services.thumbnail_store
     gallery.root.mkdir(parents=True, exist_ok=True)
     gallery.index.write_bytes(b"bad")
@@ -290,19 +288,19 @@ def test_variant_json_logs_again_only_after_the_lookup_recovered(app, services, 
         assert "error" not in rpc(app, "students.list")
         gallery.index.write_bytes(b"bad again")
         rpc(app, "students.list")
-    assert len([r for r in caplog.records if "Photograph lookup failed" in r.getMessage()]) == 2
+    assert len([r for r in caplog.records if "Thumbnail lookup failed" in r.getMessage()]) == 2
 
 
 def test_a_valid_selection_still_gives_the_thumbnail(app, services):
     gallery = services.thumbnail_store
     key = gallery.save("hoshino", capture()[0], "portrait")["saved"]
     gallery.select("hoshino", key)
-    variants = [v for item in rpc(app, "students.list")["result"]["students"] for v in item["alts"]]
-    assert variants[0]["thumbnail"].endswith(f"{key}.png")
+    alts = [v for item in rpc(app, "students.list")["result"]["students"] for v in item["alts"]]
+    assert alts[0]["thumbnail"].endswith(f"{key}.png")
 
 
 def test_deep_copies_of_the_manifest_carry_the_held_rows(gallery):
     put(gallery, base(photos={BAD: {"id": BAD, "variant": "student:a", "sha256": "bad"}}))
     data = gallery._read()
     clone = copy.deepcopy(data)
-    assert clone.held_photos == data.held_photos and clone.document() == data.document()
+    assert clone.held_thumbnails == data.held_thumbnails and clone.document() == data.document()

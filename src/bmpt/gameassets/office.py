@@ -1,4 +1,4 @@
-"""The ordinary lobby's day/night NGUI background, read from the installed game."""
+"""The ordinary memorial lobby's day/night NGUI background, read from the installed game."""
 
 from __future__ import annotations
 
@@ -19,13 +19,13 @@ BACKGROUNDS = {
     "day": (
         "LobbyCommon",
         "UILobbyBackground_Day",
-        "hall.officeDay",
+        "studentHall.officeDay",
         "ui-uilobbyelement-_mxload-prefabs-2025-07-02_assets_all_1158600183.bundle",
     ),
     "night": (
         "LobbyCommonNight",
         "UILobbyBackground_Night",
-        "hall.officeNight",
+        "studentHall.officeNight",
         "ui-uilobbyelement-_mxload-prefabs-2026-07-02_assets_all_1202836469.bundle",
     ),
 }
@@ -100,8 +100,8 @@ def material_description(form: dict, material: dict | None = None) -> dict:
 
 def _add_materials(game, path: Path, tree: dict) -> set[Path]:
     """Resolve only active background UITexture materials, preserving the prefab's own geometry."""
-    from .model import BundleGraph
-    from .service_base import _MODEL_LOCK
+    from .chibi import BundleGraph
+    from .service_base import _CHIBI_LOCK
 
     nodes = {}
 
@@ -115,7 +115,7 @@ def _add_materials(game, path: Path, tree: dict) -> set[Path]:
 
     collect(tree)
     with (
-        _MODEL_LOCK,
+        _CHIBI_LOCK,
         game._cab_discovery().batch(),
         BundleGraph({}, resolver=game._resolve_cabs, opener=open_bundle) as graph,
     ):
@@ -176,7 +176,7 @@ def inventory(game) -> dict:
     by_name = {path.name: path for path in paths}
     textures = [path for path in paths if texture_bundle(path)]
     prefabs = {key: by_name.get(spec[3]) for key, spec in BACKGROUNDS.items()}
-    # Changed resource filenames are discovered only in the lobby prefab family.
+    # Changed resource filenames are discovered only in the office prefab category.
     fallback = (
         [path for path in paths if path.name.startswith("ui-uilobbyelement-")] if not all(prefabs.values()) else []
     )

@@ -1,4 +1,4 @@
-// The detail screen's switch popups on the shared list popup (switch portrait, memorial lobby, 3D model) and the
+// The detail screen's switch popups on the shared list popup (switch portrait, memorial lobby, chibi) and the
 // alt picker.
 import { notify, closed as popupClosed, listPopup, message } from "../ui/popup.js";
 import { isSpecial, specialFraming } from "./special-view.js";
@@ -37,7 +37,7 @@ import {
   pageToken,
   open,
   thumb,
-  modelPicture,
+  chibiPicture,
   originalName,
   fullName,
   shortName,
@@ -88,7 +88,7 @@ import { albumClosed, setAlbumClosed } from "./detail-fullscreen.js";
 export let pickerSel = null;
 
 // --- the detail screen's popups, on the shared popup module (popup.js): the list popups (switch portrait or memorial
-// lobby, the alt picker) and the frame (compare, aliases, details); Escape and the backdrop close them ---
+// memorial lobby, the alt picker) and the frame (compare, aliases, details); Escape and the backdrop close them ---
 
 // switch portrait or memorial lobby: the alt's own skeleton and added ones, then the other alts' portraits;
 // OK writes the chosen one into the game files (applyCandidate)
@@ -117,7 +117,7 @@ async function drawPopup(scroll = 0) {
     const picture = lazyThumbnail(
       () =>
         kind === "chibi"
-          ? modelPicture(c, v, work)
+          ? chibiPicture(c, v, work)
           : thumb(
               baseOf(c, kind),
               kind === "portrait" ? "portrait" : "landscape",
@@ -158,11 +158,11 @@ async function drawPopup(scroll = 0) {
           ? T("status.applied")
           : null,
       dim: c.greyed,
-      // past-limit own costumes and another student's model carry their caution on hover
-      // what the game may draw differently (cautionKey); past the limit, another student's model say more
+      // past-limit own costumes and another student's chibi carry their caution on hover
+      // what the game may draw differently (cautionKey); past the limit, another student's chibi say more
       ...(cautionKey(c) ? { hint: T(cautionKey(c)) } : {}),
-      ...(c.beyondFit ? { hint: T("model.beyondFit") } : {}),
-      ...crossExtras(c, T("model.crossCharacter")),
+      ...(c.beyondFit ? { hint: T("chibi.beyondFit") } : {}),
+      ...crossExtras(c, T("chibi.crossCharacter")),
       badge: c.greyed
         ? {
             ...GREYED_BADGE(),
@@ -174,7 +174,7 @@ async function drawPopup(scroll = 0) {
       tag: c.mod?.repairSourceId
         ? { text: T("remap.repaired"), color: "#d7eaf4", ink: "#2d4664" }
         : c.mod?.optimized_from
-          ? { text: T("model.optimized"), color: "#d7eaf4", ink: "#2d4664" }
+          ? { text: T("chibi.optimized"), color: "#d7eaf4", ink: "#2d4664" }
           : null,
     };
   };
@@ -182,7 +182,7 @@ async function drawPopup(scroll = 0) {
     .map(item)
     .filter((it) => popupSeg === 0 || (popupSeg === 1) === !!it.recruit)
     .sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0));
-  // a search adds the other students' models after the matching cards
+  // a search adds the other students' chibis after the matching cards
   const more =
     kind === "chibi" && coreOf(v, kind)
       ? (query) =>
@@ -212,12 +212,12 @@ async function drawPopup(scroll = 0) {
       },
       sortKey: "sort.default",
       more,
-      // the icon toggle lists every other student's model (an icon in the toolbar); the cards in view are
+      // the icon toggle lists every other student's chibi (an icon in the toolbar); the cards in view are
       // the ones judged
       ...(more
         ? {
             toggle: {
-              label: T("model.showOthers"),
+              label: T("chibi.showOthers"),
               checked: showOthers(),
               onChange: (on) => {
                 setShowOthers(on);
@@ -274,9 +274,9 @@ async function drawPopup(scroll = 0) {
             checking
               ? null
               : c.previewOnly
-                ? T("model.unfit")
+                ? T("chibi.unfit")
                 : c.beyondFit
-                  ? T("model.beyondFit")
+                  ? T("chibi.beyondFit")
                   : cautionKey(c)
                     ? T(cautionKey(c))
                     : null,
@@ -311,24 +311,24 @@ async function drawPopup(scroll = 0) {
             ? [
                 optimizedCopy(c, v)
                   ? [
-                      T("model.optimizedGo"),
+                      T("chibi.optimizedGo"),
                       () => {
                         setPending(`m:${optimizedCopy(c, v).id}`);
                         renderPopup();
                       },
                     ]
                   : [
-                      T("model.optimize"),
+                      T("chibi.optimize"),
                       () => runOptimize(c, v),
                       busy || !!c.greyed || !!c.previewOnly || !!c.pending || !coreOf(v, kind),
                       "secondary",
                       checking
                         ? null
                         : c.previewOnly
-                          ? T("model.unfit")
+                          ? T("chibi.unfit")
                           : c.beyondFit
-                            ? T("model.beyondFit")
-                            : T("model.optimizeHint"),
+                            ? T("chibi.beyondFit")
+                            : T("chibi.optimizeHint"),
                       checking,
                     ],
               ]
@@ -339,7 +339,7 @@ async function drawPopup(scroll = 0) {
                 async () => {
                   if (!(await removeMod(c.id))) return;
                   await reload();
-                  ctx.invalidateRoster();
+                  ctx.invalidateStudentList();
                   if (pending === c.key)
                     setPending(popupMode(shownStudent, alt(), kind, modsOn(), otherStudents).start);
                   renderPopup();
@@ -361,7 +361,7 @@ async function drawPopup(scroll = 0) {
     },
   });
 }
-// Optimize Physics on a 3D candidate (model.optimize): the copy is selected, or "No optimization needed" shows
+// Optimize Physics on a 3D candidate (chibi.optimize): the copy is selected, or "No optimization needed" shows
 async function runOptimize(c, v = alt()) {
   const source = optimizeSource(c);
   if (!source || busy) return;
@@ -378,11 +378,11 @@ async function runOptimize(c, v = alt()) {
     },
   );
   if (!ok || !open || switchPopupPage !== pageToken || $("popup").hidden) return;
-  // nothing to build: the official model needs none; a costume that no physics rule improves says it has no gain
+  // nothing to build: the official chibi needs none; a costume that no physics rule improves says it has no gain
   if (result?.unneeded)
     await message({
-      title: T("model.optimize"),
-      lines: [T(result.reason === "no_gain" ? "model.optimizeNoGain" : "model.optimizeUnneeded")],
+      title: T("chibi.optimize"),
+      lines: [T(result.reason === "no_gain" ? "chibi.optimizeNoGain" : "chibi.optimizeUnneeded")],
       ok: T("picker.ok"),
     });
   else if (result?.mod) setPending(`m:${result.mod}`);
@@ -393,8 +393,8 @@ export async function openPopup(kind = "portrait") {
     v = alt();
   if (kind === "chibi") {
     void costumesReady(v).catch((err) => console.error("Costume check failed", err));
-    // the switch opens at once with the student's own cards; another student's model already chosen
-    // gets its card, and the popup its start, once the roster is in
+    // the switch opens at once with the student's own cards; another student's chibi already chosen
+    // gets its card, and the popup its start, once the student list is in
     if (otherStudents) judgeCross(v);
     else
       void readOthers().then((students) => {
@@ -446,7 +446,7 @@ export async function markSeen(mods, scroll = 0) {
     await rpc("mods.seen", { ids });
     clearUnseen(student, ids);
     if (shownStudent !== student) clearUnseen(shownStudent, ids);
-    ctx.invalidateRoster();
+    ctx.invalidateStudentList();
     // The save may finish after the switch closed and another popup took its host.
     if (open)
       await Promise.all([
@@ -478,7 +478,7 @@ function closeSwitch(apply) {
   const chosen = popupCandidate(alt(), popupKind, pending);
   if (popupKind === "chibi") judgeCross(alt());
   // only a choice other than the start (what the game shows; while mods are off, the configured source)
-  // a start taken before the roster was in may stand for another student's model not listed yet: kept as it is
+  // a start taken before the student list was in may stand for another student's chibi not listed yet: kept as it is
   if (apply && startLoose && pending === popupStart) return;
   if (apply && chosen && !chosen.greyed && !chosen.refused) return saveCandidate(pending, popupKind);
 }
@@ -522,7 +522,7 @@ export async function overwrittenMessage(v, kind = "portrait") {
     files: partsOf(v, kind),
   });
   if (added && open && page === pageToken) {
-    ctx.invalidateRoster();
+    ctx.invalidateStudentList();
     await reload();
   }
   return added;
@@ -613,7 +613,10 @@ export async function openPicker(scroll = 0) {
           [T("field.file"), coreOf(o, kind)],
           [T("info.gameFile"), o.date || "—"],
           [T("info.status"), T(appliedKey(o, kind) === "self" ? "status.original" : "status.replaced")],
-          [T(isSpecial(o) ? "special.background" : "tab.lobby"), T(o.memorialLobby ? "model.has" : "model.none")],
+          [
+            T(isSpecial(o) ? "special.background" : "tab.memorialLobby"),
+            T(o.memorialLobby ? "chibi.has" : "chibi.none"),
+          ],
         ],
         actions: [
           [T(platform === "mac" ? "open.mac" : "open.win"), () => reveal(file)],

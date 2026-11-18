@@ -18,7 +18,7 @@ from bmpt.webui.state import ALIAS_LENGTH, ALIAS_MAX, FLAGS, SCAN_CONSENT_SCOPE,
 def test_instances_keep_each_others_keys(tmp_path):
     path = tmp_path / "webui.json"
     a, b = UiState(path), UiState(path)
-    a.set("roster", {"sort": "name"})
+    a.set("student_list", {"sort": "name"})
     b.set("voice_volume", 40)  # b never read a's roster: it must not write its own stale copy over it
     b.set_consent(True)
     a.set("lobby_zoom_out", True)
@@ -26,17 +26,17 @@ def test_instances_keep_each_others_keys(tmp_path):
     assert data["prefs"] == {"roster": {"sort": "name"}, "voice_volume": 40, "lobby_zoom_out": True}
     assert data["consent"] is True
     fresh = UiState(path)
-    assert fresh.get("roster") == {"sort": "name"} and fresh.get("voice_volume") == 40 and fresh.consent is True
+    assert fresh.get("student_list") == {"sort": "name"} and fresh.get("voice_volume") == 40 and fresh.consent is True
 
 
 def test_reads_follow_the_other_instances(tmp_path):
     path = tmp_path / "webui.json"
     a, b = UiState(path), UiState(path)
-    assert b.consent is None and b.get("roster") is None
+    assert b.consent is None and b.get("student_list") is None
     a.set_consent(False)
-    a.set("roster", {"sort": "added"})
+    a.set("student_list", {"sort": "added"})
     assert b.consent is False
-    assert b.get("roster") == {"sort": "added"}
+    assert b.get("student_list") == {"sort": "added"}
 
 
 def test_visits_of_both_instances_are_merged(tmp_path):

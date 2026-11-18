@@ -16,7 +16,7 @@ const makeElement = () => ({
   },
 });
 globalThis.document = { createElement: makeElement };
-globalThis.hallBackgroundHarness = {
+globalThis.studentHallBackgroundHarness = {
   NGUI: {
     load: async (url) => {
       loads.push(url);
@@ -56,20 +56,23 @@ globalThis.hallBackgroundHarness = {
   withTimeout: (promise) => promise,
   readSerialized,
 };
-let source = await readFile(new URL("../../src/bmpt/web/js/hall/student-hall-backgrounds.js", import.meta.url), "utf8");
+let source = await readFile(
+  new URL("../../src/bmpt/web/js/student-hall/student-hall-backgrounds.js", import.meta.url),
+  "utf8",
+);
 source = source.replace(/^import [^;]*;$/gm, "");
-source = `const {NGUI, withTimeout, readSerialized} = globalThis.hallBackgroundHarness; const S = 1920 / 2960; const T = (key) => key;\n${source}`;
-const Hall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+source = `const {NGUI, withTimeout, readSerialized} = globalThis.studentHallBackgroundHarness; const S = 1920 / 2960; const T = (key) => key;\n${source}`;
+const StudentHall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 const day = { name: "office-day", layoutUrl: "/asset/office/day/layout.json" };
 const night = { name: "office-night", layoutUrl: "/asset/office/night/layout.json" };
 const collection = { name: "BG_School_Collection", url: "/asset/art/background/BG_School_Collection" };
 
 test("office day is the unsaved default while explicit saved backgrounds and partial installs are preserved", () => {
-  assert.equal(Hall.backgroundChoice("", [collection, night, day]), day);
-  assert.equal(Hall.backgroundChoice(collection.name, [day, collection]), collection);
-  assert.equal(Hall.backgroundChoice(night.name, [day, night]), night);
-  assert.equal(Hall.backgroundChoice("office-day", [collection]), collection);
-  assert.equal(Hall.backgroundChoice("", []), null);
+  assert.equal(StudentHall.backgroundChoice("", [collection, night, day]), day);
+  assert.equal(StudentHall.backgroundChoice(collection.name, [day, collection]), collection);
+  assert.equal(StudentHall.backgroundChoice(night.name, [day, night]), night);
+  assert.equal(StudentHall.backgroundChoice("office-day", [collection]), collection);
+  assert.equal(StudentHall.backgroundChoice("", []), null);
 });
 
 test("office rendering retains exact ancestor geometry, layer depths and per-widget tints", async () => {
@@ -118,7 +121,7 @@ test("office rendering retains exact ancestor geometry, layer depths and per-wid
   payload = { tree, textures: { Sky: "/sky.png", Front: "/front.png" } };
   globalThis.fetch = async () => ({ ok: true, json: async () => payload });
   try {
-    await Hall.layers(day, makeElement(), { signal: new AbortController().signal });
+    await StudentHall.layers(day, makeElement(), { signal: new AbortController().signal });
     assert.equal(rendered[0].tree, tree);
     assert.deepEqual(tree.pos, [24, -12]);
     assert.equal(tree.children[0].children[0].widgets[0].depth, -40);
@@ -141,7 +144,7 @@ test("a missing office asset falls back to an available collection without erasi
   console.warn = () => {};
   const target = makeElement();
   try {
-    await Hall.render(day, target, { signal: new AbortController().signal, choices: [day, collection] });
+    await StudentHall.render(day, target, { signal: new AbortController().signal, choices: [day, collection] });
     assert.equal(target.dataset.background, collection.name);
     assert.equal(target.children.length, 1);
     assert.equal(day.name, "office-day");
@@ -161,7 +164,7 @@ test("late office metadata cannot render after navigation cancellation", async (
       release = resolve;
     });
   try {
-    const pending = Hall.layers(day, makeElement(), { signal: controller.signal });
+    const pending = StudentHall.layers(day, makeElement(), { signal: controller.signal });
     controller.abort();
     release({ ok: true, json: async () => payload });
     assert.equal(await pending, null);
@@ -197,7 +200,7 @@ test("Night light preserves authored alpha and uses the actual additive pass in 
   });
   try {
     const target = makeElement(),
-      view = await Hall.layers(night, target);
+      view = await StudentHall.layers(night, target);
     assert.equal(target.style.overflow, "hidden", "native layers clip to the same viewport as the canvas preview");
     const light = view.nodes.get("Night/Light_1").els[0];
     assert.equal(light.style.mixBlendMode, "plus-lighter");
@@ -212,7 +215,7 @@ test("Night light preserves authored alpha and uses the actual additive pass in 
           drawn.push({ mode: this.globalCompositeOperation, alpha: this.globalAlpha });
         },
       };
-    await Hall.paint(view, context);
+    await StudentHall.paint(view, context);
     assert.deepEqual(drawn, [
       { mode: "source-over", alpha: 1 },
       { mode: "lighter", alpha: 0.45 },
@@ -235,12 +238,12 @@ test("unsupported shader programs or operations fail instead of silently changin
     { shader: "Unlit/Transparent Colored", src: 1, dst: 10 },
     { shader: "Unlit/Transparent Colored", src: 5, dst: 10, srcA: 1, dstA: 10 },
   ])
-    assert.throws(() => Hall.blending(material), /Unsupported office shader/);
+    assert.throws(() => StudentHall.blending(material), /Unsupported office shader/);
 });
 
 test("a cancelled staged render never publishes unfinished background layers", async () => {
   const fetchBefore = globalThis.fetch,
-    renderBefore = globalThis.hallBackgroundHarness.NGUI.render;
+    renderBefore = globalThis.studentHallBackgroundHarness.NGUI.render;
   const controller = new AbortController(),
     target = makeElement(),
     previous = makeElement();
@@ -250,7 +253,7 @@ test("a cancelled staged render never publishes unfinished background layers", a
     ok: true,
     json: async () => ({ tree: { name: "Office", widgets: [], children: [] }, textures: {} }),
   });
-  globalThis.hallBackgroundHarness.NGUI.render = async (...args) => {
+  globalThis.studentHallBackgroundHarness.NGUI.render = async (...args) => {
     renderedInto = args[1];
     const view = await renderBefore(...args);
     return new Promise((resolve) => {
@@ -258,7 +261,7 @@ test("a cancelled staged render never publishes unfinished background layers", a
     });
   };
   try {
-    const pending = Hall.layers(day, target, { signal: controller.signal });
+    const pending = StudentHall.layers(day, target, { signal: controller.signal });
     for (let i = 0; i < 20 && !release; i++) await Promise.resolve();
     assert.ok(release);
     assert.notEqual(renderedInto, target);
@@ -269,6 +272,6 @@ test("a cancelled staged render never publishes unfinished background layers", a
     assert.deepEqual(target.children, [previous]);
   } finally {
     globalThis.fetch = fetchBefore;
-    globalThis.hallBackgroundHarness.NGUI.render = renderBefore;
+    globalThis.studentHallBackgroundHarness.NGUI.render = renderBefore;
   }
 });

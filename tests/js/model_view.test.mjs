@@ -1,4 +1,4 @@
-// Tests for the 3D chibi's camera (web/js/model/model-camera.js; the 3D tab opens at the formation screen's view of one
+// Tests for the 3D chibi's camera (web/js/chibi/chibi-camera.js; the 3D tab opens at the formation screen's view of one
 // character). Run by tests/test_chibi_materials.py with Node's test runner; "three" and "three/addons/" resolve to the
 // bundled copy.
 import assert from "node:assert/strict";
@@ -14,9 +14,9 @@ register(
 );
 const THREE = await import("three");
 const { FORMATION_VIEW, bustDistance, carryZoom, frameDistance, stillCamera, stillCrop } = await import(
-  "../../src/bmpt/web/js/model/model-camera.js"
+  "../../src/bmpt/web/js/chibi/chibi-camera.js"
 );
-const { storyAction, storyActions } = await import("../../src/bmpt/web/js/model/model.js");
+const { storyAction, storyActions } = await import("../../src/bmpt/web/js/chibi/chibi.js");
 
 const near = (a, b, eps = 1e-4) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 const TAN5 = Math.tan((5 * Math.PI) / 180);
@@ -127,7 +127,7 @@ test("the switch card's still is the front view whatever the orbit and the zoom"
   }
 });
 
-test("a story model's cutscene clips are its actions, in order, each held on its last frame", () => {
+test("a story chibi's cutscene clips are its actions, in order, each held on its last frame", () => {
   // Ayame's story forms have no idle; their slots Story_1.. come from their cutscenes
   const clips = new Map([
     ["Story_10", {}],
@@ -142,7 +142,7 @@ test("a story model's cutscene clips are its actions, in order, each held on its
 });
 
 test("the retreat cuts straight to the crying loop; the knockdown falls and stays down", async () => {
-  const { ACTIONS, createStillView } = await import("../../src/bmpt/web/js/model/model.js");
+  const { ACTIONS, createStillView } = await import("../../src/bmpt/web/js/chibi/chibi.js");
   assert.deepEqual(Object.keys(ACTIONS), ["idle", "reaction", "walk", "victory", "pickup", "retreat", "knockdown"]);
   assert.deepEqual(ACTIONS.retreat, { slots: ["Vital_Retreat"], fade: 0, face: true });
   assert.deepEqual(ACTIONS.knockdown, { slots: ["Vital_Death"], hold: true });
@@ -217,7 +217,7 @@ function biped(yaw = 0, names = {}) {
 }
 
 test("the facing is read from the skeleton: trunk across the left-to-right line, whatever the student", async () => {
-  const { facingBones, facingOf } = await import("../../src/bmpt/web/js/model/model.js");
+  const { facingBones, facingOf } = await import("../../src/bmpt/web/js/chibi/chibi.js");
   const facing = (root) =>
     facingOf(facingBones(root))
       ?.toArray()
@@ -248,7 +248,7 @@ test("the facing is read from the skeleton: trunk across the left-to-right line,
 });
 
 test("the face's facing: the head's forward read on the formation idle, carried by the head's turn", async () => {
-  const { facingBones, facingOf, headFront } = await import("../../src/bmpt/web/js/model/model.js");
+  const { facingBones, facingOf, headFront } = await import("../../src/bmpt/web/js/chibi/chibi.js");
   const round = (v) => v?.toArray().map((x) => Math.round(x * 1000) / 1000 + 0);
   // the idle: the body turned 0.5 rad off the front view, the head turned back to look into it
   const root = biped(0.5);
@@ -272,7 +272,7 @@ test("the face's facing: the head's forward read on the formation idle, carried 
 });
 
 test("the front view keeps the camera's height angle and turns the yaw to the facing", async () => {
-  const { frontView } = await import("../../src/bmpt/web/js/model/model.js");
+  const { frontView } = await import("../../src/bmpt/web/js/chibi/chibi.js");
   const round = (v) => v.toArray().map((x) => Math.round(x * 1000) / 1000 + 0);
   // biome-ignore lint/suspicious/noApproximativeNumericConstant: the expected value is rounded to three places
   assert.deepEqual(round(frontView(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 2, 2))), [0.707, 0.707, 0]);
@@ -280,7 +280,7 @@ test("the front view keeps the camera's height angle and turns the yaw to the fa
 });
 
 test("only the retreat turns the view to the face, from its first posed frame, and keeps the zoom", async () => {
-  const { ACTIONS, createStillView } = await import("../../src/bmpt/web/js/model/model.js");
+  const { ACTIONS, createStillView } = await import("../../src/bmpt/web/js/chibi/chibi.js");
   assert.deepEqual(
     Object.keys(ACTIONS).filter((name) => ACTIONS[name].face),
     ["retreat"],
@@ -301,7 +301,7 @@ test("only the retreat turns the view to the face, from its first posed frame, a
   view.named = new Map([["R02", clip("R02", true)]]);
   view.fit = 3;
   view.limits = { min: 1, max: 4 };
-  // the head's forward is read on the formation idle's posed frame, once per model
+  // the head's forward is read on the formation idle's posed frame, once per chibi
   view.act("idle", { quiet: true });
   assert.equal(view.headFront, null);
   view.readHeadFront();
@@ -335,7 +335,7 @@ test("only the retreat turns the view to the face, from its first posed frame, a
     view.tween.dir1.toArray().map((v) => Math.round(v * 1000) / 1000 + 0),
     [0, 0, -1],
   );
-  // a model without the formation idle (a cafe idle) has none: the body's facing
+  // a chibi without the formation idle (a cafe idle) has none: the body's facing
   view.clips.delete("Formation_Idle");
   view.clips.set("Cafe_Idle", clip("Cafe_Idle", true));
   view.headFront = undefined;
@@ -349,7 +349,7 @@ test("only the retreat turns the view to the face, from its first posed frame, a
 });
 
 test("the view follows the hips across the floor, so any clip plays in place", async () => {
-  const { anchorNode, followOffset } = await import("../../src/bmpt/web/js/model/model.js");
+  const { anchorNode, followOffset } = await import("../../src/bmpt/web/js/chibi/chibi.js");
   const root = new THREE.Group();
   const boneRoot = new THREE.Bone();
   boneRoot.name = "bone_root";
@@ -379,12 +379,12 @@ test("the view follows the hips across the floor, so any clip plays in place", a
   near(off.z, 2);
 });
 
-test("the target stands over the prefab's root, or over the hips of a model placed off its root", async () => {
-  const { standPoint } = await import("../../src/bmpt/web/js/model/model.js");
+test("the target stands over the prefab's root, or over the hips of a chibi placed off its root", async () => {
+  const { standPoint } = await import("../../src/bmpt/web/js/chibi/chibi.js");
   const origin = { x: 0, y: 0, z: 0 };
   // a chibi's idle hips sway a few centimetres from its root: the formation screen's place is kept
   assert.deepEqual(standPoint(origin, { x: -0.03, y: 0.38, z: 0.05 }), { x: 0, z: 0 });
   assert.deepEqual(standPoint(origin, null), { x: 0, z: 0 });
-  // Arona's cutscene model stands 1.18 across and 0.84 deep from its root
+  // Arona's cutscene chibi stands 1.18 across and 0.84 deep from its root
   assert.deepEqual(standPoint(origin, { x: 1.18, y: 0.96, z: 0.84 }), { x: 1.18, z: 0.84 });
 });

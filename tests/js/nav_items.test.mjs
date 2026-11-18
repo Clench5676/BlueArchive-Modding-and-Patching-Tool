@@ -17,16 +17,16 @@ import {
 const T = (key, vars = {}) => (key === "nav.classic" ? `${vars.label} - Classic UI` : `<${key}>`);
 const CLASSIC = ["crc_tool", "asset_packer", "asset_extractor", "adb_push", "tools"];
 
-test("Students and Batch Import remain in the bottom bar while Home owns the hall entry", () => {
+test("Students and Batch Import remain in the bottom bar while Home owns the Student Hall entry", () => {
   assert.equal(ITEMS.length, 7);
   assert.deepEqual(
     ITEMS.filter((item) => item.route).map((item) => item.route),
-    ["#/roster", "#/import"],
+    ["#/student-list", "#/import"],
   );
   assert.equal(greyed(ITEMS[1]), false);
   assert.ok(!ITEMS.some((item) => ["mod_update", "batch_update", "mod_install"].includes(item.classic)));
   assert.equal(greyed(ITEMS[0]), false);
-  assert.equal(ITEMS[0].route, "#/roster");
+  assert.equal(ITEMS[0].route, "#/student-list");
   assert.deepEqual(
     ITEMS.filter(greyed).map((it) => it.classic),
     CLASSIC,
@@ -54,14 +54,14 @@ test("each greyed entry is named for assistive technology, never with a tooltip,
     assert.equal("title" in v, false, "no tooltip");
   }
   const students = view(
-    ITEMS.find((item) => item.route === "#/roster"),
+    ITEMS.find((item) => item.route === "#/student-list"),
     T,
   );
   assert.deepEqual(students, {
     label: "<nav.students>",
     name: "<nav.students>",
     greyed: false,
-    route: "#/roster",
+    route: "#/student-list",
     tab: null,
   });
 });

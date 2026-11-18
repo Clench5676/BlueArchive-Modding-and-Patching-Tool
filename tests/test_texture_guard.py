@@ -20,8 +20,8 @@ from bmpt.unity import texture_guard as guard
 from ba_modding_toolkit.bundle import Bundle
 from ba_modding_toolkit.core import extraction
 from bmpt.core.errors import ServiceError
-from bmpt.gameassets import AssetCache, GameAssets, model, service
-from bmpt.gameassets import model_service
+from bmpt.gameassets import AssetCache, GameAssets, chibi, service
+from bmpt.gameassets import chibi_service
 from bmpt.gameassets.spine import extract_spine
 from bmpt.library import portrait_edit
 from ba_modding_toolkit.models import AssetType, SaveOptions
@@ -512,7 +512,7 @@ def fake_env(monkeypatch, tmp_path, declared, cab="CAB-test", path_id=42):
 
     (tmp_path / "fake.bundle").write_bytes(b"fake")
     monkeypatch.setattr(service, "open_bundle", open_bundle)
-    monkeypatch.setattr(model_service, "open_bundle", open_bundle)  # lobby effect textures
+    monkeypatch.setattr(chibi_service, "open_bundle", open_bundle)  # lobby effect textures
     located = {"cab-test": str(tmp_path / "fake.bundle")}
     monkeypatch.setattr(GameAssets, "_resolve_cabs", lambda self, wanted, hint=None: located)
 
@@ -522,10 +522,10 @@ def test_selection_frame_and_lobby_effect_textures_refuse_the_texture(tmp_path, 
     fake_env(monkeypatch, tmp_path, texture(8192, 8192, CRASHING_SITE_FORMAT, bytes(64)))
     slot = {"frameEffect": {"material": {"tex": {"_Tex_Main": {"id": "cab-test_42"}}}}}
     monkeypatch.setattr(game, "layout", lambda root, path: slot)
-    monkeypatch.setattr(game, "lobby_info", lambda core: {"fx": {"textures": {"cab-test_42": {}}}})
+    monkeypatch.setattr(game, "memorial_lobby_info", lambda core: {"fx": {"textures": {"cab-test_42": {}}}})
     for read in (
         lambda: game.selection_frame_texture("cab-test_42"),
-        lambda: game.lobby_fx_texture("core", "cab-test_42"),
+        lambda: game.memorial_lobby_fx_texture("core", "cab-test_42"),
     ):
         with pytest.raises(ServiceError) as caught:
             read()
@@ -551,11 +551,11 @@ def test_chibi_export_refuses_the_texture(no_decoder):
         path_id=7,
         read=lambda: texture(8192, 8192, CRASHING_SITE_FORMAT, bytes(64)),
     )
-    exporter = model._Exporter(SimpleNamespace(locations={"cab-a": owner}), "ch0001")
+    exporter = chibi._Exporter(SimpleNamespace(locations={"cab-a": owner}), "ch0001")
     with pytest.raises(ServiceError) as caught:
         exporter.texture(obj)
     assert caught.value.code == "bundle_invalid" and caught.value.params == {"file": Path(owner).name}
-    unknown = model._Exporter(SimpleNamespace(locations={}), "ch0001")
+    unknown = chibi._Exporter(SimpleNamespace(locations={}), "ch0001")
     with pytest.raises(guard.TextureRefused):
         unknown.texture(obj)
     assert no_decoder.calls == []
@@ -623,13 +623,13 @@ def test_official_spine_cores_and_ui_bundles_pass_the_check(tmp_path):
     from bmpt.gameassets.unity import open_bundle
 
     game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache"))
-    portraits, lobbies = game.spine_cores("spr"), game.spine_cores("lobby")
+    portraits, memorial_lobbies = game.spine_cores("portrait"), game.spine_cores("memorialLobby")
     backgrounds = group_bundles(game._paths(), "spinebackground")
     # the first portraits include 4096 pages; the rest of each sample is spread over the sorted cores
     chosen = sorted(set(sorted(portraits)[:25]) | set(spaced(portraits, 15)))
     spine = (
         [portraits[core] for core in chosen]
-        + [lobbies[core] for core in spaced(lobbies, 16)]
+        + [memorial_lobbies[core] for core in spaced(memorial_lobbies, 16)]
         + [backgrounds[core] for core in spaced(backgrounds, 13)]
     )
     ui = [[path] for path in spaced([p for p in game._paths() if is_atlas(p) or is_texture(p)], 24)]

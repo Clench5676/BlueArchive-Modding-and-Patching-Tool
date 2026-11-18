@@ -175,7 +175,7 @@ def test_conversion_update_add_apply_uses_real_classic_core(real_metadata, platf
     assert Bundle.load(env.original).env.objects[0].read().m_Script == "official"
 
 
-@pytest.mark.parametrize("kind", ["spr", "lobby"])
+@pytest.mark.parametrize("kind", ["portrait", "memorialLobby"])
 @pytest.mark.parametrize("crc_name", [False, True])
 @pytest.mark.parametrize("manual", [False, True])
 @pytest.mark.parametrize("platform,source_platform", [(13, "android"), (9, "ios")])
@@ -185,11 +185,11 @@ def test_current_release_spine_rebuilds_foreign_platform_instead_of_copying(
     from bmpt.core.errors import ServiceError
 
     env = real_metadata
-    if kind == "lobby":
+    if kind == "memorialLobby":
         env.original.unlink()
         env.original = game_bundle(env.game_dir, "test_home_gl")
         official_bundle(env, name="test_home_gl_note")
-    name = "test_spr_note" if kind == "spr" else "test_home_gl_note"
+    name = "test_spr_note" if kind == "portrait" else "test_home_gl_note"
     source = unity_bundle(
         env.tmp / "input" / env.original.name,
         platform,
@@ -221,7 +221,7 @@ def test_current_release_spine_rebuilds_foreign_platform_instead_of_copying(
     assert source.read_bytes() == before
     assert "cab-fixture" in inspect_bundle(env.original).files
     assert "cab-mobile" not in inspect_bundle(env.original).files
-    env.library.restore("test", kind=kind)
+    env.library.restore("test", resource_type=kind)
     assert Bundle.load(env.original).env.objects[0].read().m_Script == "official"
 
 
@@ -274,19 +274,19 @@ def test_current_release_cross_platform_rebuild_rejects_invalid_output(real_meta
     assert env.original.read_bytes() == before and not env.library.mods()
 
 
-@pytest.mark.parametrize("kind", ["spr", "lobby"])
+@pytest.mark.parametrize("kind", ["portrait", "memorialLobby"])
 @pytest.mark.parametrize("manual", [False, True])
 def test_current_release_spine_upgrades_serialized_version_using_target_format(real_metadata, kind, manual):
     from bmpt.core.errors import ServiceError
 
     env = real_metadata
-    if kind == "lobby":
+    if kind == "memorialLobby":
         env.original.unlink()
         env.original = game_bundle(env.game_dir, "test_home_gl")
         official_bundle(env, name="test_home_gl_note")
     source = unity_bundle(
         env.tmp / "input" / env.original.name,
-        name="test_spr_note" if kind == "spr" else "test_home_gl_note",
+        name="test_spr_note" if kind == "portrait" else "test_home_gl_note",
         payload=b"older format",
     )
     source.write_bytes(source.read_bytes().replace(b"2021.3.0f1", b"2020.3.0f1"))
@@ -833,7 +833,7 @@ def test_markerless_lobby_fallback_validates_compressed_renamed_bundles(
     env = real_metadata
     env.original.unlink()
     env.original = game_bundle(env.game_dir, "ch0156_home")
-    env.catalog.variants["test"].lobby = "ch0156_home"
+    env.catalog.alts["test"].memorial_lobby = "ch0156_home"
     monkeypatch.setattr("bmpt.library.identity.content_cores", content_cores)
     official_bundle(env, name="ch0156_home_note")
     source = unity_bundle(
@@ -1347,7 +1347,7 @@ def test_legacy_recognition_cache_tracks_file_and_record_revisions(env):
     )
     record = env.library._records[mod.id]
     record["source_hashes"] = identity
-    lookup = lambda: env.library.find_legacy_import_source(identity, "spr")
+    lookup = lambda: env.library.find_legacy_import_source(identity, "portrait")
     assert lookup() == lookup() == mod.id
     assert len(env.library._legacy_import_matches) == 1
     mod.file.write_bytes(mod.file.read_bytes() + b"changed")

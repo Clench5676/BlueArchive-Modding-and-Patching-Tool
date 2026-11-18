@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Collection, Hashable, Sequence
 
-from bmpt.spine import atlas_remap, graft as grafting
+from bmpt.spine import atlas_remap, add_animations as animation_transfer
 from bmpt.unity import mod_origin
 from bmpt.core import devmode
 from bmpt.engine import (
@@ -35,14 +35,14 @@ from .. import targets as resolver
 from ..identity import identify
 from ..judge import (
     core_of,
-    kind_of_file,
+    resource_type_of_file,
     mod_versions,
     other_target,
 )
-from ..models import (
+from ..records import (
     AddResult,
     ApplyResult,
-    Kind,
+    ResourceType,
     Pin,
 )
 from ..storage import (
@@ -63,8 +63,8 @@ logger = logging.getLogger(__package__)
 class ImportsMixin:
     """Identifying, inspecting, storing and applying imports, and recovering unfinished ones."""
 
-    def _graftable(self, selected: integrity.Contents, official: integrity.Contents, skeleton: str) -> bool:
-        """Tell whether the mod carries what a graft of the official ``skeleton`` needs.
+    def _can_add_animations(self, selected: integrity.Contents, official: integrity.Contents, skeleton: str) -> bool:
+        """Tell whether the mod carries what an animation transfer of the official ``skeleton`` needs.
 
         That is a binary 4.2 skeleton for it and the atlas of its stem with the pages of that atlas.
         """
@@ -87,10 +87,10 @@ class ImportsMixin:
         return bool(pages) and pages <= set(selected.textures)
 
     @staticmethod
-    def _graft_plan(
+    def _add_animations_plan(
         selected: integrity.Contents, official: integrity.Contents, skeleton: str
     ) -> tuple[list[str], dict[str, list[str]]]:
-        """Plan a graft of the official ``skeleton``'s new animations into the mod's own (``graft.SkeletonGraft``).
+        """Plan how to add the official skeleton's new animations to the mod.
 
         Returns:
             The tuple (carried, refused): the names it carries and, per animation it cannot carry, the reasons
@@ -98,7 +98,7 @@ class ImportsMixin:
         """
         own = atlas_remap.pair_atlases(selected.skeletons, official.skeletons).get(skeleton)
         try:
-            plan = grafting.SkeletonGraft(selected.skeletons[own], official.skeletons[skeleton])
+            plan = animation_transfer.AddedAnimations(selected.skeletons[own], official.skeletons[skeleton])
         except (ValueError, KeyError, IndexError, struct.error):
             return [], {}
         return [an["name"] for an in plan.animations], dict(plan.refused)
@@ -115,10 +115,14 @@ class ImportsMixin:
         pin = pin or self.current_pin()
         files = {path.name: path for path in self._paths(record)}
         core = core_of(next(iter(files)))
-        kind = kind_of_file(next(iter(files)))
-        targets = (self._other_targets(files, pin) if kind == "other" else self._spine_parts(core, pin)) if pin else []
-        if pin and not targets and kind != "other":
-            target_core = self._core_map(pin).core(self._target_of(record), kind) or core
+        resource_type = resource_type_of_file(next(iter(files)))
+        targets = (
+            (self._other_targets(files, pin) if resource_type == "other" else self._spine_parts(core, pin))
+            if pin
+            else []
+        )
+        if pin and not targets and resource_type != "other":
+            target_core = self._core_map(pin).core(self._target_of(record), resource_type) or core
             targets = self._spine_parts(target_core, pin)
         paths = set(files.values()) | set(targets)
         for target in targets:
@@ -136,7 +140,7 @@ class ImportsMixin:
         identity = [
             pin.key if pin else None,
             self._target_of(record),
-            record.get("repaired_from"),
+            record.get("repair_source_id"),
             self._repaired_id(record) or None,
             stamps,
         ]
@@ -154,7 +158,7 @@ class ImportsMixin:
             progress: Receives the initial check-step dictionary; None disables reporting.
 
         Returns:
-            Compatibility data, official/mod Spine inputs, and available remap, old-rig, and graft options.
+            Compatibility data, official/mod Spine inputs, and available remap, old-rig, and animation transfer options.
         """
         record = self._record(mod_id)
         if progress:
@@ -162,15 +166,22 @@ class ImportsMixin:
         report = self._check_group(
             {path.name: path for path in self._paths(record)},
             pin or self.current_pin(),
-            variant_key=self._target_of(record),
+            alt_id=self._target_of(record),
             built=self._read_built_against(record),
         )
-        report["repaired_from"], report["repaired_id"] = record.get("repaired_from", ""), self._repaired_id(record)
-        report["remappable"] = report["remappable"] and not (report["repaired_from"] or report["repaired_id"])
+        report["repair_source_id"], report["repaired_copy_id"] = (
+            record.get("repair_source_id", ""),
+            self._repaired_id(record),
+        )
+        report["remappable"] = report["remappable"] and not (report["repair_source_id"] or report["repaired_copy_id"])
         old_rig = report.setdefault("oldRig", {"atlases": [], "animations": {}, "available": False})
         old_rig["available"] = old_rig["available"] and report["remappable"]
-        graft = report.setdefault("graft", {"kind": None, "animations": {}, "refused": {}, "available": False})
-        graft["available"] = graft["available"] and not (report["repaired_from"] or report["repaired_id"])
+        add_animations = report.setdefault(
+            "add_animations", {"resource_type": None, "animations": {}, "refused": {}, "available": False}
+        )
+        add_animations["available"] = add_animations["available"] and not (
+            report["repair_source_id"] or report["repaired_copy_id"]
+        )
         return report
 
     @_serialized
@@ -188,7 +199,7 @@ class ImportsMixin:
         return self._identify_import(path, name, pin)
 
     def _identify_import(self, path: Path, name: str, pin: Pin | None = None) -> tuple[str, str, str]:
-        if kind_of_file(name) == "other":
+        if resource_type_of_file(name) == "other":
             return identify(path, name, self.catalog, filename_only=True)
         pin = pin or self.current_pin()
         targets = self._spine_parts(core_of(name), pin) if pin else []
@@ -201,16 +212,16 @@ class ImportsMixin:
             )
         return identify(path, name, self.catalog, filename_only=named)
 
-    def import_core(self, core: str, kind: str, pin: Pin | None = None) -> str:
-        """Choose an import grouping key, mapping model dependency cores to their prefab slot.
+    def import_core(self, core: str, resource_type: str, pin: Pin | None = None) -> str:
+        """Choose an import grouping key, mapping chibi dependency cores to their prefab slot.
 
         Args:
             core: Physical bundle core, normalized to lower case.
-            kind: Library kind; only model joins several physical cores into one slot.
+            resource_type: Library kind; only chibi joins several physical cores into one slot.
             pin: Game install and server the operation is fixed to; None uses the current install if available.
         """
         core = core.lower()
-        if kind != "model":
+        if resource_type != "chibi":
             return core
         pin = pin or self.current_pin()
         return self._core_map(pin).slot(core) if pin else core
@@ -219,7 +230,7 @@ class ImportsMixin:
         """Apply the shared Add/batch version rule, respecting dates that coexist in the install.
 
         Args:
-            entries: Grouping-key/filename pairs in import order; model keys must use import_core
+            entries: Grouping-key/filename pairs in import order; chibi keys must use import_core
                 so prefab and dependency cores belong to one set.
             pin: Game install and server the operation is fixed to; None uses the current install if available.
 
@@ -396,7 +407,9 @@ class ImportsMixin:
             return None
         name = next(iter(files))
         targets = (
-            self._other_targets(files, pin) if kind_of_file(name) == "other" else self._spine_parts(core_of(name), pin)
+            self._other_targets(files, pin)
+            if resource_type_of_file(name) == "other"
+            else self._spine_parts(core_of(name), pin)
         )
         inspection = inspection or integrity.Inspection()
         # Named for current parts: this check judges their release itself and refuses another one by name.
@@ -433,8 +446,8 @@ class ImportsMixin:
         for source, incoming, baseline in identities:
             if not incoming.files:
                 raise ServiceError("mod_release_mismatch", file=source.name)
-            if kind_of_file(name) == "model":
-                self._check_model_references(source, incoming, baseline, replacements, targets, pin, inspection)
+            if resource_type_of_file(name) == "chibi":
+                self._check_chibi_references(source, incoming, baseline, replacements, targets, pin, inspection)
             elif incoming.files != baseline.files or incoming.layout != baseline.layout:
                 raise ServiceError("mod_release_mismatch", file=source.name)
         # A whole file must also point at objects the game still holds where it points into other bundles.
@@ -455,14 +468,14 @@ class ImportsMixin:
         return {
             "direct": replacements,
             "targets": list(replacements),
-            "originals": originals,
+            "officials": originals,
             "sourceContents": selected,
             "officialContents": official,
             "source": source_origin,
             "compatibility": compatibility,
         }
 
-    def _check_model_references(
+    def _check_chibi_references(
         self,
         source: Path,
         incoming: integrity.Contents,
@@ -476,7 +489,7 @@ class ImportsMixin:
         changed = {}
         for cab, layout in baseline.layout.items():
             replacement = dict(incoming.layout.get(cab, ()))
-            ids = {path_id for path_id, kind in layout if replacement.get(path_id) != kind}
+            ids = {path_id for path_id, resource_type in layout if replacement.get(path_id) != resource_type}
             if ids:
                 changed[cab] = ids
         removed_cabs = baseline.files - incoming.files
@@ -526,7 +539,7 @@ class ImportsMixin:
         duplicate = self._known().get(identity)
         core_name = core_of(next(iter(files)))
         pin = pin or self.current_pin()
-        generic = kind_of_file(next(iter(files))) == "other"
+        generic = resource_type_of_file(next(iter(files))) == "other"
         targets = []
         if pin:
             try:
@@ -555,7 +568,7 @@ class ImportsMixin:
                     "targets": targets,
                     "recognized": True,
                 }
-            if kind_of_file(next(iter(files))) not in ("spr", "lobby") or error.code not in (
+            if resource_type_of_file(next(iter(files))) not in ("portrait", "memorialLobby") or error.code not in (
                 "mod_platform_mismatch",
                 "mod_platform_unknown",
                 "mod_unity_version_mismatch",
@@ -584,17 +597,17 @@ class ImportsMixin:
             "installed": installed,
             "compatibility": report,
             "targets": targets,
-            "originals": originals if generic else [],
+            "officials": originals if generic else [],
             "rebuild": rebuild,
         }
 
     @_serialized
     def apply_import(
         self,
-        variant_key: str,
+        alt_id: str,
         source: str,
         *,
-        kind: Kind,
+        resource_type: ResourceType,
         pin: Pin,
         settings: Settings,
         backup: bool,
@@ -607,9 +620,9 @@ class ImportsMixin:
         the shared Settings object changes. Deferred configurations use the usual switch flow.
 
         Args:
-            variant_key: Variant key or generic target selecting the destination slot.
-            source: official, mod:<id>, or variant:<key> source selected by the import.
-            kind: Library kind restricting which slot receives the source.
+            alt_id: alt key or generic target selecting the destination slot.
+            source: official, mod:<id>, or alt:<key> source selected by the import.
+            resource_type: Library kind restricting which slot receives the source.
             pin: Game install and server the operation is fixed to.
             settings: Import-specific adapter supplying save and conversion settings during this call.
             backup: Whether this import's game writes also preserve adjacent .backup files.
@@ -619,7 +632,9 @@ class ImportsMixin:
         previous = self.settings
         self.settings = settings
         try:
-            return self.apply(variant_key, source, kind=kind, pin=pin, log=log, progress=progress, create_backup=backup)
+            return self.apply(
+                alt_id, source, resource_type=resource_type, pin=pin, log=log, progress=progress, create_backup=backup
+            )
         finally:
             self.settings = previous
 
@@ -630,7 +645,7 @@ class ImportsMixin:
         pin: Pin | None = None,
         log: LogFunc = no_log,
         *,
-        kind: Kind | None = None,
+        resource_type: ResourceType | None = None,
     ) -> AddResult:
         """Store an upload, then select each newly added mod through the normal switch flow.
 
@@ -639,24 +654,29 @@ class ImportsMixin:
             progress: Receives import and apply progress; None disables reporting.
             pin: Game install and server the operation is fixed to; None uses the current install if available.
             log: Receives user-facing operation messages.
-            kind: Required library kind, or None to infer it from each group.
+            resource_type: Required library kind, or None to infer it from each group.
 
         Returns:
             Import results with applied, deferred, incomplete, and failed additions recorded separately.
         """
         pin = pin or self.current_pin()
-        added = self.add(paths, progress, pin=pin, kind=kind)
+        added = self.add(paths, progress, pin=pin, resource_type=resource_type)
         for entry in added:
             try:
                 result = self.apply(
-                    entry.target, f"mod:{entry.id}", kind=entry.kind, pin=pin, log=log, progress=progress
+                    entry.target,
+                    f"mod:{entry.id}",
+                    resource_type=entry.resource_type,
+                    pin=pin,
+                    log=log,
+                    progress=progress,
                 )
             except ServiceError as error:
                 added.failed.append({"id": entry.id, **error.to_json()})
                 if (
                     pin is not None
-                    and entry.kind != "other"
-                    and self.configured(entry.target, pin).get(entry.kind) == f"mod:{entry.id}"
+                    and entry.resource_type != "other"
+                    and self.configured(entry.target, pin).get(entry.resource_type) == f"mod:{entry.id}"
                 ):
                     added.configured.append(entry)
             else:
@@ -668,13 +688,15 @@ class ImportsMixin:
 
     @_serialized
     @_mod_writer
-    def add_assigned_files(self, files: dict[str, Path], variant: str, kind: str, pin: Pin | None = None) -> AddResult:
+    def add_assigned_files(
+        self, files: dict[str, Path], alt: str, resource_type: str, pin: Pin | None = None
+    ) -> AddResult:
         """Store an explicitly attributed, self-contained mod without claiming an install target.
 
         Args:
             files: Safe bundle basenames mapped to source paths forming one complete mod.
-            variant: Assignment-capable variant key explicitly chosen to own the mod.
-            kind: Required inferred library kind for the self-contained upload.
+            alt: Assignment-capable alt key explicitly chosen to own the mod.
+            resource_type: Required inferred library kind for the self-contained upload.
             pin: Reserved install context; this storage-only operation does not inspect it.
 
         Raises:
@@ -682,18 +704,18 @@ class ImportsMixin:
         """
         from ..manual_identity import validate
 
-        self.catalog.assignment_variant(variant)
-        validate(files, kind)
+        self.catalog.assignment_alt(alt)
+        validate(files, resource_type)
         signature = self._identity(files)
         known = self._known().get(signature)
         result = AddResult()
         if known:
             record = self._record(known)
-            if self._target_of(record) != variant or record["kind"] != kind:
-                raise ServiceError("mod_target_mismatch", id=known, variant=variant)
+            if self._target_of(record) != alt or record["resource_type"] != resource_type:
+                raise ServiceError("mod_target_mismatch", id=known, alt=alt)
             result.duplicates.append(self._entry(record))
             return result
-        record = self._store(files, variant, variant, kind, user_added=True, assignment=variant)
+        record = self._store(files, alt, alt, resource_type, user_added=True, assignment=alt)
         result.append(self._entry(record))
         return result
 
@@ -702,9 +724,9 @@ class ImportsMixin:
         files: dict[str, Path],
         label: str,
         target: str,
-        kind: str,
+        resource_type: str,
         *,
-        repaired_from: str = "",
+        repair_source_id: str = "",
         user_added: bool = False,
         assignment: str = "",
         metadata: dict[str, Any] | None = None,
@@ -735,9 +757,9 @@ class ImportsMixin:
         record = {
             "id": mod_id,
             "files": names,
-            "label": label,
-            "target": target,
-            "kind": kind,
+            "name": label,
+            ("generic_target" if target.startswith("other:") else "target_alt"): target,
+            "resource_type": resource_type,
             "added": datetime.now(timezone.utc).isoformat(),
             "seen": False,
             "user_added": user_added,
@@ -746,19 +768,21 @@ class ImportsMixin:
             if set(metadata) & set(record):
                 raise ValueError("Generated Mod metadata overrides a reserved field")
             record.update(copy.deepcopy(metadata))
-        if repaired_from:
-            record["repaired_from"] = repaired_from
+        if repair_source_id:
+            record["repair_source_id"] = repair_source_id
         if assignment:
-            record["assignment"] = assignment
+            record["assigned_alt"] = assignment
         hashes = {name: self._hashes.get(files[name]).sha1 for name in names}
         data = {
-            "version": 1,
+            "version": 2,
             "id": mod_id,
             "phase": "preparing",
             "record": record,
             "hashes": hashes,
-            "repaired_from": repaired_from,
-            "old_repaired_id": self._record(repaired_from).get("repaired_id") if repaired_from else None,
+            "repair_source_id": repair_source_id,
+            "old_repaired_copy_id": self._record(repair_source_id).get("repaired_copy_id")
+            if repair_source_id
+            else None,
         }
         atomic_json(journal, data)
         try:
@@ -780,8 +804,8 @@ class ImportsMixin:
             sync_directory(directory.parent)
             sync_directory(transaction)
             self._records[mod_id] = record
-            if repaired_from:
-                self._record(repaired_from)["repaired_id"] = mod_id
+            if repair_source_id:
+                self._record(repair_source_id)["repaired_copy_id"] = mod_id
             self._save()
         except Exception as error:
             try:
@@ -815,12 +839,12 @@ class ImportsMixin:
         ):
             raise ServiceError("library_io_error", file=journal)
         self._records.pop(mod_id, None)
-        repaired = self._records.get(data["repaired_from"])
-        if repaired and repaired.get("repaired_id") == mod_id:
-            if data["old_repaired_id"] is None:
-                repaired.pop("repaired_id", None)
+        repaired = self._records.get(data["repair_source_id"])
+        if repaired and repaired.get("repaired_copy_id") == mod_id:
+            if data["old_repaired_copy_id"] is None:
+                repaired.pop("repaired_copy_id", None)
             else:
-                repaired["repaired_id"] = data["old_repaired_id"]
+                repaired["repaired_copy_id"] = data["old_repaired_copy_id"]
         path = self._state_path
         with file_lock(self.root / "state.json.lock"):
             try:
@@ -832,10 +856,10 @@ class ImportsMixin:
                     isinstance(state, dict)
                     and isinstance(state.get("version"), (int, float))
                     and not isinstance(state["version"], bool)
-                    and state["version"] > 1
+                    and state["version"] > 2
                 ):
                     raise ServiceError("library_state_unreadable", file=path)
-                if not isinstance(state, dict) or state.get("version") != 1 or not isinstance(state.get("mods"), list):
+                if not isinstance(state, dict) or state.get("version") != 2 or not isinstance(state.get("mods"), list):
                     raise ServiceError("library_io_error", file=path)
                 before = copy.deepcopy(state)
                 # held records are raw JSON, whatever their shape: only an object with this id goes
@@ -845,13 +869,13 @@ class ImportsMixin:
                 for record in state["mods"]:
                     if (
                         isinstance(record, dict)
-                        and record.get("id") == data["repaired_from"]
-                        and record.get("repaired_id") == mod_id
+                        and record.get("id") == data["repair_source_id"]
+                        and record.get("repaired_copy_id") == mod_id
                     ):
-                        if data["old_repaired_id"] is None:
-                            record.pop("repaired_id", None)
+                        if data["old_repaired_copy_id"] is None:
+                            record.pop("repaired_copy_id", None)
                         else:
-                            record["repaired_id"] = data["old_repaired_id"]
+                            record["repaired_copy_id"] = data["old_repaired_copy_id"]
                 if state != before:
                     # the file just read is the last good one; a rollback does not wait for its copy
                     try:
@@ -901,7 +925,7 @@ class ImportsMixin:
                         or not isinstance(record, dict)
                         or record.get("id") != mod_id
                         or not isinstance(hashes, dict)
-                        or data["version"] != 1
+                        or data["version"] != 2
                         or data["phase"] not in ("preparing", "publishing", "rollback")
                         or not record.get("files")
                         or set(record["files"]) != set(hashes)
@@ -942,7 +966,7 @@ class ImportsMixin:
     def _add_group(self, paths: list[Path], label: str, pin: Pin) -> tuple[str, bool]:
         """Store the parts of one core as one mod, whatever their dates.
 
-        The mod is keyed by the variant key the install's own core map gives the core (a core the current catalog does
+        The mod is keyed by the alt key the install's own core map gives the core (a core the current catalog does
         not map is stored too). A part set already in the library is not stored twice.
 
         Returns:
@@ -954,14 +978,16 @@ class ImportsMixin:
         if existing is not None:
             return existing, False
         core_name = core_of(paths[0].name)
-        kind = kind_of_file(paths[0].name)
-        if kind is None:
+        resource_type = resource_type_of_file(paths[0].name)
+        if resource_type is None:
             raise ServiceError("mod_unsupported", file=paths[0])
-        key = other_target(files) if kind == "other" else self._core_map(pin).key(core_name) or core_name.lower()
+        key = (
+            other_target(files) if resource_type == "other" else self._core_map(pin).key(core_name) or core_name.lower()
+        )
         return self._store(
             files,
-            label if kind == "other" else core_name,
+            label if resource_type == "other" else core_name,
             key,
-            kind,
+            resource_type,
             built_against=self._built_against(files, pin, "import", painted=True),
         )["id"], True

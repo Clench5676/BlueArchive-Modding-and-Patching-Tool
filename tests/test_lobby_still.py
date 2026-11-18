@@ -18,7 +18,7 @@ def test_verified_ui_lobby_camera_matches_still_coordinates(tmp_path):
     if not root.is_dir():
         pytest.skip("Verified game view not supplied")
     game = GameAssets(get_search_dirs(root), AssetCache(root=tmp_path / "cache"))
-    info = game.lobby_info("ch0169_home")
+    info = game.memorial_lobby_info("ch0169_home")
     assert info["main"] == "CH0169_home"
     assert info["view"] == {"x": -1480, "y": -832.5, "w": 2960, "h": 1665}
     (layer,) = [layer for layer in info["layers"] if layer["name"] == info["main"]]

@@ -30,7 +30,7 @@ import { modsOn } from "./detail-switchers.js";
 
 // --- game files switched elsewhere: the Enable Mods switch, the tray, a queued write, the classic UI closing
 // (library.changed, main.js). The student is read again, and the left side reloads the way an applied portrait or
-// lobby does when the shown alt's files of that kind changed. It waits while a popup or a fullscreen view is
+// memorial lobby does when the shown alt's files of that kind changed. It waits while a popup or a fullscreen view is
 // open, while the screen changes and while this screen's own job runs (whose reload comes first). ---
 let heldChange; // undefined: nothing waiting; null: anything may have changed; {cores}: those lower-case cores
 let reloadingChanged = null;
@@ -53,7 +53,7 @@ const quiet = () => !fullscreen && !Visual.isOpen() && !popupOpen() && !changing
 /**
  * Take a change of the game files made elsewhere (the Enable Mods switch, the tray, a queued write, the classic
  * UI closing) into the screen. The student is read again and the left side reloads the way an applied portrait
- * or lobby does.
+ * or memorial lobby does.
  * @param {{cores: string[]}|null} [change] The cores that changed; null: anything may have changed.
  * @returns {Promise<void>|undefined} Settles after queued changes have refreshed and drawn, or the screen is
  *     left; undefined when the screen is not open.
@@ -102,18 +102,18 @@ async function reloadChanged() {
     return;
   } // read anew meanwhile: read again after it
   // A repacked file can retain its size, date and student fields. A source event still revalidates its manifest.
-  const lobbyChanged = change === null || change.cores.includes(lower(alt().memorialLobby));
-  const modelChanged =
+  const memorialLobbyChanged = change === null || change.cores.includes(lower(alt().memorialLobby));
+  const chibiChanged =
     change === null || [alt().chibi, ...(alt().chibiCores || [])].some((core) => change.cores.includes(lower(core)));
   if (
     JSON.stringify(data) === JSON.stringify(shownStudent) &&
     previewEnabled === modsOn() &&
-    !lobbyChanged &&
-    !modelChanged
+    !memorialLobbyChanged &&
+    !chibiChanged
   )
     return;
   // the thumbnails of every core of the student whose files or configured preview changed
-  const changed = { portrait: false, memorialLobby: lobbyChanged, chibi: modelChanged };
+  const changed = { portrait: false, memorialLobby: memorialLobbyChanged, chibi: chibiChanged };
   for (const v of data.alts) {
     const was = shownStudent.alts.find((x) => x.key === v.key);
     for (const kind of ["portrait", "memorialLobby", "chibi"]) {
@@ -127,7 +127,7 @@ async function reloadChanged() {
       if (v.key === altId) changed[kind] = true;
     }
   }
-  ctx.invalidateRoster();
+  ctx.invalidateStudentList();
   for (const kind of ["portrait", "memorialLobby", "chibi"]) if (changed[kind]) resetPreview(kind);
   const left = changed[tabKind()];
   await changeInPlace(async () => {

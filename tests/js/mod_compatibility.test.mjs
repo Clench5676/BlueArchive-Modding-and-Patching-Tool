@@ -815,13 +815,13 @@ test("a portrait the game drew anew keeps the rig its textures were drawn for, u
   }
 });
 
-test("a mod with its own skeleton the official one outgrew is offered the graft beside the remap, the graft first", async () => {
+test("a mod with its own skeleton the official one outgrew is offered the animation transfer beside the remap, the animation transfer first", async () => {
   for (const locale of ["zh-CN", "en-US", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
-    const h = await harness(locale, "graft", true);
+    const h = await harness(locale, "addAnimations", true);
     const own = {
       ...mixedReport(),
       resourceType: "portrait",
-      graft: { kind: "own", animations: { "test.skel": ["17", "18"] }, available: true },
+      addAnimations: { resourceType: "own", animations: { "test.skel": ["17", "18"] }, available: true },
     };
     h.use(own);
     const rig = (atlas) => ({ atlas, skeleton: "c2tlbA==" });
@@ -830,7 +830,7 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
         token: "t1",
         rigs: {
           "test.atlas": {
-            kind: "own",
+            resourceType: "own",
             animations: ["17", "18"],
             mod: rig("mod"),
             base: null,
@@ -855,7 +855,7 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
         pages: [],
         drawings: {},
         report: {
-          grafted: ["17", "18"],
+          addedAnimations: ["17", "18"],
           corrected: ["18"],
           unfixed: [],
           refused: { 19: ["bone:hat"] },
@@ -873,11 +873,11 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
       },
     });
     const checked = await h.mod.inspect("old-mod");
-    assert.equal(checked.assessment.graft, true, locale);
+    assert.equal(checked.assessment.addAnimations, true, locale);
     assert.equal(checked.assessment.remap, true, locale);
     assert.deepEqual(
       h.mod.repairs(checked.assessment).map(({ kind }) => kind),
-      ["graft", "remap"],
+      ["addAnimations", "remap"],
       locale,
     );
     h.calls.length = 0;
@@ -887,16 +887,16 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
     const rule = popup.lines.findIndex((line) => line.rule);
     assert.deepEqual(
       texts.slice(rule + 1),
-      [h.strings.compatibility.autoUpdate, h.strings.compatibility.graft, h.strings.compatibility.remapUpdate],
+      [h.strings.compatibility.autoUpdate, h.strings.compatibility.addExpressions, h.strings.compatibility.remapUpdate],
       locale,
     );
-    // three buttons: Cancel, the remap, and the graft as the primary one
+    // three buttons: Cancel, the remap, and the animation transfer as the primary one
     assert.deepEqual(
       popup.buttons.map(({ label, value, primary }) => [label, value, !!primary]),
       [
         [h.strings.popup.cancel, "cancel", false],
         [h.strings.compatibility.remapAction, "remap", false],
-        [h.strings.compatibility.graftAction, "graft", true],
+        [h.strings.compatibility.addExpressionsAction, "addAnimations", true],
       ],
       locale,
     );
@@ -942,16 +942,16 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
     assert.deepEqual(
       lines,
       [
-        h.strings.remap.grafted.replace("{n}", 2),
-        h.strings.remap.graftCorrected.replace("{n}", 1),
-        h.strings.remap.graftRefused.replace("{n}", 1),
-        h.strings.remap.graftGrown.replace("{n}", 132),
-        h.strings.remap.graftUnanchored,
+        h.strings.remap.addedExpressions.replace("{n}", 2),
+        h.strings.remap.addAnimationsCorrected.replace("{n}", 1),
+        h.strings.remap.addAnimationsRefused.replace("{n}", 1),
+        h.strings.remap.addAnimationsGrown.replace("{n}", 132),
+        h.strings.remap.addExpressionsUnanchored,
         h.mod.CONVERTER_NAME,
       ],
       locale,
     );
-    // what the graft refused: the converter's route, which ends this comparison
+    // what the animation transfer refused: the converter's route, which ends this comparison
     assert.deepEqual(
       options.lines.at(-1).button,
       { label: h.strings.compatibility.converterAction, close: "convert" },
@@ -960,18 +960,18 @@ test("a mod with its own skeleton the official one outgrew is offered the graft 
     assert.deepEqual(options.expressions, ["17", "18"], locale);
     assert.deepEqual(options.marks, ["17"], locale);
     assert.ok(options.partial, locale);
-    assert.equal(options.verdict, "remap.graftPartial", locale); // its own verdict: nothing was repacked
+    assert.equal(options.verdict, "remap.addExpressionsPartial", locale); // its own verdict: nothing was repacked
   }
 });
 
-test("what the graft refused goes through the converter once it is fetched with the user's consent", async () => {
+test("what the animation transfer refused goes through the converter once it is fetched with the user's consent", async () => {
   for (const locale of ["zh-CN", "en-US"]) {
     // the first comparison ends with the converter's route, the second is accepted
     const h = await harness(locale, "ok", (n) => (n === 1 ? "convert" : true));
     h.use({
       ...mixedReport(),
       resourceType: "portrait",
-      graft: { kind: "own", animations: { "test.skel": ["17"] }, available: true },
+      addAnimations: { resourceType: "own", animations: { "test.skel": ["17"] }, available: true },
     });
     const rig = (atlas) => ({ atlas, skeleton: "c2tlbA==" });
     const review = (report) => ({
@@ -980,7 +980,7 @@ test("what the graft refused goes through the converter once it is fetched with 
       pages: [],
       drawings: {},
       report: {
-        grafted: ["17"],
+        addedAnimations: ["17"],
         corrected: [],
         unfixed: [],
         grown: 0,
@@ -1001,7 +1001,7 @@ test("what the graft refused goes through the converter once it is fetched with 
         token: "t1",
         rigs: {
           "test.atlas": {
-            kind: "own",
+            resourceType: "own",
             animations: ["17", "19"],
             mod: rig("mod"),
             base: null,
@@ -1026,7 +1026,7 @@ test("what the graft refused goes through the converter once it is fetched with 
         rigs: { "test.atlas": { before: rig("mod"), after: rig("after"), check: { "00": ["face"] } } },
         refused: {},
       },
-      "actions.addAnimationsConvertCheck": review({ grafted: ["17", "19"], refused: {}, converter: true }),
+      "actions.addAnimationsConvertCheck": review({ addedAnimations: ["17", "19"], refused: {}, converter: true }),
     });
     await h.mod.check("old-mod", "Mod", () => {}, { resourceType: "portrait" });
     const methods = h.calls.map(([method]) => method);
@@ -1071,14 +1071,20 @@ test("on macOS the converter is the user's to compile: no download", async () =>
   h.use({
     ...mixedReport(),
     resourceType: "portrait",
-    graft: { kind: "own", animations: { "test.skel": ["17"] }, available: true },
+    addAnimations: { resourceType: "own", animations: { "test.skel": ["17"] }, available: true },
   });
   const rig = (atlas) => ({ atlas, skeleton: "c2tlbA==" });
   h.steps({
     "actions.addAnimations": {
       token: "t1",
       rigs: {
-        "test.atlas": { kind: "own", animations: ["17"], mod: rig("mod"), base: null, official: rig("official") },
+        "test.atlas": {
+          resourceType: "own",
+          animations: ["17"],
+          mod: rig("mod"),
+          base: null,
+          official: rig("official"),
+        },
       },
     },
     "actions.addAnimationsBuild": {
@@ -1091,7 +1097,7 @@ test("on macOS the converter is the user's to compile: no download", async () =>
       pages: [],
       drawings: {},
       report: {
-        grafted: ["17"],
+        addedAnimations: ["17"],
         refused: { 19: "x" },
         corrected: [],
         unfixed: [],
@@ -1118,8 +1124,8 @@ test("a memorial lobby is offered its new animations with the ones it cannot tak
       ...report(),
       resourceType: "memorialLobby",
       remappable: false,
-      graft: {
-        kind: "own",
+      addAnimations: {
+        resourceType: "own",
         animations: { "test.skel": ["Talk_01", "Bad_01"] },
         refused: { "test.skel": { Hat_01: ["bone:hat", "constraint:cap"] } },
         available: true,
@@ -1129,7 +1135,7 @@ test("a memorial lobby is offered its new animations with the ones it cannot tak
       "actions.addAnimations": {
         token: "t2",
         plain: true,
-        rigs: { "test.atlas": { skeleton: "c2tlbA==", atlas: "grafted", animations: ["Talk_01", "Bad_01"] } },
+        rigs: { "test.atlas": { skeleton: "c2tlbA==", atlas: "carried", animations: ["Talk_01", "Bad_01"] } },
       },
       "actions.addAnimationsCheck": {
         preview: "review",
@@ -1137,7 +1143,7 @@ test("a memorial lobby is offered its new animations with the ones it cannot tak
         pages: [],
         drawings: {},
         report: {
-          grafted: ["Talk_01"],
+          addedAnimations: ["Talk_01"],
           corrected: [],
           unfixed: [],
           refused: { Hat_01: ["bone:hat"], Bad_01: ["pose:"] },
@@ -1161,7 +1167,7 @@ test("a memorial lobby is offered its new animations with the ones it cannot tak
         .split(".")
         .reduce((o, k) => o?.[k], h.strings)
         .replace(/\{(\w+)\}/g, (_, k) => vars[k]);
-    const refused = checked.assessment.issues.find(({ key }) => key === "graftRefused");
+    const refused = checked.assessment.issues.find(({ key }) => key === "addAnimationsRefused");
     assert.deepEqual(refused.params, { name: "test.skel", names: "Hat_01" }, locale);
     const sep = /^(zh|ja)/.test(locale) ? "、" : ", ";
     assert.equal(
@@ -1176,7 +1182,7 @@ test("a memorial lobby is offered its new animations with the ones it cannot tak
     );
     assert.deepEqual(
       h.mod.repairs(checked.assessment).map(({ kind, text, label }) => [kind, text, label]),
-      [["graft", h.strings.compatibility.graftAnimations, h.strings.compatibility.graftAnimationsAction]],
+      [["addAnimations", h.strings.compatibility.addAnimations, h.strings.compatibility.addAnimationsAction]],
       locale,
     );
     h.calls.length = 0;
@@ -1193,33 +1199,33 @@ test("a memorial lobby is offered its new animations with the ones it cannot tak
       locale,
     );
     assert.deepEqual(h.calls[2][1], { token: "t2", geometry: { "test.atlas": { failed: ["Bad_01"] } } }, locale);
-    assert.deepEqual(h.posed, [["failed", "grafted", ["Talk_01", "Bad_01"]]], locale);
+    assert.deepEqual(h.posed, [["failed", "carried", ["Talk_01", "Bad_01"]]], locale);
     const [, , , options] = h.comparisons[0];
     const lines = options.lines.map((line) => (typeof line === "string" ? line : line.text));
-    assert.deepEqual(lines, [T("remap.graftedAnimations", { n: 1 }), T("remap.graftRefused", { n: 2 })], locale);
+    assert.deepEqual(lines, [T("remap.addedAnimations", { n: 1 }), T("remap.addAnimationsRefused", { n: 2 })], locale);
     assert.equal(options.steps, "animation", locale);
     assert.deepEqual(options.expressions, ["Talk_01"], locale);
-    assert.equal(options.verdict, "remap.graftAnimationsPartial", locale);
+    assert.equal(options.verdict, "remap.addAnimationsPartial", locale);
   }
 });
 
-test("a redrawn portrait whose official rig gained expressions is offered its old rig with them grafted", async () => {
+test("a redrawn portrait whose official rig gained expressions is offered its old rig with them added", async () => {
   const h = await harness("zh-CN", "ok", false);
   h.use({
     ...mixedReport(),
     resourceType: "portrait",
     oldRig: { atlases: ["test.atlas"], animations: { "test.skel": ["11"] }, available: false },
-    graft: { kind: "oldRig", animations: { "test.skel": ["11"] }, available: true },
+    addAnimations: { resourceType: "oldRig", animations: { "test.skel": ["11"] }, available: true },
   });
   h.redraw({ redrawn: true, overlap: 0.5 });
   const checked = await h.mod.inspect("old-mod");
-  assert.equal(checked.assessment.graft, true);
+  assert.equal(checked.assessment.addAnimations, true);
   assert.equal(checked.assessment.oldRig, false);
   assert.ok(!checked.assessment.issues.some(({ key }) => key === "oldRigAnimations"));
   assert.ok(checked.assessment.issues.some(({ key }) => key === "missingAnimations"));
   assert.deepEqual(
     h.mod.repairs(checked.assessment).map(({ kind, text }) => [kind, text]),
-    [["graft", h.strings.compatibility.graftOldRig]],
+    [["addAnimations", h.strings.compatibility.addExpressionsOldRig]],
   );
   assert.equal(h.mod.canRemap("old-mod", { resourceType: "portrait" }), true);
 });

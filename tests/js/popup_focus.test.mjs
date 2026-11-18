@@ -380,7 +380,7 @@ test("a message popup takes the focus, traps Tab between its buttons and returns
   opener.remove();
 });
 
-test("a Hall-style modal that focuses its own host before joining the stack keeps that focus and traps Tab", () => {
+test("a Student Hall-style modal that focuses its own host before joining the stack keeps that focus and traps Tab", () => {
   const nav = mount("button");
   nav.focus();
   const host = popupHost();
@@ -418,10 +418,10 @@ test("an asset-consent style popup that must be answered is trapped too, and Esc
   behind.remove();
 });
 
-test("popup.js keeps one trap: the Hall modal and the import dialogs no longer carry their own", async () => {
+test("popup.js keeps one trap: the Student Hall modal and the import dialogs no longer carry their own", async () => {
   const { readFileSync } = await import("node:fs");
   const web = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}`, import.meta.url), "utf8");
-  assert.doesNotMatch(web("hall/student-hall-ui.js"), /event\.key !== "Tab"/);
+  assert.doesNotMatch(web("student-hall/student-hall-ui.js"), /event\.key !== "Tab"/);
   for (const file of IMPORT_PAGE_MODULES) assert.doesNotMatch(web(`mods/${file}`), /event\.key !== "Tab"/, file);
   assert.match(web("ui/popup.js"), /addEventListener\("keydown", trapKey\)/);
 });

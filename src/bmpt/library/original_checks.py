@@ -7,7 +7,7 @@ after the list is gone again: it is never used as an official copy, never writte
 
 ``originals.json`` in the library folder, beside ``originals/``:
 
-    {"version": 1, "originals": {"<bundle name>": {"by": "steam" | "crc" | "failed", "sha1": "...", "size": 1,
+    {"version": 2, "officials": {"<bundle name>": {"by": "steam" | "crc" | "failed", "sha1": "...", "size": 1,
                                                    "mtime": 1}}}
 
 A record speaks for the bytes it names (``sha1``). Managed originals also carry a recorded SHA-256 baseline. The
@@ -29,7 +29,7 @@ from .storage import Fingerprint, Fingerprints, atomic_json, file_revision
 logger = logging.getLogger(__name__)
 
 FILE = "originals.json"
-VERSION = 1
+VERSION = 2
 
 Verdict = Literal["steam", "crc", "failed"]
 VERDICTS = ("steam", "crc", "failed")
@@ -66,9 +66,9 @@ class OriginalChecks:
                 data = read_runtime(self.path)
             except (OSError, ValueError):
                 data = None
-            entries = data.get("originals") if isinstance(data, dict) and data.get("version") == VERSION else None
+            entries = data.get("officials") if isinstance(data, dict) and data.get("version") == VERSION else None
             if entries is not None:
-                self._extra = {key: value for key, value in data.items() if key not in ("version", "originals")}
+                self._extra = {key: value for key, value in data.items() if key not in ("version", "officials")}
             for name, record in (entries or {}).items():
                 if (
                     isinstance(name, str)
@@ -118,7 +118,7 @@ class OriginalChecks:
             self._write(records, {**self._extra, "digests": digests})
 
     def _write(self, records: dict, extra: dict) -> None:
-        atomic_json(self.path, {**extra, "version": VERSION, "originals": dict(sorted(records.items()))})
+        atomic_json(self.path, {**extra, "version": VERSION, "officials": dict(sorted(records.items()))})
         self._cache = None
 
     def of_bytes(self, name: str, fingerprint: Fingerprint) -> Verdict | None:

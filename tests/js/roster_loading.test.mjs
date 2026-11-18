@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { hasAsset, primaryKind, configuredKey, previewBase } from "../../src/bmpt/web/js/mods/switch-sources.js";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/roster/roster.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/student-list/student-list.js", import.meta.url), "utf8");
 const rowsCode = source.slice(source.indexOf("async function renderRow("), source.indexOf("function maxScroll("));
 const deferred = () => {
   let resolve;
@@ -88,7 +88,7 @@ function harness(kind = "portrait", generated = false) {
     view: { scroll: 0 },
     clipTop: () => 0,
     ctx: {},
-    clipRosterBand: async () => {},
+    clipStudentListBand: async () => {},
     cardTree: (e) => e,
     portraitOf: (e) => `portrait-${e.key}`,
     countText: () => "Portraits: 1, Memorial lobbies: 1",
@@ -113,10 +113,10 @@ function harness(kind = "portrait", generated = false) {
   return { ...api, requested, pictures, renders, host, rows, signal: env.thumbnailWork.signal };
 }
 
-test("roster cards keep their full accessible name and counts without a hover title", async () => {
+test("studentList cards keep their full accessible name and counts without a hover title", async () => {
   const h = harness();
   h.rows.get(0).items[0].e.mods = 2;
-  h.rows.get(0).items[0].e.modCounts = { portrait: 1, lobby: 1 };
+  h.rows.get(0).items[0].e.modCounts = { portrait: 1, memorialLobby: 1 };
   const pending = h.syncRows();
   const card = h.host.children[0].children[0];
   assert.equal(card.attrs["aria-label"], "Student 0 - Portraits: 1, Memorial lobbies: 1");
@@ -130,7 +130,7 @@ test("roster cards keep their full accessible name and counts without a hover ti
 });
 
 for (const kind of ["portrait", "memorialLobby"])
-  test(`visible generated ${kind} thumbnails complete before the roster is revealed`, async () => {
+  test(`visible generated ${kind} thumbnails complete before the student list is revealed`, async () => {
     const h = harness(kind, true);
     let ready = false;
     const showing = h.syncRows().then(() => {
@@ -150,7 +150,7 @@ for (const kind of ["portrait", "memorialLobby"])
     assert.deepEqual(h.requested, [0, 1, 2]);
   });
 
-test("leaving the roster cancels overscan queued behind the visible rows", async () => {
+test("leaving the student list cancels overscan queued behind the visible rows", async () => {
   const h = harness();
   const pending = h.syncRows();
   h.signal.aborted = true;
@@ -204,7 +204,7 @@ for (const kind of ["portrait", "memorialLobby"])
     assert.equal(ready, true);
   });
 
-test("roster fallback and configured-source stills receive the alt's default background", () => {
+test("studentList fallback and configured-source stills receive the alt's default background", () => {
   const code = source.slice(source.indexOf("const portraitOf ="), source.indexOf("// --- rows near the view"));
   const requested = [],
     student = {
@@ -239,14 +239,14 @@ test("roster fallback and configured-source stills receive the alt's default bac
   assert.deepEqual(
     requested.map((args) => [args[0], args[1], args[5]]),
     [
-      ["live-skeleton", "roster", "/bg/practice-room"],
-      ["configured-skeleton", "roster", "/bg/practice-room"],
-      ["configured-skeleton", "roster", "/bg/practice-room"],
+      ["live-skeleton", "studentList", "/bg/practice-room"],
+      ["configured-skeleton", "studentList", "/bg/practice-room"],
+      ["configured-skeleton", "studentList", "/bg/practice-room"],
     ],
   );
 });
 
-test("library-only roster cards use saved Mod previews without inventing local cores", () => {
+test("library-only student list cards use saved Mod previews without inventing local cores", () => {
   const code = source.slice(source.indexOf("const portraitOf ="), source.indexOf("// --- rows near the view"));
   const requested = [],
     alts = [];
@@ -278,7 +278,7 @@ test("library-only roster cards use saved Mod previews without inventing local c
       portrait: null,
       memorialLobby: null,
       chibi: null,
-      storedKinds: [kind],
+      storedResourceTypes: [kind],
       configured: {},
     };
     alts.push(student);
@@ -286,7 +286,7 @@ test("library-only roster cards use saved Mod previews without inventing local c
     assert.equal(portraitOf(student), null, "preview opt-out stays unselected");
     student.previewSources = { [kind]: `mod:assigned-${kind}` };
     const result = portraitOf(student);
-    if (kind === "chibi") assert.equal(result, null, "model cards never request Spine assets");
+    if (kind === "chibi") assert.equal(result, null, "chibi cards never request Spine assets");
     else assert.ok(result.includes(`/mod/assigned-${kind}/`));
   }
   assert.equal(requested.length, 2);
@@ -341,7 +341,7 @@ test("the empty list is placed by emptyListY on the middle of the visible paper,
     assert.equal(tree.pos[1], 1234);
     assert.equal(calls.length, 1);
     assert.equal(calls[0][0], centre);
-    assert.deepEqual([calls[0][1].text, calls[0][1].w_], ["[roster.empty]", 1200]);
+    assert.deepEqual([calls[0][1].text, calls[0][1].w_], ["[studentList.empty]", 1200]);
     assert.equal(collection.children[0].children[0].pos[1], 53, "the layout is cloned, never moved");
   }
 });

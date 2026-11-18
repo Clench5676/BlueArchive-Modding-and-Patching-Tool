@@ -23,10 +23,10 @@ import * as Impact from "./update-impact.js";
 export const entryKey = (e) => `${e?.install}|${e?.core}`;
 
 /**
- * An alternate lobby core's suffix ("gl", "teen"), shown after the kind; none for the primary core and
+ * An alternate memorial lobby core's suffix ("gl", "teen"), shown after the kind; none for the primary core and
  * portraits.
  */
-export function lobbySuffix(core) {
+export function memorialLobbySuffix(core) {
   const m = /_home_([a-z0-9]+)$/i.exec(String(core || ""));
   return m ? m[1].toLowerCase() : "";
 }
@@ -35,9 +35,9 @@ export function lobbySuffix(core) {
 export function kindLabel(entry) {
   const kind = entry?.resourceType || (/_spr$/i.test(entry?.core || "") ? "portrait" : "memorialLobby");
   if (kind === "other") return T("settings.mods.other");
-  if (kind !== "memorialLobby") return T(kind === "chibi" ? "tab.model" : "tab.portrait");
-  const suffix = lobbySuffix(entry?.core);
-  return suffix ? `${T("tab.lobby")} ${suffix}` : T("tab.lobby");
+  if (kind !== "memorialLobby") return T(kind === "chibi" ? "tab.chibi" : "tab.portrait");
+  const suffix = memorialLobbySuffix(entry?.core);
+  return suffix ? `${T("tab.memorialLobby")} ${suffix}` : T("tab.memorialLobby");
 }
 
 /** The install an entry is in, from mods.state.installs. */
@@ -394,10 +394,11 @@ async function cardsOf(entries, state, which) {
   const nameOf = await names().catch(() => undefined);
   return entries.map((e) => {
     const base = entryBase(e, state),
-      lobby = e?.resourceType === "memorialLobby";
+      memorialLobby = e?.resourceType === "memorialLobby";
     // a portrait's details show it upright, as the portrait switch popup does
-    const big = e?.resourceType === "portrait" ? () => thumb(base, "portrait") : () => thumb(base, "bust", null, lobby);
-    return { ...card(e, { state, nameOf, which }), thumb: thumb(base, "card", null, lobby), big };
+    const big =
+      e?.resourceType === "portrait" ? () => thumb(base, "portrait") : () => thumb(base, "bust", null, memorialLobby);
+    return { ...card(e, { state, nameOf, which }), thumb: thumb(base, "card", null, memorialLobby), big };
   });
 }
 

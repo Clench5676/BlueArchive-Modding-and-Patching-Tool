@@ -53,7 +53,7 @@ export const disable = (original) => disabledButton(layouts.filter, original);
 /**
  * The popups' light-blue button (ETCSetting/ButtonBg): 402 x 136, caption 48 down to 34 fitted to the width
  * less 60, its label box 30 less across and 20 less down. Callers vary the width (240 at least) and pass their
- * own sizes where a screen has its own (the Hall's boxes).
+ * own sizes where a screen has its own (the Student Hall's boxes).
  */
 export function optionButton(
   option,

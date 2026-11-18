@@ -28,7 +28,7 @@ named exemplar node.
 ## Adoption
 
 On the system: every popup (`popup.js`, `popup-frames.js`), Import Mod, Settings, the switch cards, the toolbars of
-the Student Hall, its framing, the roster and photography, and the detail page's composed parts. Values that are a
+the Student Hall, its framing, the student list and thumbnail capture, and the detail page's composed parts. Values that are a
 prefab's own stay and say so in the code. Not yet: the stopped memorial candidate/queue/footer buttons, the
-photography toolbar and the detail screen's Show in Finder / Explorer button (`retainedButton`, the old `POPUP` /
+thumbnail capture toolbar and the detail screen's Show in Finder / Explorer button (`retainedButton`, the old `POPUP` /
 `FOOTER` tokens); the classic tool pages join the system when they move into the web UI.

@@ -1,6 +1,8 @@
-"""Reading the library's mods and their photographs; renaming, favouring and removing mods."""
+"""Reading the library's mods and their thumbnails; renaming, favouring and removing mods."""
 
 from __future__ import annotations
+
+from ..records import stored_target
 
 import contextlib
 import hashlib
@@ -24,7 +26,7 @@ from ..judge import (
     date_of,
     says_official,
 )
-from ..models import (
+from ..records import (
     ApplyResult,
     DeleteResult,
     ModEntry,
@@ -38,46 +40,48 @@ from .base import _Entry, _drop_source, _errors, _game_folder, _mod_writer, _ser
 
 
 class ModsMixin:
-    """Reading the library's mods and their photographs; renaming, favouring and removing mods."""
+    """Reading the library's mods and their thumbnails; renaming, favouring and removing mods."""
 
     @_serialized
     def assigned_targets(self) -> set[str]:
         """Return explicit ownership targets represented by stored mods, including absent local students."""
-        return {record["assignment"] for record in self._records.values() if record.get("assignment")}
+        return {record["assigned_alt"] for record in self._records.values() if record.get("assigned_alt")}
 
     @_serialized
-    def variant_metadata(self, key: str) -> Any:
-        """Resolve a variant key's catalog or stored ownership metadata under the library lock."""
-        return self._variant(key)
+    def alt_metadata(self, key: str) -> Any:
+        """Resolve an alt key's catalog or stored ownership metadata under the library lock."""
+        return self._alt(key)
 
-    def _variant(self, key: str) -> Any:
+    def _alt(self, key: str) -> Any:
         try:
-            return self.catalog.variant(key)
+            return self.catalog.alt(key)
         except (KeyError, ServiceError) as error:
             if isinstance(error, ServiceError) and error.code != "catalog_alt_not_found":
                 raise
-            if callable(getattr(self.catalog, "assignment_variant", None)) and any(
-                (record.get("assignment") or record.get("target")) == key for record in self._records.values()
+            if callable(getattr(self.catalog, "assignment_alt", None)) and any(
+                (record.get("assigned_alt") or stored_target(record)) == key for record in self._records.values()
             ):
                 try:
-                    return self.catalog.assignment_variant(key)
+                    return self.catalog.assignment_alt(key)
                 except (KeyError, ServiceError) as lookup:
                     if isinstance(lookup, ServiceError) and lookup.code != "catalog_alt_not_found":
                         raise
-            # Current NPC bundles may have no roster entry. Their stored filename owns the model slot.
+            # Current NPC bundles may have no student list entry. Their stored filename owns the chibi slot.
             record = next(
                 (
                     record
                     for record in self._records.values()
-                    if record["kind"] == "model" and record["target"] == key and core_of(record["files"][0]) == key
+                    if record["resource_type"] == "chibi"
+                    and stored_target(record) == key
+                    and core_of(record["files"][0]) == key
                 ),
                 None,
             )
             if record:
-                from ...catalog.models import Variant
+                from ...catalog.records import Alt
                 from ...catalog._names import LANGUAGES, BASE_SHORT
 
-                return Variant(
+                return Alt(
                     key,
                     key,
                     key,
@@ -89,10 +93,10 @@ class ModsMixin:
                     None,
                     None,
                     None,
-                    model=key,
+                    chibi=key,
                 )
             if isinstance(error, KeyError):
-                raise ServiceError("alt_not_found", variant=key) from error
+                raise ServiceError("alt_not_found", alt=key) from error
             raise
 
     def _record(self, mod_id: str) -> dict[str, Any]:
@@ -111,17 +115,17 @@ class ModsMixin:
         return paths
 
     def _target_of(self, record: dict[str, Any]) -> str:
-        """Give the variant a mod belongs to.
+        """Give the alt a mod belongs to.
 
         That is the one the current catalog gives its core, else its stored target (fixed when it was added; a later
         catalog may name that core by an alias).
         """
-        if record.get("assignment"):
-            return record["assignment"]
-        if record["kind"] == "other":
-            return record["target"]
-        variant = self.catalog.variant_for_core(core_of(record["files"][0]))
-        return variant.key if variant is not None else record["target"]
+        if record.get("assigned_alt"):
+            return record["assigned_alt"]
+        if record["resource_type"] == "other":
+            return stored_target(record)
+        alt = self.catalog.alt_for_core(core_of(record["files"][0]))
+        return alt.key if alt is not None else stored_target(record)
 
     def _repaired_id(self, record: dict[str, Any]) -> str:
         """Give the repaired copy a mod links to, an empty string when the link points at no record.
@@ -129,16 +133,16 @@ class ModsMixin:
         An old library that deleted the copy keeps its id, which counts as none. A held record is there (its files are
         missing for now, not gone): its link stays, and the mod stays not repairable while it is held.
         """
-        mod_id = record.get("repaired_id")
+        mod_id = record.get("repaired_copy_id")
         if not isinstance(mod_id, str) or not mod_id:
             return ""
         return mod_id if mod_id in self._records or mod_id in self._held_ids() else ""
 
     @staticmethod
     def _optimized_from(record: dict[str, Any]) -> str:
-        """The source an Optimize Physics copy was built from ("variant:<key>"), "" for any other mod."""
+        """The source an Optimize Physics copy was built from ("alt:<key>"), "" for any other mod."""
         source = record.get("optimized_from")
-        return source if isinstance(source, str) and source.startswith("variant:") else ""
+        return source if isinstance(source, str) and source.startswith("alt:") else ""
 
     @classmethod
     def _costume_outdated(cls, record: dict[str, Any]) -> bool:
@@ -157,30 +161,30 @@ class ModsMixin:
         )
 
     def _entry(self, record: dict[str, Any]) -> ModEntry:
-        from ..lobby_camera import meta_of
+        from ..memorial_lobby_camera import meta_of
 
         paths = self._paths(record)
         parsed = parse_filename(paths[0].name)
-        # a memorial lobby camera is one of its variant's lobby choices (lobby_camera)
+        # a memorial lobby camera is one of its alt's memorial lobby choices (memorial_lobby_camera)
         camera = meta_of(record)
         # The parts of one mod can carry different dates: the mod is dated by its newest part, not by the first one.
         return ModEntry(
             record["id"],
             paths[0],
             self._label(record),
-            camera["variant"] if camera else self._target_of(record),
-            "lobby" if camera else record["kind"],
+            camera["alt"] if camera else self._target_of(record),
+            "memorialLobby" if camera else record["resource_type"],
             record["added"],
             not record["seen"],
             sum(p.stat().st_size for p in paths),
             max(date_of(path.name) for path in paths),
             parsed.crc,
             camera["core"] if camera else core_of(paths[0].name),
-            repaired_from=record.get("repaired_from", ""),
-            repaired_id=self._repaired_id(record),
+            repair_source_id=record.get("repair_source_id", ""),
+            repaired_copy_id=self._repaired_id(record),
             user_added=record.get("user_added") is True,
             alias=record.get("alias", ""),
-            label_base=record["label"],
+            base_name=record["name"],
             optimized_from=self._optimized_from(record),
             camera={key: camera[key] for key in ("source", "number", "scale", "offset")} if camera else None,
         )
@@ -190,18 +194,18 @@ class ModsMixin:
         alias = record.get("alias")
         if isinstance(alias, str) and alias:
             return alias
-        if record.get("roster_photography"):
-            return t("webui.photo.modName")
-        if isinstance(record.get("lobby_camera"), dict):
-            return t("webui.lobby.cameraName", n=record["lobby_camera"].get("number", 1))
+        if record.get("student_list_thumbnails"):
+            return t("webui.thumbnail.modName")
+        if isinstance(record.get("memorial_lobby_camera"), dict):
+            return t("webui.memorialLobby.cameraName", n=record["memorial_lobby_camera"].get("number", 1))
         if self._optimized_from(record):
-            return t("webui.model.optimizedName", name=record["label"])
-        source = record.get("repaired_from")
+            return t("webui.chibi.optimizedName", name=record["name"])
+        source = record.get("repair_source_id")
         if isinstance(source, str) and source and source not in seen:
             parent = self._records.get(source)
-            name = self._label(parent, seen | {record["id"]}) if parent else record["label"]
+            name = self._label(parent, seen | {record["id"]}) if parent else record["name"]
             return t("webui.remap.name", name=name)
-        return record["label"]
+        return record["name"]
 
     @_serialized
     def mods(self) -> list[ModEntry]:
@@ -209,13 +213,13 @@ class ModsMixin:
         return [self._entry(record) for record in self._records.values()]
 
     @property
-    def photographs(self):
-        """Return the persistent family-aware photograph store, creating its accessor lazily."""
-        from ..photographs import Photographs, student_family
+    def thumbnails(self):
+        """Return the persistent student-aware thumbnail store, creating its accessor lazily."""
+        from ..thumbnails import Thumbnails, student_of
 
-        if not hasattr(self, "_photographs"):
-            self._photographs = Photographs(self.root, lambda key, catalog=self.catalog: student_family(catalog, key))
-        return self._photographs
+        if not hasattr(self, "_thumbnails"):
+            self._thumbnails = Thumbnails(self.root, lambda key, catalog=self.catalog: student_of(catalog, key))
+        return self._thumbnails
 
     def _migrate_collection_slots(self) -> None:
         """Partition legacy shared Collection slots by batch without changing any game bytes."""
@@ -268,7 +272,7 @@ class ModsMixin:
         self.profiles.update(update)
 
     @_serialized
-    def photograph_choice(self, descriptor: dict, pin: Pin | None = None) -> dict:
+    def thumbnail_choice(self, descriptor: dict, pin: Pin | None = None) -> dict:
         """Describe the desired Collection portrait, including a choice deferred while mods are off.
 
         Args:
@@ -280,82 +284,82 @@ class ModsMixin:
         return portrait_edit.choice(self, descriptor, self._current(pin))
 
     @_serialized
-    def photograph_removal_info(self, variant: str, key: str) -> dict:
-        """Describe the skins whose managed recipes use a photograph before deletion.
+    def thumbnail_removal_info(self, alt: str, key: str) -> dict:
+        """Describe the skins whose managed recipes use a thumbnail before deletion.
 
         Args:
-            variant: Variant key authorizing the photo's student family and identifying local use.
-            key: Photograph ID, or official for the undeletable game-art choice.
+            alt: alt key authorizing the thumbnail's student and identifying local use.
+            key: thumbnail ID, or official for the undeletable game-art choice.
 
         Returns:
-            Official and usage flags plus the sorted target variant keys.
+            Official and usage flags plus the sorted target alt keys.
         """
         from ..portrait_edit import usage_targets
 
         if key == "official":
             return {"official": True, "used": False, "used_here": False, "used_elsewhere": False, "targets": []}
-        self.photographs._entry(variant, key)
+        self.thumbnails._entry(alt, key)
         uses = usage_targets(self)
         targets = sorted(uses.get(key, set()))
         return {
             "official": False,
             "used": key in uses,
-            "used_here": variant in targets,
-            "used_elsewhere": any(target != variant for target in targets),
+            "used_here": alt in targets,
+            "used_elsewhere": any(target != alt for target in targets),
             "targets": targets,
         }
 
     @_serialized
     @_mod_writer
-    def delete_photograph(self, variant: str, key: str, confirm: bool = False, log: LogFunc = no_log) -> dict:
-        """Delete a photograph transactionally, resetting its managed texture uses when confirmed.
+    def delete_thumbnail(self, alt: str, key: str, confirm: bool = False, log: LogFunc = no_log) -> dict:
+        """Delete a thumbnail transactionally, resetting its managed texture uses when confirmed.
 
         Args:
-            variant: Variant key authorizing access to the photo's student family.
-            key: Saved photograph ID; the official choice cannot be removed.
-            confirm: Whether to reset recipes using the photo before deleting it.
+            alt: alt key authorizing access to the thumbnail's student.
+            key: Saved thumbnail ID; the official choice cannot be removed.
+            confirm: Whether to reset recipes using the thumbnail before deleting it.
             log: Receives user-facing operation messages.
 
         Returns:
-            The remaining family photograph listing.
+            The remaining student thumbnail listing.
 
         Raises:
             ServiceError: The asset is official, confirmation is required, a held reference
-                prevents deletion, or a protected write or photo validation fails.
+                prevents deletion, or a protected write or thumbnail validation fails.
         """
         from .. import portrait_edit
 
         if key in ("official", None):
             raise ServiceError("asset_official")
-        self.photographs._entry(variant, key)
+        self.thumbnails._entry(alt, key)
         if key in portrait_edit.in_use(self) and not confirm:
             raise ServiceError("asset_delete_confirm")
         from ..asset_delete import transaction
 
         with transaction(self) as deletion:
             if key in portrait_edit.in_use(self):
-                portrait_edit.remove_photo(self, key, log)
+                portrait_edit.remove_thumbnail(self, key, log)
             portrait_edit._prune_composites(self)
-            deletion.remember_photo(variant, key)
-            result = self.photographs.delete(variant, key, portrait_edit.in_use(self))
+            deletion.remember_thumbnail(alt, key)
+            result = self.thumbnails.delete(alt, key, portrait_edit.in_use(self))
         return result
 
     @_serialized
     @_mod_writer
-    def apply_photograph(
+    def apply_thumbnail(
         self,
-        variant: str,
+        alt: str,
         key: str | None,
         descriptor: dict,
         pin: Pin | None = None,
         log: LogFunc = no_log,
         progress: ProgressCallback | None = None,
     ) -> ApplyResult:
-        """Apply a saved photograph to a variant's shared Collection texture.
+        """Apply a saved thumbnail to an alt's shared Collection texture.
 
         Args:
-            variant: Variant key whose catalog portrait must match the descriptor's texture name.
-            key: Photograph ID in the same student family, or None to restore official art.
+            alt: alt key whose catalog portrait must match the descriptor's texture name.
+            key: thumbnail ID in the same student, or None to restore official art.
             descriptor: Collection target metadata containing the bundle and exact texture name.
             pin: Game install and server the operation is fixed to; None uses the current install.
             log: Receives user-facing operation messages.
@@ -366,11 +370,11 @@ class ModsMixin:
         """
         from .. import portrait_edit
 
-        target = self._variant(variant)
-        if not getattr(target, "portrait", None) or target.portrait != descriptor.get("name"):
+        target = self._alt(alt)
+        if not getattr(target, "official_thumbnail", None) or target.official_thumbnail != descriptor.get("name"):
             raise ServiceError("thumbnail_target_unavailable")
-        png = self.photographs.image(variant, key) if key is not None else None
-        return portrait_edit.apply(self, variant, key, png, descriptor, self._current(pin), log, progress)
+        png = self.thumbnails.image(alt, key) if key is not None else None
+        return portrait_edit.apply(self, alt, key, png, descriptor, self._current(pin), log, progress)
 
     def _recognize_installed(self, mod_id: str, identity: frozenset) -> bool:
         """Adopt exact outside content without writing any game files."""
@@ -399,7 +403,7 @@ class ModsMixin:
     def _matches_installed(self, identity: frozenset, entry: _Entry) -> bool:
         files = {part.path.name: part.path for part in entry.parts}
         modified = {part.path.name: part.path for part in entry.parts if not part.official}
-        if entry.kind == "other":
+        if entry.resource_type == "other":
             slots = {core_of(name) for name in files}
             identity = frozenset(item for item in identity if item[0] in slots)
         return bool(modified) and self._identity(modified) <= identity <= self._identity(files)
@@ -412,17 +416,21 @@ class ModsMixin:
             pin: Game install and server the operation is fixed to; None uses the current install if available.
 
         Returns:
-            Generic mod rows excluding photograph recipes and cameras, with selected and active/mixed/missing states.
+            Generic mod rows excluding thumbnail recipes and cameras, with selected and active/mixed/missing states.
         """
         pin = pin or self.current_pin()
         view = self._view([pin], "full") if pin else None
         rows = []
         for record in self._records.values():
-            if record["kind"] != "other" or record.get("roster_photography") or record.get("lobby_camera"):
+            if (
+                record["resource_type"] != "other"
+                or record.get("student_list_thumbnails")
+                or record.get("memorial_lobby_camera")
+            ):
                 continue
             source = f"mod:{record['id']}"
             try:
-                targets = self._game_files(record["target"], "other", pin) if pin else []
+                targets = self._game_files(stored_target(record), "other", pin) if pin else []
             except ServiceError:
                 targets = []
             entries = [view.entry(pin, core_of(path.name)) for path in targets]
@@ -444,8 +452,8 @@ class ModsMixin:
             rows.append(
                 {
                     "id": record["id"],
-                    "label": self._label(record),
-                    "target": record["target"],
+                    "name": self._label(record),
+                    "target": stored_target(record),
                     "files": [path.name for path in targets] or list(record["files"]),
                     "selected": bool(entries) and selected == len(entries),
                     "state": state,
@@ -531,8 +539,8 @@ class ModsMixin:
 
         if self._removal_info(mod_id)["used"] and not confirm:
             raise ServiceError("asset_delete_confirm")
-        # the lobby cameras framed on this mod's art go with it: each puts its prefab back first
-        from ..lobby_camera import cameras, meta_of
+        # the memorial lobby cameras framed on this mod's art go with it: each puts its prefab back first
+        from ..memorial_lobby_camera import cameras, meta_of
 
         for camera in [r["id"] for r in cameras(self) if meta_of(r).get("source") == source]:
             gone = self.remove(camera, confirm=True, log=log)
@@ -561,8 +569,10 @@ class ModsMixin:
                         applied.pop("build", None)
                 del self._records[mod_id]
                 for other in self._records.values():
-                    if other.get("repaired_id") == mod_id:
-                        del other["repaired_id"]  # the original is repairable again: one write with the copy's removal
+                    if other.get("repaired_copy_id") == mod_id:
+                        del other[
+                            "repaired_copy_id"
+                        ]  # the original is repairable again: one write with the copy's removal
                 self._save()
                 remove_tree(directory)
                 self._delete_built_files(keys, self.profiles.read())
@@ -576,7 +586,7 @@ class ModsMixin:
             [],
             [{"install": key, "core": core} for key, core in sorted(affected)],
             sorted({core for _, core in affected}),
-            [record["kind"]] if affected else [],
+            [record["resource_type"]] if affected else [],
         )
 
     def _in_use(self, mod_id: str) -> list[Path]:
@@ -641,7 +651,7 @@ class ModsMixin:
             ServiceError: The label is invalid, the mod is missing, or the state cannot be written.
         """
         if not isinstance(label, str):
-            raise ServiceError("bad_params", key="label")
+            raise ServiceError("bad_params", key="alias")
         alias = " ".join(
             "".join(
                 ch
@@ -650,7 +660,7 @@ class ModsMixin:
             ).split()
         )
         if len(alias) > 120:
-            raise ServiceError("bad_params", key="label")
+            raise ServiceError("bad_params", key="alias")
         record = self._record(mod_id)
         old = record.get("alias")
         if alias:
@@ -681,23 +691,23 @@ class ModsMixin:
 
     @_serialized
     def favorites(self) -> set[str]:
-        """Return a snapshot of the favorite variant keys."""
+        """Return a snapshot of the favorite alt keys."""
         return set(self._favorites)
 
     @_serialized
-    def set_favorite(self, variant_key: str, on: bool) -> None:
-        """Set a variant's favorite flag.
+    def set_favorite(self, alt_id: str, on: bool) -> None:
+        """Set an alt's favorite flag.
 
         Args:
-            variant_key: Variant key validated against catalog or stored ownership metadata.
-            on: Whether the variant belongs in the saved favorites set.
+            alt_id: alt key validated against catalog or stored ownership metadata.
+            on: Whether the alt belongs in the saved favorites set.
         """
-        self._variant(variant_key)
+        self._alt(alt_id)
         old = set(self._favorites)
         if on:
-            self._favorites.add(variant_key)
+            self._favorites.add(alt_id)
         else:
-            self._favorites.discard(variant_key)
+            self._favorites.discard(alt_id)
         try:
             self._save()
         except (OSError, ServiceError):

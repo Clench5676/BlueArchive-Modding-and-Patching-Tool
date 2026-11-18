@@ -1,4 +1,4 @@
-"""The graft of an official rig's new animations into a mod's own rig (bmpt.spine.graft, bmpt.spine.binary)."""
+"""The graft of an official rig's new animations into a mod's own rig (bmpt.spine.add_animations, bmpt.spine.binary)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from bmpt.spine import atlas_remap, graft, rebake
+from bmpt.spine import atlas_remap, add_animations, rebake
 from bmpt.spine.binary import MESH, REGION, Skeleton, draw_order, draw_order_bytes, strip_nonessential, varint_bytes
 
 from graft_rigs import mesh, region, remove_animations, remove_slot, skeleton
@@ -105,7 +105,7 @@ def test_an_animation_the_mod_lacks_comes_with_the_attachment_it_shows_and_nothi
         skin={"body": [("b", region(w=9))], "face": [("a", region(w=7))], "glow": [("g", region())]},
         animations=[("00", {"face": ["a"]}, [])],
     )
-    g = graft.SkeletonGraft(mod, official())
+    g = add_animations.AddedAnimations(mod, official())
     out = g.build()
     assert names(out) == ["00", "17"] and not g.refused and not g.inserted
     assert entry(out, "face") == ["a", "new"]
@@ -123,7 +123,7 @@ def test_a_slot_the_new_animation_needs_is_inserted_in_the_official_order_and_th
         animations=[("00", {}, [["glow", "body"]])],
     )
     new = official(animations=[("00", {}, [["glow", "body", "face"]]), ("17", {"face": ["new"]}, [])])
-    g = graft.SkeletonGraft(mod, new)
+    g = add_animations.AddedAnimations(mod, new)
     out = g.build()
     assert g.inserted == ["face"]
     assert [s["name"] for s in Skeleton(out).slots] == ["body", "face", "glow"]
@@ -139,7 +139,7 @@ def test_draw_order_of_a_carried_animation_is_recomputed_for_the_mods_slot_list(
         animations=[("00", {}, [])],
     )
     new = official(animations=[("00", {}, []), ("17", {"face": ["new"]}, [["glow", "face", "body"]])])
-    out = graft.SkeletonGraft(mod, new).build()
+    out = add_animations.AddedAnimations(mod, new).build()
     assert orders(out, "17") == [["glow", "face", "body", "extra"]]
 
 
@@ -154,7 +154,7 @@ def test_carried_records_follow_whether_the_mods_file_holds_nonessential_data(mo
         nonessential=mod_ness,
         animations=[("00", {"face": ["a"]}, [])],
     )
-    out = graft.SkeletonGraft(mod, new).build()
+    out = add_animations.AddedAnimations(mod, new).build()
     sk = Skeleton(out)  # walks to the last byte
     assert sk.nonessential is mod_ness
     assert sk.attachments()[("default", "face", "new")]["kind"] == MESH
@@ -173,7 +173,7 @@ def test_an_animation_that_needs_a_bone_the_mod_lacks_is_refused_with_the_reason
         animations=[("00", {"face": ["a"]}, []), ("17", {"face": ["new"]}, []), ("18", {"cap": ["c"]}, [])],
     )
     mod = official(animations=[("00", {"face": ["a"]}, [])])
-    g = graft.SkeletonGraft(mod, new)
+    g = add_animations.AddedAnimations(mod, new)
     assert [a["name"] for a in g.animations] == ["17"]
     assert g.refused == {"18": ["bone:hat"]}
 
@@ -187,17 +187,17 @@ def test_a_carried_region_follows_the_mods_bone_and_a_sheared_one_goes_as_a_mesh
         skin={"body": [("b", region())], "face": [("a", region())], "glow": [("g", region())]},
         animations=[("00", {"face": ["a"]}, [])],
     )
-    g = graft.SkeletonGraft(mod, new)
+    g = add_animations.AddedAnimations(mod, new)
     carried = next(iter(g.carried.values()))
     turn = np.array([[0.0, -2.0, 5.0], [2.0, 0.0, -3.0], [0, 0, 1]])  # 90 degrees, twice the size, moved
-    body, note = graft.placed_record(g, carried, turn, 0, None)
+    body, note = add_animations.placed_record(g, carried, turn, 0, None)
     out = g.build({("default", "face", "new"): body})
     a = Skeleton(out).attachments()[("default", "face", "new")]
     assert not note and a["kind"] == REGION
     assert np.allclose(a["floats"], (90, 5 + 0 * 1, -3 + 2 * 1, 2, 2, 4, 4))
     sheared = np.array([[1.0, 0.5, 0.0], [0.0, 1.0, 0.0], [0, 0, 1]])
     box = atlas_remap.Region("new", -1, "page.png", (0, 0), (4, 4), (4, 4), (0, 0))
-    body, note = graft.placed_record(g, carried, sheared, 0, box)
+    body, note = add_animations.placed_record(g, carried, sheared, 0, box)
     out = g.build({("default", "face", "new"): body})
     a = Skeleton(out).attachments()[("default", "face", "new")]
     assert note == "mesh" and a["kind"] == MESH and a["vertex_floats"] == 8
@@ -210,13 +210,13 @@ def test_the_anchor_is_fitted_over_the_attachments_both_rigs_have_and_refused_wh
     tri = np.zeros((2, 3), dtype=np.int64)
 
     def rig(points):
-        return graft.Setup(skin={("face", "a"): ("page", points, np.zeros_like(points), tri)})
+        return add_animations.Setup(skin={("face", "a"): ("page", points, np.zeros_like(points), tri)})
 
-    t, fitted = graft.fit_anchor(rig(moved), rig(square), "face")
+    t, fitted = add_animations.fit_anchor(rig(moved), rig(square), "face")
     assert fitted and np.allclose(t, move, atol=1e-6)
     bent = moved.copy()
     bent[2] += (5, 5)
-    t, fitted = graft.fit_anchor(rig(bent), rig(square), "face")
+    t, fitted = add_animations.fit_anchor(rig(bent), rig(square), "face")
     assert not fitted and np.allclose(t, np.eye(3))
 
 
@@ -226,10 +226,10 @@ ATLAS = "page.png\nsize:32,32\nfilter:Linear,Linear\nface\nbounds:0,0,8,8\n"
 OFFICIAL = "official.png\nsize:16,16\nfilter:Linear,Linear\nnew\nbounds:8,0,4,6\noffsets:1,1,6,8\nrotate:90\n"
 
 
-def setup_drawing(box) -> graft.Setup:
+def setup_drawing(box) -> add_animations.Setup:
     x0, y0, x1, y1 = (v / 32 for v in box)
     uv = np.array([[x0, y0], [x1, y0], [x1, y1], [x0, y1]])
-    return graft.Setup(skin={("face", "face"): ("page", uv * 100, uv, np.array([[0, 1, 2], [2, 3, 0]]))})
+    return add_animations.Setup(skin={("face", "face"): ("page", uv * 100, uv, np.array([[0, 1, 2], [2, 3, 0]]))})
 
 
 def pages():
@@ -241,10 +241,12 @@ def pages():
 
 def test_a_carried_region_goes_where_the_mods_rig_samples_nothing_with_its_pixels_rotate_and_offsets():
     mod, new = pages()
-    packed = graft.pack(ATLAS, OFFICIAL, ["new"], {"page": mod}, {"official": new}, setup_drawing((0, 0, 8, 8)))
+    packed = add_animations.pack(
+        ATLAS, OFFICIAL, ["new"], {"page": mod}, {"official": new}, setup_drawing((0, 0, 8, 8))
+    )
     place = packed.placed["new"]
     assert not packed.grown and (place.xy[0] >= 8 or place.xy[1] >= 8)
-    text = graft.atlas_text(ATLAS, packed)
+    text = add_animations.atlas_text(ATLAS, packed)
     region = next(r for r in atlas_remap.parse_atlas(text).regions.values() if r.name == "new")
     assert (region.degrees, region.size, region.offset, region.original) == (90, (4, 6), (1, 1), (6, 8))
     x, y = place.xy
@@ -259,11 +261,13 @@ def test_a_full_page_grows_downward_in_whole_rows_and_the_atlas_follows_in_eithe
         "  xy: 0, 0\n  size: 32, 32\n  orig: 32, 32\n  offset: 0, 0\n  index: -1\n"
     )
     for text in (ATLAS.replace("bounds:0,0,8,8", "bounds:0,0,32,32"), legacy):
-        packed = graft.pack(text, OFFICIAL, ["new"], {"page": mod}, {"official": new}, setup_drawing((0, 0, 32, 32)))
-        assert packed.grown["page.png"] % graft.ROWS == 0
+        packed = add_animations.pack(
+            text, OFFICIAL, ["new"], {"page": mod}, {"official": new}, setup_drawing((0, 0, 32, 32))
+        )
+        assert packed.grown["page.png"] % add_animations.ROWS == 0
         height = 32 + packed.grown["page.png"]
         assert packed.images["page"].size == (32, height)
-        out = graft.atlas_text(text, packed)
+        out = add_animations.atlas_text(text, packed)
         parsed = atlas_remap.parse_atlas(out)
         assert parsed.pages["page.png"].size == (32, height)
         assert {r.name for r in parsed.regions.values()} == {"face", "new"}
@@ -273,7 +277,9 @@ def test_a_full_page_grows_downward_in_whole_rows_and_the_atlas_follows_in_eithe
 def test_a_page_larger_than_its_atlas_declares_takes_the_region_scaled():
     mod, new = pages()
     big = mod.resize((64, 64))
-    packed = graft.pack(ATLAS, OFFICIAL, ["new"], {"page": big}, {"official": new}, setup_drawing((0, 0, 8, 8)))
+    packed = add_animations.pack(
+        ATLAS, OFFICIAL, ["new"], {"page": big}, {"official": new}, setup_drawing((0, 0, 8, 8))
+    )
     x, y = packed.placed["new"].xy
     assert packed.images["page"].size == (64, 64)
     assert packed.images["page"].getpixel((2 * x + 1, 2 * y + 1))[:3] == (200, 0, 0)
@@ -290,12 +296,12 @@ def drawn(x, page="p", colour=None):
 
 def test_a_part_is_compared_with_the_official_part_on_the_rendered_picture():
     image = Image.new("RGBA", (4, 4), (255, 0, 0, 255))
-    pages_ = {"p": graft._premultiplied(image)}
-    assert graft.off([drawn(0)], pages_, [drawn(0)], pages_) == 0
-    assert graft.off([drawn(0)], pages_, [drawn(5)], pages_) > graft.BOUND
-    assert graft.off([], pages_, [drawn(0)], pages_) == 1
+    pages_ = {"p": add_animations._premultiplied(image)}
+    assert add_animations.off([drawn(0)], pages_, [drawn(0)], pages_) == 0
+    assert add_animations.off([drawn(0)], pages_, [drawn(5)], pages_) > add_animations.BOUND
+    assert add_animations.off([], pages_, [drawn(0)], pages_) == 1
     t = np.array([[1, 0, 5], [0, 1, 0], [0, 0, 1]], dtype=float)
-    assert graft.off([drawn(5)], pages_, graft.moved((drawn(0),), {"face": t}), pages_) == 0
+    assert add_animations.off([drawn(5)], pages_, add_animations.moved((drawn(0),), {"face": t}), pages_) == 0
 
 
 def test_posted_setup_geometry_is_checked():
@@ -313,7 +319,7 @@ def test_posted_setup_geometry_is_checked():
             }
         ],
     }
-    assert graft.setup(good).slot_bones == {"face": "root"}
+    assert add_animations.setup(good).slot_bones == {"face": "root"}
     for bad in (
         {**good, "bones": {"root": [1, 0, 0, 1, 0, float("nan")]}},
         {**good, "slotBones": {"face": "arm"}},
@@ -321,8 +327,8 @@ def test_posted_setup_geometry_is_checked():
         [],
         {**good, "bones": None},
     ):
-        with pytest.raises(graft.GraftError):
-            graft.setup(bad)
+        with pytest.raises(add_animations.AddAnimationsError):
+            add_animations.setup(bad)
 
 
 # --- official skeletons: remove and graft back
@@ -354,7 +360,7 @@ def test_official_animations_taken_out_and_grafted_back_are_what_they_were():
         numbered = [a["name"] for a in Skeleton(data).animations if re.fullmatch(r"\d+", a["name"])]
         take = numbered[-max(1, len(numbered) // 3) :]
         for mod in (remove_animations(data, take), strip_nonessential(remove_animations(data, take))):
-            g = graft.SkeletonGraft(mod, data)
+            g = add_animations.AddedAnimations(mod, data)
             out = g.build()
             assert not g.refused and sorted(names(out)) == sorted(names(data))
             before, after = animations_by_name(data), animations_by_name(out)
@@ -371,7 +377,7 @@ def test_an_official_slot_taken_out_and_grafted_back_returns_in_its_place_with_i
             cut = remove_slot(data, slot["name"])
             if cut is None or not cut[1]:
                 continue
-            g = graft.SkeletonGraft(cut[0], data)
+            g = add_animations.AddedAnimations(cut[0], data)
             out = g.build()
             assert not g.refused, g.refused
             assert [s["name"] for s in Skeleton(out).slots] == [s["name"] for s in sk.slots]
@@ -383,11 +389,11 @@ def test_an_official_slot_taken_out_and_grafted_back_returns_in_its_place_with_i
                 break
 
 
-def test_a_page_beyond_the_largest_one_a_graft_packs_is_refused():
+def test_a_page_beyond_the_largest_one_a_add_animations_packs_is_refused():
     mod, new = pages()
     huge = ATLAS.replace("size:32,32", "size:100000,100000")
-    with pytest.raises(graft.GraftError):
-        graft.pack(huge, OFFICIAL, ["new"], {"page": mod}, {"official": new}, setup_drawing((0, 0, 8, 8)))
+    with pytest.raises(add_animations.AddAnimationsError):
+        add_animations.pack(huge, OFFICIAL, ["new"], {"page": mod}, {"official": new}, setup_drawing((0, 0, 8, 8)))
 
 
 # --- events, and rigs without a picture to compare (memorial lobbies, Spine backgrounds)
@@ -403,7 +409,7 @@ def test_an_event_a_new_animation_fires_is_appended_to_the_mods_event_list_and_n
         ],
     )
     mod = official(events=["mine"], animations=[("00", {"face": ["a"]}, [], ["mine"])])
-    g = graft.SkeletonGraft(mod, new)
+    g = add_animations.AddedAnimations(mod, new)
     out = g.build()
     assert not g.refused and names(out) == ["00", "17", "18"]
     assert g.events_added == ["voice", "step"]
@@ -429,24 +435,24 @@ def test_an_event_is_carried_only_for_an_animation_that_is_carried():
         },
         animations=[("00", {"face": ["a"]}, []), ("18", {"cap": ["c"]}, [], ["voice"])],
     )
-    g = graft.SkeletonGraft(official(animations=[("00", {"face": ["a"]}, [])]), new)
+    g = add_animations.AddedAnimations(official(animations=[("00", {"face": ["a"]}, [])]), new)
     assert g.refused == {"18": ["bone:hat"]} and not g.events_added and not g.animations
 
 
 def test_without_a_posed_rig_a_region_goes_where_none_of_the_mods_atlas_regions_lie():
     mod, new = pages()
-    out = graft.pack(ATLAS, OFFICIAL, ["new"], {"page": mod}, {"official": new}, None)
+    out = add_animations.pack(ATLAS, OFFICIAL, ["new"], {"page": mod}, {"official": new}, None)
     x, y = out.placed["new"].xy
-    assert x >= 8 + graft.PAD or y >= 8 + graft.PAD  # clear of the mod's own region
+    assert x >= 8 + add_animations.PAD or y >= 8 + add_animations.PAD  # clear of the mod's own region
     assert not out.grown
 
 
 def test_a_pack_with_no_region_to_place_changes_no_page():
-    out = graft.pack(ATLAS, OFFICIAL, [], {}, {}, None)
+    out = add_animations.pack(ATLAS, OFFICIAL, [], {}, {}, None)
     assert not out.placed and not out.images and not out.grown
 
 
-def test_a_plain_graft_carries_the_animations_and_attachments_with_the_official_records():
+def test_a_plain_add_animations_carries_the_animations_and_attachments_with_the_official_records():
     skin = {"body": [("b", region())], "face": [("a", region()), ("new", region(x=3))], "glow": [("g", region())]}
     new = official(skin=skin)
     mod = official(
@@ -459,7 +465,7 @@ def test_a_plain_graft_carries_the_animations_and_attachments_with_the_official_
         "g\nbounds:8,8,2,2\nnew\nbounds:8,0,4,6\n"
     )
     page, source = pages()
-    out = graft.plain(mod, mod_atlas, {"page": page}, new, official_atlas, {"official": source})
+    out = add_animations.plain(mod, mod_atlas, {"page": page}, new, official_atlas, {"official": source})
     assert names(out.skeleton) == ["00", "17"] and list(out.results) == ["17"]
     sk = Skeleton(out.skeleton)
     assert (
@@ -469,14 +475,14 @@ def test_a_plain_graft_carries_the_animations_and_attachments_with_the_official_
     assert "\nnew\n" in out.atlas and "page" in out.pages
 
 
-def test_a_plain_graft_of_only_some_animations_leaves_the_others_out():
+def test_a_plain_add_animations_of_only_some_animations_leaves_the_others_out():
     new = official(animations=[("00", {"face": ["a"]}, []), ("17", {"face": ["new"]}, []), ("18", {}, [])])
     mod = official(animations=[("00", {"face": ["a"]}, [])])
     atlas = "page.png\nsize:32,32\nfilter:Linear,Linear\na\nbounds:0,0,8,8\n"
-    out = graft.plain(mod, atlas, {}, new, OFFICIAL, {}, only={"18"})
+    out = add_animations.plain(mod, atlas, {}, new, OFFICIAL, {}, only={"18"})
     assert names(out.skeleton) == ["00", "18"] and not out.pages
-    with pytest.raises(graft.GraftError):
-        graft.plain(mod, atlas, {}, new, OFFICIAL, {}, only={"nothing"})
+    with pytest.raises(add_animations.AddAnimationsError):
+        add_animations.plain(mod, atlas, {}, new, OFFICIAL, {}, only={"nothing"})
 
 
 def official_lobby_skeletons() -> list[bytes]:
@@ -536,7 +542,7 @@ def test_official_lobby_animations_and_events_taken_out_and_grafted_back_are_wha
             mod, gone = remove_animations(data, take), take
         if not gone:
             continue
-        g = graft.SkeletonGraft(mod, data)
+        g = add_animations.AddedAnimations(mod, data)
         out = g.build()
         assert not g.refused, g.refused
         assert Skeleton(out).events == sk.events and sorted(names(out)) == sorted(names(data))

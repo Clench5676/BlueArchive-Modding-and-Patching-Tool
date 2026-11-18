@@ -5,10 +5,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt.catalog import Catalog, Variant
+from bmpt.catalog import Catalog, Alt
 from bmpt.library import ModLibrary
 from bmpt.webui.thumbnails import Thumbnails
-from bmpt.webui.student_hall import empty_hall
+from bmpt.webui.student_hall import empty_student_hall
 from test_webui import app, services, rpc
 from test_library import setup_library, game_bundle, make_mod
 
@@ -24,20 +24,21 @@ def test_missing_japanese_folder_keeps_global_and_hall_then_recovers(app, servic
     settings.save()
     from uuid import uuid4
 
-    hall = empty_hall()
-    hall["background"] = "office-night"
-    hall["portraits"] = [
+    student_hall = empty_student_hall()
+    student_hall["memorials"] = student_hall.pop("memorialLobbies")
+    student_hall["background"] = "office-night"
+    student_hall["portraits"] = [
         {"id": str(uuid4()), "variant": "hoshino", "source": "mod:m1", "x": 400, "y": 980, "scale": 1, "mirror": False}
     ]
-    hall["memorials"] = [{"id": str(uuid4()), "variant": "hoshino", "source": "mod:m1"}]
-    hall["active"] = hall["memorials"][0]["id"]
-    services.state.set("student_hall", hall)
-    wire_hall = {key: value for key, value in hall.items() if key not in ("portraits", "memorials")}
+    student_hall["memorials"] = [{"id": str(uuid4()), "variant": "hoshino", "source": "mod:m1"}]
+    student_hall["active"] = student_hall["memorials"][0]["id"]
+    wire_hall = {key: value for key, value in student_hall.items() if key not in ("portraits", "memorials")}
     wire_hall["portraits"] = [
         {"id": row["id"], "alt": "hoshino", "source": "mod:m1", "x": 400, "y": 980, "scale": 1, "flipHorizontal": False}
-        for row in hall["portraits"]
+        for row in student_hall["portraits"]
     ]
-    wire_hall["memorialLobbies"] = [{"id": hall["active"], "alt": "hoshino", "source": "mod:m1"}]
+    wire_hall["memorialLobbies"] = [{"id": student_hall["active"], "alt": "hoshino", "source": "mod:m1"}]
+    services.state.set("student_hall", wire_hall)
     before = services.state.path.read_bytes(), settings.path.read_bytes()
     changes = []
     monkeypatch.setattr(services, "reload_game", lambda: changes.append(settings.server_region()))
@@ -58,7 +59,7 @@ def test_missing_japanese_folder_keeps_global_and_hall_then_recovers(app, servic
     assert settings.server_region() == "japan"
     assert "result" in rpc(app, "settings.set", key="fileSource", value="windows_global")
     assert rpc(app, "studentHall.get")["result"] == wire_hall
-    assert json.loads(services.state.path.read_bytes())["prefs"]["student_hall"] == hall
+    assert json.loads(services.state.path.read_bytes())["prefs"]["student_hall"] == student_hall
     assert game_bytes.read_bytes() == b"never write game files"
     assert not services.library.applied
 
@@ -75,15 +76,15 @@ def test_absent_catalog_model_record_has_complete_names_for_display(tmp_path):
     key = "unlisted_npc"
     library._records["npc"] = {
         "id": "npc",
-        "kind": "model",
-        "target": key,
+        "resource_type": "chibi",
+        "target_alt": key,
         "files": [f"character-{key}-_mxload-2026-01-01_000_assets_all_1.bundle"],
     }
-    record = library.variant_metadata(key)
-    assert isinstance(record, Variant)
+    record = library.alt_metadata(key)
+    assert isinstance(record, Alt)
     assert all(value["full"] == key for value in record.names.values())
-    result = Thumbnails(SimpleNamespace(catalog=catalog, library=library)).describe({"photos": [{"variant": key}]})
-    assert result["photos"][0]["names"] == record.names
+    result = Thumbnails(SimpleNamespace(catalog=catalog, library=library)).describe({"thumbnails": [{"alt": key}]})
+    assert result["thumbnails"][0]["names"] == record.names
 
 
 def test_saved_model_target_uses_offline_student_metadata(tmp_path):
@@ -91,25 +92,25 @@ def test_saved_model_target_uses_offline_student_metadata(tmp_path):
     library = ModLibrary(tmp_path / "library", catalog)
     library._records["model"] = {
         "id": "model",
-        "kind": "model",
-        "target": "shiroko",
+        "resource_type": "chibi",
+        "target_alt": "shiroko",
         "files": ["character-shiroko-_mxload-2026-01-01_000_assets_all_1.bundle"],
     }
-    value = library.variant_metadata("shiroko")
-    assert value.names == catalog.assignment_variant("shiroko").names
-    assert value.spr is None and value.lobby is None
+    value = library.alt_metadata("shiroko")
+    assert value.names == catalog.assignment_alt("shiroko").names
+    assert value.portrait is None and value.memorial_lobby is None
 
 
-def test_photograph_store_follows_the_selected_catalog(services):
+def test_thumbnail_store_follows_the_selected_catalog(services):
     """The store's family lookup is bound to its catalog (it never waits for the services lock under its own lock),
     so a new catalog makes a new store: a caller never gets one that resolves through a replaced catalog."""
-    services._catalog = SimpleNamespace(variant=lambda key: SimpleNamespace(family="global-family"))
-    photographs = services.thumbnail_store
-    assert photographs.family("student") == "global-family"
-    assert services.thumbnail_store is photographs
-    services._catalog = SimpleNamespace(variant=lambda key: SimpleNamespace(family="japan-family"))
+    services._catalog = SimpleNamespace(alt=lambda key: SimpleNamespace(student="global-family"))
+    thumbnails = services.thumbnail_store
+    assert thumbnails.student("student") == "global-family"
+    assert services.thumbnail_store is thumbnails
+    services._catalog = SimpleNamespace(alt=lambda key: SimpleNamespace(student="japan-family"))
     current = services.thumbnail_store
-    assert current is not photographs and current.family("student") == "japan-family"
+    assert current is not thumbnails and current.student("student") == "japan-family"
     assert services.thumbnail_store is current
 
 
@@ -173,7 +174,7 @@ def test_apply_and_restore_use_selected_install_and_preserve_other_choices(setup
     env.settings.set("file_source", "windows_japan")
     assert env.library.current_pin().root == japan
     assert env.library.current_pin().server == "japan"
-    assert env.library.configured("test")["spr"] is None
+    assert env.library.configured("test")["portrait"] is None
     env.library.apply("test", f"mod:{entry.id}")
     assert japanese_file.read_bytes() != japanese_original
     assert env.original.read_bytes() == global_applied
@@ -181,7 +182,7 @@ def test_apply_and_restore_use_selected_install_and_preserve_other_choices(setup
     assert japanese_file.read_bytes() == japanese_original
     assert env.original.read_bytes() == global_applied
     env.settings.set("file_source", "windows_global")
-    assert env.library.configured("test")["spr"] == f"mod:{entry.id}"
+    assert env.library.configured("test")["portrait"] == f"mod:{entry.id}"
     env.library.restore("test")
     assert env.original.read_bytes() == global_original
 

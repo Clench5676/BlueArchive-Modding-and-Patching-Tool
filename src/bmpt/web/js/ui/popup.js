@@ -515,7 +515,7 @@ export const titleHeight = (title) => textItem(NGUI, title, TYPE.display, { line
  * @property {string|null} [footer] The buttons' size, "XS", "S", "M" or "L" (FOOTER); without it the default size,
  *     XS, its bodies as wide as the captions need.
  * @property {"center"|"right"} [align] "right" for a footer at the frame's bottom right, its last body's right edge
- *     SPACE.xl in from the frame's (the panels' edge; the list popups and the Hall's background picker).
+ *     SPACE.xl in from the frame's (the panels' edge; the list popups and the Student Hall's background picker).
  */
 
 /**

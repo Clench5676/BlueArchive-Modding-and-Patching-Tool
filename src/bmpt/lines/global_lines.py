@@ -95,7 +95,7 @@ def dialogues(rows: Iterable[dict[str, Any]]) -> dict[int, Dialogues]:
 
 
 def portrait_dialogues(rows: Iterable[dict[str, Any]]) -> dict[int, dict[int, list[dict[str, Any]]]]:
-    """Collect the ordinary lobby's Idle dialogues from the rows of the CharacterDialog table.
+    """Collect the ordinary memorial lobby's Idle dialogues from the rows of the CharacterDialog table.
 
     Greetings, anniversary lines and memorial scenes are different voice sequences and are left out, as are teen-mode
     rows.
@@ -151,7 +151,7 @@ def portrait_dialogues(rows: Iterable[dict[str, Any]]) -> dict[int, dict[int, li
 
 
 def portrait_by_clip(groups: dict, clips: dict[str, list[str | None]]) -> dict[str, dict[str, Any]]:
-    """Put the ordinary lobby rows of each dialogue group on its voice clips.
+    """Put the ordinary memorial lobby rows of each dialogue group on its voice clips.
 
     A row with voice ids starts a new clip's segment; a row without one continues the segment before, so its timed
     expression stays on the voice it continues. A table without voice ids gives each row a segment. Segments go on the
@@ -203,14 +203,16 @@ def portrait_by_clip(groups: dict, clips: dict[str, list[str | None]]) -> dict[s
 
 
 def portrait_voice_lines(groups: dict, clips: Iterable[str]) -> dict[str, dict[str, Any]]:
-    """Match the ordinary lobby voice clips (``<name>_lobby_<n>[_<part>]``) to the dialogue groups and their lines.
+    """Match the ordinary voice clips to dialogue groups and lines.
+
+    The game names the clips ``<name>_lobby_<n>[_<part>]``.
 
     When every row carries voice ids and the clips have no part numbers, ``n`` counts voices across the groups in
     order, not groups: a group may contain two voices. Otherwise clip ``n`` belongs to group ``n``, parts in order.
 
     Args:
         groups: ``{group id: rows}`` of one character, as ``portrait_dialogues`` gives them.
-        clips: Clip ids; ids that are not lobby clips are ignored.
+        clips: Clip ids; ids that are not memorial lobby clips are ignored.
 
     Returns:
         The lines by clip id, as ``portrait_by_clip`` gives them.
@@ -384,7 +386,7 @@ class GlobalLines:
         deadline = time.monotonic() + DEADLINE
         for url in URLS:
             if time.monotonic() >= deadline:
-                logger.info("Global lobby lines unavailable: no time left for %s", url)
+                logger.info("Global Memorial Lobby lines unavailable: no time left for %s", url)
                 break
             try:
                 data = json.loads(self._get(url, deadline))
@@ -394,11 +396,11 @@ class GlobalLines:
                 self._portraits = portrait_dialogues(rows)
                 return dialogues(rows)
             except Exception as e:  # offline, HTTP errors, bad JSON
-                logger.info("Global lobby lines unavailable from %s: %s", url, e)
+                logger.info("Global Memorial Lobby lines unavailable from %s: %s", url, e)
         return None
 
     def portrait_dialogues(self, character_id: int | str) -> dict[int, list[dict[str, str]]]:
-        """Return a character's ordinary lobby dialogues, as ``portrait_dialogues`` gives them, from the same table.
+        """Return the ordinary dialogues from the character's dialogue table.
 
         Raises:
             ServiceError: ``lines_unavailable`` when the table cannot be read.
@@ -410,7 +412,7 @@ class GlobalLines:
             return {}
 
     def cached_portrait_dialogues(self, character_id: int | str) -> dict[int, list[dict[str, str]]] | None:
-        """Return a character's ordinary lobby dialogues without waiting on a download that holds the table lock.
+        """Return the character's cached ordinary dialogues.
 
         Returns:
             The dialogues as ``portrait_dialogues`` gives them, or None while the table is not read yet.

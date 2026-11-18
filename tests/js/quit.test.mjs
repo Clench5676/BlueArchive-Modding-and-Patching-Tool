@@ -6,8 +6,8 @@ import { test } from "node:test";
 import { CONFIRM_KEYS, HOSTS, confirmQuit, quitKey } from "../../src/bmpt/web/js/app/quit.js";
 
 // the page: the student list shown, every popup host hidden, unless said otherwise
-function page({ roster = true, open = [] } = {}) {
-  const els = { "screen-roster": { hidden: !roster } };
+function page({ studentList = true, open = [] } = {}) {
+  const els = { "screen-student-list": { hidden: !studentList } };
   for (const id of HOSTS) els[id] = { hidden: !open.includes(id) };
   return (id) => els[id] || null;
 }
@@ -41,7 +41,11 @@ test("Escape is left alone while any popup host is open, behind the loading scre
     assert.equal(quitKey(esc(), { byId: page({ open: [id] }) }), false, id);
   }
   assert.equal(quitKey(esc(), { byId: page(), covering: true }), false, "the loading screen");
-  assert.equal(quitKey(esc(), { byId: page({ roster: false }) }), false, "the detail screen or the no-game screen");
+  assert.equal(
+    quitKey(esc(), { byId: page({ studentList: false }) }),
+    false,
+    "the detail screen or the no-game screen",
+  );
   assert.equal(quitKey(esc(), { byId: () => null }), false, "no student list in the page");
 });
 

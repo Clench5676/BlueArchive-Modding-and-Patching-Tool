@@ -24,16 +24,16 @@ def complete_contents(platform="Android"):
 
 def test_assignment_catalog_has_unreleased_students_without_local_assets():
     catalog = Catalog(None, None)
-    families = catalog.assignment_families()
-    assert families and not catalog.families()
-    variants = [variant for family in families for variant in family.variants]
-    assert len(variants) > 100
-    assert all(variant.spr is None and variant.lobby is None and variant.model is None for variant in variants)
-    assert catalog.assignment_variant(variants[-1].key.upper()).key == variants[-1].key
+    students = catalog.assignment_students()
+    assert students and not catalog.students()
+    alts = [alt for student in students for alt in student.alts]
+    assert len(alts) > 100
+    assert all(alt.portrait is None and alt.memorial_lobby is None and alt.chibi is None for alt in alts)
+    assert catalog.assignment_alt(alts[-1].key.upper()).key == alts[-1].key
     with pytest.raises(ServiceError, match="catalog_alt_not_found"):
-        catalog.variant(variants[-1].key)
-    families[0].variants.clear()
-    assert catalog.assignment_families()[0].variants
+        catalog.alt(alts[-1].key)
+    students[0].alts.clear()
+    assert catalog.assignment_students()[0].alts
 
 
 @pytest.mark.parametrize(
@@ -76,7 +76,7 @@ def test_preview_and_apply_options_are_independent_and_migrate_saved_optout(env)
     (result,) = run(env, [entry], enableAfterImport=False, previewAfterImport=True)
     assert result["outcome"] == "imported" and result["previewSelected"]
     pin = env.library.current_pin()
-    assert env.services.state.preview_sources(pin.key, "test")["spr"] == f"mod:{result['libraryId']}"
+    assert env.services.state.preview_sources(pin.key, "test")["portrait"] == f"mod:{result['libraryId']}"
     assert not result["configured"] and not result["applied"]
     assert env.original.read_bytes() != source.read_bytes()
 
@@ -84,8 +84,8 @@ def test_preview_and_apply_options_are_independent_and_migrate_saved_optout(env)
 def test_unreleased_assignment_stores_self_contained_mod_and_never_applies(env, monkeypatch):
     source = game_bundle(env.tmp / "incoming", "future_home", payload=b"future lobby")
     catalog = Catalog(None, None)
-    chosen = catalog.assignment_families()[0].variants[0]
-    monkeypatch.setattr(env.catalog, "assignment_variant", catalog.assignment_variant, raising=False)
+    chosen = catalog.assignment_students()[0].alts[0]
+    monkeypatch.setattr(env.catalog, "assignment_alt", catalog.assignment_alt, raising=False)
     monkeypatch.setattr(integrity.Inspection, "inspect", lambda self, path, **kwargs: complete_contents())
     monkeypatch.setattr(manual_identity, "content_cores", lambda path: {"future_home"})
     original = env.original.read_bytes()
@@ -99,7 +99,7 @@ def test_unreleased_assignment_stores_self_contained_mod_and_never_applies(env, 
     assert result["applyUnavailable"] == "no_target" and not result["configured"] and not result["applied"]
     assert env.original.read_bytes() == original
     (mod,) = reload_library(env).mods()
-    assert mod.target == chosen.key and mod.kind == "lobby"
+    assert mod.target == chosen.key and mod.resource_type == "memorialLobby"
     assert env.library.preview_bundles(mod.id) == [env.root / "mods" / mod.id / source.name]
     env.services._game = SimpleNamespace(spine_files_from=lambda paths: {"future_home.skel": b"skeleton"})
     assert env.services._spine_file("mod", mod.id, "skeleton.skel").body == b"skeleton"
@@ -130,16 +130,16 @@ def test_unknown_platform_can_be_stored_without_claiming_compatibility(tmp_path,
         integrity.Inspection, "inspect", lambda self, path, **kwargs: complete_contents("UnknownPlatform")
     )
     monkeypatch.setattr(manual_identity, "content_cores", lambda path: {"future_home"})
-    assert manual_identity.validate({source.name: source}) == "lobby"
+    assert manual_identity.validate({source.name: source}) == "memorialLobby"
 
 
 def test_saved_assignments_add_only_their_students_without_inventing_game_handles():
-    from bmpt.webui.assigned_catalog import families_with_assignments, stored_asset_fields
+    from bmpt.webui.assigned_catalog import students_with_assignments, stored_asset_fields
 
     catalog = Catalog(None, None)
-    chosen = catalog.assignment_families()[0].variants[0]
-    families = families_with_assignments(catalog, [chosen.key])
-    assert [variant.key for family in families for variant in family.variants] == [chosen.key]
-    fields = stored_asset_fields(chosen, [SimpleNamespace(target=chosen.key, kind="lobby")])
-    assert fields == {"storedKinds": ["lobby"], "localKinds": []}
-    assert chosen.lobby is None and chosen.spr is None
+    chosen = catalog.assignment_students()[0].alts[0]
+    students = students_with_assignments(catalog, [chosen.key])
+    assert [alt.key for student in students for alt in student.alts] == [chosen.key]
+    fields = stored_asset_fields(chosen, [SimpleNamespace(target=chosen.key, resource_type="memorialLobby")])
+    assert fields == {"storedResourceTypes": ["memorialLobby"], "localResourceTypes": []}
+    assert chosen.memorial_lobby is None and chosen.portrait is None

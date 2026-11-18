@@ -1,13 +1,13 @@
-// A lobby skeleton drawn with the materials the game's spine-unity gives it (lobby.json layer "materials",
+// A memorial lobby skeleton drawn with the materials the game's spine-unity gives it (memorial-lobby.json layer "materials",
 // gameassets/spine_materials.py), in spine-player's batch. The atlas pages the game draws with a shader of its own
 // (Aru's multiply page, the scrolling water and river pages, CH0310's glitching game screen) draw with ports of those
 // compiled programs; the other pages keep spine-player's drawing. Multiply and Screen slots of a skeleton without
 // replacement materials for that mode draw as Normal. The dark colour (two-colour tint) never reaches the screen: no
-// lobby shader reads it. Hooks spine-player's PolygonBatcher and SkeletonRenderer; needs linear.js.
+// memorial lobby shader reads it. Hooks spine-player's PolygonBatcher and SkeletonRenderer; needs linear.js.
 import * as Linear from "../core/linear.js";
 import { toLinear } from "../app/touch-fx.js";
 
-// Runtime hooks run only on players created after lobby-players.js awaits ensureSpine().
+// Runtime hooks run only on players created after memorial-lobby-players.js awaits ensureSpine().
 
 const states = new WeakMap(),
   attached = new Set();
@@ -271,7 +271,7 @@ function loadImage(url) {
 }
 
 /**
- * The slot blend modes drawn as Normal: Multiply and Screen without replacement materials (lobby.json layer
+ * The slot blend modes drawn as Normal: Multiply and Screen without replacement materials (memorial-lobby.json layer
  * materials.blend), whose slots keep their page's material. The slots keep their blend mode (the painted area
  * still leaves such lights out); only their draws change. slotBlends keeps the declared modes for an explicit
  * NPC exception.
@@ -300,11 +300,11 @@ export function materialOf(materials, page, mode) {
 /**
  * Switch a loaded player (linear.js attached) to its layer's materials.
  * @param {object} player The spine-player.
- * @param {object} layer The lobby's layer; its materials come from lobby.json.
+ * @param {object} layer The memorial lobby's layer; its materials come from memorial-lobby.json.
  * @param {object} [options]
- * @param {() => (object|null)} [options.screen] Gives the game's view in the layer's skeleton units (lobby.js
+ * @param {() => (object|null)} [options.screen] Gives the game's view in the layer's skeleton units (memorial-lobby.js
  *     layerViewport).
- * @param {string} [options.base] The lobby's route, for the materials' own textures.
+ * @param {string} [options.base] The memorial lobby's route, for the materials' own textures.
  * @param {(url: string) => Promise<HTMLImageElement>} [options.load] Loads an image, for the tests.
  * @param {boolean} [options.slotBlends] Keep the declared blend modes of every slot.
  * @returns {boolean} False when the player cannot take them (no WebGL2 or no materials).

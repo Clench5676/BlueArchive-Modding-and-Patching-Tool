@@ -141,7 +141,7 @@ test("Windows WebView2 notches are identified without taking trackpad, pinch or 
     assert.equal(windowsWheel(notch(), platform), false);
 });
 
-test("a virtual roster notch draws intermediate positions and ends at the same distance at 60 and 120 Hz", () => {
+test("a virtual student list notch draws intermediate positions and ends at the same distance at 60 and 120 Hz", () => {
   for (const hz of [60, 120]) {
     const h = virtual();
     const event = notch();
@@ -343,8 +343,8 @@ test("pointer, keyboard, blur, visibility and motion preference changes cancel n
   }
 });
 
-test("the roster uses the shared controller for its virtual position and cancels it on hide or rebuild", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/roster/roster.js", import.meta.url), "utf8");
+test("the student list uses the shared controller for its virtual position and cancels it on hide or rebuild", () => {
+  const source = readFileSync(new URL("../../src/bmpt/web/js/student-list/student-list.js", import.meta.url), "utf8");
   assert.match(flat(source), /wheelScroller\(\{ read: \(\) => view.scroll/);
   assert.match(flat(source), /view.scroll = top; applyScroll\(\)/);
   assert.match(flat(source), /if \(motion.wheel\(ev\)\) return;/);

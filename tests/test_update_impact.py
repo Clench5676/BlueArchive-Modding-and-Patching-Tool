@@ -139,14 +139,14 @@ def test_the_summary_of_an_update_names_the_mods_whose_rig_changed(spine):
     assert summary["mods"] == [
         {
             "id": entry.id,
-            "label": summary["mods"][0]["label"],
+            "name": summary["mods"][0]["name"],
             "target": "test",
-            "kind": "spr",
+            "resource_type": "portrait",
             "core": "test_spr",
             "impact": "rig_changed",
             "changes": {"repacked": True, "animations": 1},
             "configured": True,
-            "repaired_id": "",
+            "repaired_copy_id": "",
         }
     ]
     assert summary["counts"]["rig_changed"] == 1
@@ -172,10 +172,10 @@ def test_a_retry_holds_an_entry_whose_rig_changed_and_apply_mod_configuration_wr
         {
             "install": key(env),
             "core": "test_spr",
-            "variant": "test",
-            "kind": "spr",
+            "alt": "test",
+            "resource_type": "portrait",
             "source": f"mod:{entry.id}",
-            "label": entry.label,
+            "name": entry.name,
         }
     ]
 
@@ -249,8 +249,8 @@ def test_the_impact_check_names_each_mod_in_its_progress(spine):
             "total": 1,
             "action": "check",
             "step": "import.step.check",
-            "variant": "test",
-            "kind": "spr",
+            "alt": "test",
+            "resource_type": "portrait",
             "core": entry.core,
             "name": "",
             "source": "",

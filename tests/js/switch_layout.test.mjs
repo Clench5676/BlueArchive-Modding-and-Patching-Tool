@@ -56,10 +56,10 @@ test("the gap between cards, across and down, is the grid gutter (SPACE.xl) for 
 
 test("the column count is the most cards that fit the content box with at least the gutter between them", () => {
   for (const width of [1300, 1818, 2200])
-    for (const kind of ["lobby", "model", "other"]) {
+    for (const kind of ["memorialLobby", "chibi", "other"]) {
       const { card, columns, overhang } = switchGrid(kind, width),
         room = width - 2 * SPACE.xl - overhang,
-        cap = { lobby: 2, model: 4, other: 6 }[kind];
+        cap = { memorialLobby: 2, chibi: 4, other: 6 }[kind];
       assert.ok(
         columns * card.w + (columns - 1) * SPACE.xl <= room + 1e-9 || columns === 1,
         `${kind} ${width}: ${columns} fit`,
@@ -70,7 +70,7 @@ test("the column count is the most cards that fit the content box with at least 
 });
 
 test("full rows span the content box edge to edge and later rows stand a row and the gutter below", () => {
-  for (const kind of ["lobby", "model", "other"]) {
+  for (const kind of ["memorialLobby", "chibi", "other"]) {
     const grid = switchGrid(kind),
       trees = Array.from({ length: grid.columns * 2 + 1 }, () => cardTree(grid.card));
     const bounds = placeSwitchCards(trees, structuredClone(grid), PAPER);

@@ -1,6 +1,6 @@
-"""Manage portrait, memorial lobby, model, and generic mods with persistent student photographs."""
+"""Manage portrait, memorial lobby, chibi, and generic mods with persistent student thumbnails."""
 
-from .models import (
+from .records import (
     AdoptResult,
     ApplyResult,
     AssetDifference,
@@ -12,17 +12,17 @@ from .models import (
     ScanResult,
     ToggleResult,
     UpdateResult,
-    VariantState,
+    AltState,
 )
 from .service import ModLibrary
-from .judge import supports_kind
+from .judge import supports_resource_type
 
 __all__ = [
     "ModLibrary",
-    "supports_kind",
+    "supports_resource_type",
     "ModEntry",
     "GameFileState",
-    "VariantState",
+    "AltState",
     "ApplyResult",
     "UpdateResult",
     "CompareResult",

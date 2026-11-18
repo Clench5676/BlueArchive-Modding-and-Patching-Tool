@@ -104,16 +104,16 @@ const actionSets = (locale) => {
     "alt picker (two)": [open, t("btn.extract")],
   };
 };
-// one row where the XS or XXS bodies at their minimum width fit it (a 3D model's four), else rows
+// one row where the XS or XXS bodies at their minimum width fit it (a chibi's four), else rows
 // of as many XS bodies as the panel holds (popup.js detailsTree), one caption size for all
 const XS_MIN_W = 200,
   PER_ROW = Math.max(1, Math.floor((PANEL - 40 + GAP) / (XS_MIN_W + GAP)));
 const XXS = { minW: 140, h: 88, pad: 26, fs: 30, min: 22 };
 for (const locale of LOCALES)
-  test(`a 3D model's four actions stand on one XXS row in ${locale}`, () => {
+  test(`a chibi's four actions stand on one XXS row in ${locale}`, () => {
     document.documentElement.lang = locale;
     const t = (key) => text(locale, key);
-    const captions = [t("popup.apply"), t("open.mac"), t("model.optimize"), t("btn.extract")];
+    const captions = [t("popup.apply"), t("open.mac"), t("chibi.optimize"), t("btn.extract")];
     assert.ok(4 * XS_MIN_W + 3 * GAP > PANEL - 40, "the XS row would fit: no XXS needed");
     assert.ok(4 * XXS.minW + 3 * GAP <= PANEL - 40);
     const total = 4 * ((PANEL - 40 + GAP) / 4 - GAP),
@@ -125,7 +125,7 @@ for (const locale of LOCALES)
       captions,
       row.map((f) => f.width - clear),
       maxH,
-      `${locale} model`,
+      `${locale} chibi`,
     );
   });
 for (const locale of LOCALES)
@@ -182,8 +182,8 @@ for (const locale of LOCALES)
       90,
       `${locale} cards`,
     );
-    for (const lobby of ["tab.lobby", "special.background"]) {
-      const tabs = ["tab.portrait", lobby, "tab.model"].map((key) => text(locale, key));
+    for (const memorialLobby of ["tab.memorialLobby", "special.background"]) {
+      const tabs = ["tab.portrait", memorialLobby, "tab.chibi"].map((key) => text(locale, key));
       const fits = fitGroup(tabs, 52, 36, 360, 1);
       assertGroup(
         fits,
@@ -281,17 +281,18 @@ for (const locale of LOCALES)
     }
   });
 
-// --- segments: the roster's six and the list popup's three ---
+// --- segments: the student list's six and the list popup's three ---
 for (const locale of LOCALES)
-  test(`the roster's six segments and the popup's three share one size in ${locale}`, async () => {
-    const roster = await source("roster/roster-widgets.js"),
+  test(`the student list's six segments and the popup's three share one size in ${locale}`, async () => {
+    const studentList = await source("student-list/student-list-widgets.js"),
       popup = await popupSource();
-    // the roster's two filters' six captions go through toolbarFit, which fits every filter's captions as one group
+    // the student list's two filters' six captions go through toolbarFit, which fits every filter's captions as one
+    // group
     assert.match(
-      roster,
+      studentList,
       /filters: \[\["seg\.all", "seg\.mods", "seg\.noMods"\], \["seg\.all", "seg\.recruit", "seg\.noRecruit"\]\]\.map\(\(keys\) => keys\.map\(\(k\) => T\(k\)\)\)/,
     );
-    assert.match(roster, /fitGroup\(filters\.flat\(\), segFs, 22, segW - 26, 2, \{ maxH: 96 \}\)/);
+    assert.match(studentList, /fitGroup\(filters\.flat\(\), segFs, 22, segW - 26, 2, \{ maxH: 96 \}\)/);
     // the list popups' three go through the same toolbarFit, as one filter
     assert.match(popup, /toolbarFit\(\{ left, right, filters: segs \? \[segs\.map\(segText\)\] : \[\]/);
     assert.match(
@@ -318,7 +319,7 @@ for (const locale of LOCALES)
         six,
         six.map(() => segW - 26),
         96,
-        `${locale} roster ${segW}`,
+        `${locale} studentList ${segW}`,
       );
     }
     const three = ["seg.all", "seg.recruit", "seg.noRecruit"].map((key) => text(locale, key));
@@ -448,24 +449,28 @@ for (const locale of LOCALES)
     }
   });
 
-// --- the Hall modal's retained footer ---
+// --- the Student Hall modal's retained footer ---
 await import("../../src/bmpt/web/js/ui/ui-grid.js");
 for (const locale of LOCALES)
-  test(`the Hall modal's footer captions fit in ${locale}`, async () => {
-    const ui = await source("hall/student-hall-ui.js");
+  test(`the Student Hall modal's footer captions fit in ${locale}`, async () => {
+    const ui = await source("student-hall/student-hall-ui.js");
     assert.match(ui, /fitGroup\(captions, 40, 26, width \/ S - 60, 2, \{ maxH: height \/ S - 20 \}\)/);
     document.documentElement.lang = locale;
     const S = 1920 / 2960;
-    // the Hall modal's footer actions: up to 280 wide, 66 high
-    const hall = ["hall.addPortraits", "hall.adjust", "hall.remove", "popup.cancel", "popup.save"].map((key) =>
-      text(locale, key),
-    );
+    // the Student Hall modal's footer actions: up to 280 wide, 66 high
+    const studentHall = [
+      "studentHall.addPortraits",
+      "studentHall.adjust",
+      "studentHall.remove",
+      "popup.cancel",
+      "popup.save",
+    ].map((key) => text(locale, key));
     assertGroup(
-      fitGroup(hall, 40, 26, 280 / S - 60, 2, { maxH: 66 / S - 20 }),
-      hall,
-      hall.map(() => 280 / S - 60),
+      fitGroup(studentHall, 40, 26, 280 / S - 60, 2, { maxH: 66 / S - 20 }),
+      studentHall,
+      studentHall.map(() => 280 / S - 60),
       66 / S - 20,
-      `${locale} hall footer`,
+      `${locale} Student Hall footer`,
     );
   });
 
@@ -482,10 +487,10 @@ for (const locale of LOCALES)
   });
 
 for (const locale of LOCALES)
-  test(`Hall portrait Reset fits its native button in ${locale}`, () => {
+  test(`StudentHall portrait Reset fits its native button in ${locale}`, () => {
     document.documentElement.lang = locale;
     const S = 1920 / 2960,
-      caption = text(locale, "hall.scaleReset"),
+      caption = text(locale, "studentHall.scaleReset"),
       room = 156 / S - 60,
       height = 68 / S - 20;
     assertGroup(
@@ -498,7 +503,7 @@ for (const locale of LOCALES)
   });
 
 for (const locale of LOCALES)
-  test(`Hall portrait swap choice fits its existing card button in ${locale}`, () => {
+  test(`StudentHall portrait swap choice fits its existing card button in ${locale}`, () => {
     document.documentElement.lang = locale;
     const S = 1920 / 2960,
       caption = text(locale, "import.select"),
@@ -524,7 +529,7 @@ for (const locale of LOCALES)
     assert.doesNotMatch(compatibility, /footer: "[SML]"/);
     document.documentElement.lang = locale;
     const control = CONTROL.buttonXS,
-      captions = ["popup.cancel", "compatibility.remapAction", "compatibility.graftAction"].map((key) =>
+      captions = ["popup.cancel", "compatibility.remapAction", "compatibility.addExpressionsAction"].map((key) =>
         text(locale, key),
       );
     for (const size of ["S", "M", "L"]) {
@@ -545,17 +550,17 @@ for (const locale of LOCALES)
     }
   });
 
-// --- the 3D model tab's action cards (detail-strip.js stripCard): a 242-wide Common_Btn_BG card, its caption 56 down
-// to 28 in 50 less than the card's width, up to two lines; every action model.js plays has its caption in every
+// --- the chibi tab's action cards (detail-strip.js stripCard): a 242-wide Common_Btn_BG card, its caption 56 down
+// to 28 in 50 less than the card's width, up to two lines; every action chibi.js plays has its caption in every
 // locale ---
 for (const locale of LOCALES)
-  test(`the 3D model's action captions fit their cards in ${locale}`, async () => {
+  test(`the chibi's action captions fit their cards in ${locale}`, async () => {
     const detail = await source("detail/detail-strip.js"),
-      model = await raw("model/model.js");
+      chibi = await raw("chibi/chibi.js");
     assert.match(detail, /const CARD = \{ w: 242, h: 209 \};/);
     // (the action bar's group cards bring their own fit: action_list.test.mjs)
     assert.match(detail, /const f = captionFit \|\| fitText\(caption, 56, 28, w - 50\)[,;]/);
-    const names = [...model.match(/export const ACTIONS = \{([\s\S]*?)\n\};/)[1].matchAll(/^ {2}(\w+): \{/gm)].map(
+    const names = [...chibi.match(/export const ACTIONS = \{([\s\S]*?)\n\};/)[1].matchAll(/^ {2}(\w+): \{/gm)].map(
       (m) => m[1],
     );
     assert.ok(names.includes("retreat") && names.includes("knockdown"));
@@ -563,7 +568,7 @@ for (const locale of LOCALES)
     const room = 242 - 50,
       height = 209 - 13;
     for (const name of [...names, "story"]) {
-      const caption = text(locale, `model.action.${name}`).replace("{n}", "12"),
+      const caption = text(locale, `chibi.action.${name}`).replace("{n}", "12"),
         f = fitText(caption, 56, 28, room);
       assert.ok(f.lines <= 2 && f.fs >= 28 - 8, `${locale} ${name}: ${f.fs}px on ${f.lines} lines`);
       assert.ok(

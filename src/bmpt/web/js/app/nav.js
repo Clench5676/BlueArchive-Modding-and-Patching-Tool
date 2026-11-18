@@ -1,7 +1,7 @@
 import { topActionLayout, nativeRightClearance } from "../window/top-action-layout.js";
 import { CORNER_MARGIN } from "../window/corner-layout.js";
 import { watchTopBar } from "../window/top-bar.js";
-// The lobby-style bottom navigation and the top bar. The entries are nav-items.js: one without a web screen is
+// The UILobby-style bottom navigation and the top bar. The entries are nav-items.js: one without a web screen is
 // greyed out with the game's disabled tint and hands over to the classic GUI on its tab, through the hand-off
 // prompt (on every click, with Don't Ask Again, until the pref classicPrompt is turned off).
 import { notify } from "../ui/popup.js";
@@ -71,15 +71,15 @@ export async function renderNav(active = 0, opts = {}) {
     revision = ++navRevision;
   const next = document.createElement("div"),
     plate = document.createElement("div");
-  let lobby = null;
+  let home = null;
   if (options.game)
-    lobby = await NGUI.layout("UILobby").catch((err) => {
+    home = await NGUI.layout("UILobby").catch((err) => {
       console.warn("navigation layout", err);
       return null;
     });
-  if (lobby) {
+  if (home) {
     await skinTop().catch((err) => console.warn("top bar layout", err));
-    const tree = clone(NGUI.find(lobby, "Front/Bottom/Menu/BG/BG"));
+    const tree = clone(NGUI.find(home, "Front/Bottom/Menu/BG/BG"));
     tree.pos = [0, 0];
     await NGUI.render(tree, plate, { scale: S, origin: [960, 104 - 52 * S] });
   }
@@ -97,8 +97,8 @@ export async function renderNav(active = 0, opts = {}) {
       } else if (i === active) b.setAttribute("aria-current", "page");
       b.addEventListener("click", () => click(item));
       next.appendChild(b);
-      if (lobby) {
-        const tree = navigationEntry(NGUI.find(lobby, "Front/Bottom/Menu/BG/Grid"), item, v.label, v.greyed, i, width);
+      if (home) {
+        const tree = navigationEntry(NGUI.find(home, "Front/Bottom/Menu/BG/Grid"), item, v.label, v.greyed, i, width);
         await NGUI.render(tree, b, { scale: S, origin: navigationOrigin(tree, S, width) });
       } else b.textContent = v.label;
     }),
@@ -109,7 +109,7 @@ export async function renderNav(active = 0, opts = {}) {
 }
 
 let topReady,
-  topHall = false,
+  topStudentHall = false,
   topAvailable = true;
 const topBoxes = {
   home: [CORNER_MARGIN, 7, 50, 50],
@@ -117,15 +117,15 @@ const topBoxes = {
   line: [CORNER_MARGIN + 76, 12, 3, 32],
 };
 /**
- * Show the top bar for the Student Hall (hall) or for the other screens.
- * @param {boolean} hall Whether the Student Hall is shown: the home and back buttons are hidden then.
+ * Show the top bar for the Student Hall (Student Hall) or for the other screens.
+ * @param {boolean} Student Hall Whether the Student Hall is shown: the home and back buttons are hidden then.
  */
-export function setTopActions(hall, available = true) {
-  topHall = hall;
+export function setTopActions(studentHall, available = true) {
+  topStudentHall = studentHall;
   topAvailable = available;
-  document.querySelector(".topbar")?.classList.toggle("hall-home", hall);
+  document.querySelector(".topbar")?.classList.toggle("student-hall-home", studentHall);
   const back = document.querySelector(".topbar .back");
-  if (back) back.hidden = hall || !back.onclick;
+  if (back) back.hidden = studentHall || !back.onclick;
   reflowTopActions();
 }
 /** Place the top bar's home, option and divider controls against the native window controls. */
@@ -149,10 +149,14 @@ export function reflowTopActions() {
     native?.platform === "win32"
       ? native.bounds
       : document.getElementById("native-controls")?.getBoundingClientRect?.();
-  const preliminary = topActionLayout(topBoxes, topHall);
+  const preliminary = topActionLayout(topBoxes, topStudentHall);
   const scale =
     globalThis.bamtHeaderGeometry?.scale || document.getElementById("stage")?.getBoundingClientRect?.().width / 1920;
-  const boxes = topActionLayout(topBoxes, topHall, nativeRightClearance(stage, controls, preliminary.option, scale));
+  const boxes = topActionLayout(
+    topBoxes,
+    topStudentHall,
+    nativeRightClearance(stage, controls, preliminary.option, scale),
+  );
   for (const [key, selector] of [
     ["home", ".top-home"],
     ["option", ".top-option"],
@@ -162,8 +166,8 @@ export function reflowTopActions() {
     if (!host) continue;
     const [right, top, width, height] = boxes[key];
     Object.assign(host.style, { right: `${right}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
-    if (key === "home") host.hidden = topHall || !topAvailable;
-    if (key === "line") host.hidden = topHall;
+    if (key === "home") host.hidden = topStudentHall || !topAvailable;
+    if (key === "line") host.hidden = topStudentHall;
   }
 }
 addEventListener("resize", reflowTopActions);
@@ -217,7 +221,7 @@ export function setTitle(text, onBack) {
   document.querySelector(".topbar").setAttribute("aria-label", text);
   const back = document.querySelector(".topbar .back");
   back.onclick = onBack || null;
-  back.hidden = topHall || !onBack;
+  back.hidden = topStudentHall || !onBack;
 }
 
 // the bar's content stays centred on its fill whatever changes under it (top-bar.js)

@@ -142,7 +142,7 @@ def test_model_direct_replacement_never_transfers_assets(batch_model_env, monkey
     assert source.read_bytes() == original_source
     assert not Path(str(target) + ".backup").exists()
     assert all(path.read_bytes() == env.official[path] for path in (env.parts[0], env.parts[2]))
-    env.library.restore("hoshino", kind="model")
+    env.library.restore("hoshino", resource_type="chibi")
     assert target.read_bytes() == official
 
 
@@ -257,7 +257,7 @@ def test_current_npc_without_roster_entry_imports_applies_and_restores(env, monk
 
     restore_metadata(monkeypatch)
     env.library.catalog = Catalog(
-        SimpleNamespace(spine_cores=lambda kind: {}, collection_names=lambda: {}, model_cores=lambda: {"en0002"}), None
+        SimpleNamespace(spine_cores=lambda kind: {}, collection_names=lambda: {}, chibi_cores=lambda: {"en0002"}), None
     )
     target = rename_crc(unity_bundle(game_bundle(env.game_dir, "en0002", category="npcs"), name="EN0002_Body"))
     official = target.read_bytes()
@@ -269,12 +269,12 @@ def test_current_npc_without_roster_entry_imports_applies_and_restores(env, monk
     (result,) = run(env, [entry])
     assert result["outcome"] == "imported" and result["applied"], result
     assert target.read_bytes() == source.read_bytes()
-    assert env.library.configured("en0002")["model"] == f"mod:{result['libraryId']}"
+    assert env.library.configured("en0002")["chibi"] == f"mod:{result['libraryId']}"
     assert not env.library.toggle(False, True).failed
     assert target.read_bytes() == official
     assert not env.library.toggle(True, False).failed
     assert target.read_bytes() == source.read_bytes()
-    env.library.restore("en0002", kind="model")
+    env.library.restore("en0002", resource_type="chibi")
     assert target.read_bytes() == official
 
 
@@ -324,9 +324,9 @@ def verified_model(tmp_path, monkeypatch):
     target = game / chosen.name
     catalog = Catalog(
         SimpleNamespace(
-            spine_cores=lambda kind: portraits if kind == "spr" else {},
+            spine_cores=lambda kind: portraits if kind == "portrait" else {},
             collection_names=lambda: {},
-            model_cores=lambda: {core},
+            chibi_cores=lambda: {core},
         ),
         None,
     )
@@ -390,7 +390,7 @@ def test_verified_modified_model_part_imports_whole(verified_model, monkeypatch,
     assert source.read_bytes() == before
     assert all(path.read_bytes() == contents for path, contents in official.items() if path != env.original)
     (mod,) = env.library.mods()
-    env.library.restore(mod.target, kind="model")
+    env.library.restore(mod.target, resource_type="chibi")
     assert all(path.read_bytes() == contents for path, contents in official.items())
 
 
@@ -442,7 +442,7 @@ def test_current_name_rebuilds_foreign_or_older_spine_instead_of_copying(env, mo
     (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("convert" if change == "region" else "update", None)
     with pytest.raises(ServiceError):
-        env.library.add_files("spr", [source], direct=True)
+        env.library.add_files("portrait", [source], direct=True)
     assert not env.library.mods()
     (result,) = run(env, [entry], assetTypes=["TextAsset"])
     assert result["outcome"] == "updated" and result["applied"], result
@@ -478,7 +478,7 @@ def test_partial_model_replacement_validates_effective_dependencies(batch_model_
         "found": [],
     }
     with pytest.raises(ServiceError, match="mod_parts_missing") as refused:
-        env.library.add_files("model", [source], direct=True)
+        env.library.add_files("chibi", [source], direct=True)
     assert (target.name if change == "body_cab" else "CAB-missing-material") in refused.value.params["files"]
     assert not env.library.mods()
 
@@ -565,7 +565,7 @@ def test_model_replacement_preserves_referenced_objects(batch_model_env, monkeyp
         else:
             assert (entry["state"], entry["reason"]) == ("blocked", code), entry
         with pytest.raises(ServiceError, match=code):
-            env.library.add_files("model", [source], direct=True)
+            env.library.add_files("chibi", [source], direct=True)
         assert not env.library.mods()
     else:
         assert (entry["state"], entry["reason"]) == ("ready", None), entry

@@ -129,14 +129,16 @@ def test_bundle_families_map_to_kinds(name, kind):
 
 def test_library_kinds_map_to_package_kinds():
     background = "assets-_mx-spinebackground-spinebg-_mxdependency-2024-11-18_000_assets_all_1.bundle"
-    assert ba_mod.kind_of("spr", []) == "portrait"
-    assert ba_mod.kind_of("lobby", [background]) == "spine_scene"
+    assert ba_mod.resource_type_of("portrait", []) == "portrait"
+    assert ba_mod.resource_type_of("memorialLobby", [background]) == "spine_scene"
     assert (
-        ba_mod.kind_of("lobby", ["assets-_mx-spinelobbies-x_home-_mxdependency-2024-11-18_000_assets_all_1.bundle"])
+        ba_mod.resource_type_of(
+            "memorialLobby", ["assets-_mx-spinelobbies-x_home-_mxdependency-2024-11-18_000_assets_all_1.bundle"]
+        )
         == "lobby"
     )
     assert (
-        ba_mod.kind_of(
+        ba_mod.resource_type_of(
             "other",
             [
                 "effect-_mxload-prefabs-2025-07-02_assets_all_1.bundle",
@@ -170,7 +172,7 @@ def test_an_exported_package_imports_with_its_manifest_trusted(env):
         folder=env.tmp / "exports",
         server="global",
         platform="windows",
-        kind=None,
+        resource_type=None,
         log=lambda *_: None,
         progress=lambda *_: None,
     )

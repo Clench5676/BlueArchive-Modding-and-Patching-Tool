@@ -1,5 +1,5 @@
-"""Memorial lobby layout and interaction (gameassets/lobby.py) on synthetic typetrees, the lobby.json route, and a
-read-only check against a local install."""
+"""Memorial lobby layout and interaction (gameassets/memorial_lobby.py) on synthetic typetrees, the memorial-lobby.json
+route, and a read-only check against a local install."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import pytest
 
 from bmpt.host.config import Settings
 from bmpt.core.errors import ServiceError
-from bmpt.gameassets import lobby
+from bmpt.gameassets import memorial_lobby
 from bmpt.gameassets.unity import open_bundle
 from bmpt.webui.services import Services
 from bmpt.webui.state import UiState
@@ -91,7 +91,7 @@ class Prefab:
 
     def read(self, root: str, skeletons, clips, resolve=None):
         kinds = {pid: kind for pid, (kind, _) in self.objects.items()}
-        return lobby.read_prefab(
+        return memorial_lobby.read_prefab(
             kinds, lambda pid: self.objects[pid][1], SCRIPTS, root, skeletons, clips, resolve=resolve
         )
 
@@ -127,8 +127,8 @@ def skeleton_data(name: str, mix: float) -> dict:
 SKELETONS = ["Test_home", "Test_bg", "Test_scene"]
 
 
-def core_clips() -> lobby.Clips:
-    return lobby.Clips(
+def core_clips() -> memorial_lobby.Clips:
+    return memorial_lobby.Clips(
         [
             (9001, skeleton_data("Test_home", 0.4)),
             (9002, skeleton_data("Test_bg", 0.2)),
@@ -245,13 +245,13 @@ def build_prefab(spine_y: float = -962.0, spine_scale: float = 100.0) -> Prefab:
 
 
 def test_prefab_candidates():
-    assert lobby.prefab_candidates("ch0242_home", ["CH0242_home"])[0] == "lobbych0242"
-    assert lobby.prefab_candidates("ch0295_home_gl", [])[0] == "lobbych0295_gl"
-    assert lobby.prefab_candidates("ako_home_teen", ["ako_home_Teen"])[0] == "lobbyako_teen"
+    assert memorial_lobby.prefab_candidates("ch0242_home", ["CH0242_home"])[0] == "lobbych0242"
+    assert memorial_lobby.prefab_candidates("ch0295_home_gl", [])[0] == "lobbych0295_gl"
+    assert memorial_lobby.prefab_candidates("ako_home_teen", ["ako_home_Teen"])[0] == "lobbyako_teen"
     # two cores share a skeleton; group lobbies are named after the skeleton itself
-    assert "lobbyairi" in lobby.prefab_candidates("airi0_home", ["Airi_home"])
-    assert "lobbyhoshino_multi" in lobby.prefab_candidates("lobbyhoshino_multi", ["LobbyHoshino_multi"])
-    names = lobby.prefab_candidates("hoshino_home", ["Hoshino_home", "Hoshino_home_background"])
+    assert "lobbyairi" in memorial_lobby.prefab_candidates("airi0_home", ["Airi_home"])
+    assert "lobbyhoshino_multi" in memorial_lobby.prefab_candidates("lobbyhoshino_multi", ["LobbyHoshino_multi"])
+    names = memorial_lobby.prefab_candidates("hoshino_home", ["Hoshino_home", "Hoshino_home_background"])
     assert names[0] == "lobbyhoshino" and len(names) == len(set(names))
 
 
@@ -293,7 +293,7 @@ def test_idle_sync_clips_and_sound_keys():
         asked.append(owner)
         return events.get((owner, pointer["m_FileID"], pointer["m_PathID"]))
 
-    clips = lobby.Clips(
+    clips = memorial_lobby.Clips(
         [
             (9001, skeleton_data("Test_home", 0.4)),
             (-1, clip("Test_home-Idle_01", 0, loop=1, PlayMode=0, FinishMode=0, SyncPlayClipObjects=[ref(-2), ref(0)])),
@@ -340,7 +340,7 @@ def test_sound_events_as_the_game_plays_them():
         "m_Name": "SFX_Spine_Subway",
         "AudioData": {"Volume": 0.699999988079071, "Pitch": 1.0, "AudioClips": [ref(655, 5), ref(0)]},
     }
-    assert lobby.sound_event(subway, clip_id) == {
+    assert memorial_lobby.sound_event(subway, clip_id) == {
         "name": "SFX_Spine_Subway",
         "volume": 0.7,
         "pitch": 1.0,
@@ -351,11 +351,20 @@ def test_sound_events_as_the_game_plays_them():
         "m_Name": "SpineSFX_Cloth",
         "AudioData": {"Volume": 0.08, "Pitch": -3.0, "AudioClips": [ref(1, 5), ref(2, 5)]},
     }
-    assert lobby.sound_event(cloth, clip_id)["pitch"] == 1.0 and len(lobby.sound_event(cloth, clip_id)["clips"]) == 2
-    assert lobby.sound_event({**cloth, "AudioData": {**cloth["AudioData"], "Pitch": 3.0}}, clip_id)["pitch"] == 3.0
+    assert (
+        memorial_lobby.sound_event(cloth, clip_id)["pitch"] == 1.0
+        and len(memorial_lobby.sound_event(cloth, clip_id)["clips"]) == 2
+    )
+    assert (
+        memorial_lobby.sound_event({**cloth, "AudioData": {**cloth["AudioData"], "Pitch": 3.0}}, clip_id)["pitch"]
+        == 3.0
+    )
     # an ambient event, or one without clips, is not a sound key's
-    assert lobby.sound_event({"m_Name": "AmbientAudioEvent_Breeze", "Clip": ref(3, 5), "Command": 0}, clip_id) is None
-    assert lobby.sound_event({"AudioData": {"AudioClips": []}}, clip_id) is None
+    assert (
+        memorial_lobby.sound_event({"m_Name": "AmbientAudioEvent_Breeze", "Clip": ref(3, 5), "Command": 0}, clip_id)
+        is None
+    )
+    assert memorial_lobby.sound_event({"AudioData": {"AudioClips": []}}, clip_id) is None
 
 
 def test_prefab_layout_drags_touches_and_anchors():
@@ -416,7 +425,7 @@ def test_enlarged_lobby_scale_and_unknown_skeletons():
     # the pat box is in NGUI units, the bone values stay skeleton units
     assert info["drags"][0]["rect"] == [-109.0, 131.0, 491.0, 531.0] and info["drags"][0]["orig"] == [117.45, 55.59]
     # a mod with other skeleton names: the prefab places none of them
-    assert build_prefab().read("LobbyTest", ["Other_home"], lobby.Clips([], ["Other_home"])) is None
+    assert build_prefab().read("LobbyTest", ["Other_home"], memorial_lobby.Clips([], ["Other_home"])) is None
     assert build_prefab().read("LobbyMissing", SKELETONS, core_clips()) is None
 
 
@@ -440,27 +449,32 @@ def aspect_component(narrow: float = 1.15, wide: float = 1.3, scale=(2, 4), offs
 def test_aspect_rule_blends_towards_the_narrow_and_wide_ends():
     comp = aspect_component(offsets=[(2, (24, 24, 24), (13, 26, 39)), (8, (0, 0, 0), (2.5, 3.5, -2.5))])
     t = 5 / 13  # 16:9 is 5/13 of the way from the standard 2960 x 1440 to 4:3
-    assert lobby.ASPECT_VIEW == 16 / 9
-    factor, offsets = lobby.aspect_rule(comp)
-    assert factor == pytest.approx(1 + 0.15 * t) and factor == lobby.aspect_rule(comp, 16 / 9)[0]
+    assert memorial_lobby.ASPECT_VIEW == 16 / 9
+    factor, offsets = memorial_lobby.aspect_rule(comp)
+    assert factor == pytest.approx(1 + 0.15 * t) and factor == memorial_lobby.aspect_rule(comp, 16 / 9)[0]
     assert offsets == {100002: (5, 10, 15), 100008: (1, 1, -1)}  # the second: 0.9, 1.3, -0.9
     # the narrowest screen takes the narrow values whole, one narrower is clamped; offsets round half to even
-    factor, offsets = lobby.aspect_rule(comp, 4 / 3)
+    factor, offsets = memorial_lobby.aspect_rule(comp, 4 / 3)
     assert (factor, offsets[100002], offsets[100008]) == (pytest.approx(1.15), (13, 26, 39), (2, 4, -2))
-    assert lobby.aspect_rule(comp, 1.0) == lobby.aspect_rule(comp, 4 / 3)
+    assert memorial_lobby.aspect_rule(comp, 1.0) == memorial_lobby.aspect_rule(comp, 4 / 3)
     # wider than the standard: the wide values, towards 2.1666667 and clamped there
-    mid = lobby.ASPECT_STANDARD + (lobby.ASPECT_WIDE - lobby.ASPECT_STANDARD) / 4
-    factor, offsets = lobby.aspect_rule(comp, mid)
+    mid = memorial_lobby.ASPECT_STANDARD + (memorial_lobby.ASPECT_WIDE - memorial_lobby.ASPECT_STANDARD) / 4
+    factor, offsets = memorial_lobby.aspect_rule(comp, mid)
     assert factor == pytest.approx(1 + 0.3 * 0.25) and offsets[100002] == (6, 6, 6) and offsets[100008] == (0, 0, 0)
-    assert lobby.aspect_rule(comp, lobby.ASPECT_WIDE) == lobby.aspect_rule(comp, 21 / 9)
-    assert lobby.aspect_rule(comp, 21 / 9)[0] == pytest.approx(1.3) and lobby.aspect_rule(comp, 21 / 9)[1][100002] == (
+    assert memorial_lobby.aspect_rule(comp, memorial_lobby.ASPECT_WIDE) == memorial_lobby.aspect_rule(comp, 21 / 9)
+    assert memorial_lobby.aspect_rule(comp, 21 / 9)[0] == pytest.approx(1.3) and memorial_lobby.aspect_rule(
+        comp, 21 / 9
+    )[1][100002] == (
         24,
         24,
         24,
     )
     # the standard aspect itself: nothing moves
-    assert lobby.aspect_rule(comp, lobby.ASPECT_STANDARD) == (1.0, {100002: (0, 0, 0), 100008: (0, 0, 0)})
-    assert lobby.aspect_targets(comp) == [100002, 100004]
+    assert memorial_lobby.aspect_rule(comp, memorial_lobby.ASPECT_STANDARD) == (
+        1.0,
+        {100002: (0, 0, 0), 100008: (0, 0, 0)},
+    )
+    assert memorial_lobby.aspect_targets(comp) == [100002, 100004]
 
 
 def test_prefab_follows_the_aspect_scale_at_16_9():
@@ -553,7 +567,7 @@ def test_post_processing_blends_the_volumes_like_urp():
             "components": [component("ChromaticAberration", intensity=param(1.0))],
         },
     ]
-    post = lobby.post_processing(volumes)
+    post = memorial_lobby.post_processing(volumes)
     assert post == {
         "chromaticAberration": 0.075,
         "liftGammaGain": {
@@ -583,11 +597,11 @@ def test_post_processing_priority_weight_and_defaults():
         }
 
     # the higher priority goes last whatever the hierarchy order; a partial weight lerps from what is below
-    assert lobby.post_processing([ca(0.2, priority=1.0), ca(0.1)]) == {"chromaticAberration": 0.2}
-    assert lobby.post_processing([ca(0.1), ca(0.3, weight=0.5)]) == {"chromaticAberration": 0.2}
+    assert memorial_lobby.post_processing([ca(0.2, priority=1.0), ca(0.1)]) == {"chromaticAberration": 0.2}
+    assert memorial_lobby.post_processing([ca(0.1), ca(0.3, weight=0.5)]) == {"chromaticAberration": 0.2}
     # effects that end up doing nothing are left out, as are local volumes and a Panini projection at distance 0
-    assert lobby.post_processing([ca(0.0)]) == {}
-    assert lobby.post_processing([{**ca(0.1), "global": False}]) == {}
+    assert memorial_lobby.post_processing([ca(0.0)]) == {}
+    assert memorial_lobby.post_processing([{**ca(0.1), "global": False}]) == {}
     panini = {
         "weight": 0.368,
         "priority": 0.0,
@@ -595,8 +609,8 @@ def test_post_processing_priority_weight_and_defaults():
         "active": True,
         "components": [component("PaniniProjection", distance=param(1.0), cropToFit=param(1.0))],
     }
-    assert lobby.post_processing([panini]) == {"panini": {"distance": 0.368, "cropToFit": 1.0}}
-    assert lobby.post_processing([]) == {}
+    assert memorial_lobby.post_processing([panini]) == {"panini": {"distance": 0.368, "cropToFit": 1.0}}
+    assert memorial_lobby.post_processing([]) == {}
 
 
 def test_prefab_volumes_follow_only_the_volumes_that_count():
@@ -620,7 +634,7 @@ def test_prefab_volumes_follow_only_the_volumes_that_count():
         return profiles.get(pointer["m_PathID"])
 
     kinds = {pid: kind for pid, (kind, _) in p.objects.items()}
-    info = lobby.read_prefab(
+    info = memorial_lobby.read_prefab(
         kinds, lambda pid: p.objects[pid][1], SCRIPTS, "LobbyTest", SKELETONS, core_clips(), profile=profile
     )
     assert info["post"] == {"chromaticAberration": 0.1}
@@ -779,7 +793,9 @@ def test_prefab_page_shaders():
     assert layers["Test_home"]["pages"] == {} and layers["Test_home"]["queue"] == 3000
     # without a resolver (or without prefab data) no page has a shader: every slot colour is decoded
     assert all(l["shaders"] == {} for l in build_prefab().read("LobbyTest", SKELETONS, core_clips())["layers"])
-    assert lobby.lobby_info(["A_home"], lobby.Clips([], []), None)["layers"][0]["shaders"] == {}
+    assert (
+        memorial_lobby.memorial_lobby_info(["A_home"], memorial_lobby.Clips([], []), None)["layers"][0]["shaders"] == {}
+    )
 
 
 TOGGLE = 5009
@@ -827,15 +843,15 @@ def test_prefab_systems_switched_by_spine_events():
 
 def test_lobby_info_with_and_without_prefab():
     clips = core_clips()
-    info = lobby.lobby_info(SKELETONS, clips, build_prefab().read("LobbyTest", SKELETONS, clips))
+    info = memorial_lobby.memorial_lobby_info(SKELETONS, clips, build_prefab().read("LobbyTest", SKELETONS, clips))
     assert info["view"] == {"x": -1480.0, "y": -832.5, "w": 2960.0, "h": 1665.0}
     assert info["defaultMix"]["Test_home"] == 0.4 and "Pat_01_M" in info["clips"]["Test_home"]
     assert json.loads(json.dumps(info)) == info
-    bare = lobby.lobby_info(["A_home", "A_bg", "A_home"], lobby.Clips([], []), None)
+    bare = memorial_lobby.memorial_lobby_info(["A_home", "A_bg", "A_home"], memorial_lobby.Clips([], []), None)
     assert bare["prefab"] is None and bare["drags"] == [] and bare["touches"] == [] and bare["post"] == {}
     assert bare["idles"] == {} and bare["sounds"] == {} and info["sounds"] == {}
     sounds = {"cab-a_1": {"name": "S", "volume": 0.7, "pitch": 1.0, "clips": ["cab-b_2"]}}
-    assert lobby.lobby_info(SKELETONS, clips, None, sounds)["sounds"] == sounds
+    assert memorial_lobby.memorial_lobby_info(SKELETONS, clips, None, sounds)["sounds"] == sounds
     assert bare["fx"] == {"systems": [], "materials": {}, "textures": {}, "meshes": {}, "toggles": []}
     assert [(l["name"], l["x"], l["y"], l["scale"], l["active"]) for l in bare["layers"]] == [
         ("A_home", 0.0, -962.0, 1.0, True),
@@ -849,12 +865,12 @@ class _Game:
     def __init__(self):
         self.calls = []
 
-    def lobby_info(self, core):
+    def memorial_lobby_info(self, core):
         self.calls.append(core)
         return {"prefab": "LobbyTest", "core": core}
 
     def spine_files(self, kind, core):
-        raise AssertionError("lobby.json must not extract the Spine files")
+        raise AssertionError("memorial-lobby.json must not extract the Spine files")
 
 
 def test_lobby_json_route_is_memory_only(tmp_path):
@@ -870,7 +886,7 @@ def test_lobby_json_route_is_memory_only(tmp_path):
         library=_Library(),
     )
     try:
-        response = services.asset("spine/memorialLobby/hoshino_home/lobby.json", {})
+        response = services.asset("spine/memorialLobby/hoshino_home/memorial-lobby.json", {})
         assert json.loads(response.body) == {"prefab": "LobbyTest", "core": "hoshino_home"}
         assert response.mime == "application/json" and response.light is False
         assert game.calls == ["hoshino_home"]
@@ -879,7 +895,7 @@ def test_lobby_json_route_is_memory_only(tmp_path):
 
 
 class _FxGame(_Game):
-    def lobby_fx_texture(self, core, tex_id):
+    def memorial_lobby_fx_texture(self, core, tex_id):
         from bmpt.gameassets import AssetNotFound
 
         self.calls.append((core, tex_id))
@@ -921,7 +937,7 @@ def test_lobby_fx_texture_route(tmp_path):
 
 
 class _SoundGame(_Game):
-    def lobby_sound(self, core, clip_id):
+    def memorial_lobby_sound(self, core, clip_id):
         from bmpt.gameassets import AssetNotFound
 
         self.calls.append((core, clip_id))
@@ -977,14 +993,14 @@ def test_real_lobbies(real_game, monkeypatch):
         put(key, value, **kwargs)
 
     monkeypatch.setattr(cache, "put", record)
-    hoshino = real_game.lobby_info("hoshino_home")
+    hoshino = real_game.memorial_lobby_info("hoshino_home")
     assert hoshino["prefab"] == "LobbyHoshino" and hoshino["main"] == "Hoshino_home"
     assert {d["kind"] for d in hoshino["drags"]} >= {"pat", "look"} and hoshino["touches"]
     assert hoshino["defaultMix"]["Hoshino_home"] == 0.4
-    momiji = real_game.lobby_info("momiji_home")
+    momiji = real_game.memorial_lobby_info("momiji_home")
     # the 1.15 prefabs end at 1.15 x the aspect factor (1.0576923 at 16:9, see lobby.aspect_rule)
     assert {(l["y"], l["scale"]) for l in momiji["layers"]} == {(-1170.12, 1.21635)}
-    aru = {l["name"]: l["active"] for l in real_game.lobby_info("aru_home")["layers"]}
+    aru = {l["name"]: l["active"] for l in real_game.memorial_lobby_info("aru_home")["layers"]}
     assert aru["Aru_home"] is True and False in aru.values()
     # the camera's post-processing from the prefab's volumes (PPV at weight 1; the flash and depth of field at 0)
     assert hoshino["post"] == {
@@ -997,9 +1013,9 @@ def test_real_lobbies(real_game, monkeypatch):
         },
     }
     # Yoshimi's volumes sit on the UI layer, outside the lobby camera's volume mask: no post-processing in the game
-    assert real_game.lobby_info("yoshimi_home")["post"] == {}
+    assert real_game.memorial_lobby_info("yoshimi_home")["post"] == {}
     # Erika's sat there too until the 2026-11 update moved them onto the camera's volume layer
-    assert real_game.lobby_info("erika_home")["post"] == {
+    assert real_game.memorial_lobby_info("erika_home")["post"] == {
         "chromaticAberration": 0.1,
         "panini": {"distance": 1.0, "cropToFit": 1.0},
         "liftGammaGain": {
@@ -1010,9 +1026,9 @@ def test_real_lobbies(real_game, monkeypatch):
     }
     # lobby data is derived from character bundles: kept in memory, and nothing but the prefab name index reaches the
     # disk cache (consent is on)
-    assert sum(key.startswith(_SCHEMA + "lobby/") and not disk for key, disk in puts) == 5
+    assert sum(key.startswith(_SCHEMA + "memorial-lobby/") and not disk for key, disk in puts) == 5
     on_disk = {key for key, disk in puts if disk}
-    assert on_disk == {_SCHEMA + "lobby-prefabs"}
+    assert on_disk == {_SCHEMA + "memorial-lobby-prefabs"}
     files = {p for p in cache.root.rglob("*") if p.is_file()}
     assert files == {cache._path(real_game.cache_version, key) for key in on_disk}
 
@@ -1028,7 +1044,7 @@ def test_real_lobby_particles(real_game, monkeypatch):
         put(key, value, **kwargs)
 
     monkeypatch.setattr(real_game.cache, "put", record)
-    michiru = real_game.lobby_info("ch0113_home")["fx"]
+    michiru = real_game.memorial_lobby_info("ch0113_home")["fx"]
     names = {s["name"] for s in michiru["systems"]}
     assert {"glow", "Particle", "Fireworks_1", "boke_1", "dust_1"} <= names
     sparkler = [s for s in michiru["systems"] if "/FX_Hanabi/" in s["path"]]
@@ -1042,9 +1058,9 @@ def test_real_lobby_particles(real_game, monkeypatch):
     assert any(s.get("subs") for s in michiru["systems"])
     # every texture is served from memory as PNG, and only those the lobby lists
     tex_id = next(iter(michiru["textures"]))
-    assert real_game.lobby_fx_texture("ch0113_home", tex_id)[:8] == b"\x89PNG\r\n\x1a\n"
+    assert real_game.memorial_lobby_fx_texture("ch0113_home", tex_id)[:8] == b"\x89PNG\r\n\x1a\n"
     with pytest.raises(AssetNotFound):
-        real_game.lobby_fx_texture("ch0187_home", tex_id + "0")
+        real_game.memorial_lobby_fx_texture("ch0187_home", tex_id + "0")
     # game art: kept in memory only
     assert any("lobby-fx/" in key for key, _ in puts) and not any(disk for key, disk in puts if "lobby-fx/" in key)
 
@@ -1052,10 +1068,10 @@ def test_real_lobby_particles(real_game, monkeypatch):
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_lobby_particle_colour_space_layers_and_toggles(real_game):
     # Nodoka's star and meteors keep their colours as stored (Apply Active Color Space off), her other system not
-    nodoka = real_game.lobby_info("nodoka_home")["fx"]["systems"]
+    nodoka = real_game.memorial_lobby_info("nodoka_home")["fx"]["systems"]
     assert len(nodoka) == 10 and sum(s["renderer"]["colorSpace"] == 0 for s in nodoka) == 9
     # Aru's dust is on the game's other sorting layer (value 2): over her skeletons, which are on Default
-    aru = real_game.lobby_info("aru_home")
+    aru = real_game.memorial_lobby_info("aru_home")
     assert sorted(s["name"] for s in aru["fx"]["systems"] if s["sortingLayer"] == 2) == [
         "dust_00",
         "dust_01",
@@ -1066,7 +1082,7 @@ def test_real_lobby_particle_colour_space_layers_and_toggles(real_game):
     assert {layer["sortingLayer"] for layer in aru["layers"]} == {0}
     # CH0217: the character's Spine events switch seven GameObjects, all off in the prefab: the fish's bubbles (0 to
     # 3, from Idle_01 and BG_Loop_00_R) and the bubbles from her mouth (4 to 6, Talk_04_M and Idle_01)
-    fx = real_game.lobby_info("ch0217_home")["fx"]
+    fx = real_game.memorial_lobby_info("ch0217_home")["fx"]
     assert fx["toggles"] == [{"skeleton": "CH0217_home", "on": [0] * 7}]
     assert {i for s in fx["systems"] for _, i in s.get("toggle", [])} == set(range(7))
     assert all("_Fish/" in s["path"] or "_Bubble/" in s["path"] for s in fx["systems"] if s.get("toggle"))
@@ -1075,19 +1091,21 @@ def test_real_lobby_particle_colour_space_layers_and_toggles(real_game):
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_lobby_particle_modules(real_game):
     # CH0172's oil drops leave dirt trails, with the renderers' second material (queue 2950, under the character)
-    oil = [s for s in real_game.lobby_info("ch0172_home")["fx"]["systems"] if "trail" in s["modules"]]
+    oil = [s for s in real_game.memorial_lobby_info("ch0172_home")["fx"]["systems"] if "trail" in s["modules"]]
     rest = [s for s in oil if s.get("rest") != 0]  # the others play during the intro only
     assert len(rest) == 6 and {s["trailQueue"] for s in oil} == {2950} and all(s["material"] for s in oil)
     # CH0318's dust fades by its speed; CH0292's headlights emit by the distance they move
-    dust = [s for s in real_game.lobby_info("ch0318_home")["fx"]["systems"] if "colorBySpeed" in s["modules"]]
+    dust = [s for s in real_game.memorial_lobby_info("ch0318_home")["fx"]["systems"] if "colorBySpeed" in s["modules"]]
     assert sorted(s["modules"]["colorBySpeed"]["range"][1] for s in dust) == [7.0, 8.0]
-    assert sum(s["emission"]["dist"] > 0 for s in real_game.lobby_info("ch0292_home")["fx"]["systems"]) == 9
+    assert sum(s["emission"]["dist"] > 0 for s in real_game.memorial_lobby_info("ch0292_home")["fx"]["systems"]) == 9
     # Hibiki's bokeh: bursts spread along their edges; CH0069's halo: bursts of five in burst spread mode with a
     # spread of 0.12 (placed at random: how the two go together is not known)
-    hibiki = real_game.lobby_info("hibiki_home")["fx"]["systems"]
+    hibiki = real_game.memorial_lobby_info("hibiki_home")["fx"]["systems"]
     assert sum(s["shape"]["type"] == 12 and s["shape"]["radiusMode"] == 3 for s in hibiki if s["shape"]) == 10
     halo = next(
-        s for s in real_game.lobby_info("ch0069_home")["fx"]["systems"] if (s["shape"] or {}).get("arcMode") == 3
+        s
+        for s in real_game.memorial_lobby_info("ch0069_home")["fx"]["systems"]
+        if (s["shape"] or {}).get("arcMode") == 3
     )
     assert halo["emission"]["bursts"][0]["n"] == 5.0 and halo["shape"]["arcSpread"] == 0.12
     assert halo["renderer"]["sort"] == 1
@@ -1097,17 +1115,17 @@ def test_real_lobby_particle_modules(real_game):
 def test_real_lobby_page_queues(real_game):
     # Hibiki's background page draws at 2900 and her own at 3050: the river surface (3000, pushed back by its sorting
     # fudge among the other effects of that queue) draws over the river, under her
-    hibiki = real_game.lobby_info("hibiki_home")
+    hibiki = real_game.memorial_lobby_info("hibiki_home")
     (layer,) = hibiki["layers"]
     assert layer["pages"] == {"Hibiki_home": 3050, "Hibiki_home2": 2900} and layer["queue"] == 2900
     river = next(s for s in hibiki["fx"]["systems"] if s["name"] == "River_surface")
     assert (river["order"], river["queue"], river["fudge"]) == (0, 3000, 50.0)
     # Kisaki (Swimsuit): the scenery at 2900, her at 3100, the mist in front of her at 3200
-    (kisaki,) = real_game.lobby_info("ch0356_home")["layers"]
+    (kisaki,) = real_game.memorial_lobby_info("ch0356_home")["layers"]
     assert kisaki["pages"] == {"CH0356_home": 3100, "CH0356_home_2": 3200, "CH0356_home_3": 2900, "CH0356_home_4": 2900}
     # every page of the atlas the web UI loads has its queue (the page's file name without its extension)
     for core, layer in (("hibiki_home", layer), ("ch0356_home", kisaki)):
-        atlas = real_game.spine_files("lobby", core)[f"{layer['name']}.atlas"].decode("utf8")
+        atlas = real_game.spine_files("memorialLobby", core)[f"{layer['name']}.atlas"].decode("utf8")
         names = [line.strip()[:-4] for line in atlas.splitlines() if line.strip().lower().endswith(".png")]
         assert names and set(names) == set(layer["pages"])
 
@@ -1124,7 +1142,7 @@ def test_real_lobby_idle_clips_and_sounds(real_game, monkeypatch):
 
     monkeypatch.setattr(real_game.cache, "put", record)
     # Shigure's idle starts her train: track 3, at random times, with the subway's sound 3.1 s in
-    shigure = real_game.lobby_info("shigure_home")
+    shigure = real_game.memorial_lobby_info("shigure_home")
     assert shigure["idles"]["Shigure_home"] == ["Idle_01"]
     assert shigure["clips"]["Shigure_home"]["Idle_01"]["sync"] == ["Train_00_R"]
     train = shigure["clips"]["Shigure_home"]["Train_00_R"]
@@ -1134,17 +1152,17 @@ def test_real_lobby_idle_clips_and_sounds(real_game, monkeypatch):
     assert time == 3.1 and shigure["sounds"][event]["name"] == "SFX_Spine_Subway"
     assert shigure["sounds"][event]["volume"] == 0.7 and len(shigure["sounds"][event]["clips"]) == 1
     # Yuzu's idle pool plays two background clips besides the idle
-    assert real_game.lobby_info("ch0336_home")["idles"]["CH0336_home"] == [
+    assert real_game.memorial_lobby_info("ch0336_home")["idles"]["CH0336_home"] == [
         "Idle_01",
         "Idle_BG_B_01_R",
         "Idle_Cloud_01_R",
     ]
     # the sound, decoded in memory (WAV), and only for clips the lobby lists
     clip_id = shigure["sounds"][event]["clips"][0]
-    wav = real_game.lobby_sound("shigure_home", clip_id)
+    wav = real_game.memorial_lobby_sound("shigure_home", clip_id)
     assert wav[:4] == b"RIFF" and wav[8:12] == b"WAVE" and len(wav) > 10000
     with pytest.raises(AssetNotFound):
-        real_game.lobby_sound("aru_home", clip_id)
+        real_game.memorial_lobby_sound("aru_home", clip_id)
     assert any("lobby-sound/" in key for key, _ in puts) and not any(
         disk for key, disk in puts if "lobby-sound/" in key
     )
@@ -1164,16 +1182,16 @@ def test_real_lobby_aspect_scale(real_game, monkeypatch):
 
     monkeypatch.setattr(particles, "build", spy)
     # Azusa's LobbySpine is serialized at 1: the skeleton ends at the factor, the standard place scaled about the centre
-    (azusa,) = real_game.lobby_info("azusa_home")["layers"]
+    (azusa,) = real_game.memorial_lobby_info("azusa_home")["layers"]
     assert (azusa["scale"], azusa["x"], azusa["y"]) == (round(s, 5), 0.0, round(-962 * s, 2))
     # a lobby serialized at 1.15 ends at 1.15 times the factor, and CH0242 (mostNarrowScale 1.0) does not change
-    (ch0205,) = real_game.lobby_info("ch0205_home")["layers"]
+    (ch0205,) = real_game.memorial_lobby_info("ch0205_home")["layers"]
     assert (ch0205["scale"], ch0205["y"]) == (round(1.15 * s, 5), round(-1106.3 * s, 2))
-    (ch0242,) = real_game.lobby_info("ch0242_home")["layers"]
+    (ch0242,) = real_game.memorial_lobby_info("ch0242_home")["layers"]
     assert (ch0242["scale"], ch0242["x"], ch0242["y"]) == (1.0, 0.0, -962.0)
     # Hina has two scale targets: her background and the LobbySpine both scale
-    real_game.lobby_info("hina_home")
-    with open_bundle(real_game._bundle_path(real_game._lobby_prefabs()["lobbyhina"])) as env:
+    real_game.memorial_lobby_info("hina_home")
+    with open_bundle(real_game._bundle_path(real_game._memorial_lobby_prefabs()["lobbyhina"])) as env:
         raw = {
             o.path_id: o.read_typetree()
             for o in env.objects

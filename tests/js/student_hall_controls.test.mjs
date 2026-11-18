@@ -33,7 +33,7 @@ const loop = node("Able_Count", [
   node("Label_SpineCount", [], [{ text: "9/9", color: "#466399/1.00" }]),
 ]);
 const duty = (name, tint) => node(name, [node("Icon", [], [sprite("Common_Icon_SpecialLobby", 68, 68, tint, 5)])]);
-const lobby = node("UILobby", [
+const home = node("UILobby", [
   node("Front", [
     node("Right", [
       node("Btn_RotateSpine", [node("ConditionRoot", [loop])]),
@@ -56,7 +56,7 @@ let rendered,
   wired = [],
   drawnIcons = new Map(),
   alignedIcons = new Map();
-globalThis.hallControlsHarness = {
+globalThis.studentHallControlsHarness = {
   S,
   clone: structuredClone,
   NGUI: {
@@ -88,8 +88,8 @@ globalThis.hallControlsHarness = {
   },
   UI: { retainedButton: async () => {}, button: async () => {}, scaleControl: async () => {} },
   T: (key) =>
-    globalThis.hallControlsHarness.strings
-      ? key.split(".").reduce((v, k) => v[k], globalThis.hallControlsHarness.strings)
+    globalThis.studentHallControlsHarness.strings
+      ? key.split(".").reduce((v, k) => v[k], globalThis.studentHallControlsHarness.strings)
       : `localized:${key}`,
   Popup: {
     hit(host, view, path, fn, meta) {
@@ -108,24 +108,28 @@ globalThis.hallControlsHarness = {
     }),
     querySelectorAll: () => [],
   },
-  lobby,
+  home,
 };
-const hallFile = (name) => readFile(new URL(`../../src/bmpt/web/js/hall/${name}`, import.meta.url), "utf8");
-let source = joinedModules(await hallFile("student-hall.js"), await hallFile("student-hall-portrait-toolbar.js"));
+const studentHallFile = (name) =>
+  readFile(new URL(`../../src/bmpt/web/js/student-hall/${name}`, import.meta.url), "utf8");
+let source = joinedModules(
+  await studentHallFile("student-hall.js"),
+  await studentHallFile("student-hall-portrait-toolbar.js"),
+);
 source =
   `import { CONTROL, XS_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui/ui-grid.js", import.meta.url).href}";\n` +
   source;
 source =
-  `import { portraitReplacements } from "${new URL("../../src/bmpt/web/js/hall/student-hall-model.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/bmpt/web/js/hall/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/bmpt/web/js/window/corner-layout.js", import.meta.url).href}";\n` +
+  `import { portraitReplacements } from "${new URL("../../src/bmpt/web/js/student-hall/student-hall-chibi.js", import.meta.url).href}";\nimport { portraitRect, portraitToolbarLayout, PORTRAIT_SIZE } from "${new URL("../../src/bmpt/web/js/student-hall/student-hall-framing.js", import.meta.url).href}";\nimport { bindCorner } from "${new URL("../../src/bmpt/web/js/window/corner-layout.js", import.meta.url).href}";\n` +
   source;
-source = `const {S,clone,NGUI,alignIcon,text,T,Popup,document,UI}=globalThis.hallControlsHarness;\n${source}\nexport {lobbyControl,controls,renderChrome,renderPortraitActions};
+source = `const {S,clone,NGUI,alignIcon,text,T,Popup,document,UI}=globalThis.studentHallControlsHarness;\n${source}\nexport {homeControl,controls,renderChrome,renderPortraitActions};
 export function setPortraits(value){portraits=value;}
-export function fixture(mode,kind=null,writes=0,portraits=[],choices=[]){options={choices};layouts={lobby:globalThis.hallControlsHarness.lobby};store={current:()=>({mode,memorialLobbies:[],portraits}),kind:()=>kind};root={getBoundingClientRect:()=>({left:0,top:0,width:1920,height:1080})};chrome={replaceChildren(){},querySelectorAll:()=>[]};hits={querySelector:()=>null};pendingWrites=writes;hitGeneration=0;}
-//# sourceURL=hall-controls-fixture.js`;
-const Hall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+export function fixture(mode,kind=null,writes=0,portraits=[],choices=[]){options={choices};layouts={home:globalThis.studentHallControlsHarness.home};store={current:()=>({mode,memorialLobbies:[],portraits}),kind:()=>kind};root={getBoundingClientRect:()=>({left:0,top:0,width:1920,height:1080})};chrome={replaceChildren(){},querySelectorAll:()=>[]};hits={querySelector:()=>null};pendingWrites=writes;hitGeneration=0;}
+//# sourceURL=student-hall-controls-fixture.js`;
+const StudentHall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 
 test("approved icon-only actions preserve the native background and normalize visual size and vertical center", () => {
-  Hall.fixture("portraits");
+  StudentHall.fixture("portraits");
   for (const [name, expected, width, height] of [
     ["Layout", "Cafe_Icon_NameEdit", 50, 50],
     ["Background", "Cafe_Icon_Photo", 120, 104],
@@ -134,7 +138,7 @@ test("approved icon-only actions preserve the native background and normalize vi
     ["Mode", "Common_Icon_Change_Count", 116, 84],
     ["Fullscreen", "Common_UIHide_Icon", 75, 63],
   ]) {
-    const tree = Hall.lobbyControl(name, "Unused caption", 1400, 156 * S);
+    const tree = StudentHall.homeControl(name, "Unused caption", 1400, 156 * S);
     assert.deepEqual(
       tree.children.map((c) => c.name),
       ["Bg", "Icon"],
@@ -147,10 +151,10 @@ test("approved icon-only actions preserve the native background and normalize vi
     assert.equal(icon.widgets[0].color, "#466399/1.00");
     assert.deepEqual(icon.scale, [1, 1]);
     assert.deepEqual(icon.pos, [0, 0]);
-    assert.equal(Hall.lobbyControl(name, "", 1400, 156 * S, false).children[1].widgets[0].color, "#2f3c52/1.00");
+    assert.equal(StudentHall.homeControl(name, "", 1400, 156 * S, false).children[1].widgets[0].color, "#2f3c52/1.00");
   }
   assert.equal(
-    find(lobby, "Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count/Label_SpineCount").widgets[0].text,
+    find(home, "Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count/Label_SpineCount").widgets[0].text,
     "9/9",
   );
 });
@@ -161,8 +165,8 @@ test("normal and edit actions pack immediately left of the right-aligned numberl
     ["portraits", "layout"],
     ["memorialLobby", null],
   ]) {
-    Hall.fixture(mode, kind);
-    const all = Hall.controls(),
+    StudentHall.fixture(mode, kind);
+    const all = StudentHall.controls(),
       actions = all.filter((action) => !action[6]);
     assert.equal(
       all.some((action) => action[0] === "Remove"),
@@ -190,35 +194,35 @@ test("normal and edit actions pack immediately left of the right-aligned numberl
 });
 
 test("icon actions retain localized accessible names and disable during writes", async () => {
-  Hall.fixture("portraits", null, 1);
+  StudentHall.fixture("portraits", null, 1);
   wired = [];
-  await Hall.renderChrome();
+  await StudentHall.renderChrome();
   assert.deepEqual(
     wired.map((b) => b.name),
     [
-      "localized:hall.changeLayout",
-      "localized:hall.background",
-      "localized:hall.memorial",
-      "localized:lobby.fullscreen",
+      "localized:studentHall.changeLayout",
+      "localized:studentHall.background",
+      "localized:studentHall.memorial",
+      "localized:memorialLobby.fullscreen",
     ],
   );
   assert.ok(wired.every((b) => b.disabled));
   assert.ok(rendered.children.every((c) => c.children[1].widgets[0].color === "#2f3c52/1.00"));
-  Hall.fixture("portraits", "layout");
+  StudentHall.fixture("portraits", "layout");
   wired = [];
-  await Hall.renderChrome();
-  assert.ok(wired.some((b) => b.name === "localized:hall.addPortraits"));
+  await StudentHall.renderChrome();
+  assert.ok(wired.some((b) => b.name === "localized:studentHall.addPortraits"));
   assert.equal(find(rendered, "Save/Label_SpineCount").widgets[0].text, "localized:popup.save");
   assert.equal(find(rendered, "Cancel/Label_SpineCount").widgets[0].text, "localized:popup.cancel");
 });
 
 test("rendered layer arrows rotate in screen coordinates while retaining centered native sprite geometry", async () => {
   const entries = [{ id: "a" }, { id: "b" }, { id: "c" }];
-  Hall.fixture("portraits", "layout", 0, entries);
+  StudentHall.fixture("portraits", "layout", 0, entries);
   drawnIcons = new Map();
   wired = [];
   const host = { style: {}, replaceChildren() {} };
-  await Hall.renderPortraitActions(host, entries[1], { x: 700, y: 400, width: 500 }, 0);
+  await StudentHall.renderPortraitActions(host, entries[1], { x: 700, y: 400, width: 500 }, 0);
   for (const [name, rotation] of [
     ["Backward", -180],
     ["Forward", 0],
@@ -235,32 +239,34 @@ test("rendered layer arrows rotate in screen coordinates while retaining centere
     assert.ok(Math.abs(Math.max(widget.w_, widget.h_) - 56) < 1e-10);
   }
   assert.equal(wired.length, 7);
-  assert.ok(wired.filter((button) => button.action !== "hall-portrait-change").every((button) => !button.disabled));
-  assert.equal(wired.find((button) => button.action === "hall-portrait-change").disabled, true);
+  assert.ok(
+    wired.filter((button) => button.action !== "student-hall-portrait-change").every((button) => !button.disabled),
+  );
+  assert.equal(wired.find((button) => button.action === "student-hall-portrait-change").disabled, true);
 });
 
-test("top-right icons keep the75percent baseline with the photo-only8percent optical adjustment", async () => {
-  Hall.fixture("portraits", "layout");
+test("top-right icons keep the75percent baseline with the thumbnail-only8percent optical adjustment", async () => {
+  StudentHall.fixture("portraits", "layout");
   alignedIcons = new Map();
-  await Hall.renderChrome();
-  assert.equal(alignedIcons.get("Hall/Add/Icon").height, 64 * S * 0.75);
-  assert.equal(alignedIcons.get("Hall/Background/Icon").height, 48 * S * 1.08);
-  assert.equal(alignedIcons.get("Hall/Mode/Icon").height, 48 * S);
-  Hall.fixture("memorialLobby");
-  await Hall.renderChrome();
-  assert.equal(alignedIcons.get("Hall/Adjust/Icon").height, 64 * S * 0.75);
-  Hall.fixture("portraits");
-  await Hall.renderChrome();
-  assert.equal(alignedIcons.get("Hall/Layout/Icon").height, 48 * S);
+  await StudentHall.renderChrome();
+  assert.equal(alignedIcons.get("StudentHall/Add/Icon").height, 64 * S * 0.75);
+  assert.equal(alignedIcons.get("StudentHall/Background/Icon").height, 48 * S * 1.08);
+  assert.equal(alignedIcons.get("StudentHall/Mode/Icon").height, 48 * S);
+  StudentHall.fixture("memorialLobby");
+  await StudentHall.renderChrome();
+  assert.equal(alignedIcons.get("StudentHall/Adjust/Icon").height, 64 * S * 0.75);
+  StudentHall.fixture("portraits");
+  await StudentHall.renderChrome();
+  assert.equal(alignedIcons.get("StudentHall/Layout/Icon").height, 48 * S);
   for (const name of ["Add", "Adjust", "Layout", "Background"]) {
-    assert.equal(alignedIcons.get(`Hall/${name}/Icon`).center, "bounds");
-    assert.equal(alignedIcons.get(`Hall/${name}/Icon`).alphaCutoff, 32);
+    assert.equal(alignedIcons.get(`StudentHall/${name}/Icon`).center, "bounds");
+    assert.equal(alignedIcons.get(`StudentHall/${name}/Icon`).alphaCutoff, 32);
   }
-  assert.equal(alignedIcons.get("Hall/Mode/Icon").center, undefined);
-  assert.equal(alignedIcons.get("Hall/Fullscreen/Icon").height, 48 * S);
+  assert.equal(alignedIcons.get("StudentHall/Mode/Icon").center, undefined);
+  assert.equal(alignedIcons.get("StudentHall/Fullscreen/Icon").height, 48 * S);
 });
 
-test("Hall's real action row measures its top margin below the bar at minimum, default and large sizes", async () => {
+test("StudentHall's real action row measures its top margin below the bar at minimum, default and large sizes", async () => {
   const { CORNER_MARGIN } = await import("../../src/bmpt/web/js/window/corner-layout.js");
   const { headerGeometry } = await import("../../src/bmpt/web/js/window/window-layout.js");
   for (const mode of ["portraits", "memorialLobby"])
@@ -297,8 +303,8 @@ test("Hall's real action row measures its top margin below the bar at minimum, d
               }
             : null,
         });
-        Hall.fixture(mode);
-        const destination = await Hall.renderChrome({ publish: false });
+        StudentHall.fixture(mode);
+        const destination = await StudentHall.renderChrome({ publish: false });
         const [dx, dy] = destination.children[0].style.translate.split(" ").map(parseFloat);
         const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);
         near(stageTop + (145 - (104 * S) / 2 + dy) * k - barBottom, CORNER_MARGIN * k);
@@ -315,28 +321,30 @@ test("the Common ChangeUnit portrait icon keeps its77x68ratio and enables only w
       { alt: "alt", source: "official", student: "hero", resourceType: "portrait" },
     ];
   for (const available of [[], choices]) {
-    Hall.fixture("portraits", "layout", 0, [entry], available);
+    StudentHall.fixture("portraits", "layout", 0, [entry], available);
     wired = [];
-    await Hall.renderPortraitActions(
+    await StudentHall.renderPortraitActions(
       { style: {}, replaceChildren() {} },
       entry,
       { x: 900, y: 400, width: 400, height: 700 },
       0,
     );
-    const hit = wired.find((b) => b.action === "hall-portrait-change"),
+    const hit = wired.find((b) => b.action === "student-hall-portrait-change"),
       widget = drawnIcons.get("PortraitChange").node.widgets[0];
     assert.equal(widget.atlas, "Common");
     assert.equal(widget.sprite, "Campaign_Icon_ChangeUnit");
     assert.ok(Math.abs(widget.w_ / widget.h_ - 77 / 68) < 1e-12);
     assert.equal(hit.disabled, available.length === 0);
-    assert.equal(hit.name, "localized:hall.changePortrait");
+    assert.equal(hit.name, "localized:studentHall.changePortrait");
   }
 });
 
 test("the own-size slider moves the toolbar only once a size is set, never under a dragged thumb", async () => {
-  const { portraitRect, portraitToolbarLayout } = await import("../../src/bmpt/web/js/hall/student-hall-framing.js");
+  const { portraitRect, portraitToolbarLayout } = await import(
+    "../../src/bmpt/web/js/student-hall/student-hall-framing.js"
+  );
   const entry = { id: "a", alt: "hero", source: "mod:current", x: 400, y: 1100, scale: 1, flipHorizontal: false },
-    ui = globalThis.hallControlsHarness.UI,
+    ui = globalThis.studentHallControlsHarness.UI,
     saved = { ...ui };
   let change,
     reset,
@@ -355,14 +363,14 @@ test("the own-size slider moves the toolbar only once a size is set, never under
     };
   };
   ui.button = async (host, name, caption, box, fn) => {
-    if (name === "HallPortraitScaleReset") reset = fn;
+    if (name === "StudentHallPortraitScaleReset") reset = fn;
   };
   try {
-    Hall.fixture("portraits", "layout", 0, [entry], []);
+    StudentHall.fixture("portraits", "layout", 0, [entry], []);
     wired = [];
     const host = { style: {}, replaceChildren() {} },
       rect = portraitRect(entry, null);
-    await Hall.renderPortraitActions(host, entry, rect, 0);
+    await StudentHall.renderPortraitActions(host, entry, rect, 0);
     const count = wired.length,
       start = { ...host.style },
       expected = (scale) => portraitToolbarLayout(portraitRect({ ...entry, scale }, null), count);
@@ -386,21 +394,21 @@ test("the own-size slider moves the toolbar only once a size is set, never under
 
 test("the toolbar centres on the portrait's visible head, not its Spine bounds", async () => {
   const entry = { id: "a", alt: "hero", source: "mod:current", x: 700, y: 1100, scale: 1, flipHorizontal: false };
-  Hall.fixture("portraits", "layout", 0, [entry], []);
-  Hall.setPortraits({ actors: new Map(), head: (id) => (id === "a" ? { x: -150, y: -600 } : null) });
+  StudentHall.fixture("portraits", "layout", 0, [entry], []);
+  StudentHall.setPortraits({ actors: new Map(), head: (id) => (id === "a" ? { x: -150, y: -600 } : null) });
   try {
     const host = { style: {}, replaceChildren() {} };
-    await Hall.renderPortraitActions(host, entry, { x: 0, y: 0, width: 1900, height: 1080 }, 0);
+    await StudentHall.renderPortraitActions(host, entry, { x: 0, y: 0, width: 1900, height: 1080 }, 0);
     const [x, y, w, h] = ["left", "top", "width", "height"].map((k) => parseFloat(host.style[k]));
     assert.equal(x + w / 2, 700 - 150, "centred on the head, not on the wide box");
     assert.equal(y + h, 1100 - 600, "touching the head");
   } finally {
-    Hall.setPortraits(null);
+    StudentHall.setPortraits(null);
   }
 });
 
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
-  test(`Hall toolbar bodies, scaled gaps and Cancel/Save fitting in ${locale}`, async () => {
+  test(`StudentHall toolbar bodies, scaled gaps and Cancel/Save fitting in ${locale}`, async () => {
     const ctx = {
       font: "",
       measureText(value) {
@@ -424,16 +432,16 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
     };
     globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
     const real = await import("../../src/bmpt/web/js/ui/ngui.js"),
-      fixture = globalThis.hallControlsHarness,
+      fixture = globalThis.studentHallControlsHarness,
       previous = fixture.NGUI.fitGroup;
     fixture.NGUI.fitGroup = real.fitGroup;
     fixture.strings = JSON.parse(
       await readFile(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),
     ).webui;
     try {
-      Hall.fixture("portraits", "layout");
-      await Hall.renderChrome();
-      const actions = Hall.controls(),
+      StudentHall.fixture("portraits", "layout");
+      await StudentHall.renderChrome();
+      const actions = StudentHall.controls(),
         icons = actions.filter((a) => !a[6]),
         pair = actions.filter((a) => a[6]);
       assert.equal(CONTROL.toolbar.h, 104);

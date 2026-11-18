@@ -66,7 +66,7 @@ class CutParameters:
 
     @classmethod
     def strict(cls):
-        """Return a stricter variant, kept for comparison.
+        """Return a stricter alt, kept for comparison.
 
         No overlay alpha in the first five mesh pixels, then a five-pixel feather; bleed copies the nearest edited
         colour.

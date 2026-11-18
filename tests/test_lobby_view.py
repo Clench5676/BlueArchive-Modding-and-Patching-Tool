@@ -69,9 +69,7 @@ def test_zoom_out_setting_is_full_art_by_default_and_persists(app, tmp_path):
             rpc(app, "settings.set", key="memorialLobbyZoomOut", value=mode)["result"]["memorialLobbyZoomOut"]["mode"]
             == mode
         )
-        assert UiState(tmp_path / "webui.json").get("lobby_zoom") == {"fullArt": "art", "gameView": "game"}.get(
-            mode, mode
-        )
+        assert UiState(tmp_path / "webui.json").get("memorial_lobby_zoom_out_mode") == mode
     for bad in ("wide", "", None, True, ["art"]):
         assert rpc(app, "settings.set", key="memorialLobbyZoomOut", value=bad)["error"]["code"] == "bad_params"
     assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"]["mode"] == "gameView"
@@ -86,7 +84,7 @@ def test_custom_zoom_out_limit_is_kept_in_range_and_steps(app, tmp_path):
             ]["custom"]
             == kept
         )
-    assert UiState(tmp_path / "webui.json").get("lobby_zoom_custom") == 2.8
+    assert UiState(tmp_path / "webui.json").get("memorial_lobby_zoom_out_custom_limit") == 2.8
     for bad in ("2", None, True, float("nan"), float("inf")):
         assert (
             rpc(app, "settings.set", key="memorialLobbyZoomOutCustomLimit", value=bad)["error"]["code"] == "bad_params"
@@ -95,19 +93,24 @@ def test_custom_zoom_out_limit_is_kept_in_range_and_steps(app, tmp_path):
 
 
 def test_zoom_out_setting_migrates_the_saved_boolean(services, app):
-    # the setting is a saved boolean (lobby_zoom_out) without a mode: true is Full Art, false the game's view
-    services.state.set("lobby_zoom_out", True)
+    def load_legacy(**prefs):
+        path = services.state.path
+        path.write_text(json.dumps({"prefs": prefs}))
+        services.state = UiState(path)
+
+    load_legacy(lobby_zoom_out=True)
     assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"] == {"mode": "fullArt", "custom": 2.0}
-    services.state.set("lobby_zoom_out", False)
+    load_legacy(lobby_zoom_out=False)
     assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"]["mode"] == "gameView"
     # a chosen mode wins over the saved boolean, and a damaged value falls back to it
-    services.state.set("lobby_zoom_out", True)
+    load_legacy(lobby_zoom_out=True)
     rpc(app, "settings.set", key="memorialLobbyZoomOut", value="unlocked")
     assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"]["mode"] == "unlocked"
-    services.state.set("lobby_zoom", "everything")
-    services.state.set("lobby_zoom_custom", "far")
+    load_legacy(lobby_zoom_out=True, lobby_zoom="unlocked")
+    assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"]["mode"] == "unlocked"
+    load_legacy(lobby_zoom_out=True, lobby_zoom="everything", lobby_zoom_custom="far")
     assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"] == {"mode": "fullArt", "custom": 2.0}
-    services.state.set("lobby_zoom_out", False)
+    load_legacy(lobby_zoom_out=False, lobby_zoom="everything", lobby_zoom_custom="far")
     assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"]["mode"] == "gameView"
 
 
@@ -120,7 +123,7 @@ def test_post_processing_setting_is_on_by_default_and_persists(app, tmp_path):
         ]
         is False
     )
-    assert UiState(tmp_path / "webui.json").get("lobby_post") is False
+    assert UiState(tmp_path / "webui.json").get("memorial_lobby_post_processing") is False
     assert (
         rpc(app, "settings.set", key="memorialLobbyPostProcessing", value=1)["result"]["memorialLobbyPostProcessing"]
         is True
@@ -131,7 +134,7 @@ def test_intro_setting_is_on_by_default_and_persists(app, tmp_path):
     # the memorial lobby's intro plays when the lobby is entered unless it is turned off
     assert rpc(app, "settings.get")["result"]["memorialLobbyIntro"] is True
     assert rpc(app, "settings.set", key="memorialLobbyIntro", value=False)["result"]["memorialLobbyIntro"] is False
-    assert UiState(tmp_path / "webui.json").get("lobby_intro") is False
+    assert UiState(tmp_path / "webui.json").get("memorial_lobby_intro") is False
     assert rpc(app, "settings.set", key="memorialLobbyIntro", value=True)["result"]["memorialLobbyIntro"] is True
 
 
@@ -195,7 +198,13 @@ const cases = [
 console.log(JSON.stringify(cases.map(([e, last]) => T.wheelKind(e, now, last))));
 """
     out = subprocess.run(
-        ["node", "--input-type=module", "-e", script, (WEB / "js" / "lobby" / "lobby-touch.js").as_uri()],
+        [
+            "node",
+            "--input-type=module",
+            "-e",
+            script,
+            (WEB / "js" / "memorial-lobby" / "memorial-lobby-touch.js").as_uri(),
+        ],
         capture_output=True,
         text=True,
         timeout=60,
@@ -285,7 +294,7 @@ def game(tmp_path_factory):
 def test_talk_template_is_the_prefab_box_at_the_origin(game):
     from bmpt.gameassets.layouts import export_layout, subtree
 
-    path = game._bundle_path(game._lobby_prefabs()["lobbycommon"])
+    path = game._bundle_path(game._memorial_lobby_prefabs()["lobbycommon"])
     with open_bundle(path) as env:
         original = subtree(export_layout(env, "LobbyCommon", {}), "DialogPanel/ChatDialog/Talk")
     saved = dialogue_layout(game)
@@ -297,8 +306,8 @@ def test_talk_template_is_the_prefab_box_at_the_origin(game):
 def test_dialogue_and_pat_boxes_share_prefab_root_coordinates(game):
     # Independently accumulate the official transforms from the root. Unlike local positions, both exported values
     # must include every ancestor's translation, rotation and scale. The collider rect is unrotated about its centre.
-    info = game.lobby_info("ch0100_home")
-    path = game._bundle_path(game._lobby_prefabs()["lobbych0100"])
+    info = game.memorial_lobby_info("ch0100_home")
+    path = game._bundle_path(game._memorial_lobby_prefabs()["lobbych0100"])
     with open_bundle(path) as env:
         objects = {
             o.path_id: o.read_typetree()

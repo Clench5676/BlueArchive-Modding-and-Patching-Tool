@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..records import stored_target
+
 import copy
 import json
 import logging
@@ -11,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from bmpt.host import steam_records
-from ...catalog.models import CoreMap
+from ...catalog.records import CoreMap
 from ...host.store_formats import FutureFormat, StateEncoder, epoch_root, read_runtime
 from ...core.errors import ServiceError
 from ...core.filelock import file_lock
@@ -19,9 +21,9 @@ from ...gameassets.cabs import CabIndex
 from ...core.logging_utils import log_failure
 from .. import pointers, rig_archive, staging, toggle_timing
 from ..original_checks import OriginalChecks
-from ..judge import supports_kind
+from ..judge import supports_resource_type
 from ..migrations import LEGACY_REMAP, legacy_remapped
-from ..models import Pin
+from ..records import Pin
 from ..profiles import Profiles
 from ..storage import (
     Fingerprints,
@@ -35,7 +37,7 @@ from .costumes import CostumesMixin
 from .editing import EditingMixin
 from .enable import EnableMixin
 from .folders import FoldersMixin
-from .graft import GraftMixin
+from .add_animations import AddAnimationsMixin
 from .impact import ImpactMixin
 from .imports import ImportsMixin
 from .mods import ModsMixin
@@ -69,7 +71,7 @@ class ModLibrary(
     CopiesMixin,
     EnableMixin,
     EditingMixin,
-    GraftMixin,
+    AddAnimationsMixin,
     UpdatingMixin,
 ):
     """Store mods, verified originals, installed-source records, and the Enable Mods configuration.
@@ -97,7 +99,7 @@ class ModLibrary(
 
         Args:
             root: Library storage folder, resolved before state and asset paths are created.
-            catalog: Character catalog resolving bundle cores, variants, and explicit assignments.
+            catalog: Character catalog resolving bundle cores, alts, and explicit assignments.
             game: Game asset service used for Collection target resolution; None omits that service.
             settings: Game-folder, server, and save settings; None permits storage without a selected install.
             scan_allowed: Reports consent to inspect game files the library did not write.
@@ -140,7 +142,7 @@ class ModLibrary(
         self._waiting: set[str] = set()  # write journals waiting for their install, already logged
         self._records: dict[str, dict[str, Any]] = {}
         self._remap_previews: dict[str, dict] = {}
-        self._grafts: dict[str, dict] = {}  # graft jobs between their steps (graft, graft_build, graft_check)
+        self._added_animations: dict[str, dict] = {}  # Add Animations jobs between their steps
         self._favorites: set[str] = set()
         self._applied: dict[str, dict[str, Any]] = {}
         self._migrations: set[str] = set()
@@ -211,15 +213,15 @@ class ModLibrary(
             The tuple (records, favourites, applied, migrations, held).
 
         Raises:
-            ValueError: The file as a whole is not a state of this version (_NewerState for a version above 1).
+            ValueError: The file as a whole is not a state of this version (_NewerState for a version above 2).
         """
         if not isinstance(data, dict):
             raise ValueError("not a library state")
         version = data.get("version")
-        if isinstance(version, (int, float)) and not isinstance(version, bool) and version > 1:
+        if isinstance(version, (int, float)) and not isinstance(version, bool) and version > 2:
             raise _NewerState(version)
-        if version != 1:
-            raise ValueError("not a version 1 library state")
+        if version != 2:
+            raise ValueError("not a version 2 library state")
         mods, listed, written, migrated = (
             data.get(key, empty)
             for key, empty in (("mods", []), ("favorites", []), ("applied", {}), ("migrations", []))
@@ -274,11 +276,13 @@ class ModLibrary(
                 or not all(isinstance(f, str) and Path(f).name == f and f.endswith(".bundle") for f in files)
             ):
                 return "bad files"
-            if not all(isinstance(record[key], str) for key in ("label", "target", "added")):
+            if not all(isinstance(record[key], str) for key in ("name", "added")):
                 return "bad text"
-            if not supports_kind(record["kind"]) or not isinstance(record["seen"], bool):
+            if not isinstance(stored_target(record), str):
+                return "bad target"
+            if not supports_resource_type(record["resource_type"]) or not isinstance(record["seen"], bool):
                 return "bad kind or flag"
-            if "assignment" in record and (not isinstance(record["assignment"], str) or not record["assignment"]):
+            if "assigned_alt" in record and (not isinstance(record["assigned_alt"], str) or not record["assigned_alt"]):
                 return "bad assignment"
         except (KeyError, TypeError):
             return "key missing or of another type"
@@ -300,7 +304,7 @@ class ModLibrary(
     def _read_state(self) -> _Reading:
         """Read state.json, else (when it is unreadable or gone) its previous copy; never raises.
 
-        With neither file the library is empty. A file of a newer build (version above 1) is never read as corrupt: the
+        With neither file the library is empty. A file of a newer build (version above 2) is never read as corrupt: the
         previous copy is not looked at. A file that cannot be opened (``OSError``: locked, scanned) is not corruption
         either. A missing file with a previous copy (a partial restore) reads the copy, as profiles.json does: nothing
         here deletes state.json, and its writes are atomic.
@@ -368,8 +372,8 @@ class ModLibrary(
         state keeps it, unless the file is a newer build's. An ``io`` failure is read again at the next call, any other
         verdict stands until the file changes.
         """
-        self._reread = reading.kind == "io"
-        if reading.kind == "newer" or not self._state_good:
+        self._reread = reading.resource_type == "io"
+        if reading.resource_type == "newer" or not self._state_good:
             self._state_error = reading.error
 
     def _check_writable(self) -> None:
@@ -388,7 +392,7 @@ class ModLibrary(
         A previous copy is older than this instance's state: the records it held before are kept too.
         """
         held = reading.state[4] if reading.state else []
-        if reading.kind == "prev":
+        if reading.resource_type == "prev":
             held = [*held, *(raw for raw in self._held if raw not in held)]
         return held
 
@@ -424,7 +428,9 @@ class ModLibrary(
             return
         disk = reading.state or ({}, set(), {}, set(), [])
         base, mine = self._base, (self._records, self._favorites, self._applied, self._migrations)
-        self._records, self._favorites, self._applied, self._migrations = _combine(reading.kind, base, mine, disk)
+        self._records, self._favorites, self._applied, self._migrations = _combine(
+            reading.resource_type, base, mine, disk
+        )
         self._held = _held_after(self._disk_held(reading), self._records, base[0], mine[0])
         self._base, self._seen = copy.deepcopy(disk[:4]), signature_
         self._state_good, self._state_error, self._reread = True, None, False
@@ -462,7 +468,7 @@ class ModLibrary(
         mine = (self._records, self._favorites, self._applied, self._migrations)
         with toggle_timing.enter("state_file_wait", file_lock(self.root / "state.json.lock")):
             reading = self._read_state()
-            if reading.error is not None and (reading.kind != "corrupt" or not self._state_good):
+            if reading.error is not None and (reading.resource_type != "corrupt" or not self._state_good):
                 raise reading.error
             base = self._base
             if reading.error is not None:
@@ -471,19 +477,19 @@ class ModLibrary(
                 merged, held = mine, _held_after(self._held, mine[0], base[0], mine[0])
             else:
                 disk = reading.state or ({}, set(), {}, set(), [])
-                merged = _combine(reading.kind, base, mine, disk)
+                merged = _combine(reading.resource_type, base, mine, disk)
                 held = _held_after(self._disk_held(reading), merged[0], base[0], mine[0])
             if LEGACY_REMAP not in merged[3]:
                 merged = (legacy_remapped(merged[0]), merged[1], merged[2], merged[3] | {LEGACY_REMAP})
             payload = {
                 **self._state_extra,
-                "version": 1,
+                "version": 2,
                 "mods": [*merged[0].values(), *held],
                 "favorites": sorted(merged[1]),
                 "applied": merged[2],
                 "migrations": sorted(merged[3]),
             }
-            self._keep_state_file(reading.kind)
+            self._keep_state_file(reading.resource_type)
             if self._state_encoder is None:
                 atomic_json(path, payload)
             else:
@@ -501,21 +507,23 @@ class ModLibrary(
         )
         self._version += 1
 
-    def _keep_state_file(self, kind: str) -> None:
+    def _keep_state_file(self, resource_type: str) -> None:
         """Keep the old state.json before it is replaced.
 
         A file that was read becomes state.json.prev (the last good file); one that could not be read is kept as
         state.json.bad, and the previous copy stays what it is.
         """
-        if kind == "ok":
+        if resource_type == "ok":
             atomic_copy(self._state_path, self._prev_path)
-        elif kind in ("prev", "corrupt") and self._state_path.exists():  # a missing file leaves nothing to keep
+        elif (
+            resource_type in ("prev", "corrupt") and self._state_path.exists()
+        ):  # a missing file leaves nothing to keep
             try:
                 atomic_copy(self._state_path, self._bad_path)
             except OSError as error:
                 log_failure(logger, logging.WARNING, "Could not keep the unreadable library state", error)
 
-    supports_kind = staticmethod(supports_kind)
+    supports_resource_type = staticmethod(supports_resource_type)
 
 
 def _snapshot_records(records: dict, previous: dict) -> dict:

@@ -81,7 +81,7 @@ def foreign(text: str, lang: str) -> list[str]:
 
 
 def all_names(data: dict):
-    for key, entry in data["variants"].items():
+    for key, entry in data["alts"].items():
         for lang, name in entry["names"].items():
             yield key, lang, name["full"]
             yield key, lang, name["short"]
@@ -97,7 +97,7 @@ def test_shipped_names_use_their_own_script(shipped: dict):
 
 
 def test_shipped_names_keep_no_untranslated_part(shipped: dict):
-    for key, entry in shipped["variants"].items():
+    for key, entry in shipped["alts"].items():
         assert "untranslated_csv_part" not in entry["fallbacks"].values(), key
         assert set(entry["name_sources"].values()) <= SOURCES, key
 
@@ -105,7 +105,7 @@ def test_shipped_names_keep_no_untranslated_part(shipped: dict):
 def test_shipped_story_names_follow_the_bracket_rules(shipped: dict):
     others = {lang: {sep.strip() for other, sep in SEPARATORS.items() if sep != SEPARATORS[lang]} for lang in LANGUAGES}
     checked = 0
-    for key, entry in shipped["variants"].items():
+    for key, entry in shipped["alts"].items():
         base = shipped["students"][str(entry["student_id"])]["names"]
         for lang, name in entry["names"].items():
             if entry["playable"] or entry["name_sources"][lang] not in ("official", "translated"):
@@ -149,7 +149,7 @@ def write_cases(path: Path) -> Path:
 
 
 def test_generator_applies_the_name_table(generator, tmp_path: Path):
-    entries = generator.build_catalog(write_cases(tmp_path / "map.csv"), FIXTURES)["variants"]
+    entries = generator.build_catalog(write_cases(tmp_path / "map.csv"), FIXTURES)["alts"]
     for key, expected in CASES["expected"].items():
         entry = entries[key]
         actual = {
@@ -174,7 +174,7 @@ def test_thai_names_use_the_existing_official_source_or_english(shipped: dict):
     assert source["source"].endswith("/data/th/students.min.json")
     assert re.fullmatch(r"[a-f0-9]{40}", source["sha"])
     official = 0
-    for key, entry in shipped["variants"].items():
+    for key, entry in shipped["alts"].items():
         name = entry["names"]["th"]
         if entry["name_sources"]["th"] == "official":
             official += 1
@@ -185,8 +185,8 @@ def test_thai_names_use_the_existing_official_source_or_english(shipped: dict):
             assert name == thai_fallback(entry["names"]["en"]), key
             assert entry["fallbacks"]["th"] == "missing_thai_name", key
     assert official == len(source["students"]) == 172
-    assert shipped["variants"]["hoshino"]["names"]["th"] == {"full": "โฮชิโนะ", "short": "ต้นฉบับ"}
-    assert shipped["variants"]["hoshino_swimsuit"]["names"]["th"] == {"full": "โฮชิโนะ (ชุดว่ายน้ำ)", "short": "ชุดว่ายน้ำ"}
+    assert shipped["alts"]["hoshino"]["names"]["th"] == {"full": "โฮชิโนะ", "short": "ต้นฉบับ"}
+    assert shipped["alts"]["hoshino_swimsuit"]["names"]["th"] == {"full": "โฮชิโนะ (ชุดว่ายน้ำ)", "short": "ชุดว่ายน้ำ"}
     for student in shipped["students"].values():
         assert re.search(r"[\u0e00-\u0e7f]", student["names"]["th"]) or student["names"]["th"] == student["names"]["en"]
 
@@ -214,8 +214,8 @@ def test_generator_accepts_an_optional_newer_thai_table(generator, tmp_path: Pat
     thai = {"Id": 10005, "Name": "โฮชิโนะ", "PersonalName": "โฮชิโนะ", "IsReleased": [True, True, False]}
     (tmp_path / "students.th.json").write_text(json.dumps([thai]), encoding="utf-8")
     data = generator.build_catalog(FIXTURES / "characters.csv", tmp_path)
-    assert data["variants"]["hoshino"]["names"]["th"]["full"] == "โฮชิโนะ"
-    assert data["variants"]["ch0010"]["fallbacks"]["th"] == "missing_thai_name"
+    assert data["alts"]["hoshino"]["names"]["th"]["full"] == "โฮชิโนะ"
+    assert data["alts"]["ch0010"]["fallbacks"]["th"] == "missing_thai_name"
     assert data["students"]["42"]["names"]["th"] == "โฮชิโนะ"
 
 
@@ -227,7 +227,7 @@ def kivo_given(name: str) -> str:
 def test_shipped_zh_cn_names_follow_kivo_wording(shipped: dict):
     """Base names and costume words are Kivo's community wording, never the CN server's."""
     for key, kivo in KIVO["variants"].items():
-        entry = shipped["variants"][key]
+        entry = shipped["alts"][key]
         name = entry["names"]["zh-CN"]
         given, server = kivo_given(kivo["name"]), kivo_given(kivo["name_cn"])
         assert shipped["students"][str(entry["student_id"])]["names"]["zh-CN"] == given, key
@@ -245,7 +245,7 @@ def test_shipped_zh_cn_names_follow_kivo_wording(shipped: dict):
 def test_shipped_aliases_keep_the_cn_servers_names(shipped: dict):
     """The CN server's names that Kivo's wording replaced stay findable as aliases (never shown)."""
     for key, kivo in KIVO["variants"].items():
-        entry = shipped["variants"][key]
+        entry = shipped["alts"][key]
         student = shipped["students"][str(entry["student_id"])]
         given, server = kivo_given(kivo["name"]), kivo_given(kivo["name_cn"])
         if server != given:
@@ -265,9 +265,9 @@ def test_shipped_aliases_keep_the_cn_servers_names(shipped: dict):
         "ch0252": "\u4337",
     }
     for key, server in students.items():
-        sid = str(shipped["variants"][key]["student_id"])
+        sid = str(shipped["alts"][key]["student_id"])
         assert server in shipped["students"][sid]["aliases"], key
-        assert server in shipped["variants"][key]["aliases"], key
+        assert server in shipped["alts"][key]["aliases"], key
     # and the CN server's costume words: New Year, Armed, Bunny, Casual, Track
     words = {
         "aru_newyear": "\u65b0\u5e74",
@@ -278,21 +278,19 @@ def test_shipped_aliases_keep_the_cn_servers_names(shipped: dict):
         "utahaturret": "\u5c0f\u96f7",
     }
     for key, word in words.items():
-        assert any(word in alias for alias in shipped["variants"][key]["aliases"]), key
+        assert any(word in alias for alias in shipped["alts"][key]["aliases"]), key
 
 
 def test_shipped_aliases_are_sorted_and_never_the_shown_name(shipped: dict):
     records = [(sid, student["names"]["zh-CN"], student.get("aliases")) for sid, student in shipped["students"].items()]
-    records += [
-        (key, entry["names"]["zh-CN"]["full"], entry.get("aliases")) for key, entry in shipped["variants"].items()
-    ]
+    records += [(key, entry["names"]["zh-CN"]["full"], entry.get("aliases")) for key, entry in shipped["alts"].items()]
     with_aliases = [record for record in records if record[2] is not None]
     assert len(with_aliases) > 200
     for key, shown, aliases in with_aliases:
         assert aliases and aliases == sorted(set(aliases)) and shown not in aliases, key
         assert all(usable(alias) and alias.strip() == alias for alias in aliases), key
     # a Terror form is its own name, never an alias of the student
-    shiroko = shipped["students"][str(shipped["variants"]["shiroko"]["student_id"])]
+    shiroko = shipped["students"][str(shipped["alts"]["shiroko"]["student_id"])]
     assert "aliases" not in shiroko
 
 
@@ -347,17 +345,17 @@ def test_shipped_terror_names_use_one_asterisk(shipped: dict):
     names = [(key, lang, text) for key, lang, text in all_names(shipped) if lang not in half]
     assert not [item for item in names if "*" in item[2]]
     assert not [item for item in all_names(shipped) if item[1] in half and "\uff0a" in item[2]]
-    terror = [key for key, entry in shipped["variants"].items() if "\uff0a" in entry["names"]["zh-CN"]["full"]]
+    terror = [key for key, entry in shipped["alts"].items() if "\uff0a" in entry["names"]["zh-CN"]["full"]]
     assert {"ch0199", "ch0263", "np0125", "np0186", "np0231", "np0232"} <= set(terror)
     for key in terror:
         for lang in half:
-            assert "*" in shipped["variants"][key]["names"][lang]["full"], (key, lang)
+            assert "*" in shipped["alts"][key]["names"][lang]["full"], (key, lang)
 
 
 def test_shipped_variants_have_distinct_names(shipped: dict):
     for lang in LANGUAGES:
         keys = defaultdict(set)
-        for key, entry in shipped["variants"].items():
+        for key, entry in shipped["alts"].items():
             keys[entry["names"][lang]["full"]].add(key)
         twins = {frozenset(found) for found in keys.values() if len(found) > 1}
         assert twins == KNOWN_TWINS[lang], lang

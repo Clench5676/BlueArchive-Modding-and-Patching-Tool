@@ -1,5 +1,5 @@
-// Row 4 of the detail screen: a box, then cards on the columns of row 2's skill cards (faces, lobby dialogues, the
-// chibi's actions), the pile in the button column.
+// Row 4 of the detail screen: a box, then cards on the columns of row 2's skill cards (faces, memorial lobby dialogues,
+// the chibi's actions), the pile in the button column.
 import { notify } from "../ui/popup.js";
 import * as NGUI from "../ui/ngui.js";
 import { horizontalScroll } from "../ui/horizontal-scroll.js";
@@ -9,7 +9,7 @@ import { previewError } from "./preview-error.js";
 import * as ActionList from "../ui/action-list.js";
 import { actionLabel, groupLabel, menuOf } from "./clip-names.js";
 import { cardText, fitCards } from "../ui/action-list-layout.js";
-import * as Lobby from "../lobby/lobby.js";
+import * as MemorialLobby from "../memorial-lobby/memorial-lobby.js";
 import { T } from "../core/i18n.js";
 import { SPACE } from "../ui/ui-tokens.js";
 import { row, toNode } from "../ui/ui-grid.js";
@@ -27,12 +27,12 @@ import {
   expanded,
   exprScroll,
   mainPlayer,
-  lobbySeq,
-  modelActions,
-  modelAction,
-  modelMenu,
-  modelLib,
-  ModelLib,
+  memorialLobbySeq,
+  chibiActions,
+  chibiAction,
+  chibiMenu,
+  chibiLib,
+  ChibiLib,
   renderFailed,
   commit,
   applied,
@@ -46,7 +46,7 @@ import {
   costumeRun,
   costumesWanted,
   TEXTURES,
-  setModelAction,
+  setChibiAction,
   setExpressionState,
   setExpanded,
   setExprScroll,
@@ -206,20 +206,20 @@ export function stripCard(
 
 // row 4 per tab: the portrait's faces, the memorial lobby's dialogues
 function row4Items() {
-  if (tab === "lobby") {
+  if (tab === "memorialLobby") {
     // the dialogue's lines in the UI language, else a numbered placeholder
-    return (Lobby.meta()?.sequences || []).map((sq) => {
-      const text = Lobby.textOf(sq).join(" "),
-        none = T("lobby.dialogue", { n: sq.n });
+    return (MemorialLobby.meta()?.sequences || []).map((sq) => {
+      const text = MemorialLobby.textOf(sq).join(" "),
+        none = T("memorialLobby.dialogue", { n: sq.n });
       return text ? { key: sq.anim, body: text } : { key: sq.anim, body: none, placeholder: true };
     });
   }
-  if (tab === "model" && modelMenu) return barItems();
-  // a story model's own cutscene clips read "Story 1", "Story 2", ...
-  if (tab === "model")
-    return modelActions.map((a) => ({
+  if (tab === "chibi" && chibiMenu) return barItems();
+  // a story chibi's own cutscene clips read "Story 1", "Story 2", ...
+  if (tab === "chibi")
+    return chibiActions.map((a) => ({
       key: a,
-      caption: /^story\d+$/.test(a) ? T("model.action.story", { n: a.slice(5) }) : T(`model.action.${a}`),
+      caption: /^story\d+$/.test(a) ? T("chibi.action.story", { n: a.slice(5) }) : T(`chibi.action.${a}`),
     }));
   if (!spineAllowed()) return [];
   const base = currentBase();
@@ -233,12 +233,12 @@ function row4Items() {
   const request = thumbnailWork.thumb;
   return (names.length ? names : ["00"]).map((e) => ({ key: e, thumb: () => request(base, "face", e) }));
 }
-// The 3D tab's action bar (docs/webui/model-actions.md): a card per action group the model has, its names one size;
+// The 3D tab's action bar (docs/webui/chibi-actions.md): a card per action group the chibi has, its names one size;
 // the playing action's group card is selected and shows that action's name alone, or the loading ring while its clips
 // are fetched.
-const playingAction = () => modelMenu?.find((a) => a.key === modelAction) || null;
+const playingAction = () => chibiMenu?.find((a) => a.key === chibiAction) || null;
 function barItems() {
-  const groups = menuOf(modelMenu),
+  const groups = menuOf(chibiMenu),
     playing = playingAction(),
     names = groups.map((g) => groupLabel(g.id, T)),
     fits = fitCards(names);
@@ -256,16 +256,16 @@ function barItems() {
     };
   });
 }
-// the bar's key of an action model.js names when it changes by itself (a tap's reaction, the idle after it)
+// the bar's key of an action chibi.js names when it changes by itself (a tap's reaction, the idle after it)
 export const actionKey = (name) =>
-  (modelMenu?.find((a) => a.key === name) || modelMenu?.find((a) => a.id === name && (a.form || 0) <= 1))?.key || name;
+  (chibiMenu?.find((a) => a.key === name) || chibiMenu?.find((a) => a.id === name && (a.form || 0) <= 1))?.key || name;
 const row4Selected = () =>
-  tab === "lobby"
-    ? lobbySeq
-    : tab === "model" && modelMenu
+  tab === "memorialLobby"
+    ? memorialLobbySeq
+    : tab === "chibi" && chibiMenu
       ? `group:${playingAction()?.group}`
-      : tab === "model"
-        ? modelAction
+      : tab === "chibi"
+        ? chibiAction
         : expression;
 // A group card pressed: its action list opens over it (action-list.js); the same card closes it, another group's
 // switches to that one. A picked action plays (pickAction) and the list closes.
@@ -284,41 +284,41 @@ function toggleGroup(item) {
     group: item.key,
     anchor,
     sections: item.group.sections,
-    selected: modelAction,
+    selected: chibiAction,
     onPick: (key) => {
-      const a = modelMenu?.find((x) => x.key === key);
-      if (tab === "model" && a) void pickAction(a);
+      const a = chibiMenu?.find((x) => x.key === key);
+      if (tab === "chibi" && a) void pickAction(a);
     },
   }).catch(renderFailed);
 }
-// An action picked on the bar plays at once when its clips are there (the model's GLB carries today's actions).
-// Otherwise they are fetched (model.js loadClips: the model route's ?clip=) while its group card shows the
+// An action picked on the bar plays at once when its clips are there (the chibi's GLB carries today's actions).
+// Otherwise they are fetched (chibi.js loadClips: the chibi route's ?clip=) while its group card shows the
 // loading ring, then it plays. The fetch counts only its own foreground time (withPreviewTimeout); leaving the
 // 3D tab, the alt or the screen gives it up. A failure leaves the previous action playing and says the
 // preview is unavailable.
 const CLIP_CAP = 15000;
 async function pickAction(a) {
   stopActionLoad();
-  const M = await ModelLib();
+  const M = await ChibiLib();
   if (M.playAction(a)) {
-    setModelAction(a.key);
+    setChibiAction(a.key);
     keepScroll();
     renderExpressions();
     return;
   }
   const v = alt(),
     run = costumeRun,
-    before = M.current() ?? modelAction,
+    before = M.current() ?? chibiAction,
     abort = new AbortController();
   const load = (actionLoad = { key: a.key, abort });
-  setModelAction(a.key);
+  setChibiAction(a.key);
   keepScroll();
   renderExpressions();
   let played = false,
     failure = null;
   try {
     played =
-      (await withPreviewTimeout(M.loadClips(a.clips, { signal: abort.signal }), CLIP_CAP, "model clips", {
+      (await withPreviewTimeout(M.loadClips(a.clips, { signal: abort.signal }), CLIP_CAP, "chibi clips", {
         signal: abort.signal,
       })) &&
       costumesWanted(v, run) &&
@@ -328,11 +328,11 @@ async function pickAction(a) {
     failure = err;
     abort.abort(); // past its deadline: the request too
   }
-  if (actionLoad !== load) return; // given up: another action picked, the model shown again or the tab left
+  if (actionLoad !== load) return; // given up: another action picked, the chibi shown again or the tab left
   actionLoad = null;
-  setModelAction(played ? a.key : actionKey(M.current() ?? before));
+  setChibiAction(played ? a.key : actionKey(M.current() ?? before));
   if (failure) {
-    previewError(failure, a.clips.join(","), "model-clip");
+    previewError(failure, a.clips.join(","), "chibi-clip");
     notify(T("detail.failed"), { kind: "error", error: failure });
   }
   if (costumesWanted(v, run)) {
@@ -346,22 +346,22 @@ export function stopActionLoad() {
   load?.abort.abort();
 }
 function row4Pick(key) {
-  // the card follows the dialogue through Lobby.onTalk: selected while it plays, let go when it ends
-  if (tab === "lobby") {
-    if (Lobby.playing() === key) Lobby.stop();
-    else Lobby.play(key);
-  } else if (tab === "model") {
-    setModelAction(key);
-    modelLib?.then((M) => M.play(key));
+  // the card follows the dialogue through MemorialLobby.onTalk: selected while it plays, let go when it ends
+  if (tab === "memorialLobby") {
+    if (MemorialLobby.playing() === key) MemorialLobby.stop();
+    else MemorialLobby.play(key);
+  } else if (tab === "chibi") {
+    setChibiAction(key);
+    chibiLib?.then((M) => M.play(key));
   } else {
     setExpressionState(key);
     applyExpression();
   }
 }
-// play every dialogue in order; the cards and the play-all button follow along (Lobby.onTalk)
+// play every dialogue in order; the cards and the play-all button follow along (MemorialLobby.onTalk)
 export function togglePlayAll() {
-  if (Lobby.playingAll()) Lobby.stop();
-  else Lobby.playAll(lobbySeq);
+  if (MemorialLobby.playingAll()) MemorialLobby.stop();
+  else MemorialLobby.playAll(memorialLobbySeq);
 }
 
 export function renderExpressions() {
@@ -374,7 +374,7 @@ async function drawExpressions() {
   const host = $("ngui-expr");
   // the 3D tab's action bar: every group card in a row that scrolls, no pile; its open list stays over a redraw of
   // the bar and closes when the bar goes
-  const bar = tab === "model" && !!modelMenu;
+  const bar = tab === "chibi" && !!chibiMenu;
   if (!bar) ActionList.close();
   const list = row4Items(),
     sel = row4Selected(),
@@ -524,7 +524,7 @@ async function drawExpressions() {
   });
 }
 // a portrait face's name, as the camera's expression list has it
-const faceName = (key) => (key === "00" ? T("photo.natural") : `${T("photo.expressions")} ${key}`);
+const faceName = (key) => (key === "00" ? T("thumbnail.natural") : `${T("thumbnail.expressions")} ${key}`);
 const keepScroll = () => {
   setExprScroll(document.querySelector(".expr-clip")?.scrollLeft || 0);
 };

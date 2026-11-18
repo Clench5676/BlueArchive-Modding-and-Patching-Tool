@@ -1,4 +1,4 @@
-import { portraitCaptureView } from "../photography/camera.js";
+import { portraitCaptureView } from "../thumbnail-capture/camera.js";
 // The portrait's visual mode framing and the numbers of its prefab (visual-mode.js draws it). No DOM: the tests run
 // it in Node.
 // A view is the skeleton point at the stage's centre (cx, cy, skeleton units) and the stage px per skeleton unit (k);
@@ -75,8 +75,8 @@ export function limits(box, home) {
 }
 /** Bring a view inside the limits. */
 export function clampView(v, lim) {
-  if (lim.photoFrame)
-    return portraitCaptureView({ ...v, k: clamp(v.k, lim.kMin, lim.kMax) }, lim.photoBounds, lim.photoFrame);
+  if (lim.thumbnailFrame)
+    return portraitCaptureView({ ...v, k: clamp(v.k, lim.kMin, lim.kMax) }, lim.thumbnailBounds, lim.thumbnailFrame);
   const [x0, y0, x1, y1] = lim.box;
   return { cx: clamp(v.cx, x0, x1), cy: clamp(v.cy, y0, y1), k: clamp(v.k, lim.kMin, lim.kMax) };
 }

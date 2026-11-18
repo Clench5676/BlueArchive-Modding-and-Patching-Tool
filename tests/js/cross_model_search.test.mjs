@@ -8,7 +8,7 @@ import * as Sources from "../../src/bmpt/web/js/mods/switch-sources.js";
 import { LOCALES, installFitPage } from "./helpers/fit_canvas.mjs";
 
 installFitPage();
-const { pickerItems } = await import("../../src/bmpt/web/js/roster/roster-widgets.js");
+const { pickerItems } = await import("../../src/bmpt/web/js/student-list/student-list-widgets.js");
 // the detail screen's modules read as one, their exports as plain declarations
 const source = DETAIL_MODULES.map((file) =>
   readFileSync(new URL(`../../src/bmpt/web/js/detail/${file}`, import.meta.url), "utf8"),
@@ -80,14 +80,14 @@ for (const locale of LOCALES)
     await ctx.drawPopup();
     const item = (key) => popup.items.find((it) => it.key === `v:${key}`);
     const actions = (key) =>
-      popup.details(item(key)).actions.filter(([label]) => [ui.popup.apply, ui.model.optimize].includes(label));
-    assert.equal(item("past").hint, ui.model.beyondFit);
-    assert.equal(item("cross").hint, ui.model.crossCharacter);
+      popup.details(item(key)).actions.filter(([label]) => [ui.popup.apply, ui.chibi.optimize].includes(label));
+    assert.equal(item("past").hint, ui.chibi.beyondFit);
+    assert.equal(item("cross").hint, ui.chibi.crossCharacter);
     for (const key of ["past", "cross"]) {
       assert.equal(actions(key).length, 2);
       for (const [, run, disabled, , hint] of actions(key)) {
         assert.equal(disabled, false);
-        if (key === "past") assert.equal(hint, ui.model.beyondFit);
+        if (key === "past") assert.equal(hint, ui.chibi.beyondFit);
         run();
       }
     }
@@ -96,7 +96,7 @@ for (const locale of LOCALES)
     for (const key of ["refused", "unchecked"])
       for (const [, , disabled, , hint] of actions(key)) {
         assert.equal(disabled, true);
-        assert.equal(hint, ui.model.unfit);
+        assert.equal(hint, ui.chibi.unfit);
       }
   });
 
@@ -161,7 +161,7 @@ for (const locale of LOCALES)
     const actions = (key) =>
       popup
         .details(popup.items.find((it) => it.key === `v:${key}`))
-        .actions.filter(([label]) => [ui.popup.apply, ui.model.optimize].includes(label));
+        .actions.filter(([label]) => [ui.popup.apply, ui.chibi.optimize].includes(label));
     for (const key of ["unchecked", "cross"]) {
       assert.equal(actions(key).length, 2);
       for (const [label, , disabled, , hint, loading] of actions(key)) {
@@ -178,7 +178,7 @@ for (const locale of LOCALES)
     checking.clear();
     for (const [, , , , hint, loading] of actions("unchecked")) {
       assert.ok(!loading);
-      assert.equal(hint, ui.model.unfit);
+      assert.equal(hint, ui.chibi.unfit);
     }
   });
 
@@ -253,20 +253,20 @@ for (const locale of LOCALES)
     await ctx.drawPopup();
     const item = (key) => popup.items.find((it) => it.key === `v:${key}`);
     const applyHint = (key) => popup.details(item(key)).actions.find(([label]) => label === ui.popup.apply)[4];
-    assert.equal(item("ex").hint, ui.model.exParts);
-    assert.equal(item("shader").hint, ui.model.carriedShader);
-    assert.equal(item("both").hint, ui.model.exParts, "the first caution");
-    assert.equal(item("past").hint, ui.model.beyondFit, "past the limit says more");
-    assert.equal(item("cross").hint, ui.model.crossCharacter, "another student's model says more");
+    assert.equal(item("ex").hint, ui.chibi.exParts);
+    assert.equal(item("shader").hint, ui.chibi.carriedShader);
+    assert.equal(item("both").hint, ui.chibi.exParts, "the first caution");
+    assert.equal(item("past").hint, ui.chibi.beyondFit, "past the limit says more");
+    assert.equal(item("cross").hint, ui.chibi.crossCharacter, "another student's chibi says more");
     assert.equal(item("plain").hint, undefined, "an unknown caution shows none");
-    assert.equal(applyHint("ex"), ui.model.exParts);
-    assert.equal(applyHint("shader"), ui.model.carriedShader);
-    assert.equal(applyHint("past"), ui.model.beyondFit);
+    assert.equal(applyHint("ex"), ui.chibi.exParts);
+    assert.equal(applyHint("shader"), ui.chibi.carriedShader);
+    assert.equal(applyHint("past"), ui.chibi.beyondFit);
     assert.equal(applyHint("plain"), null);
   });
 
 for (const locale of LOCALES)
-  test(`the model search shares picker matching and appends roster-ordered hits (${locale})`, () => {
+  test(`the chibi search shares picker matching and appends student-list-ordered hits (${locale})`, () => {
     const ui = JSON.parse(
       readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),
     ).webui;
@@ -275,8 +275,8 @@ for (const locale of LOCALES)
       key: "ch0171",
       student: "other",
       chibi: "ch0171_enemy",
-      label: ui.model.unfit,
-      full: ui.model.unfit,
+      label: ui.chibi.unfit,
+      full: ui.chibi.unfit,
       releasedOnServer: false,
     };
     const field = {
@@ -319,7 +319,7 @@ for (const locale of LOCALES)
     assert.deepEqual(hits(""), []);
     assert.deepEqual(calls.at(-1), [], "empty search checks only saved choices");
     assert.deepEqual(
-      hits(ui.model.unfit).map((c) => c.key),
+      hits(ui.chibi.unfit).map((c) => c.key),
       ["v:ch0171"],
       "localized label and full name",
     );
@@ -354,7 +354,7 @@ for (const locale of LOCALES)
     assert.deepEqual(
       hits("NPC").map((c) => c.key),
       ["v:recruit", "v:field", "v:ch0171"],
-      "the roster puts favourites first",
+      "the student list puts favourites first",
     );
     recruit.favorite = false;
     assert.deepEqual(
@@ -395,7 +395,7 @@ function queue({ saved = [], read, check, cautions } = {}) {
     costumeState: new Map(),
     open: true,
     current: v,
-    tab: "model",
+    tab: "chibi",
     costumeChecks: new Map(),
     alt: () => ctx.current,
     candidates: () => saved.map((key) => ({ cross: true, alt: { key } })),
@@ -588,16 +588,16 @@ test("a stale cross verdict cannot populate the cache after game resources chang
   assert.equal(q.ctx.costumeState.size, 0);
 });
 
-// --- Show other students: every other student's model listed, judged as it comes into view ---
+// --- Show other students: every other student's chibi listed, judged as it comes into view ---
 const makeSearch = (others, { seg = 0, shown = [] } = {}) => {
   const v = { key: "slot", student: "own", chibi: "slot" },
     calls = [];
-  const roster = [{ alts: others }];
+  const studentList = [{ alts: others }];
   const ctx = vm.createContext({
     ...Sources,
     pickerItems,
     Intl,
-    otherStudents: roster,
+    otherStudents: studentList,
     popupSeg: seg,
     crossShown: shown,
     costumeState: new Map(),
@@ -628,7 +628,7 @@ const otherAlt = (key, label, extra = {}) => ({
   ...extra,
 });
 
-test("with Show other students on, every other student's model follows the own cards, in the roster's order", () => {
+test("with Show other students on, every other student's chibi follows the own cards, in the student list's order", () => {
   const others = [
     otherAlt("c", "Charlie"),
     otherAlt("a", "Alpha", { favorite: true }),
@@ -644,7 +644,7 @@ test("with Show other students on, every other student's model follows the own c
     assert.deepEqual(
       q.hits().map((c) => c.key),
       ["v:a", "v:b", "v:c", "v:f"],
-      "favourites first, then the roster's name order; the student's own student is not among them",
+      "favourites first, then the student list's name order; the student's own student is not among them",
     );
     assert.deepEqual(
       q.hits("", ["v:b"]).map((c) => c.key),
@@ -731,7 +731,7 @@ test("the cards in view are what the verdict queue is given, and a scroll replac
     assert.deepEqual(
       w.calls,
       [["x1", "x2"]],
-      "only other students' models: not the own card, a mod, or the student's sibling",
+      "only other students' chibis: not the own card, a mod, or the student's sibling",
     );
     w.view(["self", "v:sibling", "v:x1", "v:x2"]);
     assert.equal(w.calls.length, 1, "the same cards again: nothing new to ask");
@@ -748,7 +748,7 @@ test("the cards in view are what the verdict queue is given, and a scroll replac
   assert.deepEqual(off.ctx.crossShown, ["x1"], "the view is still remembered");
   const away = viewing({ kind: "portrait" });
   away.view(["v:x1"]);
-  assert.deepEqual(away.calls, [], "only for Switch 3D Model");
+  assert.deepEqual(away.calls, [], "only for Switch 3D Chibi");
   Sources.setShowOthers(false);
 });
 
@@ -791,7 +791,7 @@ test("another student's card is drawn like any card: no grey filter anywhere in 
     assert.ok(!/shade:\s*true|\bSHADE\b|\.shade\b/.test(read(`ui/${file}`)), `ui/${file}`);
 });
 
-// --- Optimize Physics answers: the official model needs none; a costume no physics rule improves has no gain ---
+// --- Optimize Physics answers: the official chibi needs none; a costume no physics rule improves has no gain ---
 const LOCALE_FILES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const ui = (locale) =>
   JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8")).webui;
@@ -830,18 +830,18 @@ for (const locale of LOCALE_FILES)
     const official = await optimizeAnswer({ unneeded: true, reason: "official" }, locale);
     assert.deepEqual(
       official.messages.map((m) => [...m.lines]),
-      [[official.web.model.optimizeUnneeded]],
+      [[official.web.chibi.optimizeUnneeded]],
     );
     const noGain = await optimizeAnswer({ unneeded: true, reason: "no_gain" }, locale);
     assert.deepEqual(
       noGain.messages.map((m) => [...m.lines]),
-      [[noGain.web.model.optimizeNoGain]],
+      [[noGain.web.chibi.optimizeNoGain]],
     );
-    assert.notEqual(noGain.web.model.optimizeNoGain, noGain.web.model.optimizeUnneeded);
+    assert.notEqual(noGain.web.chibi.optimizeNoGain, noGain.web.chibi.optimizeUnneeded);
     const older = await optimizeAnswer({ unneeded: true }, locale);
     assert.deepEqual(
       older.messages.map((m) => [...m.lines]),
-      [[older.web.model.optimizeUnneeded]],
+      [[older.web.chibi.optimizeUnneeded]],
       "no reason: the old answer",
     );
     const made = await optimizeAnswer({ mod: "copy" }, locale);
@@ -849,15 +849,15 @@ for (const locale of LOCALE_FILES)
   });
 
 test("the new Optimize Physics answer reads as agreed in zh-CN and en-US", () => {
-  assert.equal(ui("zh-CN").model.optimizeNoGain, "暂无可用的物理优化");
-  assert.equal(ui("en-US").model.optimizeNoGain, "No physics optimization available");
-  assert.equal(ui("zh-CN").model.optimizeUnneeded, "无需优化", "the official model's answer is unchanged");
-  assert.equal(ui("en-US").model.optimizeUnneeded, "No optimization needed");
+  assert.equal(ui("zh-CN").chibi.optimizeNoGain, "暂无可用的物理优化");
+  assert.equal(ui("en-US").chibi.optimizeNoGain, "No physics optimization available");
+  assert.equal(ui("zh-CN").chibi.optimizeUnneeded, "无需优化", "the official chibi's answer is unchanged");
+  assert.equal(ui("en-US").chibi.optimizeUnneeded, "No optimization needed");
 });
 
 // Which candidates show the loading ring (costumeChecking): the student's own costume while its student's costume check
-// runs, another student's model while it is wanted and the queue runs (or while the roster that queues it is read),
-// never once a verdict landed; a queue that ends without a verdict draws again, so a ring never turns for good.
+// runs, another student's chibi while it is wanted and the queue runs (or while the student list that queues it is
+// read), never once a verdict landed; a queue that ends without a verdict draws again, so a ring never turns for good.
 test("a pair shows the loading ring only while its check runs or is queued", async () => {
   let release;
   const q = queue({
@@ -877,7 +877,7 @@ test("a pair shows the loading ring only while its check runs or is queued", asy
   assert.equal(checking("v:own2"), false, "no check of the student under way");
   q.ctx.costumeChecks.set("slot|own2", Promise.resolve());
   assert.equal(checking("v:own2"), true, "the student's check runs");
-  assert.equal(checking("v:own2", "portrait"), false, "only the 3D model waits for a check");
+  assert.equal(checking("v:own2", "portrait"), false, "only the chibi waits for a check");
   assert.equal(checking("self"), false);
   q.ctx.costumeState.set(q.v.key, { own2: "ok" });
   assert.equal(checking("v:own2"), false, "its verdict landed");
@@ -886,7 +886,7 @@ test("a pair shows the loading ring only while its check runs or is queued", asy
 
   q.want(["slow", "never"]);
   await flush();
-  assert.equal(checking("v:slow"), true, "another student's model in the running queue");
+  assert.equal(checking("v:slow"), true, "another student's chibi in the running queue");
   assert.equal(checking("v:never"), true, "queued behind it");
   assert.equal(checking("v:other"), false, "not wanted");
   q.changed.length = 0;
@@ -898,9 +898,9 @@ test("a pair shows the loading ring only while its check runs or is queued", asy
 
   q.ctx.otherStudents = null;
   q.ctx.othersLoad = Promise.resolve();
-  assert.equal(checking("v:slow2"), true, "the roster that queues it is being read");
+  assert.equal(checking("v:slow2"), true, "the student list that queues it is being read");
   q.ctx.othersLoad = null;
-  assert.equal(checking("v:slow2"), false, "a roster that could not be read leaves no ring");
+  assert.equal(checking("v:slow2"), false, "a student list that could not be read leaves no ring");
   assert.deepEqual(q.failures, []);
 });
 
@@ -928,7 +928,7 @@ test("leaving the 3D tab cancels its costume checks and coming back starts them 
     stopActionLoad: () => {
       clipStops += 1;
     },
-    tab: "model",
+    tab: "chibi",
     busy: false,
     switchPopupPage: null,
     pageToken: 1,
@@ -977,7 +977,7 @@ test("leaving the 3D tab cancels its costume checks and coming back starts them 
   assert.equal(vm.runInContext("costumeChecks.size", ctx), 0);
   assert.ok(!ring("a") && !ring("b"), "the ring stops");
 
-  ctx.showTab("model");
+  ctx.showTab("chibi");
   await flush();
   assert.deepEqual(submitted, ["a", "a"], "coming back checks the pairs still without a verdict");
   assert.ok(ring("a") && ring("b"), "the ring turns again");
@@ -994,7 +994,7 @@ test("leaving the 3D tab cancels its costume checks and coming back starts them 
   vm.runInContext("costumeState.clear()", ctx);
   ctx.rpc = ((rpc) => async (method, params) => {
     if (method === "chibi.checkCostumes") {
-      ctx.tab = "lobby";
+      ctx.tab = "memorialLobby";
       ctx.stopCostumeChecks();
     }
     return rpc(method, params);

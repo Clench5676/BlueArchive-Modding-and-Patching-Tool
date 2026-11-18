@@ -10,11 +10,11 @@ in vec2 p;
 void main() { gl_Position = vec4(p, 0.0, 1.0); }`;
 // The framebuffer holds linear, premultiplied colour; the canvas gets sRGB, premultiplied (the page composites the
 // layers' canvases). Light beyond the coverage (additive over a transparent part of an upper layer) is passed on as it
-// is, so it still brightens the layer below. The final pass is the post-processing as URP 12 runs it for the lobby's
-// camera: the Panini projection, the chromatic aberration and the LDR colour grading, in that order and in linear light,
-// once for all skeletons of a lobby (lobby-stage.js). Panini and the aberration are placed in the game's screen, the
-// camera's 16:9 view G (setScreen), never in the canvas's own. The bottom layer (setClear) is drawn over the camera's
-// clear colour, black, before the colour steps.
+// is, so it still brightens the layer below. The final pass is the post-processing as URP 12 runs it for the
+// memorial lobby's camera: the Panini projection, the chromatic aberration and the LDR colour grading, in that order
+// and in linear light, once for all skeletons of a memorial lobby (memorial-lobby-stage.js). Panini and the aberration
+// are placed in the game's screen, the camera's 16:9 view G (setScreen), never in the canvas's own. The bottom layer
+// (setClear) is drawn over the camera's clear colour, black, before the colour steps.
 const FS = `#version 300 es
 precision highp float;
 uniform sampler2D t;
@@ -165,8 +165,8 @@ function pagesOf(player) {
 }
 
 /**
- * Switch a loaded player to linear light. A guest drawn into the bottom player's framebuffer (lobby-stage.js:
- * every skeleton of a lobby) only gets its pages decoded and its blending, and a frame of its own clears into
+ * Switch a loaded player to linear light. A guest drawn into the bottom player's framebuffer (memorial-lobby-stage.js:
+ * every skeleton of a memorial lobby) only gets its pages decoded and its blending, and a frame of its own clears into
  * the host's framebuffer, never the host's canvas; it goes into linear light only with its host in it, because
  * drawn into a plain canvas its sRGB pages and decoded colours would come out too dark.
  * @param {object} player The spine-player.
@@ -344,7 +344,7 @@ export function setCurves(player, curveOf) {
   if (st) st.curveOf = curveOf || null;
 }
 /**
- * Tint a player drawn by another one (lobby-stage.js) around that draw; untint() gives it its colours back. A
+ * Tint a player drawn by another one (memorial-lobby-stage.js) around that draw; untint() gives it its colours back. A
  * player already tinted is left as it is.
  */
 export function tint(player) {
@@ -389,8 +389,8 @@ export function untint(player) {
 
 // --- the game camera's post-processing ---
 // The memorial lobby is drawn by the PC client's main Camera (level0 / level1): the one whose culling mask has the
-// lobby's layer 12 and whose volume mask has the volumes' layer 30 (UICamera has neither), perspective with a field of
-// view of 10 degrees (LobbyCameraConfigPP leaves it as it is), which is all URP's Panini projection reads.
+// memorial lobby's layer 12 and whose volume mask has the volumes' layer 30 (UICamera has neither), perspective with a
+// field of view of 10 degrees (LobbyCameraConfigPP leaves it as it is), which is all URP's Panini projection reads.
 const FOV = 10;
 const lum = (c) => c[0] * 0.2126729 + c[1] * 0.7151522 + c[2] * 0.072175;
 // Mathf.GammaToLinearSpace (Color.linear): the sRGB curve, a 2.2 power above 1 (HDR colours)
@@ -407,10 +407,10 @@ const IDENTITY = Object.freeze({
   gain: [1, 1, 1],
 });
 /**
- * What the shader gets for a lobby's post-processing (lobby.json "post", lobby.py post_processing) on a target
- * of an aspect, as URP 12's PostProcessPass, ColorGradingLutPass and ColorUtils.PrepareLiftGammaGain work it
+ * What the shader gets for a memorial lobby's post-processing (memorial-lobby.json "post", memorial_lobby.py post_processing) on
+ * a target of an aspect, as URP 12's PostProcessPass, ColorGradingLutPass and ColorUtils.PrepareLiftGammaGain work it
  * out.
- * @param {object|null} post The lobby's post-processing.
+ * @param {object|null} post The memorial lobby's post-processing.
  * @param {number} [aspect] The target's width over its height.
  * @returns {object|null} The shader's parameters; null when there is nothing to do.
  */
@@ -451,15 +451,15 @@ export function postParams(post, aspect = 16 / 9) {
   }
   return out.ca > 0 || out.panini[2] > 0 || out.grade ? out : null;
 }
-export let postOn = true; // for checks: false draws every lobby without its post-processing
+export let postOn = true; // for checks: false draws every memorial lobby without its post-processing
 /**
- * Turn the lobby's post-processing on or off for every player (the game's PP option).
+ * Turn the memorial lobby's post-processing on or off for every player (the game's PP option).
  */
 export const setPostEnabled = (on) => {
   postOn = !!on;
 };
 /**
- * Set the lobby's post-processing for an attached player (lobby.json "post"; null: none).
+ * Set the memorial lobby's post-processing for an attached player (memorial-lobby.json "post"; null: none).
  */
 export function setPost(player, post) {
   const st = states.get(player);
@@ -480,7 +480,7 @@ export function setScreen(player, view) {
     st.screen = view?.width > 0 && view?.height > 0 ? { x: view.x, y: view.y, w: view.width, h: view.height } : null;
 }
 /**
- * Set a pass over the frame in linear light before the post-processing's colour steps (lobby-dof.js).
+ * Set a pass over the frame in linear light before the post-processing's colour steps (memorial-lobby-dof.js).
  * @param {object} player The spine-player.
  * @param
  *     {((gl: WebGL2RenderingContext, texture: WebGLTexture, width: number, height: number, screen: number[]) => (WebGLTexture|null|undefined))|null}
@@ -535,7 +535,7 @@ export function end(player) {
     h = res.h;
   st.bound = false;
   const screen = screenOnCanvas(st.screen, player.sceneRenderer?.camera);
-  // a pass before the colour steps (the intro's depth of field, lobby-dof.js), with the post-processing on
+  // a pass before the colour steps (the intro's depth of field, memorial-lobby-dof.js), with the post-processing on
   const src = (postOn && st.prepass?.(gl, res.tex, w, h, screen)) || res.tex;
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.disable(gl.BLEND);
@@ -567,8 +567,8 @@ export function end(player) {
 export const active = (player) => !!states.get(player)?.on;
 
 /**
- * Inspect the ungraded target once the lobby has settled: whether anything was drawn. The camera's opaque clear
- * colour is added by the final pass, so it cannot disguise a transparent atlas, a shader that discards
+ * Inspect the ungraded target once the memorial lobby has settled: whether anything was drawn. The camera's opaque
+ * clear colour is added by the final pass, so it cannot disguise a transparent atlas, a shader that discards
  * everything, or an empty render plan.
  */
 export function hasPixels(player) {

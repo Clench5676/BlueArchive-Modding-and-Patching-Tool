@@ -17,7 +17,7 @@ from bmpt.engine import (
 from ..core.errors import ServiceError
 from ..gameassets.discovery import cab_names
 from ..library import ba_mod, import_archive, integrity, manual_identity
-from ..library.judge import core_of, kind_of, part_of
+from ..library.judge import core_of, resource_type_of, part_of
 from .batch_candidates import (
     IMPORTABLE,
     Candidate,
@@ -93,19 +93,19 @@ class JudgeMixin:
         for path in selected:
             name = path.name.removesuffix(".backup")
             parsed = parse_filename(name)
-            kind = kind_of(parsed.core, parsed.category) or "other"
-            variant, error, failure = None, None, None
+            resource_type = resource_type_of(parsed.core, parsed.category) or "other"
+            alt, error, failure = None, None, None
             try:
                 if self._hashes.get(path).trailing is None:
                     raise ServiceError("bundle_invalid", file=path)
-                if not library.supports_kind(kind):
+                if not library.supports_resource_type(resource_type):
                     error = "unsupported"
-                    failure = ServiceError("mod_unsupported", file=path, kind=kind).to_json()
-                    resolve = getattr(library.catalog, "variant_for_asset_core", library.catalog.variant_for_core)
+                    failure = ServiceError("mod_unsupported", file=path, resource_type=resource_type).to_json()
+                    resolve = getattr(library.catalog, "alt_for_asset_core", library.catalog.alt_for_core)
                     found = resolve(parsed.core.lower())
-                    variant = found.key if found else None
+                    alt = found.key if found else None
                 else:
-                    name, variant, kind = library.identify_import(path, name)
+                    name, alt, resource_type = library.identify_import(path, name)
             except OSError as caught:
                 error = "library_io_error"
                 failure = ServiceError("library_io_error", file=path, error=str(caught)).to_json()
@@ -116,20 +116,23 @@ class JudgeMixin:
                 logger.debug("Cannot inspect uploaded bundle")
                 error = "unreadable"
                 failure = ServiceError("bundle_invalid", file=path, error=str(caught)).to_json()
-            core = library.import_core(parse_filename(name).core, kind, self._pin)
-            inspected.append((path, name, kind, variant, core, error, failure))
-        # Model sets share the prefab slot key, including version splits across their physical cores.
+            core = library.import_core(parse_filename(name).core, resource_type, self._pin)
+            inspected.append((path, name, resource_type, alt, core, error, failure))
+        # Chibi sets share the prefab slot key, including version splits across their physical cores.
         # Folders still separate alternative mods of the same release.
         versioned = [item for item in inspected if item[2] != "other"]
         versions = library.import_versions(
-            [((path.parent, core, kind, variant), name) for path, name, kind, variant, core, _, _ in versioned],
+            [
+                ((path.parent, core, resource_type, alt), name)
+                for path, name, resource_type, alt, core, _, _ in versioned
+            ],
             self._pin,
         )
         version_by_path = {item[0]: version for item, version in zip(versioned, versions)}
         self._join_passengers(versioned, version_by_path, library)
         active = [c for c in previous if set(c.files.values()) <= seen]
         owners = {path: c for c in active for path in c.files.values()}
-        for path, name, kind, variant, core, error, failure in inspected:
+        for path, name, resource_type, alt, core, error, failure in inspected:
             version = version_by_path.get(path, "")
             owner = owners.get(path)
             if owner is None and not error:
@@ -142,7 +145,7 @@ class JudgeMixin:
                     for c in active
                     if held & c.missing_cabs
                     or (
-                        (core, kind, variant) == (c.entry["core"], c.entry["kind"], c.entry["variant"])
+                        (core, resource_type, alt) == (c.entry["core"], c.entry["resource_type"], c.entry["alt"])
                         and (
                             all(version_by_path.get(p, "") == version for p in c.files.values())
                             if path.parent in {p.parent for p in c.files.values()}
@@ -168,18 +171,18 @@ class JudgeMixin:
                 elif matches:
                     owner = matches[0]
             if owner is not None:
-                core, kind, variant = owner.entry["core"], owner.entry["kind"], owner.entry["variant"]
-                key = (owner.entry["id"], core, "", kind, variant)
+                core, resource_type, alt = owner.entry["core"], owner.entry["resource_type"], owner.entry["alt"]
+                key = (owner.entry["id"], core, "", resource_type, alt)
             else:
                 key = (
-                    (path.parent, "", "", kind, None)
-                    if kind == "other"
-                    else (path.parent, core, version, kind, variant)
+                    (path.parent, "", "", resource_type, None)
+                    if resource_type == "other"
+                    else (path.parent, core, version, resource_type, alt)
                 )
             groups.setdefault(key, []).append((path, name, error, failure))
         candidates = []
         packages: dict[Path, dict | None] = {}
-        for (_, core_name, _, kind, variant), items in groups.items():
+        for (_, core_name, _, resource_type, alt), items in groups.items():
             files, parts, sources, error, failure = {}, {}, [], None, None
             for path, name, problem, detail in items:
                 error = error or problem
@@ -209,9 +212,9 @@ class JudgeMixin:
             entry = {
                 "id": hashlib.sha256("\0".join(map(str, sources)).encode()).hexdigest(),
                 "paths": list(map(str, sources)),
-                "variant": variant,
+                "alt": alt,
                 "core": core_name or None,
-                "kind": kind,
+                "resource_type": resource_type,
                 "files": file_list,
                 "size": sum(f["size"] for f in file_list),
                 "state": "blocked",
@@ -244,8 +247,8 @@ class JudgeMixin:
         nothing else, keeps the date rule.
         """
         sets: dict[tuple, list[tuple]] = {}
-        for path, name, kind, variant, core, error, _ in versioned:
-            sets.setdefault((path.parent, core, kind, variant), []).append((path, name, error))
+        for path, name, resource_type, alt, core, error, _ in versioned:
+            sets.setdefault((path.parent, core, resource_type, alt), []).append((path, name, error))
         inspection = integrity.Inspection(set(self.options()["assetTypes"]))
         for key, items in sets.items():
             if not any(version_by_path.get(path) for path, _, _ in items):
@@ -357,18 +360,18 @@ class JudgeMixin:
             if path in selected:
                 continue
             parsed = parse_filename(path.name.removesuffix(".backup"))
-            kind = kind_of(parsed.core, parsed.category) or "other"
-            resolve = getattr(library.catalog, "variant_for_asset_core", library.catalog.variant_for_core)
-            variant = resolve(parsed.core.lower()) if kind in ("spr", "lobby") else None
+            resource_type = resource_type_of(parsed.core, parsed.category) or "other"
+            resolve = getattr(library.catalog, "alt_for_asset_core", library.catalog.alt_for_core)
+            alt = resolve(parsed.core.lower()) if resource_type in ("portrait", "memorialLobby") else None
             slot_matches = (
-                library.import_core(parsed.core, kind, self._pin) == entry["core"]
-                or variant is not None
-                and variant.key == entry["variant"]
+                library.import_core(parsed.core, resource_type, self._pin) == entry["core"]
+                or alt is not None
+                and alt.key == entry["alt"]
             )
             same_slot = (
                 path.parent in folders
-                and kind != "other"
-                and kind == entry["kind"]
+                and resource_type != "other"
+                and resource_type == entry["resource_type"]
                 and slot_matches
                 and path not in (selected_paths or selected)
                 and integrity.replacement_key(path.name) not in parts
@@ -418,34 +421,34 @@ class JudgeMixin:
         entry.pop("attempts", None)
         resolution, attempts = None, []
         try:
-            if candidate.error in ("mod_target_unknown", "mod_target_ambiguous") or entry.get("assignment"):
+            if candidate.error in ("mod_target_unknown", "mod_target_ambiguous") or entry.get("assigned_alt"):
                 existing = library.find_import_output(list(candidate.files.values()))
                 saved = next((mod for mod in library.mods() if mod.id == existing), None) if existing else None
                 if saved:
-                    if entry.get("assignment") and entry["assignment"] != saved.target:
+                    if entry.get("assigned_alt") and entry["assigned_alt"] != saved.target:
                         raise ServiceError("mod_target_ambiguous", file=source_file(candidate))
                     entry.update(
                         state="library",
                         reason=None,
                         libraryId=saved.id,
-                        variant=saved.target,
-                        kind=saved.kind,
+                        alt=saved.target,
+                        resource_type=saved.resource_type,
                         core=entry["core"] or saved.core,
                     )
                     return
-            if entry.get("assignment"):
+            if entry.get("assigned_alt"):
                 if candidate.error not in (None, "mod_target_unknown", "mod_target_ambiguous", "unsupported"):
                     raise blocked_error(candidate)
-                variant = self.services.catalog.assignment_variant(entry["assignment"])
-                kind = manual_identity.validate(candidate.files)
+                alt = self.services.catalog.assignment_alt(entry["assigned_alt"])
+                resource_type = manual_identity.validate(candidate.files)
                 candidate.identity = self._identity_of(candidate.files)
                 entry.update(
-                    variant=variant.key,
-                    kind=kind,
+                    alt=alt.key,
+                    resource_type=resource_type,
                     state="ready",
                     reason=None,
                     libraryOnly=True,
-                    core=entry["core"] or variant.file_id,
+                    core=entry["core"] or alt.file_id,
                 )
                 return
             if candidate.failure:
@@ -463,7 +466,7 @@ class JudgeMixin:
             if report.get("direct"):
                 candidate.identity = report["identity"]
                 candidate.direct = report["direct"]
-                candidate.targets, candidate.originals = report["targets"], report["originals"]
+                candidate.targets, candidate.originals = report["targets"], report["officials"]
                 entry["target"] = mod_origin.target_of(self.services.settings, pin, report["officialContents"])
                 source = report["source"]
                 if candidate.source_override and any(
@@ -550,7 +553,9 @@ class JudgeMixin:
             if not pin or not live:
                 raise ServiceError("game_file_not_found")
             originals = (
-                report["originals"] if entry["kind"] == "other" else library.official_bundles(entry["core"], pin=pin)
+                report["officials"]
+                if entry["resource_type"] == "other"
+                else library.official_bundles(entry["core"], pin=pin)
             )
             candidate.provenance = library.import_source_identity(candidate.files, entry["target"], originals)
             try:
@@ -568,7 +573,7 @@ class JudgeMixin:
             baseline = dict(zip(live, originals))
             exact = set(candidate.files) <= {p.name for p in live}
             sources = list(candidate.files.values())
-            generic = entry["kind"] == "other"
+            generic = entry["resource_type"] == "other"
             # The parts the files write, by the one rule Enable, Apply and the preview use (``targets.resolve``).
             targets = set(replacements)
             if resolution.older:

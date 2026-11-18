@@ -73,12 +73,12 @@ def test_the_default_throttle_is_two_hundred_ms_and_a_quiet_meter_marks_nothing(
 
 
 def test_the_costume_table_lists_each_phase_once_with_the_physics_phases():
-    from bmpt.gameassets import model_adapt
+    from bmpt.gameassets import chibi_adapt
 
-    names = [name for name, _, _ in model_adapt.COSTUME_PHASES]
+    names = [name for name, _, _ in chibi_adapt.COSTUME_PHASES]
     assert len(names) == len(set(names))
     assert names[0] == "stage" and names[-1] == "save"
-    plain, physics = dict(model_adapt.costume_weights(False)), dict(model_adapt.costume_weights(True))
+    plain, physics = dict(chibi_adapt.costume_weights(False)), dict(chibi_adapt.costume_weights(True))
     assert plain["springs"] == 0 and physics["springs"] > 0
     assert plain["arms"] == 0 and physics["arms"] > 0  # the arms' retarget runs with Optimize Physics only
     assert physics["hems"] > plain["hems"]  # Optimize Physics judges many more rules
@@ -88,11 +88,11 @@ def test_the_library_reports_a_costume_builds_progress_through_the_job(monkeypat
     """``_stage_costume`` hands the build a meter whose growing fractions, below 1, reach its ``fraction``; a job's
     progress gets them as its item's {"current", "total", "step", "fraction"} (``_item_fraction``), the phases as
     the steps of the progress line (``mod_progress.COSTUME_STEPS``)."""
-    from bmpt.gameassets import model_adapt
+    from bmpt.gameassets import chibi_adapt
     from bmpt.library import service
 
     monkeypatch.setattr(progress_meter, "EVERY", 0)
-    phases = [name for name, _, _ in model_adapt.COSTUME_PHASES if name not in ("stage", "save")]
+    phases = [name for name, _, _ in chibi_adapt.COSTUME_PHASES if name not in ("stage", "save")]
 
     def adapt(**kwargs):
         for name in phases:
@@ -103,7 +103,7 @@ def test_the_library_reports_a_costume_builds_progress_through_the_job(monkeypat
     library = object.__new__(service.ModLibrary)
     library.root = tmp_path
     library.cache_root = tmp_path / "cache"
-    monkeypatch.setattr(model_adapt, "adapt", adapt)
+    monkeypatch.setattr(chibi_adapt, "adapt", adapt)
     monkeypatch.setattr(service.ModLibrary, "_official_or_current", lambda self, path, pin: path)
     monkeypatch.setattr(service.ModLibrary, "_stage_copies", lambda self, originals, folder: {})
     monkeypatch.setattr(service.ModLibrary, "_costume_files", lambda self, other, pin: ("dev", [], []))
@@ -129,9 +129,9 @@ def test_the_library_reports_a_costume_builds_progress_through_the_job(monkeypat
     assert fractions == sorted(fractions) and fractions[-1] < 0.9  # the rest of the item for the write after it
     steps = [p["step"] for p in reported]
     assert list(dict.fromkeys(steps)) == [
-        "import.step.readModel",
+        "import.step.readChibi",
         "import.step.fitCostume",
-        "import.step.buildModel",
+        "import.step.buildChibi",
         "import.step.save",
     ]
     # without a job's progress the build marks its phases all the same, and nothing is reported
@@ -148,7 +148,7 @@ def test_the_library_reports_a_costume_builds_progress_through_the_job(monkeypat
 )
 def test_official_a_costume_build_passes_its_phases_in_order_with_growing_fractions(target, source, physics):
     from ba_modding_toolkit.bundle import Bundle
-    from bmpt.gameassets import model_adapt as ma
+    from bmpt.gameassets import chibi_adapt as ma
     from bmpt.gameassets.discovery import cab_names
 
     files = list(GAME_DIR.rglob("*.bundle"))

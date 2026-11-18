@@ -68,9 +68,19 @@ test("failed jobs never offer success or open a directory", async () => {
 test("success can be dismissed without opening a folder", async () => {
   const h = harness([{ action: "confirm" }]);
   h.deps.success = async () => false;
-  await journey({ scope: "library" }, h.deps);
-  assert.equal(
-    h.events.some(([kind]) => kind === "reveal"),
-    false,
-  );
+  await journey({ scope: "single", target: "alt:hoshino", resourceType: "chibi" }, h.deps);
+  assert.deepEqual(h.events, [
+    ["confirm", "/default"],
+    [
+      "run",
+      {
+        scope: "single",
+        target: "alt:hoshino",
+        resourceType: "chibi",
+        folder: "/default",
+        server: "global",
+        platform: "windows",
+      },
+    ],
+  ]);
 });

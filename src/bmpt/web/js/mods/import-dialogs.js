@@ -35,15 +35,15 @@ export const DIALOG_AREA = [228, 203, 1464, 640];
 /**
  * Make the import page's dialogs.
  * @param {object} P The page's state.
- * @param {object} page The page's model, services and the page functions the dialogs call.
+ * @param {object} page The page's import state, services and the page functions the dialogs call.
  * @returns {object} The dialogs: dialog, openSource, openOptions and results.
  */
 export function createImportDialogs(P, page) {
-  const { model, ui, popups, identified, report } = page;
+  const { importState, ui, popups, identified, report } = page;
   const { paint, textWidget, button, inputControl, radioOptions, bindBar } = page.controls;
   const { paragraphCopy, representative, bindTexture, thumbnail, prepareVisibleRows } = page.list;
   async function openSource(entry) {
-    if (model.busy()) return;
+    if (importState.busy()) return;
     let server = entry.source?.server || entry.target.server,
       platform = entry.source?.platform || "android";
     await dialog(
@@ -51,7 +51,7 @@ export function createImportDialogs(P, page) {
       {
         action: T("picker.ok"),
         cancel: T("popup.cancel"),
-        onAction: () => model.setSource(entry.id, server, platform),
+        onAction: () => importState.setSource(entry.id, server, platform),
       },
       (area, { width }) => {
         const choices = (key, values, value, change) => {
@@ -197,8 +197,8 @@ export function createImportDialogs(P, page) {
   }
 
   async function openOptions() {
-    if (model.busy() || !(await model.loadOptions())) return;
-    const draft = { ...model.state.options, assetTypes: [...model.state.options.assetTypes] };
+    if (importState.busy() || !(await importState.loadOptions())) return;
+    const draft = { ...importState.state.options, assetTypes: [...importState.state.options.assetTypes] };
     let error;
     // The L frame (POPUP_FRAME.L: UIPopup_Option_PC's) with its content in a container padded SPACE.xl on each side
     // (panels in a popup).
@@ -219,8 +219,9 @@ export function createImportDialogs(P, page) {
             );
             return false;
           }
-          const saved = await model.saveOptions(draft);
-          if (!saved) textWidget(error, report(model.state.error), "error", { origin: [(OPTION_WIDTH * S) / 2, 35] });
+          const saved = await importState.saveOptions(draft);
+          if (!saved)
+            textWidget(error, report(importState.state.error), "error", { origin: [(OPTION_WIDTH * S) / 2, 35] });
           return saved;
         },
       },
@@ -418,7 +419,7 @@ export function createImportDialogs(P, page) {
       // the rows drawn for a 1400 px wide area, scaled to the L-class dialog's
       const k = Math.min(1, width / 1400);
       const pictures = [];
-      const groups = importGroups(model.state.taskEntries, P.merged, identified);
+      const groups = importGroups(importState.state.taskEntries, P.merged, identified);
       const textSize = P.art.rowTextSize(groups.map((group) => paragraphCopy(group, true)));
       const resultScale = 0.62 * k,
         resultTextSize = textSize;

@@ -25,7 +25,6 @@ from .strings import get_locale_dir
 from . import strings
 from .api_mods import register as register_mods
 from .api_students import register as register_students
-from .contract import SPINE_TYPES
 from .rpc import RpcRegistry
 from .services import Services
 from .session_log import tail
@@ -74,7 +73,7 @@ def build_api(s: Services) -> RpcRegistry:
     """Build the registry of the RPC methods the front end calls through ``/api/rpc``.
 
     The methods are grouped by namespace (``app``, ``settings``, ``mods``, ``actions``, ``import``, ...) and each
-    is a thin call into the services; the photography, tours, export and Student Hall methods come from their own
+    is a thin call into the services; the thumbnails, tours, export and Student Hall methods come from their own
     modules. The RPC table in docs/webui/api.md lists them.
 
     Args:
@@ -382,13 +381,13 @@ def build_api(s: Services) -> RpcRegistry:
             "outputDir": st.get("output_dir"),
             "voiceVolume": int(s.state.get("voice_volume", 80)),
             "voiceMuted": bool(s.state.get("voice_muted", False)),
-            # {mode, custom}; before the modes it was a boolean, lobby_zoom_out
-            "lobbyZoom": memorial_lobby_zoom(
-                s.state.get("lobby_zoom"), s.state.get("lobby_zoom_custom"), s.state.get("lobby_zoom_out")
+            # {mode, custom}; before the modes it was a boolean, memorial_lobby_zoom_out
+            "memorialLobbyZoomOut": memorial_lobby_zoom(
+                s.state.get("memorial_lobby_zoom_out_mode"), s.state.get("memorial_lobby_zoom_out_custom_limit")
             ),
-            "lobbyPost": bool(s.state.get("lobby_post", True)),
-            "lobbyIntro": bool(s.state.get("lobby_intro", True)),
-            "roster": student_list_view(s.state.get("roster")),
+            "memorialLobbyPostProcessing": bool(s.state.get("memorial_lobby_post_processing", True)),
+            "memorialLobbyIntro": bool(s.state.get("memorial_lobby_intro", True)),
+            "studentList": student_list_view(s.state.get("student_list")),
             "consent": s.state.consent,
             "cacheDir": str(s.cache_dir()),
             "spineConsent": s.state.spine_consent,
@@ -420,7 +419,7 @@ def build_api(s: Services) -> RpcRegistry:
                 raise ServiceError("bad_params", key=key)
             from bmpt.engine import is_game_install
 
-            # Validate before publishing the preference or invalidating a usable Hall.
+            # Validate before publishing the preference or invalidating a usable Student Hall.
             with s._lock:
                 if s.jobs.busy():
                     raise ServiceError("busy")
@@ -472,20 +471,20 @@ def build_api(s: Services) -> RpcRegistry:
             s.state.set("voice_volume", max(0, min(100, int(value))))
         elif key == "voiceMuted":
             s.state.set("voice_muted", bool(value))
-        elif key == "lobbyZoom":
+        elif key == "memorialLobbyZoomOut":
             if not isinstance(value, str) or value not in MEMORIAL_LOBBY_ZOOM_MODES:
                 raise ServiceError("bad_params", key=key)
-            s.state.set("lobby_zoom", value)
-        elif key == "lobbyZoomCustom":
+            s.state.set("memorial_lobby_zoom_out_mode", value)
+        elif key == "memorialLobbyZoomOutCustomLimit":
             if not is_number(value):
                 raise ServiceError("bad_params", key=key)
-            s.state.set("lobby_zoom_custom", memorial_lobby_zoom(None, value)["custom"])
-        elif key == "lobbyPost":
-            s.state.set("lobby_post", bool(value))
-        elif key == "lobbyIntro":
-            s.state.set("lobby_intro", bool(value))
-        elif key == "roster":
-            s.state.set("roster", student_list_view(value))
+            s.state.set("memorial_lobby_zoom_out_custom_limit", memorial_lobby_zoom(None, value)["custom"])
+        elif key == "memorialLobbyPostProcessing":
+            s.state.set("memorial_lobby_post_processing", bool(value))
+        elif key == "memorialLobbyIntro":
+            s.state.set("memorial_lobby_intro", bool(value))
+        elif key == "studentList":
+            s.state.set("student_list", student_list_view(value))
         elif key in FLAG_KEYS:
             if not isinstance(value, bool):
                 raise ServiceError("bad_params", key=key)
@@ -559,7 +558,9 @@ def build_api(s: Services) -> RpcRegistry:
             raise ServiceError("bad_params", key="previewCache")
         if not isinstance(paths, list) or not 1 <= len(paths) <= 2:
             raise ServiceError("bad_params", key="paths")
-        spine_types = "|".join(map(re.escape, SPINE_TYPES))
+        from .services_assets import SPINE_ROUTES
+
+        spine_types = "|".join(map(re.escape, SPINE_ROUTES))
         checked = []
         for path in paths:
             if not isinstance(path, str) or len(path) > 2048:
@@ -613,7 +614,7 @@ def build_api(s: Services) -> RpcRegistry:
 
     @rpc.method("debug.trace")
     def debug_trace(events: list[Any]) -> None:
-        """Log the fullscreen lobby's input events, when the App was started with ``--debug``.
+        """Log the fullscreen memorial lobby's input events, when the App was started with ``--debug``.
 
         A user's trackpad behaviour reproduces once, and the log tells what the page received.
         """
@@ -643,8 +644,8 @@ def build_api(s: Services) -> RpcRegistry:
         reveal(path)
 
     from .export_service import register_api as register_export_api
-    from .student_hall import register_api as register_hall_api
+    from .student_hall import register_api as register_student_hall_api
 
     register_export_api(rpc, s)
-    register_hall_api(rpc, s)
+    register_student_hall_api(rpc, s)
     return rpc

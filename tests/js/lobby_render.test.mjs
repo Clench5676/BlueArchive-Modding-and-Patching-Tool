@@ -1,6 +1,7 @@
-// Tests for the lobby's mesh renderers (web/js/lobby/mesh-fx.js and their drawing in particles-gl.js), the skeletons'
-// game materials (web/js/spine/skeleton-materials.js) and pinned bones (web/js/spine/skeleton-pins.js), against
-// recording stand-ins for WebGL2 and spine-player. Run by tests/test_lobby_render.py with Node's test runner.
+// Tests for the memorial lobby's mesh renderers (web/js/memorial-lobby/mesh-fx.js and their drawing in
+// particles-gl.js), the skeletons' game materials (web/js/spine/skeleton-materials.js) and pinned bones
+// (web/js/spine/skeleton-pins.js), against recording stand-ins for WebGL2 and spine-player. Run by
+// tests/test_lobby_render.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
@@ -231,10 +232,10 @@ test("empty ungraded targets are detected even when the final pass adds an opaqu
     Linear.detach(p);
   }
 });
-const Mesh = await import("../../src/bmpt/web/js/lobby/mesh-fx.js");
-const GL = await import("../../src/bmpt/web/js/lobby/particles-gl.js");
-const { IDENTITY } = await import("../../src/bmpt/web/js/lobby/particles.js");
-const { STRIDE } = await import("../../src/bmpt/web/js/lobby/particles-geometry.js");
+const Mesh = await import("../../src/bmpt/web/js/memorial-lobby/mesh-fx.js");
+const GL = await import("../../src/bmpt/web/js/memorial-lobby/particles-gl.js");
+const { IDENTITY } = await import("../../src/bmpt/web/js/memorial-lobby/particles.js");
+const { STRIDE } = await import("../../src/bmpt/web/js/memorial-lobby/particles-geometry.js");
 
 // --- mesh-fx.js -----------------------------------------------------------------------------------------------------
 
@@ -269,7 +270,7 @@ function quadFx(over = {}) {
     meshes: {},
     materials: {
       lens: {
-        program: "lobbyOrder",
+        program: "memorialLobbyOrder",
         src: 1,
         dst: 1,
         queue: 2950,
@@ -449,7 +450,7 @@ test("mesh renderers draw with the effects, sorted with them, with their animate
   assert.ok(!color, "the stand-in reports no active uniforms");
   assert.equal(effects.stats().meshes, 1);
   assert.equal(effects.stats({ meshes: true }).meshes[0].name, "LensDirt");
-  assert.ok(GL.fragmentSource("lobbyOrder").includes("t.rgb * _Color0.rgb * v_col.rgb, 1.0"));
+  assert.ok(GL.fragmentSource("memorialLobbyOrder").includes("t.rgb * _Color0.rgb * v_col.rgb, 1.0"));
   effects.detach(p);
   effects.dispose();
   Linear.detach(p);
@@ -481,7 +482,7 @@ const multiply = {
   tex: {},
 };
 
-test("0.2.0 straight colours compose with linear light, custom materials and lobby fallback blends", () => {
+test("0.2.0 straight colours compose with linear light, custom materials and memorial lobby fallback blends", () => {
   const gl = fakeGL(),
     layer = { materials: { pages: { Ported: multiply }, blend: {} } };
   const p = player(
@@ -566,8 +567,11 @@ test("Multiply and Screen slots without replacement materials draw as Normal", (
   assert.deepEqual([...M.fallbackModes({ blend: { multiply: {}, screen: {} } })], []);
 });
 
-test("only Aoi's NPC keeps its declared glow blends through the real lobby material setup", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-players.js", import.meta.url), "utf8");
+test("only Aoi's NPC keeps its declared glow blends through the real memorial lobby material setup", () => {
+  const source = readFileSync(
+    new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-players.js", import.meta.url),
+    "utf8",
+  );
   const code = source.slice(source.indexOf("function lightUp("), source.indexOf("// --- show(core, host)"));
   for (const core of [
     "np0032_npc",
@@ -652,8 +656,11 @@ test("only Aoi's NPC keeps its declared glow blends through the real lobby mater
   }
 });
 
-test("a library-only Mod without an official core still attaches and renders its lobby materials", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-players.js", import.meta.url), "utf8");
+test("a library-only Mod without an official core still attaches and renders its memorial lobby materials", () => {
+  const source = readFileSync(
+    new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-players.js", import.meta.url),
+    "utf8",
+  );
   const code = source.slice(source.indexOf("function lightUp("), source.indexOf("// --- show(core, host)"));
   const gl = fakeGL(),
     layer = { name: "custom_home", materials: { pages: {}, blend: {}, tintBlack: false } };
@@ -709,7 +716,7 @@ test("the glitch frames: a hash of the time against _GlitchFreq, the second pass
     assert.equal(M.glitch(t, 0, 0.98), frac(Math.sin(t * 91.2228) * 43758.5) >= 0.98);
     assert.equal(M.glitch(t, 1, 0.98), frac(Math.sin(3 * t * 91.2228) * 43758.5) >= 0.98);
   }
-  // about 2 % of the frames at the lobby's 0.98
+  // about 2 % of the frames at the memorial lobby's 0.98
   let n = 0;
   for (let i = 0; i < 6000; i++) n += M.glitch(i / 60, 0, 0.98) ? 1 : 0;
   assert.ok(n > 60 && n < 180, `${n} glitch frames`);
@@ -782,7 +789,11 @@ test("ported pages draw with their programs and blends; dark colours and fallen-
       },
     }),
   );
-  assert.deepEqual(loads, ["/memorialLobby/x/fx_cab-s_1.png"], "the material's own textures, from the lobby's route");
+  assert.deepEqual(
+    loads,
+    ["/memorialLobby/x/fx_cab-s_1.png"],
+    "the material's own textures, from the memorial lobby's route",
+  );
   await new Promise((r) => setTimeout(r, 0));
   const from = gl.calls.length;
   const log = p.frame();

@@ -1,15 +1,24 @@
-// Exercise the lobby's loading orchestration with the real cancellation helpers and stand-ins for drawing.
+// Exercise the memorial lobby's loading orchestration with the real cancellation helpers and stand-ins for drawing.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { latestLoad, loadPlayer } from "../../src/bmpt/web/js/spine/spine-load.js";
 import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
 import { atStep } from "../../src/bmpt/web/js/detail/preview-error.js";
-import { validRect } from "../../src/bmpt/web/js/lobby/lobby-health.js";
+import { validRect } from "../../src/bmpt/web/js/memorial-lobby/memorial-lobby-health.js";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-players.js", import.meta.url), "utf8");
-const geometrySource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-geometry.js", import.meta.url), "utf8");
-const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
+const source = readFileSync(
+  new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-players.js", import.meta.url),
+  "utf8",
+);
+const geometrySource = readFileSync(
+  new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-geometry.js", import.meta.url),
+  "utf8",
+);
+const measureSource = readFileSync(
+  new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-measure.js", import.meta.url),
+  "utf8",
+);
 const loading = source.slice(source.indexOf("// --- show(core, host)"), source.indexOf("\n  return { makePlayer"));
 const tick = () => new Promise(setImmediate);
 const noop = () => {};
@@ -37,7 +46,9 @@ function harness(layersOf = layers, resolveSources = null, { allowed = true } = 
   };
   const prompts = [];
   const env = {
-    dialogueModule: async () => ({ createLobbyDialogue: () => ({ show: noop, reposition: noop, dispose: noop }) }),
+    dialogueModule: async () => ({
+      createMemorialLobbyDialogue: () => ({ show: noop, reposition: noop, dispose: noop }),
+    }),
     latestLoad,
     layersOf,
     withTimeout,
@@ -135,7 +146,7 @@ function harness(layersOf = layers, resolveSources = null, { allowed = true } = 
     wantTouch: false,
     extendTimer: undefined,
     chain: undefined,
-    lobbyLoads: latestLoad(),
+    memorialLobbyLoads: latestLoad(),
     sourceLoads: latestLoad(),
     playerLoads: new WeakMap(),
     Idle: { start: noop, stop: noop },
@@ -153,7 +164,7 @@ function harness(layersOf = layers, resolveSources = null, { allowed = true } = 
   return { ...h, host, created, calls, revisions, failures, prompts, touchSetups };
 }
 
-test("deferred Hall loads retain input suspension and do not claim the shared Touch setup", async () => {
+test("deferred Student Hall loads retain input suspension and do not claim the shared Touch setup", async () => {
   const h = harness();
   const pending = h.show("hero_home", h.host, "hero", { deferPlayback: true });
   await tick();
@@ -167,7 +178,7 @@ test("deferred Hall loads retain input suspension and do not claim the shared To
   assert.equal(h.host.inert, false);
 });
 
-test("a lobby before acknowledgement fetches no source and leaves no notice or button", async () => {
+test("a memorial lobby before acknowledgement fetches no source and leaves no notice or button", async () => {
   let sources = 0;
   const h = harness(
     layers,
@@ -188,7 +199,7 @@ test("a lobby before acknowledgement fetches no source and leaves no notice or b
   }
 });
 
-test("configured lobby source changes cancel old players, including a switch back before the next load starts", async () => {
+test("configured memorial lobby source changes cancel old players, including a switch back before the next load starts", async () => {
   const h = harness();
   try {
     const first = h.show("hero_home", h.host, "hero", { mod: "a" });
@@ -220,7 +231,7 @@ test("configured lobby source changes cancel old players, including a switch bac
   assert.ok(h.created.every((p) => p.disposed));
 });
 
-test("late configured lobby metadata cannot resurrect a hidden view", async () => {
+test("late configured memorial lobby metadata cannot resurrect a hidden view", async () => {
   let finish;
   const h = harness(
     () =>
@@ -238,7 +249,7 @@ test("late configured lobby metadata cannot resurrect a hidden view", async () =
   assert.equal(h.created.length, 0);
 });
 
-test("a changed manifest revision reloads the same lobby source and frees its old player first", async () => {
+test("a changed manifest revision reloads the same memorial lobby source and frees its old player first", async () => {
   for (const mod of [null, "configured"]) {
     const h = harness();
     try {
@@ -260,7 +271,7 @@ test("a changed manifest revision reloads the same lobby source and frees its ol
   }
 });
 
-test("late manifests cannot revive a hidden lobby or overtake a newer source", async () => {
+test("late manifests cannot revive a hidden memorial lobby or overtake a newer source", async () => {
   const pending = new Map();
   const h = harness(layers, (_core, mod) => new Promise((resolve) => pending.set(mod, resolve)));
   const bases = (name) => ({ artBase: `${name}/`, base: "layout/" });
@@ -301,10 +312,10 @@ test("late manifests cannot revive a hidden lobby or overtake a newer source", a
   }
 });
 
-test("a configured lobby with no skeletons or a failed player rejects and allows a later source", async () => {
+test("a configured memorial lobby with no skeletons or a failed player rejects and allows a later source", async () => {
   const h = harness((core, mod) => (mod === "empty" ? { info: null, layers: [] } : layers(core, mod)));
   try {
-    await assert.rejects(h.show("hero_home", h.host, "hero", { mod: "empty" }), /No lobby skeletons found/);
+    await assert.rejects(h.show("hero_home", h.host, "hero", { mod: "empty" }), /No memorial lobby skeletons found/);
     const failed = h.show("hero_home", h.host, "hero", { mod: "broken" });
     await tick();
     h.created[0].config.error(h.created[0], "broken bundle");
@@ -355,7 +366,7 @@ test("a stale revision during a player load retries the whole composition once",
   }
 });
 
-test("one failed layer cannot be silently omitted from an otherwise ready lobby", async () => {
+test("one failed layer cannot be silently omitted from an otherwise ready memorialLobby", async () => {
   const h = harness(async () => ({
     info: null,
     layers: [
@@ -377,7 +388,7 @@ test("one failed layer cannot be silently omitted from an otherwise ready lobby"
   }
 });
 
-test("the complete lobby deadline reports failure, disposes players, and permits a later retry", async (t) => {
+test("the complete memorial lobby deadline reports failure, disposes players, and permits a later retry", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const h = harness();
   try {
@@ -400,7 +411,7 @@ test("the complete lobby deadline reports failure, disposes players, and permits
   }
 });
 
-test("a manifest that answers after the total deadline cannot start a discarded lobby", async (t) => {
+test("a manifest that answers after the total deadline cannot start a discarded memorialLobby", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let finish;
   const h = harness(
@@ -473,7 +484,7 @@ test("zoom limits are cached by both the configured art revision and the live la
 });
 
 for (const framing of [null, "character", "scene"])
-  test(`context recovery rebuilds the complete lobby with framing ${framing}`, async () => {
+  test(`context recovery rebuilds the complete memorial lobby with framing ${framing}`, async () => {
     const h = harness(async () => ({
       info: null,
       layers: [

@@ -179,13 +179,13 @@ export const SECTIONS = { move: ["movement", "kneel", "stand"] };
 const SLOTS = new Set(ACTION_DEFS.flatMap((d) => [...(d.pick || []), ...(d.play || [])]));
 
 /**
- * The actions a model's clip names give, in menu order.
- * @param {string[]} names The model's clip names.
+ * The actions a chibi's clip names give, in menu order.
+ * @param {string[]} names The chibi's clip names.
  * @param {string} dev The character's prefab name.
  * @returns
  *     {{key: string, id: string, group: string, section: string, form: number, index: number, number: number|null, clips: string[]}[]}
  *     key is the id, the skill's number and "@form" (e.g. "attack@2", "ex2"); number is the skill's number when
- *     the model has several of that skill, else null; form is 0 unless the model has two or more battle forms.
+ *     the chibi has several of that skill, else null; form is 0 unless the chibi has two or more battle forms.
  */
 export function actionsOf(names, dev) {
   const parsed = [];
@@ -260,13 +260,13 @@ export function menuOf(actions) {
  * @param {boolean} [options.withForm] False leaves the battle form out.
  */
 export function actionLabel(a, T, { withForm = true } = {}) {
-  const name = a.number ? T(`model.action.${a.id}N`, { n: a.number }) : T(`model.action.${a.id}`);
-  return a.form && withForm ? T("model.menu.form", { name, n: a.form }) : name;
+  const name = a.number ? T(`chibi.action.${a.id}N`, { n: a.number }) : T(`chibi.action.${a.id}`);
+  return a.form && withForm ? T("chibi.menu.form", { name, n: a.form }) : name;
 }
 /** The label of an action group. */
-export const groupLabel = (id, T) => T(`model.menu.group.${id}`);
+export const groupLabel = (id, T) => T(`chibi.menu.group.${id}`);
 /** The label of a section; a section of a group without sections is named like the group. */
 export function sectionLabel(section, T) {
-  const name = GROUPS.includes(section.id) ? groupLabel(section.id, T) : T(`model.menu.section.${section.id}`);
-  return section.form ? T("model.menu.form", { name, n: section.form }) : name;
+  const name = GROUPS.includes(section.id) ? groupLabel(section.id, T) : T(`chibi.menu.section.${section.id}`);
+  return section.form ? T("chibi.menu.form", { name, n: section.form }) : name;
 }

@@ -160,7 +160,7 @@ export function previewLifecycle(
 }
 
 // While a read of the page waits for the Mod library (a job holds it; the backend's library.waiting event), or a
-// preview waits for a job (the model lock, a costume build of the same pair; preview.waiting), preview deadlines
+// preview waits for a job (the chibi lock, a costume build of the same pair; preview.waiting), preview deadlines
 // stop: that wait is not the preview's own work. Each source is told apart, so one ending does not end the
 // other. A spell longer than LIBRARY_WAIT_CAP counts again, in case its end was never heard (the event stream
 // reconnected).

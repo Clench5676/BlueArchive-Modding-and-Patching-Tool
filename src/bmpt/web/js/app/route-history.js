@@ -1,7 +1,7 @@
 // In-app Back follows page entry points. Student tabs and arrows update the current detail entry, so returning
 // from a detail workflow does not traverse every pose.
-export const ROOT_ROUTE = "#/hall";
-const screen = (route) => route.split("/")[1] || "hall";
+export const ROOT_ROUTE = "#/student-hall";
+const screen = (route) => route.split("/")[1] || "student-hall";
 /**
  * Start a history of the pages the user entered.
  * @returns

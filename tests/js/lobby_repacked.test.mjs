@@ -11,9 +11,9 @@ import {
   settle,
   validRect,
   worldBounds,
-} from "../../src/bmpt/web/js/lobby/lobby-health.js";
-import { lobbyIdle } from "../../src/bmpt/web/js/spine/rest-pose.js";
-import * as Lobby from "../../src/bmpt/web/js/lobby/lobby.js";
+} from "../../src/bmpt/web/js/memorial-lobby/memorial-lobby-health.js";
+import { memorialLobbyIdle } from "../../src/bmpt/web/js/spine/rest-pose.js";
+import * as MemorialLobby from "../../src/bmpt/web/js/memorial-lobby/memorial-lobby.js";
 import * as Pins from "../../src/bmpt/web/js/spine/skeleton-pins.js";
 
 const context = vm.createContext({
@@ -68,18 +68,18 @@ test("an old skeleton version fails explicitly, while any compatible 4.2 patch i
   const p = player("repacked", (json) => {
     json.skeleton.spine = "3.8.75";
   });
-  assert.throws(() => settle(p, layer(), {}, Pins.pin), /Unsupported lobby Spine version: 3.8.75/);
+  assert.throws(() => settle(p, layer(), {}, Pins.pin), /Unsupported memorial lobby Spine version: 3.8.75/);
 });
 
 test("an idle that exists but hides its attachments falls back to drawable repacked art", () => {
   const p = player("repacked", (json) => {
     json.animations.Idle_01 = { slots: { art: { attachment: [{ name: null }] } } };
   });
-  assert.equal(lobbyIdle(p.skeleton.data), "Idle_01", "name selection alone cannot detect the hidden art");
+  assert.equal(memorialLobbyIdle(p.skeleton.data), "Idle_01", "name selection alone cannot detect the hidden art");
   assert.equal(settle(p, layer(), {}, Pins.pin), "RestLoop");
 });
 
-test("a static lobby keeps a live base track and an entirely empty lobby fails", () => {
+test("a static memorial lobby keeps a live base track and an entirely empty memorial lobby fails", () => {
   const p = player("official", (json) => {
       json.animations = {};
     }),
@@ -91,7 +91,7 @@ test("a static lobby keeps a live base track and an entirely empty lobby fails",
   const empty = player("repacked", (json) => {
     json.animations = {};
   });
-  assert.throws(() => settle(empty, layer(), {}, Pins.pin), /No drawable lobby pose/);
+  assert.throws(() => settle(empty, layer(), {}, Pins.pin), /No drawable memorial lobby pose/);
 });
 
 test("the settled idle resumes when a timeline has emptied or removed its base track", () => {
@@ -120,12 +120,18 @@ test("repacked bounds and prefab scale frame posed vertices, independent of the 
   assert.ok(overlaps(bounds, rect(view)));
   assert.ok(Math.abs(view.w - 3.2) < 1e-8);
   for (const scale of [0, -1, NaN, Infinity])
-    assert.throws(() => worldBounds(l.rest.bounds, { ...l, scale }), /Invalid lobby transform/);
+    assert.throws(() => worldBounds(l.rest.bounds, { ...l, scale }), /Invalid memorial lobby transform/);
 });
 
-test("the full lobby measurement frames renamed idle art beyond the official camera and clamps a stale touch bone", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-geometry.js", import.meta.url), "utf8");
-  const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
+test("the full memorial lobby measurement frames renamed idle art beyond the official camera and clamps a stale touch bone", () => {
+  const source = readFileSync(
+    new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-geometry.js", import.meta.url),
+    "utf8",
+  );
+  const measureSource = readFileSync(
+    new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-measure.js", import.meta.url),
+    "utf8",
+  );
   const code =
     `${measureSource.slice(measureSource.indexOf("export const CELL ="), measureSource.indexOf("export const rectOf ="))}
     ${source.slice(source.indexOf("// voice clip names"), source.indexOf("/**\n * The measuring functions"))}
@@ -134,7 +140,7 @@ test("the full lobby measurement frames renamed idle art beyond the official cam
       .replaceAll("export const", "const");
   const G = { x: -1480, y: -832.5, w: 2960, h: 1665 };
   const env = {
-    L: { game: () => ({ ...G }), idleOf: Lobby.idleOf },
+    L: { game: () => ({ ...G }), idleOf: MemorialLobby.idleOf },
     spine,
     Pins,
     artBounds,
@@ -172,8 +178,14 @@ test("the full lobby measurement frames renamed idle art beyond the official cam
 });
 
 test("revisited revision geometry matches cold painting exactly and cannot be mutated by callers", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-geometry.js", import.meta.url), "utf8");
-  const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
+  const source = readFileSync(
+    new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-geometry.js", import.meta.url),
+    "utf8",
+  );
+  const measureSource = readFileSync(
+    new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-measure.js", import.meta.url),
+    "utf8",
+  );
   const code =
     `${measureSource.slice(measureSource.indexOf("export const CELL ="), measureSource.indexOf("// --- the zoom-out limit"))}
     ${source.slice(source.indexOf("function geometryKey("), source.indexOf("// --- the zoom-out limit"))}`
@@ -181,7 +193,7 @@ test("revisited revision geometry matches cold painting exactly and cannot be mu
       .replaceAll("export const", "const");
   const G = { x: -1480, y: -832.5, w: 2960, h: 1665 },
     revision = "a".repeat(64);
-  const env = { spine, Pins, L: { idleOf: Lobby.idleOf } };
+  const env = { spine, Pins, L: { idleOf: MemorialLobby.idleOf } };
   const h = new Function(
     "env",
     `const { ${Object.keys(env).join(", ")} } = env;
@@ -209,8 +221,14 @@ test("revisited revision geometry matches cold painting exactly and cannot be mu
 });
 
 test("geometry identity covers revisions, transforms, skins, rest poses, pins, framing and camera", () => {
-  const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-geometry.js", import.meta.url), "utf8");
-  const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
+  const source = readFileSync(
+    new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-geometry.js", import.meta.url),
+    "utf8",
+  );
+  const measureSource = readFileSync(
+    new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-measure.js", import.meta.url),
+    "utf8",
+  );
   const helpers = `${measureSource.slice(measureSource.indexOf("function rectCache("), measureSource.indexOf("// the grid: three game views"))}
     ${source.slice(source.indexOf("function geometryKey("), source.indexOf("// a reusable skeleton of a layer"))}`;
   const h = new Function(`const S = { current: undefined };
@@ -268,7 +286,10 @@ test("geometry identity covers revisions, transforms, skins, rest poses, pins, f
 });
 
 test("geometry caches bound memory, evict least recently used entries and clone typed masks", () => {
-  const measureSource = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-measure.js", import.meta.url), "utf8");
+  const measureSource = readFileSync(
+    new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-measure.js", import.meta.url),
+    "utf8",
+  );
   const rectCache =
     new Function(`${measureSource.slice(measureSource.indexOf("function rectCache("), measureSource.indexOf("// the grid: three game views"))}
     return rectCache;`)();
@@ -324,7 +345,10 @@ test("renamed art joins a retained background; missing or ambiguous pairs fail w
     return { ok: true, json: async () => (url.endsWith("files.json") ? files : info) };
   };
   try {
-    const result = await Lobby.layersOf("shun_home", null, { artBase: "/art/revision/", base: "/layout/revision/" });
+    const result = await MemorialLobby.layersOf("shun_home", null, {
+      artBase: "/art/revision/",
+      base: "/layout/revision/",
+    });
     assert.deepEqual(
       result.layers.map((l) => l.name),
       ["shun_bg", "Repacked"],
@@ -332,13 +356,13 @@ test("renamed art joins a retained background; missing or ambiguous pairs fail w
     assert.equal(result.layers[1].atlas, "/art/revision/ArtBook.atlas");
     files = ["shun_bg.skel", "shun_bg.atlas"];
     await assert.rejects(
-      Lobby.layersOf("shun_home", null, { artBase: "/art/", base: "/layout/" }),
-      /Missing lobby layers: shun_home/,
+      MemorialLobby.layersOf("shun_home", null, { artBase: "/art/", base: "/layout/" }),
+      /Missing memorial lobby layers: shun_home/,
     );
     files = ["A.skel", "B.skel", "Unknown.atlas"];
     await assert.rejects(
-      Lobby.layersOf("shun_home", null, { artBase: "/art/", base: "/layout/" }),
-      /No unambiguous lobby atlas/,
+      MemorialLobby.layersOf("shun_home", null, { artBase: "/art/", base: "/layout/" }),
+      /No unambiguous memorial lobby atlas/,
     );
     assert.ok(requests.includes("/art/revision/files.json"));
   } finally {

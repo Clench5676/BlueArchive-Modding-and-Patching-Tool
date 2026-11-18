@@ -295,11 +295,11 @@
     "code": "E1011",
     "level": "failed"
   },
-  "lobby_camera_failed": {
+  "memorial_lobby_camera_failed": {
     "code": "E6016",
     "level": "failed"
   },
-  "lobby_camera_unsupported": {
+  "memorial_lobby_camera_unsupported": {
     "code": "E6017",
     "level": "failed"
   },

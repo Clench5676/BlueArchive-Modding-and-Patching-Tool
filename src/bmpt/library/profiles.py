@@ -3,7 +3,7 @@
 ``state.json`` stays as older builds write it (they load only its version 1 and rewrite it with their own keys), so the
 configuration lives in a file of its own that older builds never open::
 
-    {"version": 1,
+    {"version": 2,
      "enabled": true,                       # the Enable Mods switch, one intent for every game folder; missing: on
      "toggled": "<ISO>",                    # the last change of enabled
      "unfinished": [{"install", "core", "why"}],   # entries the toggles have not switched yet (pending, left, stuck,
@@ -11,7 +11,7 @@ configuration lives in a file of its own that older builds never open::
      "folders": {"<install key>": {
          "server": "global",
          "named_by": {"<data directory id>": "<ISO>"}, "hidden": ["<data directory id>"],
-         "configured": {"<core>": {"variant", "kind", "source", "since"}},
+         "configured": {"<core>": {"alt", "resource_type", "source", "since"}},
          "updated": {"<core>": "<ISO>"},
          "built": {"<core>": {"source", "inputs": [...], "parts": {"<file name>": {"sha1", "mod_file"}}}},
          "dismissed": {"drift": {"<core>": [[name, size, mtime_ns]]}, "untracked": {...}},
@@ -41,7 +41,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from ..host.store_formats import FutureFormat, managed_bytes, read_runtime, runtime_store
+from ..host.store_formats import FutureFormat, legacy_document, managed_bytes, read_runtime, runtime_store
 from ..core.errors import ServiceError
 from ..core.filelock import file_lock, replace
 from ..core.logging_utils import log_failure
@@ -56,8 +56,8 @@ WHY = ("pending", "left", "stuck", "held")
 def _parse(path: Path) -> dict[str, Any]:
     """A profiles file's contents; ValueError when it is not a configuration of this version."""
     data = read_runtime(path)
-    if not isinstance(data, dict) or data.get("version") != 1:
-        raise ValueError("not a version 1 configuration")
+    if not isinstance(data, dict) or data.get("version") != 2:
+        raise ValueError("not a version 2 configuration")
     if not isinstance(data.get("folders", {}), dict) or not isinstance(data.get("unfinished", []), list):
         raise ValueError("invalid configuration")
     return data
@@ -73,7 +73,7 @@ def normalized(data: dict[str, Any] | None) -> dict[str, Any]:
         An independent document with malformed folder and unfinished entries removed.
     """
     data = copy.deepcopy(data) if data else {}
-    data["version"] = 1
+    data["version"] = 2
     if not isinstance(data.get("enabled", True), bool):
         data["enabled"] = True
     if not isinstance(data.get("folders"), dict):
@@ -282,7 +282,7 @@ class Profiles:
                 raw = (
                     managed_bytes(store, data)
                     if store
-                    else (json.dumps(data, ensure_ascii=False, indent=1) + "\n").encode()
+                    else (json.dumps(legacy_document(self.path, data), ensure_ascii=False, indent=1) + "\n").encode()
                 )
                 output.write(raw)
                 output.flush()

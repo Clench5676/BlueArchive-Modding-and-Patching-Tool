@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 UPGRADE_ACTIONS = frozenset(("retry", "update", "openLog", "quit", "acknowledge", "keep", "import", "relocate"))
 MAX_BODY = 4 * 1024 * 1024
-MAX_PHOTOGRAPH_BODY = 49 * 1024 * 1024
+MAX_THUMBNAIL_BODY = 49 * 1024 * 1024
 HTTP_EXPORT_SCHEMA = "http-exports-v2"
 
 MIME = {
@@ -247,7 +247,7 @@ class WebApp:
             length = int(environ.get("CONTENT_LENGTH") or 0)
         except ValueError:
             length = 0
-        if length <= 0 or length > MAX_PHOTOGRAPH_BODY:
+        if length <= 0 or length > MAX_THUMBNAIL_BODY:
             return self._json(start_response, {"error": {"code": "bad_request", "params": {}}}, "400 Bad Request")
         try:
             body = json.loads(environ["wsgi.input"].read(length))

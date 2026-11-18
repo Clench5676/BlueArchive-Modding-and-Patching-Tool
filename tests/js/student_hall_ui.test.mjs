@@ -112,9 +112,9 @@ globalThis.uiHarness = {
     top: () => top,
   },
 };
-let source = await readFile(new URL("../../src/bmpt/web/js/hall/student-hall-ui.js", import.meta.url), "utf8");
+let source = await readFile(new URL("../../src/bmpt/web/js/student-hall/student-hall-ui.js", import.meta.url), "utf8");
 source = source.replace(/^import [^;]*;$/gm, "");
-source = `const {Popup,clone,NGUI,Loading,withTimeout,T,POPUP,POPUP_FRAME,XS_BUTTON,CONTROL,TYPE,SPACE,layoutStack,captionMinimum}=globalThis.uiHarness; const Buttons={disable:(...args)=>globalThis.uiHarness.Buttons.disable(...args)}; const S=1920/2960;\n${source}\nexport function areaFixture(fn){area=fn;} export function assetsFixture(value){assets=value;} export function readinessFixture(host,fn){visibleReadiness.set(host,fn);} export {pictureReadiness};\n//# sourceURL=hall-ui-fixture.js`;
+source = `const {Popup,clone,NGUI,Loading,withTimeout,T,POPUP,POPUP_FRAME,XS_BUTTON,CONTROL,TYPE,SPACE,layoutStack,captionMinimum}=globalThis.uiHarness; const Buttons={disable:(...args)=>globalThis.uiHarness.Buttons.disable(...args)}; const S=1920/2960;\n${source}\nexport function areaFixture(fn){area=fn;} export function assetsFixture(value){assets=value;} export function readinessFixture(host,fn){visibleReadiness.set(host,fn);} export {pictureReadiness};\n//# sourceURL=student-hall-ui-fixture.js`;
 const UI = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 UI.areaFixture((host, box, height, key) => {
   const scroll = new Element();
@@ -126,10 +126,10 @@ UI.areaFixture((host, box, height, key) => {
   return inner;
 });
 const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
-test("true Hall modals block base navigation and restore nested ownership in order", () => {
+test("true Student Hall modals block base navigation and restore nested ownership in order", () => {
   stage = new Element("stage");
   const nav = new Element("nav"),
-    screen = new Element("screen-hall"),
+    screen = new Element("screen-student-hall"),
     display = new Element("display");
   stage.append(nav);
   stage.append(screen);
@@ -613,8 +613,8 @@ test("filter redraws reset the logical viewport instead of restoring a stale old
   modal.close();
 });
 
-// Hall's search box, a search field, shows no browser clear button and closes the search on Escape
-test("Hall's search box closes the search on Escape and shows no browser clear button", async () => {
+// Student Hall's search box, a search field, shows no browser clear button and closes the search on Escape
+test("StudentHall's search box closes the search on Escape and shows no browser clear button", async () => {
   const vm = await import("node:vm"),
     { readFileSync } = await import("node:fs");
   const code = source.slice(
@@ -665,13 +665,13 @@ test("Hall's search box closes the search on Escape and shows no browser clear b
   assert.equal(key(plain).defaultPrevented, false, "without onEscape the key goes on to the popup");
   // WebKit and Chromium draw their own clear button in a search field; the game's box has none
   const css = readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
-  const rule = css.match(/\.roster-search::-webkit-search-cancel-button[^{]*\{([^}]*)\}/);
+  const rule = css.match(/\.student-list-search::-webkit-search-cancel-button[^{]*\{([^}]*)\}/);
   assert.ok(rule, "the clear button is styled");
   assert.match(rule[1], /display: none/);
   assert.match(rule[1], /-webkit-appearance: none/);
 });
 
-test("Hall modalFrame delegates one, two and three actions to popupFrame, preserving semantics and disabled state", () => {
+test("StudentHall modalFrame delegates one, two and three actions to popupFrame, preserving semantics and disabled state", () => {
   let options;
   const saved = { ...globalThis.uiHarness.Popup };
   globalThis.uiHarness.Buttons = { disable: (child) => ({ ...child, disabled: true }) };
@@ -693,7 +693,7 @@ test("Hall modalFrame delegates one, two and three actions to popupFrame, preser
       semantic: ["confirm", "blue", "secondary"][i],
       enabled: i !== 0,
     }));
-    const tree = UI.modalFrame("Hall", 2800, 1450, actions),
+    const tree = UI.modalFrame("StudentHall", 2800, 1450, actions),
       row = find(tree, "Popup/Btn");
     assert.equal(options.buttons.length, count);
     assert.deepEqual(

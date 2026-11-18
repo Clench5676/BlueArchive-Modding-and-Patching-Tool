@@ -5,7 +5,7 @@ import {
   sceneRect,
   sceneViewport,
   createSceneCamera,
-} from "../../src/bmpt/web/js/hall/student-hall-camera.js";
+} from "../../src/bmpt/web/js/student-hall/student-hall-camera.js";
 const close = (a, b) => assert.ok(Math.abs(a - b) < 0.03, `${a} != ${b}`);
 function fixture() {
   const listeners = new Map(),

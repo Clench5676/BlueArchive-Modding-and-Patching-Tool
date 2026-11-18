@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..records import stored_target
+
 import contextlib
 import copy
 import hashlib
@@ -18,26 +20,26 @@ from bmpt.engine import (
     get_search_dirs,
     parse_filename,
 )
-from ...catalog.models import CoreMap
+from ...catalog.records import CoreMap
 from ...core.errors import ServiceError
 from ...gameassets.discovery import cab_names
 from ...core.logging_utils import log_failure
 from .. import safety, toggle_timing
 from .. import targets as resolver
 from ..judge import (
-    KINDS,
+    RESOURCE_TYPES,
     core_of,
     install_key,
     install_root,
-    kind_of,
-    kind_of_file,
+    resource_type_of,
+    resource_type_of_file,
     learn_packed,
     other_target,
     packed_cab,
     part_of,
 )
-from ..models import (
-    Kind,
+from ..records import (
+    ResourceType,
     Pin,
 )
 from .base import _View, _pins_signature, _record_maps, _serialized
@@ -105,23 +107,23 @@ class FoldersMixin:
         return Pin(key, root, dirs, folder.get("server") or "global") if dirs else None
 
     @_serialized
-    def variant_cores(self, variant_key: str) -> set[str]:
-        """Collect lower-case asset cores for scanning a variant across known installs.
+    def alt_cores(self, alt_id: str) -> set[str]:
+        """Collect lower-case asset cores for scanning an alt across known installs.
 
         Args:
-            variant_key: Variant key, or a generic other:/other-set: target whose stored file slots are scanned.
+            alt_id: alt key, or a generic other:/other-set: target whose stored file slots are scanned.
         """
-        if variant_key.startswith(("other:", "other-set:")):
+        if alt_id.startswith(("other:", "other-set:")):
             return {
                 core_of(name)
                 for record in self._records.values()
-                if record["kind"] == "other" and record["target"] == variant_key
+                if record["resource_type"] == "other" and stored_target(record) == alt_id
                 for name in record["files"]
             }
         cores = set()
         for pin in self.installs():
-            for kind in KINDS:
-                core = self._core_map(pin).core(variant_key, kind)
+            for resource_type in RESOURCE_TYPES:
+                core = self._core_map(pin).core(alt_id, resource_type)
                 if core:
                     cores.add(core.lower())
         return cores
@@ -191,7 +193,7 @@ class FoldersMixin:
         """
         groups: dict[tuple, list[Path]] = {}
         for name, path in listing:
-            if kind_of_file(name) == "other":
+            if resource_type_of_file(name) == "other":
                 groups.setdefault((str(Path(path).parent), part_of(name)), []).append(Path(path))
         packed: dict[tuple, list[Path]] = {}
         for (_folder, part), paths in groups.items():
@@ -207,7 +209,7 @@ class FoldersMixin:
         return {
             part_of(name)
             for record in self._records.values()
-            if record.get("kind") == "other"
+            if record.get("resource_type") == "other"
             for name in record["files"]
         } | self._packed_wanted
 
@@ -293,7 +295,7 @@ class FoldersMixin:
     def _note_packed(self, paths: Iterable[Path], pin: Pin | None = None) -> None:
         pin = pin or self.current_pin()
         files = {Path(path).name.removesuffix(".backup"): Path(path) for path in paths}
-        parts = {part_of(name) for name in files if kind_of_file(name) == "other"}
+        parts = {part_of(name) for name in files if resource_type_of_file(name) == "other"}
         if pin is None or not parts:
             return
         packed = self._packed_groups(self._listing(pin))
@@ -311,7 +313,7 @@ class FoldersMixin:
 
         Each bundle needs its own identity to retain independent choices. No game bytes change.
         """
-        records = [record for record in self._records.values() if record.get("kind") == "other"]
+        records = [record for record in self._records.values() if record.get("resource_type") == "other"]
         if not records:
             return
         pins = self.installs()
@@ -337,8 +339,10 @@ class FoldersMixin:
                 shared = "other:" + hashlib.sha256(repr(part_of(name)).encode()).hexdigest()
                 moved.setdefault(record["id"], {}).setdefault(shared, set()).add(core_of(name))
             target = other_target(record["files"])
-            if target != record["target"]:
-                record["target"] = target
+            if target != stored_target(record):
+                record.pop("generic_target", None)
+                record.pop("target_alt", None)
+                record["generic_target" if target.startswith("other:") else "target_alt"] = target
                 changed = True
         if changed:
             self._save()
@@ -422,27 +426,27 @@ class FoldersMixin:
         self._indexes[pin.key] = (signature_, index, files, self._generation)
         return index
 
-    def _kind(self, core: str, pin: Pin) -> str | None:
+    def _resource_type(self, core: str, pin: Pin) -> str | None:
         """Use the bundle category for special slots, including files removed by an update."""
         if core.startswith("other:"):
             return "other"
         paths = self._index(pin).get(core.lower(), [])
         if paths:
-            return next((kind for path in paths if (kind := kind_of_file(path.name))), None)
+            return next((resource_type for path in paths if (resource_type := resource_type_of_file(path.name))), None)
         for name in self._applied:
             path = Path(name)
             if path.parent in pin.dirs and core_of(path.name) == core.lower():
-                return kind_of_file(path.name)
+                return resource_type_of_file(path.name)
         for record in self._records.values():
             if core_of(record["files"][0]) == core.lower():
-                return record["kind"]
+                return record["resource_type"]
         mapped = self._maps.get(pin.key)
-        if mapped and core.lower() in mapped[1].model.values():
-            return "model"
-        return kind_of(core)
+        if mapped and core.lower() in mapped[1].chibi.values():
+            return "chibi"
+        return resource_type_of(core)
 
     def _core_map(self, pin: Pin) -> CoreMap:
-        """How the install's cores map to variant keys (Catalog.core_map on its file names)."""
+        """How the install's cores map to alt keys (Catalog.core_map on its file names)."""
         index = self._index(pin)
         built_for = self._indexes[pin.key][3]
         cached = self._maps.get(pin.key)
@@ -451,63 +455,66 @@ class FoldersMixin:
         slots = [
             parse_filename(path.name)
             for paths in index.values()
-            if (path := next((part for part in paths if kind_of_file(part.name)), None)) is not None
+            if (path := next((part for part in paths if resource_type_of_file(part.name)), None)) is not None
         ]
-        spr = [slot.core for slot in slots if kind_of(slot.core, slot.category) == "spr"]
-        lobby = [slot.core for slot in slots if kind_of(slot.core, slot.category) == "lobby"]
+        portrait = [slot.core for slot in slots if resource_type_of(slot.core, slot.category) == "portrait"]
+        memorial_lobby = [slot.core for slot in slots if resource_type_of(slot.core, slot.category) == "memorialLobby"]
         special = [
             slot.core
             for slot in slots
-            if kind_of(slot.core, slot.category) == "lobby" and slot.category in ("spinebackground", "spinecharacters")
+            if resource_type_of(slot.core, slot.category) == "memorialLobby"
+            and slot.category in ("spinebackground", "spinecharacters")
         ]
         build = getattr(self.catalog, "core_map", None)
         if build is not None:
-            mapped = build(spr, lobby, special_cores=special) if special else build(spr, lobby)
+            mapped = (
+                build(portrait, memorial_lobby, special_cores=special) if special else build(portrait, memorial_lobby)
+            )
         else:  # a catalog without core maps: the current catalog's own answers
-            keys, spr_of, lobby_of = {}, {}, {}
-            for core in [*spr, *lobby]:
-                variant = self.catalog.variant_for_core(core.lower())
-                if variant is not None:
-                    keys[core.lower()] = variant.key
-                    target = spr_of if core.lower().endswith("_spr") else lobby_of
-                    target.setdefault(variant.key, core)
-            mapped = CoreMap(keys, spr_of, lobby_of, {})
-        models = [slot.core.lower() for slot in slots if kind_of(slot.core, slot.category) == "model"]
-        model_map = getattr(self.catalog, "model_map", None)
-        model_variant = getattr(self.catalog, "variant_for_model_core", self.catalog.variant_for_core)
+            keys, portrait_of, memorial_lobby_of = {}, {}, {}
+            for core in [*portrait, *memorial_lobby]:
+                alt = self.catalog.alt_for_core(core.lower())
+                if alt is not None:
+                    keys[core.lower()] = alt.key
+                    target = portrait_of if core.lower().endswith("_spr") else memorial_lobby_of
+                    target.setdefault(alt.key, core)
+            mapped = CoreMap(keys, portrait_of, memorial_lobby_of, {})
+        chibis = [slot.core.lower() for slot in slots if resource_type_of(slot.core, slot.category) == "chibi"]
+        chibi_map = getattr(self.catalog, "chibi_map", None)
+        chibi_alt = getattr(self.catalog, "alt_for_chibi_core", self.catalog.alt_for_core)
         keys = (
-            model_map(models)
-            if model_map
-            else {core.lower(): variant.key for core in models if (variant := model_variant(core.lower())) is not None}
+            chibi_map(chibis)
+            if chibi_map
+            else {core.lower(): alt.key for core in chibis if (alt := chibi_alt(core.lower())) is not None}
         )
-        model_of = {}
+        chibi_of = {}
         preferred = {
-            v.key: v.model.lower()
-            for family in getattr(self.catalog, "families", lambda: [])()
-            for v in family.variants
-            if getattr(v, "model", None)
+            v.key: v.chibi.lower()
+            for student in getattr(self.catalog, "students", lambda: [])()
+            for v in student.alts
+            if getattr(v, "chibi", None)
         }
         # Prefer this install's prefab over its dependency cores, even when a dependency sorts first.
         prefabs = {
             core
-            for core in models
+            for core in chibis
             if any(parse_filename(path.name).category == "character" for path in index[core.lower()])
         }
-        for core in sorted(models):
+        for core in sorted(chibis):
             key = keys.get(core.lower(), core.lower())
             mapped.keys.setdefault(core.lower(), key)
-            model_of.setdefault(key, core)
-            if core in prefabs and model_of[key] not in prefabs:
-                model_of[key] = core
+            chibi_of.setdefault(key, core)
+            if core in prefabs and chibi_of[key] not in prefabs:
+                chibi_of[key] = core
         for key, core in preferred.items():
-            if key in model_of:
-                model_of[key] = core
+            if key in chibi_of:
+                chibi_of[key] = core
                 mapped.keys.setdefault(core, key)
-        model_cores = {
-            key: (core, *sorted(value for value in models if value != core and keys.get(value.lower()) == key))
-            for key, core in model_of.items()
+        chibi_cores = {
+            key: (core, *sorted(value for value in chibis if value != core and keys.get(value.lower()) == key))
+            for key, core in chibi_of.items()
         }
-        mapped = replace(mapped, model=model_of, model_cores=model_cores)
+        mapped = replace(mapped, chibi=chibi_of, chibi_cores=chibi_cores)
         self._maps[pin.key] = (built_for, mapped)
         return mapped
 
@@ -548,11 +555,15 @@ class FoldersMixin:
         self._maps_cache = (key, maps)
         return maps
 
-    def _game_files(self, key: str, kind: Kind | None = None, pin: Pin | None = None) -> list[Path]:
-        if kind == "other":
+    def _game_files(self, key: str, resource_type: ResourceType | None = None, pin: Pin | None = None) -> list[Path]:
+        if resource_type == "other":
             pin = self._current(pin)
             record = next(
-                (record for record in self._records.values() if record["kind"] == "other" and record["target"] == key),
+                (
+                    record
+                    for record in self._records.values()
+                    if record["resource_type"] == "other" and stored_target(record) == key
+                ),
                 None,
             )
             if record is None:
@@ -562,34 +573,34 @@ class FoldersMixin:
             if all(slot in index for slot in slots):
                 return resolver.slot_files(index, slots)
             return self._other_targets({path.name: path for path in self._paths(record)}, pin)
-        variant = self._variant(key)
+        alt = self._alt(key)
         pin = self._current(pin)
         index = self._index(pin)
         return [
             path
             for current, value in (
-                ("spr", variant.spr),
-                ("lobby", variant.lobby),
-                ("model", getattr(variant, "model", None)),
+                ("portrait", alt.portrait),
+                ("memorialLobby", alt.memorial_lobby),
+                ("chibi", getattr(alt, "chibi", None)),
             )
-            if value and (kind is None or current == kind)
-            for core in (self._core_map(pin).slot_cores(value) if current == "model" else (value.lower(),))
+            if value and (resource_type is None or current == resource_type)
+            for core in (self._core_map(pin).slot_cores(value) if current == "chibi" else (value.lower(),))
             for path in index.get(core, [])
         ]
 
     @_serialized
-    def model_cores(self, variant_key: str, pin: Pin | None = None) -> list[str]:
-        """List a model slot's prefab core followed by its own installed dependency cores.
+    def chibi_cores(self, alt_id: str, pin: Pin | None = None) -> list[str]:
+        """List a chibi slot's prefab core followed by its own installed dependency cores.
 
         Args:
-            variant_key: Variant key whose catalog metadata supplies the model prefab core.
+            alt_id: alt key whose catalog metadata supplies the chibi prefab core.
             pin: Game install and server the operation is fixed to; None uses the current install if available.
 
         Returns:
-            Slot cores, only the prefab core without an install, or empty when the variant has no model.
+            Slot cores, only the prefab core without an install, or empty when the alt has no chibi.
         """
-        variant = self._variant(variant_key)
-        core = getattr(variant, "model", None)
+        alt = self._alt(alt_id)
+        core = getattr(alt, "chibi", None)
         if not core:
             return []
         pin = pin or self.current_pin()

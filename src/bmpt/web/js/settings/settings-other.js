@@ -71,8 +71,8 @@ async function write(method, params, mod, name, changed) {
 }
 
 /**
- * Apply a mod of the other kinds (game files that are not a portrait, lobby or model) or put the official files
- * back.
+ * Apply a mod of the other kinds (game files that are not a portrait, memorial lobby or chibi) or put the official
+ * files back.
  * @param {object} mod The mod, as mods.other lists it.
  * @param {() => Promise<void>} changed Called after the write, whatever came of it, to refresh the page.
  * @param {boolean} [useMod] True applies the mod, false restores the official files; the opposite of what is

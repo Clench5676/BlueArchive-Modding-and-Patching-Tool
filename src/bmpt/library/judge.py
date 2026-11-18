@@ -1,6 +1,6 @@
 """Judge game files and entries with pure rules that can be tested independently of reads.
 
-Terms (docs/webui/library.md, library): an *entry* is one game core of a variant in one install (a portrait or one
+Terms (docs/webui/library.md, library): an *entry* is one game core of an alt in one install (a portrait or one
 memorial lobby core); what its files *carry* is the library source that wrote them while they are unchanged since, else
 official, unknown or damaged; *configured* is the source the user chose for it; *enabled* is the Enable Mods switch.
 """
@@ -15,17 +15,25 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
 
-from bmpt.engine import SEARCH_DIR_SUFFIXES, parse_filename, spine_kind
+from bmpt.engine import SEARCH_DIR_SUFFIXES, parse_filename
 
-LIBRARY_SOURCES = ("mod:", "variant:")
+from ..gameassets.spine import spine_resource_type
+
+LIBRARY_SOURCES = ("mod:", "alt:")
 CRC_STATES = ("ok", "fixed", "needs_fix")
-KINDS = ("spr", "lobby", "model", "other")
-MODEL_CATEGORIES = {"character", "characters", "npcs"}
+RESOURCE_TYPES = ("portrait", "memorialLobby", "chibi", "other")
+CHIBI_CATEGORIES = {"character", "characters", "npcs"}
+_RESOURCE_TYPE_ORDER = {name: index for index, name in enumerate(("memorialLobby", "chibi", "other", "portrait"))}
 
 
-def supports_kind(kind: str) -> bool:
+def sorted_resource_types(values: Iterable[str]) -> list[str]:
+    """Keep the resource order used by switch results and events."""
+    return sorted(values, key=lambda value: (_RESOURCE_TYPE_ORDER.get(value, len(_RESOURCE_TYPE_ORDER)), value))
+
+
+def supports_resource_type(resource_type: str) -> bool:
     """Return whether files of this kind can be stored and switched by the library."""
-    return kind in KINDS
+    return resource_type in RESOURCE_TYPES
 
 
 def now() -> str:
@@ -50,31 +58,31 @@ def seconds(value: Any) -> float | None:
         return None
 
 
-def kind_of(core: str, category: str | None = None) -> str | None:
-    """Classify a character asset slot, using the bundle category for 3D models.
+def resource_type_of(core: str, category: str | None = None) -> str | None:
+    """Classify a character asset slot, using the bundle category for 3D chibis.
 
     Args:
-        core: Bundle core to classify as portrait, lobby, or model.
-        category: Filename category distinguishing model assets; None uses Spine naming alone.
+        core: Bundle core to classify as portrait, memorialLobby, or chibi.
+        category: Filename category distinguishing chibi assets; None uses Spine naming alone.
 
     Returns:
         The supported character kind, or None if the core is not a character slot.
     """
     if (
         category
-        and category.lower() in MODEL_CATEGORIES
-        and spine_kind(core) is None
+        and category.lower() in CHIBI_CATEGORIES
+        and spine_resource_type(core) is None
         and re.fullmatch(r"[a-z0-9][a-z0-9_]*", core.lower())
     ):
         if core.lower() != "mxcommon" and not core.lower().startswith("mxcommon_"):
-            return "model"
-    return spine_kind(core, category)
+            return "chibi"
+    return spine_resource_type(core, category)
 
 
-def kind_of_file(name: str) -> str | None:
+def resource_type_of_file(name: str) -> str | None:
     """Classify a bundle filename by category and core, using other for generic bundles."""
     parsed = parse_filename(name)
-    return kind_of(parsed.core, parsed.category) or (
+    return resource_type_of(parsed.core, parsed.category) or (
         "other" if name.endswith(".bundle") and parsed.prefix and parsed.crc else None
     )
 
@@ -120,7 +128,7 @@ def core_of(name: str) -> str:
     Args:
         name: Bundle filename to resolve to its lower-case core or hashed other slot.
     """
-    if kind_of_file(name) == "other":
+    if resource_type_of_file(name) == "other":
         cab = packed_cab(name)
         part = part_of(name) if cab is None else (*part_of(name), cab)
         return "other:" + hashlib.sha256(repr(part).encode()).hexdigest()
@@ -154,10 +162,10 @@ def date_of(name: str) -> str:
 def mod_versions(entries: Sequence[tuple[Hashable, str]], installed: Iterable[str] = ()) -> list[str]:
     """Group imported bundle sets into mod versions using the rule shared by Add and batch import.
 
-    A set is what one import takes for one mod: the files of one core and kind, or of one model slot across its cores
-    (the batch import also separates folders and variants), named by its key. Its files are the parts of one mod
+    A set is what one import takes for one mod: the files of one core and kind, or of one chibi slot across its cores
+    (the batch import also separates folders and alts), named by its key. Its files are the parts of one mod
     whatever their dates, because some cores keep their parts under different dates
-    (a Spine core's textures and text, a model's prefab and
+    (a Spine core's textures and text, a chibi's prefab and
     dependencies). Only a set in which one part (``part_of``) occurs under more than one date holds several versions
     of the mod: the whole set then goes by date. Dates kept side by side for that part in the install are one version.
 

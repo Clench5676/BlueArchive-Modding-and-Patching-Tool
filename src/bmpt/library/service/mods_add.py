@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..records import stored_target
+
 import base64
 import contextlib
 import copy
@@ -26,14 +28,14 @@ from .. import fingerprint, integrity
 from ..judge import (
     core_of,
     date_of,
-    kind_of_file,
+    resource_type_of_file,
     other_target,
     part_of,
-    supports_kind,
+    supports_resource_type,
 )
-from ..models import (
+from ..records import (
     AddResult,
-    Kind,
+    ResourceType,
     Pin,
 )
 from .base import _mod_writer, _serialized
@@ -47,7 +49,7 @@ class AddMixin:
 
     def add_files(
         self,
-        kind: Kind,
+        resource_type: ResourceType,
         paths: list[Path],
         progress: ProgressCallback | None = None,
         pin: Pin | None = None,
@@ -59,7 +61,7 @@ class AddMixin:
         """Import a batch of one supported kind, optionally applying through the master switch.
 
         Args:
-            kind: Required library kind: spr, lobby, model, or other.
+            resource_type: Required resource type: portrait, memorialLobby, chibi, or other.
             paths: Uploaded bundle files to group and deduplicate as complete mods.
             progress: Receives import and optional apply progress; None disables reporting.
             pin: Game install and server the operation is fixed to; None uses the current install.
@@ -68,13 +70,13 @@ class AddMixin:
             direct: Whether storage may accept verified current-release whole files;
                 applies only when apply is False.
         """
-        if not supports_kind(kind):
+        if not supports_resource_type(resource_type):
             if not paths:
-                raise ServiceError("source_unsupported", kind=kind)  # no file to name
-            raise ServiceError("mod_unsupported", file=paths[0], kind=kind)
+                raise ServiceError("source_unsupported", kind=resource_type)  # no file to name
+            raise ServiceError("mod_unsupported", file=paths[0], kind=resource_type)
         if apply:
-            return self.add_and_apply(paths, progress, pin, log, kind=kind)
-        return self.add(paths, progress, pin, kind=kind, direct=direct)
+            return self.add_and_apply(paths, progress, pin, log, resource_type=resource_type)
+        return self.add(paths, progress, pin, resource_type=resource_type, direct=direct)
 
     @_serialized
     @_mod_writer
@@ -84,7 +86,7 @@ class AddMixin:
         progress: ProgressCallback | None = None,
         pin: Pin | None = None,
         *,
-        kind: Kind | None = None,
+        resource_type: ResourceType | None = None,
         direct: bool = False,
     ) -> AddResult:
         """Store and deduplicate complete bundle sets grouped by slot, kind, and version.
@@ -97,7 +99,7 @@ class AddMixin:
             paths: Uploaded bundle files, including .bundle.backup files whose backup suffix is stripped.
             progress: Receives (processed files, total files, message); None disables reporting.
             pin: Game install and server the operation is fixed to; None uses the current install.
-            kind: Required library kind, or None to infer each group's kind.
+            resource_type: Required library kind, or None to infer each group's kind.
             direct: Whether verified current-release whole files may bypass rebuild-oriented preflight.
 
         Returns:
@@ -106,7 +108,7 @@ class AddMixin:
         for path in paths:
             devmode.check_read(path)
         self._note_packed(paths, pin)  # under the locks add holds: no library lock after its file locks
-        return self._add(paths, progress, pin, kind, direct=direct)
+        return self._add(paths, progress, pin, resource_type, direct=direct)
 
     def _identity(self, files: dict[str, Path]) -> frozenset:
         return frozenset((core_of(name), part_of(name), self._hashes.get(path).sha1) for name, path in files.items())
@@ -126,7 +128,7 @@ class AddMixin:
                 key=lambda item: json.dumps(item),
             ),
             "target": dict(target),
-            "originals": sorted([path.name, self._hashes.get(path).sha1] for path in originals),
+            "officials": sorted([path.name, self._hashes.get(path).sha1] for path in originals),
         }
 
     def _output_identity(self, paths: list[Path]) -> list:
@@ -152,7 +154,7 @@ class AddMixin:
         return None
 
     @_serialized
-    def find_legacy_import_source(self, source: dict, kind: str) -> str | None:
+    def find_legacy_import_source(self, source: dict, resource_type: str) -> str | None:
         """Recognize only recorded source hashes, scoped to their target and official release.
 
         Entries without these records cannot be identified without a rebuild, so skip them.
@@ -160,14 +162,18 @@ class AddMixin:
 
         Args:
             source: Import content-and-target identity to match against legacy source_hashes.
-            kind: Library kind restricting candidate records to the same asset class.
+            resource_type: Library kind restricting candidate records to the same asset class.
 
         Returns:
             Matching legacy mod ID, or None when no recorded provenance proves a match.
         """
         records, revisions = [], []
         for record in self._records.values():
-            if record["kind"] != kind or record.get("import_sources") or not record.get("source_hashes"):
+            if (
+                record["resource_type"] != resource_type
+                or record.get("import_sources")
+                or not record.get("source_hashes")
+            ):
                 continue
             records.append(record)
             stamps = []
@@ -175,7 +181,7 @@ class AddMixin:
                 stat = path.stat()
                 stamps.append((path.name, stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
             revisions.append((record["id"], record["source_hashes"], stamps))
-        key = json.dumps([source, kind, revisions], sort_keys=True)
+        key = json.dumps([source, resource_type, revisions], sort_keys=True)
         if key not in self._legacy_import_matches:
             match = next((record["id"] for record in records if record["source_hashes"] == source), None)
             if len(self._legacy_import_matches) >= 128:
@@ -184,11 +190,11 @@ class AddMixin:
         return self._legacy_import_matches[key]
 
     @_serialized
-    def legacy_import_snapshot(self, kind: str, target: str) -> list:
+    def legacy_import_snapshot(self, resource_type: str, target: str) -> list:
         """Snapshot unlinked legacy records for an asset before an expensive output comparison.
 
         Args:
-            kind: Library kind restricting legacy candidate records.
+            resource_type: Library kind restricting legacy candidate records.
             target: Stored ownership target restricting candidates to the same asset.
 
         Returns:
@@ -197,8 +203,8 @@ class AddMixin:
         return sorted(
             [record["id"], self._output_identity(self._paths(record))]
             for record in self._records.values()
-            if record["kind"] == kind
-            and record["target"] == target
+            if record["resource_type"] == resource_type
+            and stored_target(record) == target
             and not record.get("import_sources")
             and not record.get("source_hashes")
         )
@@ -270,9 +276,9 @@ class AddMixin:
                 logger.warning(
                     "Duplicate library mods: %s (%s), %s (%s)",
                     known[identity],
-                    self._records[known[identity]]["label"],
+                    self._records[known[identity]]["name"],
                     record["id"],
-                    record["label"],
+                    record["name"],
                 )
             else:
                 known[identity] = record["id"]
@@ -283,7 +289,7 @@ class AddMixin:
         paths: list[Path],
         progress: ProgressCallback | None = None,
         pin: Pin | None = None,
-        expected_kind: Kind | None = None,
+        expected_kind: ResourceType | None = None,
         *,
         direct: bool = False,
     ) -> AddResult:
@@ -297,10 +303,10 @@ class AddMixin:
                 progress(i, len(paths), t("webui.progress.add", name=source.name))
             name = source.name.removesuffix(".backup") if source.name.endswith(".bundle.backup") else source.name
             parsed = parse_filename(name)
-            kind = kind_of_file(name)
+            resource_type = resource_type_of_file(name)
             if not name.endswith(".bundle"):
                 raise ServiceError("mod_unsupported", file=source)
-            if not parsed.prefix or not parsed.crc or kind is None:
+            if not parsed.prefix or not parsed.crc or resource_type is None:
                 fingerprint = self._hashes.get(source).sha1
                 matches = [
                     path.name
@@ -311,20 +317,27 @@ class AddMixin:
                 if len({core_of(name) for name in matches}) != 1:
                     raise ServiceError("mod_unsupported", file=source)
                 name = matches[0]
-            name, target, kind = self._identify_import(source, name, pin)
-            if expected_kind is not None and kind != expected_kind:
+            name, target, resource_type = self._identify_import(source, name, pin)
+            if expected_kind is not None and resource_type != expected_kind:
                 raise ServiceError("mod_unsupported", file=source)
-            core = self.import_core(parse_filename(name).core, kind, pin)
-            taken.append((source, name, target, kind, core))
-        # Model sets share their prefab slot key; other character kinds keep their physical core.
+            core = self.import_core(parse_filename(name).core, resource_type, pin)
+            taken.append((source, name, target, resource_type, core))
+        # Chibi sets share their prefab slot key; other character kinds keep their physical core.
         versions = iter(
-            self.import_versions([((core, kind), name) for _, name, _, kind, core in taken if kind != "other"], pin)
+            self.import_versions(
+                [
+                    ((core, resource_type), name)
+                    for _, name, _, resource_type, core in taken
+                    if resource_type != "other"
+                ],
+                pin,
+            )
         )
-        for source, name, target, kind, core in taken:
-            key = (str(source.parent), "other") if kind == "other" else (core, kind, next(versions))
-            targets[key] = (target, kind)
+        for source, name, target, resource_type, core in taken:
+            key = (str(source.parent), "other") if resource_type == "other" else (core, resource_type, next(versions))
+            targets[key] = (target, resource_type)
             group = groups.setdefault(key, {})
-            if kind == "other":
+            if resource_type == "other":
                 previous = next((old for old in group if part_of(old) == part_of(name)), None)
                 if previous:
                     if self._hashes.get(group[previous]).sha1 != self._hashes.get(source).sha1:
@@ -355,14 +368,14 @@ class AddMixin:
                 continue
             names = sorted(group)
             parsed = parse_filename(names[0])
-            target, kind = targets[key]
-            if kind == "other":
+            target, resource_type = targets[key]
+            if resource_type == "other":
                 target = other_target(group)
             record = self._store(
                 group,
                 parsed.core,
                 target,
-                kind,
+                resource_type,
                 user_added=True,
                 built_against=self._built_against(group, pin, "import", painted=key in whole),
             )
@@ -387,7 +400,7 @@ class AddMixin:
         compatibility: bool = True,
         dependencies: bool = True,
         conversion: bool = False,
-        variant_key: str | None = None,
+        alt_id: str | None = None,
         inspection: integrity.Inspection | None = None,
         built: dict | None = None,
     ) -> dict:
@@ -406,13 +419,17 @@ class AddMixin:
             name: inspect(path, allow_unknown=True) if conversion else inspect(path) for name, path in files.items()
         }
         core = core_of(next(iter(files)))
-        kind = kind_of_file(next(iter(files)))
+        resource_type = resource_type_of_file(next(iter(files)))
         target_core = core
-        targets = (self._other_targets(files, pin) if kind == "other" else self._spine_parts(core, pin)) if pin else []
-        if pin and not targets and variant_key and kind != "other":
-            target_core = self._core_map(pin).core(variant_key, kind) or core
+        targets = (
+            (self._other_targets(files, pin) if resource_type == "other" else self._spine_parts(core, pin))
+            if pin
+            else []
+        )
+        if pin and not targets and alt_id and resource_type != "other":
+            target_core = self._core_map(pin).core(alt_id, resource_type) or core
             targets = self._spine_parts(target_core, pin)
-        if targets and kind not in ("other", "model"):
+        if targets and resource_type not in ("other", "chibi"):
             target_core = parse_filename(targets[0].name).core
         originals, original_paths, current_parts = {}, [], {}
         unavailable = not targets
@@ -436,21 +453,21 @@ class AddMixin:
             if not conversion:
                 integrity.check_platform(contents, files[name], expected)
             selected.merge(contents)
-        # Compatibility may address a variant whose installed core changed after this Mod was stored.
+        # Compatibility may address an alt whose installed core changed after this Mod was stored.
         target_names = (
             {
                 name.replace(f"-{parse_filename(name).core}-", f"-{target_core}-", 1): path
                 for name, path in files.items()
             }
-            if target_core != core and kind != "other"
+            if target_core != core and resource_type != "other"
             else files
         )
         resolution = self._resolve(target_names, targets, pin, cab_inspection)
         replacements = resolution.current
         replaced = set(replacements)
         older = resolution.older
-        check_dependencies = dependencies and (not compatibility or kind in ("model", "other"))
-        if older and kind == "other":
+        check_dependencies = dependencies and (not compatibility or resource_type in ("chibi", "other"))
+        if older and resource_type == "other":
             replaced.update(self._other_targets(older, pin) if pin else [])
         elif older:
             # The dependency check leaves out every part the files write; the Spine comparison, as the preview, only
@@ -504,7 +521,7 @@ class AddMixin:
             return {}
         current = self._replacements(files, targets, pin, cab_inspection) if target_names is not files else replacements
         report = {
-            "kind": kind,
+            "resource_type": resource_type,
             "official": official.spine(),
             "mod": effective.spine(),
             "unavailable": unavailable,
@@ -529,7 +546,7 @@ class AddMixin:
             }
             misfit = bool(misfits)
             layout = fingerprint.changed_layouts(built, mixed)
-            if kind == "spr" and not unavailable:
+            if resource_type == "portrait" and not unavailable:
                 # Where no record keeps the rig the mod's textures were drawn for, the earlier release the archive
                 # keeps that they follow (rig_archive), against the installed pages of the verified official copies.
                 unrecorded = {
@@ -557,7 +574,7 @@ class AddMixin:
             recorded = {name: entry for name, entry in layout.items() if isinstance(entry.get("skeleton"), str)}
             dated = (
                 self._dated_rig(list(files.values()), misfits - recorded.keys(), official.atlases, original_paths)
-                if kind == "spr" and not unavailable
+                if resource_type == "portrait" and not unavailable
                 else {}
             )
             # The UI needs to distinguish a repacked atlas without a usable repair rig.
@@ -589,7 +606,7 @@ class AddMixin:
                     selected.textures,
                     official.textures,
                 )
-                if kind == "spr"
+                if resource_type == "portrait"
                 else atlas_remap.OldRig()
             )
             report["oldRig"] = {
@@ -597,37 +614,39 @@ class AddMixin:
                 "animations": old_rig.animations,
                 "available": not unavailable and old_rig.available,
             }
-            # The graft (bmpt.spine.graft): the mod's own binary skeleton keeps its rig and takes the animations the
+            # The animation transfer (bmpt.spine.add_animations): the mod's own binary skeleton keeps its rig and
+            # takes the animations the
             # official one gained; or the old rig above takes them, where they keep it from being offered.
-            # Memorial lobbies and Spine backgrounds take the graft too (``graft.plain``): what each new animation
+            # Memorial lobbies and Spine backgrounds take the animation transfer too (``add_animations.plain``): what
+            # each new animation
             # needs is known from the two skeletons alone, so the check tells which it carries and why not the others.
             own = (
                 {
                     name: names
                     for name, names in gains["animations"].items()
-                    if self._graftable(selected, official, name)
+                    if self._can_add_animations(selected, official, name)
                 }
-                if kind in ("spr", "lobby")
+                if resource_type in ("portrait", "memorialLobby")
                 else {}
             )
-            plans = {name: self._graft_plan(selected, official, name) for name in own}
+            plans = {name: self._add_animations_plan(selected, official, name) for name in own}
             refused = {name: plan[1] for name, plan in plans.items() if plan[1]}
             own = {name: plan[0] for name, plan in plans.items() if plan[0]}
-            gained = old_rig.animations if kind == "spr" and old_rig.atlases and old_rig.complete else {}
-            report["graft"] = {
-                "kind": "own" if own else "oldRig" if gained else None,
+            gained = old_rig.animations if resource_type == "portrait" and old_rig.atlases and old_rig.complete else {}
+            report["add_animations"] = {
+                "resource_type": "own" if own else "oldRig" if gained else None,
                 "animations": own or gained,
                 "refused": refused,
                 "available": not unavailable and bool(own or gained),
             }
             report["misfit"] = not unavailable and misfit
             # Portraits are baked through world space; other kinds only move regions onto a page size that fits.
-            wanted = misfit or bool(recorded) or bool(rerig) if kind == "spr" else misfit
+            wanted = misfit or bool(recorded) or bool(rerig) if resource_type == "portrait" else misfit
             report["remappable"] = not unavailable and wanted
         except (ValueError, UnicodeError):
             report["rig"] = {"layout": [], "animations": {}, "regions": {}, "unknown": []}
             report["source"] = {"atlases": {}, "skeletons": {}}
             report["oldRig"] = {"atlases": [], "animations": {}, "available": False}
-            report["graft"] = {"kind": None, "animations": {}, "refused": {}, "available": False}
+            report["add_animations"] = {"resource_type": None, "animations": {}, "refused": {}, "available": False}
             report["misfit"] = report["remappable"] = False
         return report

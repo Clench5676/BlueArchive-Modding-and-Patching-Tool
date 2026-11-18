@@ -1,7 +1,7 @@
-// The bones a memorial lobby prefab pins (lobby.json "pins", gameassets/pins.py): SkeletonUtilityBones in Override
+// The bones a memorial lobby prefab pins (memorial-lobby.json "pins", gameassets/pins.py): SkeletonUtilityBones in Override
 // mode that no drag moves set their bone from their GameObject every frame, after the animation and before the world
 // transform, so the bone stays where the prefab put it whatever the animation does (Hihumi's Hip, and with it her
-// whole scene; CH0242's cheek_02). lobby-touch.js moves the dragged ones.
+// whole scene; CH0242's cheek_02). memorial-lobby-touch.js moves the dragged ones.
 
 const cache = new WeakMap(); // skeleton -> [pin, bone] of its pins
 
@@ -31,7 +31,7 @@ export function lerpAngle(a, b, t) {
  * spine-unity does; called after the animation and before the world transform.
  * @param {object} skeleton The spine skeleton.
  * @param {string} name The layer's name.
- * @param {object[]|null} pins The layer's pins from lobby.json.
+ * @param {object[]|null} pins The layer's pins from memorial-lobby.json.
  */
 export function pin(skeleton, name, pins) {
   if (!skeleton || !pins?.length || !shown) return;

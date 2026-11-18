@@ -3,7 +3,7 @@
 // divider) by the ink of the bitmaps NGUI drew, so every element's visual centre lies on the same line whatever
 // its box, pivot or padding is.
 import * as NGUI from "../ui/ngui.js";
-import { inkBounds } from "../hall/student-hall-icons.js";
+import { inkBounds } from "../student-hall/student-hall-icons.js";
 import { barCentre, barPadding, extent, inkRect, moveBy } from "./top-bar-layout.js";
 
 let centre = barCentre(),

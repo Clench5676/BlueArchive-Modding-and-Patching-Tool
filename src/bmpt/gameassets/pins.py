@@ -4,7 +4,8 @@ A SkeletonUtilityBone in Override mode (mode 1) sets its bone from its GameObjec
 and before the world transform (spine-unity's SkeletonUtility.UpdateLocal: the bone's local x / y from the
 GameObject's local position, its rotation from the local Euler z angle, its scale from the local scale, each where
 the component says so, lerped by overrideAlpha). The SpineDragIK touch targets (Touch_Point, Touch_Eye, the pinch and
-hand bones) are such bones, and lobby-touch.js moves them; the others nothing moves, so their bone stays where the
+hand bones) are such bones, and memorial-lobby-touch.js moves them; the others nothing moves, so their bone stays
+where the
 prefab put the GameObject whatever the animation does: Hihumi's Hip, whose driver (SpineCharacterGyro) is switched
 off, and CH0242's cheek_02, which PinchEnd_01_M animates.
 
@@ -33,7 +34,7 @@ def pins(
     """Export enabled Override SkeletonUtilityBones on active nodes, excluding drag targets.
 
     Args:
-        nodes: Prefab walk from lobby.read_prefab with transforms and first components per class.
+        nodes: Prefab walk from memorial_lobby.read_prefab with transforms and first components per class.
         skeleton_of_go: Maps a SkeletonAnimation GameObject path ID to its skeleton name, or None.
         data_scale: Returns Unity units per skeleton unit for a skeleton name.
         dragged: Skeleton/bone pairs controlled by SpineDragIK and therefore excluded from fixed pins.
@@ -46,7 +47,7 @@ def pins(
         if u is None or u.get("mode") != 1 or not n["active"] or not u.get("m_Enabled", 1):
             continue
         if (u.get("parentReference") or {}).get("m_PathID"):
-            continue  # a bone set in another transform's space: no lobby has one
+            continue  # a bone set in another transform's space: no memorial lobby has one
         skel = n
         while skel is not None and "SkeletonAnimation" not in skel["first"]:
             skel = by_go.get(skel["parent"])

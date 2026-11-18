@@ -9,10 +9,10 @@ import pytest
 
 from bmpt.catalog import Catalog
 from bmpt.core.errors import ServiceError
-from bmpt.library import ModLibrary, supports_kind
+from bmpt.library import ModLibrary, supports_resource_type
 from bmpt.library.identity import content_cores, identify
 from bmpt.library.integrity import Contents
-from bmpt.library.judge import kind_of_file
+from bmpt.library.judge import resource_type_of_file
 from ba_modding_toolkit.naming import parse_filename
 from bmpt.library import safety
 
@@ -52,23 +52,23 @@ def test_official_model_slot_ownership(tmp_path, record_property):
         core_of(path.name)
         for directory in directories
         for path in directory.glob("*.bundle")
-        if kind_of_file(path.name) == "model"
+        if resource_type_of_file(path.name) == "chibi"
     }
-    mapped = catalog.model_map(cores)
-    all_variants = [v for f in catalog.families() for v in f.variants if v.model]
+    mapped = catalog.chibi_map(cores)
+    all_variants = [v for f in catalog.students() for v in f.alts if v.chibi]
     variants = [v for v in all_variants if v.playable]
     expanded = {}
     for variant in variants:
         slot = [
-            variant.model,
-            *sorted(core for core in cores if core != variant.model and mapped.get(core) == variant.key),
+            variant.chibi,
+            *sorted(core for core in cores if core != variant.chibi and mapped.get(core) == variant.key),
         ]
         assert all(mapped.get(core) == variant.key for core in slot), (variant.key, slot)
         assert not [
-            (other.key, other.model) for other in all_variants if other.key != variant.key and other.model in slot
+            (other.key, other.chibi) for other in all_variants if other.key != variant.key and other.chibi in slot
         ], (variant.key, slot)
-        assert library.model_cores(variant.key) == slot
-        assert {core_of(path.name) for path in library._game_files(variant.key, "model")} == set(slot)
+        assert library.chibi_cores(variant.key) == slot
+        assert {core_of(path.name) for path in library._game_files(variant.key, "chibi")} == set(slot)
         if len(slot) > 1:
             expanded[variant.key] = slot
     assert expanded["ch0258"][:2] == ["ch0258_02", "ch0258"]
@@ -100,7 +100,7 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
         path
         for directory in directories
         for path in directory.glob("*.bundle")
-        if kind_of_file(path.name) == "model" and core_of(path.name) in cores
+        if resource_type_of_file(path.name) == "chibi" and core_of(path.name) in cores
     ]
     assert len(official) >= 12
     inspection = Inspection()
@@ -124,9 +124,9 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
     game = GameAssets([clone_dir], AssetCache(allowed=False, root=tmp_path / "cache"))
     catalog = Catalog(game, None, server="global")
     library = ModLibrary(tmp_path / "library", catalog, game, settings)
-    assert library.model_cores("ch0258") == ["ch0258_02", "ch0258"]
+    assert library.chibi_cores("ch0258") == ["ch0258_02", "ch0258"]
     official_bytes = {path: path.read_bytes() for path in clone_dir.glob("*.bundle")}
-    slot_files = library._game_files("ch0258", "model")
+    slot_files = library._game_files("ch0258", "chibi")
     targets = sorted(
         slot_files
         if complete
@@ -164,10 +164,10 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
             assert result["applied"] is complete
             (mod,) = library.mods()
         else:
-            (mod,) = library.add_files("model", uploads)
+            (mod,) = library.add_files("chibi", uploads)
         assert [entry.id for entry in library.mods()] == [mod.id]
         assert {path.name for path in library._paths(library._record(mod.id))} == {p.name for p in uploads}
-        result = library.apply("ch0258", f"mod:{mod.id}", kind="model")
+        result = library.apply("ch0258", f"mod:{mod.id}", resource_type="chibi")
         assert not result.incomplete
         if batch and complete:
             assert result.unchanged
@@ -199,7 +199,7 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
             assert check.returncode == 0, check.stderr
         (row,) = analyze(env, uploads)["entries"]
         assert row["state"] == ("done" if batch else "library") and row["libraryId"] == mod.id
-        library.restore("ch0258", kind="model")
+        library.restore("ch0258", resource_type="chibi")
         assert all(path.read_bytes() == data for path, data in official_bytes.items())
         assert all(hashlib.sha256(path.read_bytes()).hexdigest() == digest for path, digest in before.items())
         record_property("cloned_model_files", len(official))
@@ -220,9 +220,9 @@ def model_env(setup_library):
     mesh = model_bundle(env.game_dir, part="meshes", payload=b"mesh official")
     texture = model_bundle(env.game_dir, part="textures", payload=b"texture official")
     game = SimpleNamespace(
-        spine_cores=lambda kind: {"hoshino_spr": []} if kind == "spr" else {},
+        spine_cores=lambda kind: {"hoshino_spr": []} if kind == "portrait" else {},
         collection_names=lambda: {},
-        model_cores=lambda: {"hoshino_original"},
+        chibi_cores=lambda: {"hoshino_original"},
     )
     env.catalog = Catalog(game, None)
     env.library = ModLibrary(env.root, env.catalog, object(), env.settings, scan_allowed=lambda: True)
@@ -252,9 +252,9 @@ def split_model_env(setup_library, request):
     ]
     env.official = {path: path.read_bytes() for path in [*env.parts, *env.excluded]}
     game = SimpleNamespace(
-        spine_cores=lambda kind: {"hoshino_spr": [], env.variant_key + "_spr": []} if kind == "spr" else {},
+        spine_cores=lambda kind: {"hoshino_spr": [], env.variant_key + "_spr": []} if kind == "portrait" else {},
         collection_names=lambda: {},
-        model_cores=lambda: {env.prefab_core, "hoshino_original"},
+        chibi_cores=lambda: {env.prefab_core, "hoshino_original"},
     )
     env.catalog = Catalog(game, None)
     env.library = ModLibrary(env.root, env.catalog, object(), env.settings, scan_allowed=lambda: True)
@@ -269,7 +269,7 @@ def split_model_app(split_model_env):
     env = split_model_env
     env.previews = []
     game = SimpleNamespace(
-        model_glb=lambda core, overrides=(), reads=None: env.previews.append((core, list(overrides), reads)) or b"glTF"
+        chibi_glb=lambda core, overrides=(), reads=None: env.previews.append((core, list(overrides), reads)) or b"glTF"
     )
     env.services = Services(
         env.settings, env.tmp / "app", cache=object(), game=game, catalog=env.catalog, library=env.library
@@ -284,25 +284,25 @@ def test_split_model_slot_uses_only_its_own_install_cores(split_model_env):
     env = split_model_env
     library = env.library
     pin = library.current_pin()
-    assert library.model_cores("ch0258") == ["ch0258_02", "ch0258"]
-    assert library._core_map(pin).core("ch0258", "model") == "ch0258_02"
-    assert library._game_files("ch0258", "model") == env.parts
-    assert {file.file for file in library.state("ch0258").files if file.kind == "model"} == set(env.parts)
+    assert library.chibi_cores("ch0258") == ["ch0258_02", "ch0258"]
+    assert library._core_map(pin).core("ch0258", "chibi") == "ch0258_02"
+    assert library._game_files("ch0258", "chibi") == env.parts
+    assert {file.file for file in library.state("ch0258").files if file.resource_type == "chibi"} == set(env.parts)
     assert set(library.official_bundles("ch0258")) == set(env.parts)
     assert set(library.official_bundles("ch0258_02")) == set(env.parts)
-    assert library.model_cores("hoshino") == ["hoshino_original"]
+    assert library.chibi_cores("hoshino") == ["hoshino_original"]
     # A second install never borrows dependencies present only in the current one.
     other = env.tmp / "second-game"
     model_bundle(other, "ch0258_02", prefab=True, part="000")
     other_pin = library._pin(other, "global")
-    assert library.model_cores("ch0258", other_pin) == ["ch0258_02"]
-    assert len(library._game_files("ch0258", "model", other_pin)) == 1
+    assert library.chibi_cores("ch0258", other_pin) == ["ch0258_02"]
+    assert len(library._game_files("ch0258", "chibi", other_pin)) == 1
     # Even if that install loses its prefab file, the remaining dependencies keep the prefab choice key.
     for path in other.glob("*.bundle"):
         path.unlink()
     dependency = model_bundle(other, "ch0258", part="004")
-    assert library.model_cores("ch0258", other_pin) == ["ch0258_02", "ch0258"]
-    assert library._game_files("ch0258", "model", other_pin) == [dependency]
+    assert library.chibi_cores("ch0258", other_pin) == ["ch0258_02", "ch0258"]
+    assert library._game_files("ch0258", "chibi", other_pin) == [dependency]
     assert library._core_map(other_pin).slot("ch0258") == "ch0258_02"
 
 
@@ -315,7 +315,7 @@ def test_split_model_dependency_add_apply_switch_and_restore(split_model_app, ba
     uploads = [
         make_mod(path, env.tmp / "incoming", payload=b"mod " + str(i).encode()) for i, path in enumerate(env.parts[1:3])
     ]
-    assert all(library.identify_import(path, path.name) == (path.name, "ch0258", "model") for path in uploads)
+    assert all(library.identify_import(path, path.name) == (path.name, "ch0258", "chibi") for path in uploads)
     if batch:
         (row,) = analyze(env, uploads)["entries"]
         assert (row["core"], row["alt"], row["state"]) == ("ch0258_02", "ch0258", "ready")
@@ -323,28 +323,28 @@ def test_split_model_dependency_add_apply_switch_and_restore(split_model_app, ba
         assert result["outcome"] == "imported"
         (mod,) = library.mods()
     else:
-        (mod,) = library.add_files("model", uploads)
+        (mod,) = library.add_files("chibi", uploads)
     assert mod.core == "ch0258" and mod.target == "ch0258"
     assert {path.name for path in library.preview_bundles(mod.id)} == {path.name for path in env.parts}
-    result = library.apply("ch0258", f"mod:{mod.id}", kind="model")
+    result = library.apply("ch0258", f"mod:{mod.id}", resource_type="chibi")
     assert set(result.files) == set(env.parts[1:3]) and not result.incomplete
-    assert library.apply("ch0258", f"mod:{mod.id}", kind="model").unchanged
+    assert library.apply("ch0258", f"mod:{mod.id}", resource_type="chibi").unchanged
     assert all(path.read_bytes() == upload.read_bytes() for path, upload in zip(env.parts[1:3], uploads))
     assert all(path.read_bytes() == data for path, data in env.official.items() if path not in env.parts[1:3])
-    assert library.configured("ch0258")["model"] == f"mod:{mod.id}"
-    assert library.selection("ch0258")["model"]["installed"]
+    assert library.configured("ch0258")["chibi"] == f"mod:{mod.id}"
+    assert library.selection("ch0258")["chibi"]["installed"]
     choices = library.profiles.read()["folders"][library.current_pin().key]["configured"]
     assert set(choices) == {"ch0258_02"}
     hidden = library.profiles.read()
     pin = library.current_pin()
     hidden["folders"][pin.key]["hidden"] = [library.data_id]
     assert library._hidden_items(hidden) == [{"install": pin.key, "core": "ch0258_02", "why": "pending"}]
-    entries = [entry for entry in library.entries() if entry.kind == "model"]
+    entries = [entry for entry in library.entries() if entry.resource_type == "chibi"]
     (entry,) = entries
     assert entry.core == "ch0258_02" and len(entry.files) == len(env.parts)
     (filtered,) = library.scan(cores={"ch0258"}).entries
     assert filtered.core == "ch0258_02" and len(filtered.files) == len(env.parts)
-    state = [part for part in library.state("ch0258").files if part.kind == "model"]
+    state = [part for part in library.state("ch0258").files if part.resource_type == "chibi"]
     assert {part.applied for part in state} == {f"mod:{mod.id}"} and all(part.restorable for part in state)
     family = env.rpc.call("student.get", {"key": "hoshino"})["result"]
     shown = next(v for v in family["alts"] if v["key"] == "ch0258")
@@ -355,16 +355,16 @@ def test_split_model_dependency_add_apply_switch_and_restore(split_model_app, ba
     assert row["libraryId"] == mod.id and row["state"] == ("done" if batch else "library")
     # Another choice replaces its own part and returns the previous choice's parts to official.
     (second,) = library.add([make_mod(env.parts[0], env.tmp / "second", payload=b"other prefab")])
-    library.apply("ch0258", f"mod:{second.id}", kind="model")
+    library.apply("ch0258", f"mod:{second.id}", resource_type="chibi")
     assert all(path.read_bytes() == env.official[path] for path in env.parts[1:])
-    library.apply("ch0258", f"mod:{mod.id}", kind="model")
+    library.apply("ch0258", f"mod:{mod.id}", resource_type="chibi")
     assert not library.toggle(False, True).failed
     assert all(path.read_bytes() == data for path, data in env.official.items())
     assert all((env.root / "originals" / path.name).read_bytes() == env.official[path] for path in env.parts[1:3])
     assert not library.toggle(True, False).failed
-    assert library.selection("ch0258")["model"]["installed"]
-    library.restore("ch0258", kind="model")
-    assert library.configured("ch0258")["model"] is None
+    assert library.selection("ch0258")["chibi"]["installed"]
+    library.restore("ch0258", resource_type="chibi")
+    assert library.configured("ch0258")["chibi"] is None
     assert all(path.read_bytes() == data for path, data in env.official.items())
 
 
@@ -396,8 +396,8 @@ def test_complete_split_model_is_one_row_one_mod_and_one_choice(split_model_app,
         assert result["outcome"] == "imported" and result["applied"] and result["configured"]
         (mod,) = library.mods()
     else:
-        (mod,) = library.add_files("model", uploads)
-        applied = library.apply(env.variant_key, f"mod:{mod.id}", kind="model")
+        (mod,) = library.add_files("chibi", uploads)
+        applied = library.apply(env.variant_key, f"mod:{mod.id}", resource_type="chibi")
         assert set(applied.files) == set(env.parts)
     assert [entry.id for entry in library.mods()] == [mod.id]
     assert {path.name for path in library._paths(library._record(mod.id))} == {path.name for path in uploads}
@@ -406,14 +406,14 @@ def test_complete_split_model_is_one_row_one_mod_and_one_choice(split_model_app,
     assert all((env.root / "originals" / path.name).read_bytes() == env.official[path] for path in env.parts)
     choices = library.profiles.read()["folders"][library.current_pin().key]["configured"]
     assert set(choices) == {env.prefab_core} and choices[env.prefab_core]["source"] == f"mod:{mod.id}"
-    assert library.selection(env.variant_key)["model"]["installed"]
+    assert library.selection(env.variant_key)["chibi"]["installed"]
     assert library.add(list(reversed(uploads))).duplicates == [mod]
     (row,) = analyze(env, uploads)["entries"]
     assert row["libraryId"] == mod.id and row["core"] == env.prefab_core
-    restored = library.restore(env.variant_key, kind="model")
+    restored = library.restore(env.variant_key, resource_type="chibi")
     assert set(restored.files) == set(env.parts)
     assert all(path.read_bytes() == data for path, data in env.official.items())
-    assert library.configured(env.variant_key)["model"] is None
+    assert library.configured(env.variant_key)["chibi"] is None
 
 
 def test_complete_split_model_keeps_existing_partial_mods_separate(split_model_app):
@@ -465,13 +465,13 @@ def test_split_model_rejects_foreign_and_mixed_core_mods(split_model_env):
     env = split_model_env
     (foreign,) = env.library.add([make_mod(env.excluded[-1], env.tmp / "foreign")])
     with pytest.raises(ServiceError, match="mod_target_mismatch"):
-        env.library.apply("ch0258", f"mod:{foreign.id}", kind="model")
+        env.library.apply("ch0258", f"mod:{foreign.id}", resource_type="chibi")
     # Even a record targeted at the correct variant cannot smuggle a foreign core alongside its own.
     own = make_mod(env.parts[1], env.tmp / "mixed")
     other = make_mod(env.excluded[-1], own.parent)
-    record = env.library._store({own.name: own, other.name: other}, "mixed", "ch0258", "model")
+    record = env.library._store({own.name: own, other.name: other}, "mixed", "ch0258", "chibi")
     with pytest.raises(ServiceError, match="mod_target_mismatch"):
-        env.library.apply("ch0258", f"mod:{record['id']}", kind="model")
+        env.library.apply("ch0258", f"mod:{record['id']}", resource_type="chibi")
     assert all(path.read_bytes() == data for path, data in env.official.items())
 
 
@@ -484,10 +484,10 @@ def test_split_model_existing_dependency_mod_is_adopted_under_one_choice(split_m
     result = env.library.add([upload])
     (mod,) = result
     assert result.installed == [mod]
-    assert env.library.configured("ch0258")["model"] == f"mod:{mod.id}"
+    assert env.library.configured("ch0258")["chibi"] == f"mod:{mod.id}"
     (choice,) = env.library.entries()
     assert choice.core == "ch0258_02" and {file.file for file in choice.files} == set(env.parts)
-    env.library.restore("ch0258", kind="model")
+    env.library.restore("ch0258", resource_type="chibi")
     assert all(path.read_bytes() == data for path, data in env.official.items())
 
 
@@ -498,15 +498,15 @@ def test_split_model_incomplete_and_unrestorable_cover_the_whole_slot(split_mode
     path.write_bytes(header_bundle(b"outside bytes"))
     (mod,) = env.library.add([make_mod(env.parts[1], env.tmp / "incoming")])
     assert env.library.preview_incomplete(mod.id)
-    result = env.library.apply("ch0258", f"mod:{mod.id}", kind="model")
+    result = env.library.apply("ch0258", f"mod:{mod.id}", resource_type="chibi")
     assert result.incomplete and result.kept_current
-    assert env.library.selection("ch0258")["model"]["incomplete"]
+    assert env.library.selection("ch0258")["chibi"]["incomplete"]
     family = env.rpc.call("student.get", {"key": "hoshino"})["result"]
     variant = next(v for v in family["alts"] if v["key"] == "ch0258")
     assert next(m for m in variant["modList"] if m["id"] == mod.id)["incomplete"]
     assert next(p for p in variant["chibiFiles"] if p["file"] == str(path))["restorable"] is False
     with pytest.raises(ServiceError, match="official_unavailable"):
-        env.library.restore("ch0258", kind="model")
+        env.library.restore("ch0258", resource_type="chibi")
     assert not (env.root / "originals" / path.name).exists()
 
 
@@ -521,9 +521,9 @@ def test_split_model_drift_and_needs_fix_belong_to_prefab_entry(split_model_app)
     variant = next(v for v in family["alts"] if v["key"] == "ch0258")
     assert next(p for p in variant["chibiFiles"] if p["file"] == str(target))["crc"] == "needs_fix"
     target.write_bytes(env.official[target])
-    (entry,) = [e for e in env.library.scan().entries if e.kind == "model"]
+    (entry,) = [e for e in env.library.scan().entries if e.resource_type == "chibi"]
     assert entry.core == "ch0258_02" and entry.state == "reset"
-    assert not env.library.selection("ch0258")["model"]["installed"]
+    assert not env.library.selection("ch0258")["chibi"]["installed"]
     assert not env.library.restore_drift([{"install": entry.install, "core": entry.core}]).failed
     assert target.read_bytes() == mod.file.read_bytes()
 
@@ -537,11 +537,11 @@ def test_split_model_batch_enable_after_import_and_deferred_choice(split_model_a
     (row,) = analyze(env, [upload])["entries"]
     (result,) = run(env, [row], enableAfterImport=True)
     assert result["configured"] and not result["applied"]
-    assert env.library.configured("ch0258")["model"] == "mod:" + result["libraryId"]
+    assert env.library.configured("ch0258")["chibi"] == "mod:" + result["libraryId"]
     assert all(path.read_bytes() == data for path, data in env.official.items())
     assert not env.library.toggle(True, False).failed
     assert env.parts[1].read_bytes() == upload.read_bytes()
-    assert env.library.selection("ch0258")["model"]["installed"]
+    assert env.library.selection("ch0258")["chibi"]["installed"]
     assert not env.library.remove(result["libraryId"], confirm=True).failed
     assert all(path.read_bytes() == data for path, data in env.official.items())
 
@@ -570,12 +570,12 @@ def test_split_model_journal_rolls_back_prefab_and_dependency_together(split_mod
 
     patch_everywhere(monkeypatch, [service], "atomic_copy", fail_second)
     with pytest.raises(ServiceError, match="game_file_denied"):
-        env.library.apply("ch0258", f"mod:{mod.id}", kind="model")
+        env.library.apply("ch0258", f"mod:{mod.id}", resource_type="chibi")
     assert len(written) == 2
     assert all(path.read_bytes() == data for path, data in env.official.items())
     assert not list((env.root / "transactions").glob("*/journal.json"))
-    assert env.library.configured("ch0258")["model"] == f"mod:{mod.id}"
-    assert env.library.selection("ch0258")["model"]["error"]["code"] == "game_file_denied"
+    assert env.library.configured("ch0258")["chibi"] == f"mod:{mod.id}"
+    assert env.library.selection("ch0258")["chibi"]["error"]["code"] == "game_file_denied"
 
 
 def test_split_model_preview_sources_use_prefab_and_every_own_core(split_model_app):
@@ -631,14 +631,17 @@ def test_model_cards_read_other_cores_by_their_source_whatever_the_mods_switch(s
         assert read("official", texture).read_bytes() == official
         assert read(f"mod:{mesh.id}", texture).read_bytes() == modded
         assert read("official", untouched) == read(f"mod:{mesh.id}", untouched) == untouched
-    assert env.library.configured("en0002")["model"] == f"mod:{skin.id}"
+    assert env.library.configured("en0002")["chibi"] == f"mod:{skin.id}"
 
 
 @pytest.mark.parametrize("category", ["character", "characters", "npcs"])
 def test_supported_model_bundle_categories(category):
-    assert kind_of_file(f"assets-_mx-{category}-hoshino_original-_mxload-2026-01-01_assets_all_1.bundle") == "model"
-    assert supports_kind("model") and ModLibrary.supports_kind("model")
-    assert not supports_kind("unknown")
+    assert (
+        resource_type_of_file(f"assets-_mx-{category}-hoshino_original-_mxload-2026-01-01_assets_all_1.bundle")
+        == "chibi"
+    )
+    assert supports_resource_type("chibi") and ModLibrary.supports_resource_type("chibi")
+    assert not supports_resource_type("unknown")
 
 
 @pytest.mark.parametrize(
@@ -652,7 +655,7 @@ def test_model_content_identity_overrules_renamed_file(model_env, monkeypatch, n
         patch.setattr("bmpt.library.identity.content_cores", content_cores)
         filename, key, kind = identify(source, source.name, env.catalog)
     expected_core = "hoshino" if name == "Hoshino_Body" else "hoshino_original"
-    assert (parse_filename(filename).core, key, kind) == (expected_core, "hoshino", "model")
+    assert (parse_filename(filename).core, key, kind) == (expected_core, "hoshino", "chibi")
 
 
 def test_model_content_conflict_and_unknown_are_refused(model_env, monkeypatch):
@@ -687,9 +690,9 @@ def test_model_content_conflict_and_unknown_are_refused(model_env, monkeypatch):
 )
 def test_model_roles_resolve_against_the_owning_core(model_env, monkeypatch, anchor, role):
     env = model_env
-    variant = SimpleNamespace(key="shigure", model="ch0123")
+    variant = SimpleNamespace(key="shigure", chibi="ch0123")
     catalog = SimpleNamespace(
-        variant_for_core=lambda core: None, variant_for_model_core=lambda core: variant if core == "ch0123" else None
+        alt_for_core=lambda core: None, alt_for_chibi_core=lambda core: variant if core == "ch0123" else None
     )
     source = model_bundle(env.tmp / "upload", core="ch0123" if anchor == "filename" else "renamed")
     names = [f"CH0123_{role}"]
@@ -698,15 +701,15 @@ def test_model_roles_resolve_against_the_owning_core(model_env, monkeypatch, anc
         names.append("Echelon_CH0123")
     objects(monkeypatch, names, containers)
     monkeypatch.setattr("bmpt.library.identity.content_cores", content_cores)
-    assert content_cores(source) == {"model:ch0123"}
+    assert content_cores(source) == {"chibi:ch0123"}
     filename, key, kind = identify(source, source.name, catalog)
-    assert (parse_filename(filename).core, key, kind) == ("ch0123", "shigure", "model")
+    assert (parse_filename(filename).core, key, kind) == ("ch0123", "shigure", "chibi")
 
 
 def test_model_core_with_role_word_keeps_the_prefab_identity(model_env, monkeypatch):
     source = model_bundle(model_env.tmp / "upload", core="renamed")
     objects(monkeypatch, ["Echelon_CH0123_CutIn", "CH0123_CutIn_Body"])
-    assert content_cores(source) == {"model:ch0123_cutin"}
+    assert content_cores(source) == {"chibi:ch0123_cutin"}
 
 
 @pytest.mark.parametrize(
@@ -719,10 +722,10 @@ def test_model_core_with_role_word_keeps_the_prefab_identity(model_env, monkeypa
 )
 def test_model_role_resolution_preserves_unknown_and_conflicting_targets(model_env, monkeypatch, names, code):
     source = model_bundle(model_env.tmp / "upload")
-    hoshino = SimpleNamespace(key="hoshino", model="hoshino_original")
-    shigure = SimpleNamespace(key="shigure", model="shigure")
+    hoshino = SimpleNamespace(key="hoshino", chibi="hoshino_original")
+    shigure = SimpleNamespace(key="shigure", chibi="shigure")
     variants = {"hoshino": hoshino, "hoshino_original": hoshino, "shigure": shigure}
-    catalog = SimpleNamespace(variant_for_core=lambda core: None, variant_for_model_core=variants.get)
+    catalog = SimpleNamespace(alt_for_core=lambda core: None, alt_for_chibi_core=variants.get)
     objects(monkeypatch, names)
     monkeypatch.setattr("bmpt.library.identity.content_cores", content_cores)
     with pytest.raises(ServiceError) as caught:
@@ -760,25 +763,25 @@ STRAY_OBJECT_NAMES = [
 )
 def test_model_asset_paths_identify_the_model_whatever_the_object_names(model_env, monkeypatch, container, prefab):
     source = model_bundle(model_env.tmp / "upload", core="renamed", prefab=prefab)
-    hoshino = SimpleNamespace(key="hoshino", model="hoshino_original")
-    shigure = SimpleNamespace(key="shigure", model="shigure")
+    hoshino = SimpleNamespace(key="hoshino", chibi="hoshino_original")
+    shigure = SimpleNamespace(key="shigure", chibi="shigure")
     catalog = SimpleNamespace(
-        variant_for_core=lambda core: None, variant_for_model_core={"hoshino_original": hoshino, "shigure": shigure}.get
+        alt_for_core=lambda core: None, alt_for_chibi_core={"hoshino_original": hoshino, "shigure": shigure}.get
     )
     objects(monkeypatch, STRAY_OBJECT_NAMES, [container])
     monkeypatch.setattr("bmpt.library.identity.content_cores", content_cores)
-    assert content_cores(source) == {"model:hoshino_original"}
+    assert content_cores(source) == {"chibi:hoshino_original"}
     filename, key, kind = identify(source, source.name, catalog)
-    assert (parse_filename(filename).core, key, kind) == ("hoshino_original", "hoshino", "model")
+    assert (parse_filename(filename).core, key, kind) == ("hoshino_original", "hoshino", "chibi")
 
 
 def test_model_asset_paths_of_two_models_stay_ambiguous(model_env, monkeypatch):
     source = model_bundle(model_env.tmp / "upload")
     variants = {
-        "hoshino_original": SimpleNamespace(key="hoshino", model="hoshino_original"),
-        "shigure": SimpleNamespace(key="shigure", model="shigure"),
+        "hoshino_original": SimpleNamespace(key="hoshino", chibi="hoshino_original"),
+        "shigure": SimpleNamespace(key="shigure", chibi="shigure"),
     }
-    catalog = SimpleNamespace(variant_for_core=lambda core: None, variant_for_model_core=variants.get)
+    catalog = SimpleNamespace(alt_for_core=lambda core: None, alt_for_chibi_core=variants.get)
     objects(
         monkeypatch,
         [],
@@ -802,32 +805,32 @@ def test_installed_model_parts_identify_by_their_content(tmp_path, core, key):
         path
         for directory in dirs
         for path in directory.glob("*.bundle")
-        if kind_of_file(path.name) == "model" and parse_filename(path.name).core.lower() == core
+        if resource_type_of_file(path.name) == "chibi" and parse_filename(path.name).core.lower() == core
     ]
     assert len(parts) >= 3
     for path in parts:
-        assert identify(path, path.name, catalog)[1:] == (key, "model"), path.name
+        assert identify(path, path.name, catalog)[1:] == (key, "chibi"), path.name
 
 
 def test_model_add_apply_restore_keeps_every_slot_and_official_backup(model_env):
     env = model_env
     uploads = [make_mod(p, env.tmp / "upload", payload=f"mod {i}".encode()) for i, p in enumerate(env.parts[:2])]
-    added = env.library.add_files("model", uploads, apply=True)
+    added = env.library.add_files("chibi", uploads, apply=True)
     (entry,) = added
-    assert entry.kind == "model" and entry.target == "hoshino" and added.applied == [entry]
+    assert entry.resource_type == "chibi" and entry.target == "hoshino" and added.applied == [entry]
     assert [p.read_bytes() for p in env.parts[:2]] == [p.read_bytes() for p in uploads]
     assert env.parts[2].read_bytes() == env.official[env.parts[2]]
-    files = [f for f in env.library.state("hoshino").files if f.kind == "model"]
+    files = [f for f in env.library.state("hoshino").files if f.resource_type == "chibi"]
     assert len(files) == 3 and all(f.restorable for f in files)
     assert {f.applied for f in files} == {f"mod:{entry.id}"}
-    assert env.library.configured("hoshino")["model"] == f"mod:{entry.id}"
+    assert env.library.configured("hoshino")["chibi"] == f"mod:{entry.id}"
     assert (env.root / "originals" / env.parts[0].name).read_bytes() == env.official[env.parts[0]]
     reloaded = ModLibrary(env.root, env.catalog, object(), env.settings)
     assert reloaded.mods()[0].id == entry.id
-    assert reloaded.apply("hoshino", f"mod:{entry.id}", kind="model").unchanged
-    reloaded.restore("hoshino", kind="model")
+    assert reloaded.apply("hoshino", f"mod:{entry.id}", resource_type="chibi").unchanged
+    reloaded.restore("hoshino", resource_type="chibi")
     assert all(p.read_bytes() == data for p, data in env.official.items())
-    assert reloaded.configured("hoshino")["model"] is None
+    assert reloaded.configured("hoshino")["chibi"] is None
 
 
 @pytest.mark.parametrize("category", ["npcs", "characters"])
@@ -842,26 +845,26 @@ def test_model_of_own_bundles_is_a_slot_mods_apply_to(setup_library, category):
     ]
     official = {path: path.read_bytes() for path in parts}
     game = SimpleNamespace(
-        spine_cores=lambda kind: {"arona_spr": []} if kind == "spr" else {},
+        spine_cores=lambda kind: {"arona_spr": []} if kind == "portrait" else {},
         collection_names=lambda: {},
-        model_cores=set,
-        field_model_cores=set,
-        asset_model_cores=lambda candidates: {"arona"} & set(candidates),
+        chibi_cores=set,
+        field_chibi_cores=set,
+        asset_chibi_cores=lambda candidates: {"arona"} & set(candidates),
     )
     catalog = Catalog(game, None)
-    assert (catalog.variant("arona").model, catalog.variant("arona").field_model) == ("arona", None)
+    assert (catalog.alt("arona").chibi, catalog.alt("arona").field_chibi) == ("arona", None)
     library = ModLibrary(env.root, catalog, object(), env.settings, scan_allowed=lambda: True)
-    assert library.model_cores("arona") == ["arona"]
-    assert library._game_files("arona", "model") == parts
+    assert library.chibi_cores("arona") == ["arona"]
+    assert library._game_files("arona", "chibi") == parts
     upload = make_mod(parts[1], env.tmp / "upload", payload=b"mod mesh")
-    added = library.add_files("model", [upload], apply=True)
+    added = library.add_files("chibi", [upload], apply=True)
     (entry,) = added
-    assert entry.kind == "model" and entry.target == "arona" and added.applied == [entry]
+    assert entry.resource_type == "chibi" and entry.target == "arona" and added.applied == [entry]
     assert parts[1].read_bytes() == upload.read_bytes()
-    assert library.configured("arona")["model"] == f"mod:{entry.id}"
-    library.restore("arona", kind="model")
+    assert library.configured("arona")["chibi"] == f"mod:{entry.id}"
+    library.restore("arona", resource_type="chibi")
     assert all(path.read_bytes() == data for path, data in official.items())
-    assert library.apply("arona", f"mod:{entry.id}", kind="model").files
+    assert library.apply("arona", f"mod:{entry.id}", resource_type="chibi").files
     assert parts[1].read_bytes() == upload.read_bytes()
 
 
@@ -880,7 +883,7 @@ def test_model_master_switch_and_remove(model_env):
     assert env.parts[1].read_bytes() == env.official[env.parts[1]]
     assert not env.library.toggle(True, False).failed
     assert env.library.remove(entry.id, confirm=True).failed == []
-    assert env.library.configured("hoshino")["model"] is None
+    assert env.library.configured("hoshino")["chibi"] is None
     assert all(p.read_bytes() == data for p, data in env.official.items())
 
 
@@ -890,18 +893,18 @@ def test_model_drift_and_untracked_adoption(model_env):
     (entry,) = env.library.add_and_apply([make_mod(target, env.tmp / "upload")])
     target.write_bytes(env.official[target])
     state = next(e for e in env.library.scan().entries if e.core == "hoshino_original")
-    assert state.kind == "model" and state.state == "reset"
+    assert state.resource_type == "chibi" and state.state == "reset"
     assert not env.library.restore_drift([{"install": state.install, "core": state.core}]).failed
     assert target.read_bytes() == entry.file.read_bytes()
-    env.library.restore("hoshino", kind="model")
+    env.library.restore("hoshino", resource_type="chibi")
     Path(str(target) + ".backup").write_bytes(env.official[target])
     target.write_bytes(header_bundle(b"outside model bytes"))
     state = next(e for e in env.library.scan().entries if e.core == "hoshino_original")
-    assert state.state == "untracked" and state.kind == "model"
+    assert state.state == "untracked" and state.resource_type == "chibi"
     adopted = env.library.adopt([{"install": state.install, "core": state.core}])
     assert adopted.added and not adopted.failed
-    assert adopted.added[0].kind == "model"
-    env.library.restore("hoshino", kind="model")
+    assert adopted.added[0].resource_type == "chibi"
+    env.library.restore("hoshino", resource_type="chibi")
     assert target.read_bytes() == env.official[target]
 
 
@@ -943,7 +946,7 @@ def test_model_costume_of_itself_is_refused(model_env):
     # another variant's costume is tested in test_model_adapt.py; a variant's own model is no costume source
     env = model_env
     with pytest.raises(ServiceError, match="source_unsupported"):
-        env.library.apply("hoshino", "variant:hoshino", kind="model")
+        env.library.apply("hoshino", "alt:hoshino", resource_type="chibi")
 
 
 def test_model_jobs_publish_the_model_kind(model_env):
@@ -951,8 +954,8 @@ def test_model_jobs_publish_the_model_kind(model_env):
 
     env = model_env
     (entry,) = env.library.add([make_mod(env.parts[1], env.tmp / "upload")])
-    result = env.library.apply("hoshino", f"mod:{entry.id}", kind="model")
-    assert _changed_of(result) == {"cores": ["hoshino_original"], "kinds": ["model"]}
+    result = env.library.apply("hoshino", f"mod:{entry.id}", resource_type="chibi")
+    assert _changed_of(result) == {"cores": ["hoshino_original"], "resource_types": ["chibi"]}
 
 
 def test_add_files_checks_the_content_kind_before_storing_anything(model_env, monkeypatch):
@@ -961,7 +964,7 @@ def test_add_files_checks_the_content_kind_before_storing_anything(model_env, mo
     upload = upload.rename(upload.with_name(upload.name.replace("hoshino_original", "renamed")))
     monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: {"hoshino_spr"})
     with pytest.raises(ServiceError, match="mod_unsupported"):
-        env.library.add_files("model", [upload])
+        env.library.add_files("chibi", [upload])
     assert env.library.mods() == []
 
 
@@ -989,7 +992,7 @@ def test_model_missing_official_preserves_outside_parts_and_marks_only_partial(m
     }
     assert not list((env.root / "originals").glob("*.bundle"))
     with pytest.raises(ServiceError, match="official_unavailable"):
-        env.library.restore("hoshino", kind="model")
+        env.library.restore("hoshino", resource_type="chibi")
     services = Services(
         env.settings, env.tmp / "app", cache=object(), game=object(), catalog=env.catalog, library=env.library
     )
@@ -1014,7 +1017,7 @@ def test_model_overwritten_add_button_rpc_works_with_mods_off_without_scan(model
         path.write_bytes(header_bundle(b"outside " + path.name[-20:].encode()))
     outside = {path: path.read_bytes() for path in env.parts}
     previews = []
-    game = SimpleNamespace(model_glb=lambda core, **kwargs: previews.append(kwargs["overrides"]) or b"preview")
+    game = SimpleNamespace(chibi_glb=lambda core, **kwargs: previews.append(kwargs["overrides"]) or b"preview")
     services = Services(
         env.settings, env.tmp / "app", cache=object(), game=game, catalog=env.catalog, library=env.library
     )
@@ -1031,7 +1034,7 @@ def test_model_overwritten_add_button_rpc_works_with_mods_off_without_scan(model
         job = services.jobs.get(response["result"])
         assert job.state == "done" and not job.result["failed"] and not job.result["skipped"]
         (mod,) = env.library.mods()
-        assert mod.kind == "model" and mod.target == "hoshino"
+        assert mod.resource_type == "chibi" and mod.target == "hoshino"
         assert {path: path.read_bytes() for path in env.parts} == outside
         assert not list((env.root / "originals").glob("*.bundle"))
     finally:
@@ -1061,14 +1064,14 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
     catalog = Catalog(game, None, server="global")
     # This roster and read-only install stay fixed throughout the sweep. Resolve each
     # core once instead of repeatedly copying all catalog metadata for every part.
-    for method in ("variant_for_model_core", "variant_for_asset_core", "variant_for_core"):
+    for method in ("alt_for_chibi_core", "alt_for_asset_core", "alt_for_core"):
         monkeypatch.setattr(catalog, method, cache(getattr(catalog, method)))
     settings = Settings(tmp_path / "config.toml")
     settings.set("game_resource_dir", str(GAME_DIR))
     library = ModLibrary(tmp_path / "library", catalog, game, settings)
     pin = library.current_pin()
     variants = [
-        catalog.variant(variant.key) for family in catalog.families() for variant in family.variants if variant.playable
+        catalog.alt(variant.key) for family in catalog.students() for variant in family.alts if variant.playable
     ]
     required = {
         "ch0258",
@@ -1114,7 +1117,10 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
     sample = {variant.key for variant in variants if variant.key in fixed}
     assert required <= sample and len(sample) >= 30
     sample_cores = {
-        getattr(variant, kind) for variant in variants if variant.key in sample for kind in ("spr", "lobby", "model")
+        getattr(variant, "memorial_lobby" if kind == "memorialLobby" else kind)
+        for variant in variants
+        if variant.key in sample
+        for kind in ("portrait", "memorialLobby", "chibi")
     }
     full = os.environ.get("BAMT_ROSTER_FULL") == "1"
     official_for = library._official_for
@@ -1128,8 +1134,8 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
             failures.append((label, error.code, error.params))
 
     for variant in variants:
-        for kind in ("spr", "lobby", "model"):
-            core = getattr(variant, kind)
+        for kind in ("portrait", "memorialLobby", "chibi"):
+            core = getattr(variant, "memorial_lobby" if kind == "memorialLobby" else kind)
             if not core or core in seen:
                 continue
             seen.add(core)
@@ -1230,14 +1236,14 @@ def test_every_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch)
     model_bundle(env.game_dir, core="hina_original", prefab=True, part="000", payload=b"hina prefab")
     game = SimpleNamespace(
         spine_cores=lambda kind: (
-            {"hoshino_spr": [], "hoshino_swimsuit_spr": [], "hina_spr": []} if kind == "spr" else {}
+            {"hoshino_spr": [], "hoshino_swimsuit_spr": [], "hina_spr": []} if kind == "portrait" else {}
         ),
         collection_names=lambda: {},
-        model_cores=lambda: {"hoshino_original", "hoshino_swimsuit", "hina_original"},
+        chibi_cores=lambda: {"hoshino_original", "hoshino_swimsuit", "hina_original"},
     )
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
-    assert library.catalog.variant("hina").family != library.catalog.variant("hoshino").family
-    assert library.catalog.variant("hoshino_swimsuit").family == library.catalog.variant("hoshino").family
+    assert library.catalog.alt("hina").student != library.catalog.alt("hoshino").student
+    assert library.catalog.alt("hoshino_swimsuit").student == library.catalog.alt("hoshino").student
     built = []
     gain = {"physics": True}  # whether the physics build chose a rule (a skirt, or a regrouped rule)
 
@@ -1264,40 +1270,40 @@ def test_every_costume_is_applied_past_the_stretch_limit(model_env, monkeypatch)
 
     monkeypatch.setattr(ModLibrary, "_stage_costume", stage)
     # unchecked: the same student's pair builds
-    assert library.apply("hoshino", "variant:hoshino_swimsuit", kind="model").files
+    assert library.apply("hoshino", "alt:hoshino_swimsuit", resource_type="chibi").files
     assert built.pop() == ("hoshino_swimsuit", False, False)
-    library.restore("hoshino", kind="model")
+    library.restore("hoshino", resource_type="chibi")
     assert all(path.read_bytes() == data for path, data in env.official.items())
     pin = library.current_pin()
     for other in ("hoshino_swimsuit", "hina"):
         library._save_verdict(library._costume_signature("hoshino", other, pin)[0], False, "stretch", preview=True)
     assert library.costume_verdict("hoshino", "hina")["preview"] is True
     assert library.costume_verdict("hoshino", "hoshino_swimsuit")["preview"] is True
-    assert library.apply("hoshino", "variant:hoshino_swimsuit", kind="model").files
+    assert library.apply("hoshino", "alt:hoshino_swimsuit", resource_type="chibi").files
     assert built.pop() == ("hoshino_swimsuit", False, False)
-    assert library.configured("hoshino").get("model") == "variant:hoshino_swimsuit"
+    assert library.configured("hoshino").get("chibi") == "alt:hoshino_swimsuit"
     assert library.costume_preview("hoshino", "hoshino_swimsuit") and built.pop() == ("hoshino_swimsuit", True, False)
-    assert library.optimize_costume("hoshino", "variant:hoshino_swimsuit", "Swimsuit")["mod"]
+    assert library.optimize_costume("hoshino", "alt:hoshino_swimsuit", "Swimsuit")["mod"]
     assert built.pop() == ("hoshino_swimsuit", False, True)
-    library.restore("hoshino", kind="model")
-    result = library.apply("hoshino", "variant:hina", kind="model")
+    library.restore("hoshino", resource_type="chibi")
+    result = library.apply("hoshino", "alt:hina", resource_type="chibi")
     assert result.files and built.pop() == ("hina", False, False)
-    assert library.configured("hoshino").get("model") == "variant:hina"
+    assert library.configured("hoshino").get("chibi") == "alt:hina"
     assert library.costume_preview("hoshino", "hina") and built.pop() == ("hina", True, False)
-    made = library.optimize_costume("hoshino", "variant:hina", "Hina")
+    made = library.optimize_costume("hoshino", "alt:hina", "Hina")
     assert made["mod"] and built.pop() == ("hina", False, True)
     # nothing to build: the official model needs none, a costume that no physics rule improves says so (reasons apart)
     assert library.optimize_costume("hoshino", "official", "Hoshino") == {"unneeded": True, "reason": "official"}
     gain["physics"] = False
-    assert library.optimize_costume("hina", "variant:hoshino", "Hoshino") == {"unneeded": True, "reason": "no_gain"}
+    assert library.optimize_costume("hina", "alt:hoshino", "Hoshino") == {"unneeded": True, "reason": "no_gain"}
     assert built.pop() == ("hoshino", False, True) and not [m for m in library.mods() if m.target == "hina"]
-    library.restore("hoshino", kind="model")
+    library.restore("hoshino", resource_type="chibi")
     for other in ("hoshino_swimsuit", "hina"):
-        library._save_verdict(library._costume_signature("hoshino", other, pin)[0], False, "static model")
+        library._save_verdict(library._costume_signature("hoshino", other, pin)[0], False, "static chibi")
         with pytest.raises(ServiceError, match="source_unsupported"):
-            library.apply("hoshino", f"variant:{other}", kind="model")
+            library.apply("hoshino", f"alt:{other}", resource_type="chibi")
         with pytest.raises(ServiceError, match="source_unsupported"):
-            library.optimize_costume("hoshino", f"variant:{other}", "Refused")
+            library.optimize_costume("hoshino", f"alt:{other}", "Refused")
     assert built == []
 
 
@@ -1313,9 +1319,9 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
     env = model_env
     model_bundle(env.game_dir, core="hoshino_swimsuit", prefab=True, part="000", payload=b"swim prefab")
     game = SimpleNamespace(
-        spine_cores=lambda kind: {"hoshino_spr": [], "hoshino_swimsuit_spr": []} if kind == "spr" else {},
+        spine_cores=lambda kind: {"hoshino_spr": [], "hoshino_swimsuit_spr": []} if kind == "portrait" else {},
         collection_names=lambda: {},
-        model_cores=lambda: {"hoshino_original", "hoshino_swimsuit"},
+        chibi_cores=lambda: {"hoshino_original", "hoshino_swimsuit"},
     )
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
     built, gain = [], {"physics": True}
@@ -1346,8 +1352,8 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
 
     monkeypatch.setattr(ModLibrary, "_stage_costume", stage)
     monkeypatch.setattr(ModLibrary, "resource_version", lambda self, pin: "v1")
-    made = library.optimize_costume("hoshino", "variant:hoshino_swimsuit", "Swimsuit")["mod"]
-    assert library.apply("hoshino", "variant:hoshino_swimsuit", kind="model").files
+    made = library.optimize_costume("hoshino", "alt:hoshino_swimsuit", "Swimsuit")["mod"]
+    assert library.apply("hoshino", "alt:hoshino_swimsuit", resource_type="chibi").files
     assert library.update_due() == {
         "due": False,
         "outdated": False,
@@ -1357,7 +1363,7 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
         "previous": None,
     }
     assert library.refresh_costumes() == {"done": [], "kept": [], "left": []}
-    swap = {"id": "", "core": "hoshino_original", "source": "variant:hoshino_swimsuit"}
+    swap = {"id": "", "core": "hoshino_original", "source": "alt:hoshino_swimsuit"}
     copy = {"id": made, "core": "hoshino_original", "source": f"mod:{made}"}
 
     # a newer rule: both are built again at the start, whatever the game version; nothing is listed or asked
@@ -1380,8 +1386,8 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
         isinstance(line, dict)
         and line["total"] == 2
         and line["action"] == "process"
-        and line["variant"] == "hoshino"
-        and line["kind"] == "model"
+        and line["alt"] == "hoshino"
+        and line["resource_type"] == "chibi"
         for line in lines
     )
     # (the copy is not in the game files: its rebuild is the whole item)
@@ -1392,17 +1398,17 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
         (2, "import.step.check", 0.45),
         (2, "import.step.write", 0.9),
     ]
-    assert lines[0]["name"] == before.label and lines[-1]["source"] == "hoshino_swimsuit"
+    assert lines[0]["name"] == before.name and lines[-1]["source"] == "hoshino_swimsuit"
     after = library.mods()[0]
-    assert (after.id, after.label) == (before.id, before.label)
+    assert (after.id, after.name) == (before.id, before.name)
     assert library._records[made]["costume_rule"] == costume_rule.COSTUME_RULE
-    assert library.selection("hoshino")["model"]["installed"]
+    assert library.selection("hoshino")["chibi"]["installed"]
     assert library.update_due()["outdated"] is False
     built.clear()
     assert library.refresh_costumes() == {"done": [], "kept": [], "left": []} and built == []
 
     # the copy applied: rebuilt, then written again; the game running leaves it for the next start
-    assert library.apply("hoshino", f"mod:{made}", kind="model").files
+    assert library.apply("hoshino", f"mod:{made}", resource_type="chibi").files
     monkeypatch.setattr(costume_rule, "COSTUME_RULE", costume_rule.COSTUME_RULE + 1)
 
     def running(dirs):
@@ -1415,7 +1421,7 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
     assert built == [] and library.update_due()["outdated"] is True  # neither built nor written: the next start
     monkeypatch.setattr(safety, "check_game_for", real)
     assert library.refresh_costumes() == {"done": [copy], "kept": [], "left": []}
-    assert library.selection("hoshino")["model"] == {"source": f"mod:{made}", "installed": True, "error": None}
+    assert library.selection("hoshino")["chibi"] == {"source": f"mod:{made}", "installed": True, "error": None}
     assert library.update_due()["outdated"] is False
 
     # no physics rule improves it: kept as it is, not tried again under this rule
@@ -1438,9 +1444,9 @@ def test_a_costume_verdict_keeps_the_cautions_its_preview_build_found(model_env,
     env = model_env
     model_bundle(env.game_dir, core="hoshino_swimsuit", prefab=True, part="000", payload=b"swim prefab")
     game = SimpleNamespace(
-        spine_cores=lambda kind: {"hoshino_spr": [], "hoshino_swimsuit_spr": []} if kind == "spr" else {},
+        spine_cores=lambda kind: {"hoshino_spr": [], "hoshino_swimsuit_spr": []} if kind == "portrait" else {},
         collection_names=lambda: {},
-        model_cores=lambda: {"hoshino_original", "hoshino_swimsuit"},
+        chibi_cores=lambda: {"hoshino_original", "hoshino_swimsuit"},
     )
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
     unfit = {}
@@ -1473,9 +1479,9 @@ def test_a_costume_verdict_keeps_the_cautions_its_preview_build_found(model_env,
 def _swimsuit_library(env):
     model_bundle(env.game_dir, core="hoshino_swimsuit", prefab=True, part="000", payload=b"swim prefab")
     game = SimpleNamespace(
-        spine_cores=lambda kind: {"hoshino_spr": [], "hoshino_swimsuit_spr": []} if kind == "spr" else {},
+        spine_cores=lambda kind: {"hoshino_spr": [], "hoshino_swimsuit_spr": []} if kind == "portrait" else {},
         collection_names=lambda: {},
-        model_cores=lambda: {"hoshino_original", "hoshino_swimsuit"},
+        chibi_cores=lambda: {"hoshino_original", "hoshino_swimsuit"},
     )
     return ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
 
@@ -1564,21 +1570,21 @@ def test_a_costume_preview_whose_signature_changed_while_it_was_built_is_built_a
 def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
     """A pair's verdict holds for the costume rule and the official bytes it was judged on (not the
     program build); the rule's refusals are saved by the preview itself."""
-    from bmpt.gameassets import model_adapt
+    from bmpt.gameassets import chibi_adapt
     from bmpt.library import service
 
     env = model_env
     model_bundle(env.game_dir, core="hoshino_swimsuit", prefab=True, part="000", payload=b"swim prefab")
     game = SimpleNamespace(
-        spine_cores=lambda kind: {"hoshino_spr": [], "hoshino_swimsuit_spr": []} if kind == "spr" else {},
+        spine_cores=lambda kind: {"hoshino_spr": [], "hoshino_swimsuit_spr": []} if kind == "portrait" else {},
         collection_names=lambda: {},
-        model_cores=lambda: {"hoshino_original", "hoshino_swimsuit"},
+        chibi_cores=lambda: {"hoshino_original", "hoshino_swimsuit"},
     )
     library = ModLibrary(env.root, Catalog(game, None), object(), env.settings, scan_allowed=lambda: True)
     assert library.costume_verdict("hoshino", "hoshino_swimsuit") is None
 
     def refused(self, other, targets, directory, log, pin, *, preview=False, report=None, inputs=None, step=None):
-        raise model_adapt.refuse("rest pose")
+        raise chibi_adapt.refuse("rest pose")
 
     monkeypatch.setattr(ModLibrary, "_stage_costume", refused)
     with pytest.raises(ServiceError, match="source_unsupported"):
@@ -1614,8 +1620,8 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
         if not enabled:
             library.toggle(False, True)
         with pytest.raises(ServiceError, match="source_unsupported"):
-            library.apply("hoshino", "variant:hoshino_swimsuit", kind="model")
-        assert library.configured("hoshino").get("model") is None
+            library.apply("hoshino", "alt:hoshino_swimsuit", resource_type="chibi")
+        assert library.configured("hoshino").get("chibi") is None
     (env.root / "costume-verdicts.json").write_text("{not json")
     assert library.costume_verdict("hoshino", "hoshino_swimsuit") is None
     with pytest.raises(ServiceError, match="source_unsupported"):

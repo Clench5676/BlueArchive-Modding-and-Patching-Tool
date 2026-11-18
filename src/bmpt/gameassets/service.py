@@ -18,7 +18,6 @@ from PIL import Image
 
 from ..core import devmode, spans
 from ..core.errors import ServiceError
-from bmpt.engine import spine_kind
 from ..unity.texture_guard import texture_image
 from .cache import AssetCache, PreviewCache, pack_preview_files, unpack_preview_files
 from .discovery import (
@@ -34,10 +33,10 @@ from .discovery import (
 )
 from .errors import AssetNotFound
 from .layouts import export_layout, subtree
-from .spine import extract_spine, png_bytes, skipped, spine_stamps
+from .spine import extract_spine, png_bytes, skipped, spine_resource_type, spine_stamps
 from .unity import find_object, object_record, open_bundle, reference, ref_key
-from .model_service import ModelsMixin
-from .service_base import _MODEL_LOCK, _SCHEMA, _FxResolver
+from .chibi_service import ChibisMixin
+from .service_base import _CHIBI_LOCK, _SCHEMA, _FxResolver
 
 
 logger = logging.getLogger(__name__)
@@ -85,7 +84,7 @@ PREFAB_HINTS = {
     "UIRepeater": "ui-_mxload-prefabs-2025-07-02_assets_all_1187726256.bundle",
     # the loading ring a still being made shows in its place (UIRatioNoticePopup/Center/Popup/Base/LoadingIcon)
     "UIRatioNoticePopup": "ui-_mxload-prefabs-2025-07-02_assets_all_2108580176.bundle",
-    # the lobby, whose bottom menu entries hold the game's disabled look (layouts.py STATE_FIELDS)
+    # the memorial lobby, whose bottom menu entries hold the game's disabled look (layouts.py STATE_FIELDS)
     "UIPopup_Formation_CharEdit": "ui-_mxload-prefabs-2025-07-02_assets_all_2190018216.bundle",
     "UIMailBox": "ui-_mxload-prefabs-2025-07-02_assets_all_3761459989.bundle",
     "UILobby": "ui-_mxload-prefabs-2025-07-02_assets_all_1122735527.bundle",
@@ -139,7 +138,7 @@ def is_collection_art(name: str) -> bool:
     return name.startswith("BG_") or (name.startswith("Student_Portrait_") and name.endswith("_Collection"))
 
 
-class GameAssets(ModelsMixin):
+class GameAssets(ChibisMixin):
     """Read light UI assets and heavy character art from the user's install.
 
     Construction only checks directory existence. Discovery, version hashing,
@@ -168,8 +167,8 @@ class GameAssets(ModelsMixin):
         self.preview_cache = preview_cache
         self._guard = threading.RLock()
         self._locks: dict[str, threading.RLock] = {}
-        self._model_flights_lock = threading.Lock()
-        self._model_flights: dict[str, Future[bytes]] = {}
+        self._chibi_flights_lock = threading.Lock()
+        self._chibi_flights: dict[str, Future[bytes]] = {}
         self._indexes: dict[str, Any] = {}
         self._shader_forms: dict[tuple[str, int], dict] = {}  # shader (cab, path id) -> name, properties, pass states
 
@@ -494,7 +493,7 @@ class GameAssets(ModelsMixin):
     def _pointer_index(self) -> dict:
         """The PC client's cursor and the touch effect's textures (a small scan, about 0.1 s).
 
-        An index of its own, so a UI texture index cached before these families were read stays valid.
+        An index of its own, so a UI texture index cached before these students were read stays valid.
         """
         return self._index(
             "pointer-textures", lambda: self._scan_textures(filter(is_pointer_texture, self._paths()))["textures"]
@@ -602,10 +601,10 @@ class GameAssets(ModelsMixin):
             from . import selection_frames
 
             if root == selection_frames.ROOT:
-                from .model import BundleGraph
+                from .chibi import BundleGraph
 
                 with (
-                    spans.held("model-lock.layout", _MODEL_LOCK, hold=True),
+                    spans.held("chibi-lock.layout", _CHIBI_LOCK, hold=True),
                     self._cab_discovery().batch(),
                     BundleGraph({}, resolver=self._resolve_cabs) as graph,
                 ):
@@ -694,7 +693,7 @@ class GameAssets(ModelsMixin):
         """List collection backgrounds and portraits by their full texture names."""
         names = self._collection()
         return {
-            "bg": sorted(n for n in names if n.startswith("BG_")),
+            "background": sorted(n for n in names if n.startswith("BG_")),
             "portrait": sorted(n for n in names if n.startswith("Student_Portrait_")),
         }
 
@@ -777,7 +776,7 @@ class GameAssets(ModelsMixin):
         """Return a lossless collection portrait as PNG bytes.
 
         Args:
-            name: Exact installed roster texture name beginning with Student_Portrait_.
+            name: Exact installed student list texture name beginning with Student_Portrait_.
 
         Raises:
             AssetNotFound: The portrait is absent or its bundle changes during extraction.
@@ -785,13 +784,13 @@ class GameAssets(ModelsMixin):
         return self._collection_png(name, "Student_Portrait_")
 
     def collection_target(self, name: str) -> dict:
-        """Return an installed student-roster texture locator, excluding selection-card portraits.
+        """Return an installed student list texture locator, excluding selection-card portraits.
 
         Args:
             name: Exact Student_Portrait_ texture name present in the collection index.
 
         Raises:
-            ServiceError: The texture is not an available roster portrait (thumbnail_target_unavailable).
+            ServiceError: The texture is not an available collection thumbnail (thumbnail_target_unavailable).
         """
         if not isinstance(name, str) or not name.startswith("Student_Portrait_") or name not in self._collection():
             raise ServiceError("thumbnail_target_unavailable")
@@ -801,7 +800,7 @@ class GameAssets(ModelsMixin):
         """Read a Collection portrait from explicitly verified original bundles.
 
         Args:
-            name: Exact installed roster portrait name, validated by collection_target.
+            name: Exact installed collection thumbnail name, validated by collection_target.
             paths: Verified original bundle copies expected to contain exactly one matching Texture2D.
 
         Returns:
@@ -824,47 +823,50 @@ class GameAssets(ModelsMixin):
                 raise ServiceError("thumbnail_target_unavailable")
             return found[0]
 
-        return self._preview_bytes("photography/default/" + name + json.dumps(stamps), build)
+        return self._preview_bytes("thumbnail-capture/default/" + name + json.dumps(stamps), build)
 
-    def spine_cores(self, kind: str) -> dict[str, list[Path]]:
-        """Group portrait or lobby bundle parts by parsed Spine core.
+    def spine_cores(self, resource_type: str) -> dict[str, list[Path]]:
+        """Group portrait or memorial lobby bundle parts by parsed Spine core.
 
         Args:
-            kind: "spr" for portraits or "lobby" for memorial/background/special lobby slots.
+            resource_type: portrait for portraits or memorialLobby for memorial and special Spine scenes.
 
         Raises:
-            AssetNotFound: The category is neither spr nor lobby.
+            AssetNotFound: The resource type does not identify Spine.
         """
-        categories = {"spr": ("spinecharacters",), "lobby": ("spinelobbies", "spinebackground", "spinecharacters")}
-        if kind not in categories:
-            raise AssetNotFound(kind)
+        categories = {
+            "portrait": ("spinecharacters",),
+            "memorialLobby": ("spinelobbies", "spinebackground", "spinecharacters"),
+        }
+        if resource_type not in categories:
+            raise AssetNotFound(resource_type)
         # shared bundles of the category (e.g. "_mxcommon-.asset") are not skeletons
         groups = self._index(
-            "spine-cores/" + kind,
+            "spine-cores/" + resource_type,
             lambda: {
                 core: [str(path) for path in paths]
-                for category in categories[kind]
+                for category in categories[resource_type]
                 for core, paths in group_bundles(self._paths(), category).items()
-                if spine_kind(core, category) == kind
+                if spine_resource_type(core, category) == resource_type
             },
             disk=False,
         )
         return {core: [Path(path) for path in paths] for core, paths in groups.items()}
 
-    def spine_files(self, kind: str, core: str) -> dict[str, bytes]:
-        """Return all files required by a portrait or lobby Spine player.
+    def spine_files(self, resource_type: str, core: str) -> dict[str, bytes]:
+        """Return all files required by a portrait or memorial lobby Spine player.
 
         Args:
-            kind: Spine category, "spr" or "lobby".
+            resource_type: Spine resource type, portrait or memorialLobby.
             core: Bundle core to find without case sensitivity.
 
         Raises:
             AssetNotFound: The category/core or a required bundle/atlas page is absent.
         """
         try:
-            bundles = self.spine_cores(kind)[core.lower()]
+            bundles = self.spine_cores(resource_type)[core.lower()]
         except KeyError:
-            raise AssetNotFound((kind, core)) from None
+            raise AssetNotFound((resource_type, core)) from None
         return self.spine_files_from(bundles)
 
     def spine_files_from(self, bundles: list[Path]) -> dict[str, bytes]:

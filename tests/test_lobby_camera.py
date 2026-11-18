@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 from bmpt.core.errors import ServiceError
-from bmpt.gameassets import lobby
-from bmpt.library import lobby_camera
+from bmpt.gameassets import memorial_lobby
+from bmpt.library import memorial_lobby_camera
 from test_lobby import ASPECT, BODY, CHARACTER, CHAT, SCRIPTS, SKELETONS, Prefab, SA, aspect_component, core_clips, vec
 
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
@@ -66,7 +66,9 @@ def kinds_of(p: Prefab) -> dict:
 
 
 def patched(p: Prefab, k: float, offset) -> Prefab:
-    trees = lobby_camera.camera_trees(kinds_of(p), lambda pid: p.objects[pid][1], SCRIPTS, "LobbyTest", k, offset)
+    trees = memorial_lobby_camera.camera_trees(
+        kinds_of(p), lambda pid: p.objects[pid][1], SCRIPTS, "LobbyTest", k, offset
+    )
     out = Prefab()
     out.objects = {pid: (kind, trees.get(pid, copy.deepcopy(tree))) for pid, (kind, tree) in p.objects.items()}
     return out
@@ -113,7 +115,7 @@ def assert_mapped(before: dict, after: dict, k: float, offset, anchors=("Talk", 
     systems = before.get("fx", {}).get("systems", [])
     assert len(after.get("fx", {}).get("systems", [])) == len(systems)
     for a, b in zip(systems, after["fx"]["systems"]):
-        assert b["name"] == a["name"] and b["path"].replace(f"/{lobby_camera.NODE}/", "/") == a["path"]
+        assert b["name"] == a["name"] and b["path"].replace(f"/{memorial_lobby_camera.NODE}/", "/") == a["path"]
         if a.get("anchor"):  # relative to the bone it follows; else in the root's space, like static
             assert b["rel"] == a["rel"]
         for matrix_of in (
@@ -142,7 +144,7 @@ def test_camera_is_a_similarity_of_the_lobby(k, offset):
 
 def test_camera_changes_only_the_component_and_its_targets():
     p = official_like()
-    trees = lobby_camera.camera_trees(
+    trees = memorial_lobby_camera.camera_trees(
         kinds_of(p), lambda pid: p.objects[pid][1], SCRIPTS, "LobbyTest", 1.5, (3.0, -40.0)
     )
     assert set(trees) == {1002, 100002, 100011, 100012}
@@ -167,8 +169,8 @@ def test_camera_changes_only_the_component_and_its_targets():
 
 def refuse(p: Prefab, root="LobbyTest"):
     with pytest.raises(ServiceError) as caught:
-        lobby_camera.camera_trees(kinds_of(p), lambda pid: p.objects[pid][1], SCRIPTS, root, 1.2, (0.0, 0.0))
-    assert caught.value.code == "lobby_camera_unsupported"
+        memorial_lobby_camera.camera_trees(kinds_of(p), lambda pid: p.objects[pid][1], SCRIPTS, root, 1.2, (0.0, 0.0))
+    assert caught.value.code == "memorial_lobby_camera_unsupported"
 
 
 def test_prefabs_the_camera_cannot_frame_are_refused():
@@ -203,12 +205,12 @@ def test_prefabs_the_camera_cannot_frame_are_refused():
         (1.0, (0, 1e9)),
     ):
         with pytest.raises(ServiceError) as caught:
-            lobby_camera.check_params(k, offset)
+            memorial_lobby_camera.check_params(k, offset)
         assert caught.value.code == "bad_params"
 
 
 def test_compose_frames_a_camera_on_a_camera():
-    k, offset = lobby_camera.compose((1.2, (0.0, -100.0)), (1.5, (10.0, 20.0)))
+    k, offset = memorial_lobby_camera.compose((1.2, (0.0, -100.0)), (1.5, (10.0, 20.0)))
     assert k == pytest.approx(1.8) and offset == pytest.approx([10.0, -130.0])
     x, y = 30.0, 40.0
     once = point(1.5, (10.0, 20.0), *point(1.2, (0.0, -100.0), x, y))
@@ -239,31 +241,31 @@ def test_real_prefab_round_trip(real_game, tmp_path, core, k, offset):
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.naming import parse_filename
 
-    before = real_game.lobby_info(core)
-    name, root = real_game.lobby_prefab(core)
+    before = real_game.memorial_lobby_info(core)
+    name, root = real_game.memorial_lobby_prefab(core)
     assert root == before["prefab"]
     base = real_game._bundle_path(name)
     out = tmp_path / "out"
     out.mkdir()
     output = out / base.name
-    lobby_camera.patch_prefab(base, output, before["prefab"], k, offset)
+    memorial_lobby_camera.patch_prefab(base, output, before["prefab"], k, offset)
     # the name's CRC holds, the base file is untouched
     assert Bundle.check_crc_match(output) and parse_filename(output.name).crc == parse_filename(base.name).crc
-    after = real_game.lobby_info(core, prefab=output)
+    after = real_game.memorial_lobby_info(core, prefab=output)
     assert_mapped(before, after, k, offset)
     if core == "shiroko_home":  # the wrap Hold intro keeps its plan
         assert after["intro"].keys() == before["intro"].keys()
     # read again from the game's own prefab: the official framing, not the camera's
-    assert real_game.lobby_info(core) == before
+    assert real_game.memorial_lobby_info(core) == before
     shutil.rmtree(out)
 
 
-def _without_node(intro: dict) -> dict:
+def _without_node(memorial_lobby_intro: dict) -> dict:
     """An intro with the camera node and its curves taken out, the other nodes' indices and paths as before it."""
-    nodes = intro.get("nodes", [])
-    cam = next((i for i, n in enumerate(nodes) if n["path"].rsplit("/", 1)[-1] == lobby_camera.NODE), None)
+    nodes = memorial_lobby_intro.get("nodes", [])
+    cam = next((i for i, n in enumerate(nodes) if n["path"].rsplit("/", 1)[-1] == memorial_lobby_camera.NODE), None)
     if cam is None:
-        return intro
+        return memorial_lobby_intro
 
     def index(value):
         return value - (value > cam) if isinstance(value, int) and not isinstance(value, bool) else value
@@ -282,12 +284,14 @@ def _without_node(intro: dict) -> dict:
         if key in ("i", "node", "gate"):
             return index(value)
         if key == "path" and isinstance(value, str):
-            return value.replace(f"/{lobby_camera.NODE}/", "/")
+            return value.replace(f"/{memorial_lobby_camera.NODE}/", "/")
         return value
 
-    out = {k: v for k, v in intro.items() if k not in ("nodes", "props")}
+    out = {k: v for k, v in memorial_lobby_intro.items() if k not in ("nodes", "props")}
     out["nodes"] = [n for i, n in enumerate(nodes) if i != cam]
-    out["props"] = [p for p in intro.get("props", []) if not (p.get("on") == "node" and p.get("i") == cam)]
+    out["props"] = [
+        p for p in memorial_lobby_intro.get("props", []) if not (p.get("on") == "node" and p.get("i") == cam)
+    ]
     return fix(out)
 
 
@@ -306,32 +310,32 @@ def test_real_camera_keeps_the_official_intro(real_game, tmp_path, core, k, offs
     """The camera node holds the official framing through the intro and the camera from its rest pose on; the
     intro is otherwise the official one. A lobby whose root Animator animates below its targets keeps the targets'
     own camera (the intro framed too)."""
-    from bmpt.gameassets import intro
+    from bmpt.gameassets import memorial_lobby_intro
 
-    before = real_game.lobby_info(core)
-    name, root = real_game.lobby_prefab(core)
+    before = real_game.memorial_lobby_info(core)
+    name, root = real_game.memorial_lobby_prefab(core)
     base = real_game._bundle_path(name)
-    cab = lobby_camera.timeline_cab(base)
+    cab = memorial_lobby_camera.timeline_cab(base)
     timeline = Path(real_game._resolve_cabs({cab})[cab])
     output = tmp_path / base.name
-    assert lobby_camera.patch_prefab(base, output, root, k, offset, timeline=timeline) is held
-    after = real_game.lobby_info(core, prefab=output)
+    assert memorial_lobby_camera.patch_prefab(base, output, root, k, offset, timeline=timeline) is held
+    after = real_game.memorial_lobby_info(core, prefab=output)
     assert_mapped(before, after, k, offset)
     if not held:
-        assert not any(n["path"].endswith(lobby_camera.NODE) for n in after["intro"].get("nodes", []))
+        assert not any(n["path"].endswith(memorial_lobby_camera.NODE) for n in after["intro"].get("nodes", []))
         return
     assert _without_node(after["intro"]) == before["intro"]
     nodes = after["intro"]["nodes"]
-    cam = next(i for i, n in enumerate(nodes) if n["path"] == f"{root}/{lobby_camera.NODE}")
+    cam = next(i for i, n in enumerate(nodes) if n["path"] == f"{root}/{memorial_lobby_camera.NODE}")
     assert nodes[cam]["trs"][:2] == pytest.approx(list(offset)) and nodes[cam]["trs"][7:] == pytest.approx([k, k, k])
     curves = {(p["attr"], p["k"]): p["c"] for p in after["intro"]["props"] if p.get("on") == "node" and p["i"] == cam}
     rest = before["intro"]["idle"]
     official, camera = (0.0, 0.0, 0.0, 1.0, 1.0, 1.0), (*offset, 0.0, k, k, k)
     for (attr, axis), curve in curves.items():
         slot = (0 if attr == "position" else 3) + axis
-        assert intro.evaluate(curve, 0.0) == pytest.approx(official[slot])
-        assert intro.evaluate(curve, rest - 0.01) == pytest.approx(official[slot])
-        assert intro.evaluate(curve, rest + 0.5) == pytest.approx(camera[slot], abs=1e-4)
+        assert memorial_lobby_intro.evaluate(curve, 0.0) == pytest.approx(official[slot])
+        assert memorial_lobby_intro.evaluate(curve, rest - 0.01) == pytest.approx(official[slot])
+        assert memorial_lobby_intro.evaluate(curve, rest + 0.5) == pytest.approx(camera[slot], abs=1e-4)
     assert len(curves) == 6
 
 
@@ -341,9 +345,9 @@ def test_real_camera_keeps_the_official_intro(real_game, tmp_path, core, k, offs
 @pytest.fixture(scope="module")
 def lobby_sources(real_game):
     """Azusa's lobby art and prefab bundles and Shiroko's prefab bundle (another student's, of the same group)."""
-    prefabs = real_game._lobby_prefabs()
+    prefabs = real_game._memorial_lobby_prefabs()
     try:
-        art = real_game.spine_cores("lobby")["azusa_home"]
+        art = real_game.spine_cores("memorialLobby")["azusa_home"]
         azusa, shiroko = (real_game._bundle_path(prefabs[name]) for name in ("lobbyazusa", "lobbyshiroko"))
     except KeyError:
         pytest.skip("Lobby fixture is unavailable")
@@ -356,7 +360,7 @@ def camera_env(tmp_path, monkeypatch, lobby_sources):
     from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.library import ModLibrary, safety, storage
-    from test_library import FakeCatalog, FakeVariant
+    from test_library import FakeCatalog, FakeAlt
 
     art, azusa, shiroko = lobby_sources
     folder = tmp_path / "game"
@@ -371,7 +375,7 @@ def camera_env(tmp_path, monkeypatch, lobby_sources):
     settings.set("enable_crc_correction", "true")
     game = GameAssets([folder], AssetCache(tmp_path / "cache", allowed=False))
     monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
-    library = ModLibrary(tmp_path / "library", FakeCatalog(FakeVariant("azusa", None, "Azusa_home")), game, settings)
+    library = ModLibrary(tmp_path / "library", FakeCatalog(FakeAlt("azusa", None, "Azusa_home")), game, settings)
     return SimpleNamespace(
         library=library,
         game=game,
@@ -391,14 +395,14 @@ def save(e, source="official", k=1.25, offset=(0.0, -120.0)):
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_camera_choice_applies_switches_and_restores(camera_env):
-    from bmpt.library import lobby_camera as lc
+    from bmpt.library import memorial_lobby_camera as lc
     from bmpt.library.judge import core_of
 
     e, lib = camera_env, camera_env.library
     pin = lib.current_pin()
     record = save(e)
     meta = record[lc.TAG]
-    assert (meta["variant"], meta["source"], meta["number"], meta["base"], meta["root"]) == (
+    assert (meta["alt"], meta["source"], meta["number"], meta["base"], meta["root"]) == (
         "azusa",
         "official",
         1,
@@ -409,11 +413,11 @@ def test_camera_choice_applies_switches_and_restores(camera_env):
     cab = lc.timeline_cab(e.prefab)
     assert meta["timeline"] in {path.name for path in e.art} and cab is not None
     # its own slot, by the prefab's CAB: never Shiroko's
-    assert meta["slot"] == core_of(e.prefab.name) != core_of(e.other.name)
+    assert meta["configuration_entry"] == core_of(e.prefab.name) != core_of(e.other.name)
     # listed as a lobby choice of Azusa; hidden from the generic sources
     entry = next(m for m in lib.mods() if m.id == record["id"])
-    assert (entry.kind, entry.target, entry.core, entry.camera["number"], entry.camera["source"]) == (
-        "lobby",
+    assert (entry.resource_type, entry.target, entry.core, entry.camera["number"], entry.camera["source"]) == (
+        "memorialLobby",
         "azusa",
         "azusa_home",
         1,
@@ -424,41 +428,41 @@ def test_camera_choice_applies_switches_and_restores(camera_env):
     # the preview: the official art, the camera's layout
     assert lib.preview_bundles(record["id"]) == lib.official_bundles("azusa_home")
     before, after = (
-        e.game.lobby_info("azusa_home"),
-        e.game.lobby_info("azusa_home", prefab=lib.camera_prefab(record["id"])[1]),
+        e.game.memorial_lobby_info("azusa_home"),
+        e.game.memorial_lobby_info("azusa_home", prefab=lib.camera_prefab(record["id"])[1]),
     )
     assert_mapped(before, after, 1.25, (0.0, -120.0))
 
     source = f"mod:{record['id']}"
-    result = lib.apply("azusa", source, kind="lobby", pin=pin)
+    result = lib.apply("azusa", source, resource_type="memorialLobby", pin=pin)
     assert not result.deferred and e.prefab.read_bytes() == lib._paths(lib._record(record["id"]))[0].read_bytes()
     assert all(path.read_bytes() == data for path, data in e.art.items()) and e.other.read_bytes() == e.other_bytes
-    assert lib.configured("azusa")["lobby"] == source
-    assert lib.selection("azusa")["lobby"] == {"source": source, "installed": True, "error": None}
+    assert lib.configured("azusa")["memorialLobby"] == source
+    assert lib.selection("azusa")["memorialLobby"] == {"source": source, "installed": True, "error": None}
     # the other choices' previews read the official prefab while the camera holds the game's
-    assert lib.lobby_prefab_base("azusa_home").read_bytes() == e.official
+    assert lib.memorial_lobby_prefab_base("azusa_home").read_bytes() == e.official
     # the master switch: off puts the official prefab back, on the camera again
     lib.toggle(False, True, [pin])
-    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["lobby"] == source
-    assert lib.apply("azusa", source, kind="lobby", pin=pin).deferred
+    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["memorialLobby"] == source
+    assert lib.apply("azusa", source, resource_type="memorialLobby", pin=pin).deferred
     lib.toggle(True, False, [pin])
-    assert e.prefab.read_bytes() != e.official and lib.selection("azusa")["lobby"]["installed"]
+    assert e.prefab.read_bytes() != e.official and lib.selection("azusa")["memorialLobby"]["installed"]
     # another lobby choice of Azusa puts the prefab back
-    lib.apply("azusa", "official", kind="lobby", pin=pin)
-    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["lobby"] is None
-    assert lib.lobby_prefab_base("azusa_home") is None
+    lib.apply("azusa", "official", resource_type="memorialLobby", pin=pin)
+    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["memorialLobby"] is None
+    assert lib.memorial_lobby_prefab_base("azusa_home") is None
     # and so does a restore of her lobby
-    lib.apply("azusa", source, kind="lobby", pin=pin)
-    lib.restore("azusa", kind="lobby", pin=pin)
-    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["lobby"] is None
+    lib.apply("azusa", source, resource_type="memorialLobby", pin=pin)
+    lib.restore("azusa", resource_type="memorialLobby", pin=pin)
+    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["memorialLobby"] is None
     # a second camera is numbered after the first; framed on the first, it composes
     second = save(e, source=source, k=1.2, offset=(0.0, 10.0))[lc.TAG]
     assert second["number"] == 2 and second["source"] == "official"
     assert second["scale"] == pytest.approx(1.5) and second["offset"] == pytest.approx([0.0, -134.0])
     # deleting the applied camera puts the official prefab back
-    lib.apply("azusa", source, kind="lobby", pin=pin)
+    lib.apply("azusa", source, resource_type="memorialLobby", pin=pin)
     lib.remove(record["id"], confirm=True)
-    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["lobby"] is None
+    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["memorialLobby"] is None
 
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
@@ -483,8 +487,8 @@ def test_camera_serves_the_effect_textures_of_the_lobby_it_frames(camera_env, tm
         calls.append((core, clip_id))
         return b"RIFF of " + clip_id.encode()
 
-    monkeypatch.setattr(e.game, "lobby_fx_texture", texture)
-    monkeypatch.setattr(e.game, "lobby_sound", sound)
+    monkeypatch.setattr(e.game, "memorial_lobby_fx_texture", texture)
+    monkeypatch.setattr(e.game, "memorial_lobby_sound", sound)
     services = Services(
         Settings(tmp_path / "webui-config.toml"),
         tmp_path / "data",
@@ -495,8 +499,8 @@ def test_camera_serves_the_effect_textures_of_the_lobby_it_frames(camera_env, tm
         library=e.library,
     )
     try:
-        # the camera's own route, which its lobby.json comes from, answers for the textures and sounds that lobby.json
-        # names: those of the lobby it frames
+        # the camera's own route, which its memorial-lobby.json comes from, answers for the textures and sounds that
+        # memorial-lobby.json names: those of the memorial lobby it frames
         route = f"spine/mod/{record['id']}"
         assert services.asset(f"{route}/fx_cab-fx_1.png", {}).body == b"png of cab-fx_1"
         assert services.asset(f"{route}/sfx_cab-sfx_2.wav", {}).body == b"RIFF of cab-sfx_2"
@@ -536,7 +540,7 @@ def test_camera_still_is_framed_by_its_camera(camera_env, tmp_path):
         own = framing(f"mod/{record['id']}")
         # the still's camera (lobby-still.js) is the lobby's own: the camera's view, its main layer as the camera's
         # prefab places it, which is the official one mapped by p -> k p + offset
-        layout = json.loads(services.asset(f"spine/mod/{record['id']}/lobby.json", {}).body)
+        layout = json.loads(services.asset(f"spine/mod/{record['id']}/memorial-lobby.json", {}).body)
         main = next(layer for layer in layout["layers"] if layer["name"] == layout["main"])
         assert own == {"view": layout["view"], "layer": {key: main[key] for key in ("name", "x", "y", "scale")}}
         assert own["view"] == official["view"] and own["layer"]["name"] == official["layer"]["name"]
@@ -554,7 +558,7 @@ def test_camera_on_a_lobby_mod_and_after_a_game_update(camera_env):
     import zlib
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
-    from bmpt.library import lobby_camera as lc
+    from bmpt.library import memorial_lobby_camera as lc
 
     e, lib = camera_env, camera_env.library
     pin = lib.current_pin()
@@ -564,17 +568,17 @@ def test_camera_on_a_lobby_mod_and_after_a_game_update(camera_env):
     made.mkdir()
     bundle = Bundle.load(art)
     assert bundle.save(made / art.name, SaveOptions(perform_crc=True, compression="lz4"))[0]
-    mod = lib._store({art.name: made / art.name}, "Azusa mod", "azusa", "lobby")
+    mod = lib._store({art.name: made / art.name}, "Azusa mod", "azusa", "memorialLobby")
     record = save(e, source=f"mod:{mod['id']}")
     assert record[lc.TAG]["source"] == f"mod:{mod['id']}"
     assert lib.preview_bundles(record["id"])[-1] == lib._paths(mod)[0]
-    lib.apply("azusa", f"mod:{record['id']}", kind="lobby", pin=pin)
+    lib.apply("azusa", f"mod:{record['id']}", resource_type="memorialLobby", pin=pin)
     assert art.read_bytes() == (made / art.name).read_bytes() and e.prefab.read_bytes() != e.official
-    assert lib.configured("azusa")["lobby"] == f"mod:{record['id']}"
+    assert lib.configured("azusa")["memorialLobby"] == f"mod:{record['id']}"
     # the lobby mod alone: the prefab goes back, the art stays the mod's
-    lib.apply("azusa", f"mod:{mod['id']}", kind="lobby", pin=pin)
-    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["lobby"] == f"mod:{mod['id']}"
-    lib.apply("azusa", "official", kind="lobby", pin=pin)
+    lib.apply("azusa", f"mod:{mod['id']}", resource_type="memorialLobby", pin=pin)
+    assert e.prefab.read_bytes() == e.official and lib.configured("azusa")["memorialLobby"] == f"mod:{mod['id']}"
+    lib.apply("azusa", "official", resource_type="memorialLobby", pin=pin)
 
     # a game update gives Azusa a new prefab file: the camera is made again on it, in place
     rebuilt = Bundle.load(e.prefab)
@@ -590,7 +594,7 @@ def test_camera_on_a_lobby_mod_and_after_a_game_update(camera_env):
     fresh = lib._record(record["id"])
     assert fresh["files"] == [updated.name] and fresh[lc.TAG]["prefab"] == updated.name
     assert lib._paths(fresh)[0].exists() and not (lib._paths(fresh)[0].parent / e.prefab.name).exists()
-    lib.apply("azusa", f"mod:{record['id']}", kind="lobby", pin=pin)
+    lib.apply("azusa", f"mod:{record['id']}", resource_type="memorialLobby", pin=pin)
     assert updated.read_bytes() == lib._paths(fresh)[0].read_bytes()
     assert Bundle.check_crc_match(updated)
 
@@ -598,7 +602,7 @@ def test_camera_on_a_lobby_mod_and_after_a_game_update(camera_env):
 def test_deleting_a_lobby_mod_deletes_the_cameras_framed_on_it(camera_env):
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
-    from bmpt.library import lobby_camera as lc
+    from bmpt.library import memorial_lobby_camera as lc
 
     e, lib = camera_env, camera_env.library
     pin = lib.current_pin()
@@ -606,10 +610,10 @@ def test_deleting_a_lobby_mod_deletes_the_cameras_framed_on_it(camera_env):
     made = e.folder.parent / "mod"
     made.mkdir()
     assert Bundle.load(art).save(made / art.name, SaveOptions(perform_crc=True, compression="lz4"))[0]
-    mod = lib._store({art.name: made / art.name}, "Azusa mod", "azusa", "lobby")
+    mod = lib._store({art.name: made / art.name}, "Azusa mod", "azusa", "memorialLobby")
     on_mod = save(e, source=f"mod:{mod['id']}")
     on_official = save(e)
-    lib.apply("azusa", f"mod:{on_mod['id']}", kind="lobby", pin=pin)
+    lib.apply("azusa", f"mod:{on_mod['id']}", resource_type="memorialLobby", pin=pin)
     assert e.prefab.read_bytes() != e.official
     result = lib.remove(mod["id"], confirm=True)
     assert not result.failed

@@ -16,7 +16,7 @@ from bmpt.core.errors import ServiceError
 from bmpt.library import ModLibrary
 from ba_modding_toolkit.utils import CRCUtils
 
-from test_library import FakeCatalog, FakeVariant, game_bundle, header_bundle
+from test_library import FakeCatalog, FakeAlt, game_bundle, header_bundle
 
 RESOURCE = "BlueArchive_Data/StreamingAssets/PUB/Resource"
 GID = 7791673520712697115
@@ -119,7 +119,7 @@ def test_the_bundles_of_an_install_come_from_the_depot_cache_of_its_library(stea
 def make_library(tmp_path, game_data, allowed):
     settings = Settings(tmp_path / "config.toml")
     settings.set("game_resource_dir", str(game_data))
-    catalog = FakeCatalog(FakeVariant("test", "test_spr", "test_home_gl"))
+    catalog = FakeCatalog(FakeAlt("test", "test_spr", "test_home_gl"))
     return ModLibrary(tmp_path / "library", catalog, object(), settings, scan_allowed=lambda: allowed[0])
 
 

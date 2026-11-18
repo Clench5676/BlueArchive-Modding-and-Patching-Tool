@@ -90,11 +90,11 @@ globalThis.Image = class {
     queueMicrotask(() => this.onload?.());
   }
 };
-const lobby = n("UILobby"),
+const memorialLobby = n("UILobby"),
   collection = n("UICharacterCollection");
-insert(lobby, "Front/Bottom/Menu/BG/BG", n("BG"));
+insert(memorialLobby, "Front/Bottom/Menu/BG/BG", n("BG"));
 insert(
-  lobby,
+  memorialLobby,
   "Front/Bottom/Menu/BG/Grid",
   n(
     "Grid",
@@ -138,7 +138,7 @@ globalThis.fetch = async (url) => ({
   json: async () => {
     if (url.endsWith("atlases.json")) return { Common: meta };
     if (url.endsWith("textures.json")) return {};
-    if (url.endsWith("UILobby.json")) return lobby;
+    if (url.endsWith("UILobby.json")) return memorialLobby;
     if (url.endsWith("UICharacterCollection.json")) return collection;
     assert.fail(url);
   },
@@ -217,10 +217,13 @@ test("Home, settings and divider retain the game's native sibling spacing", asyn
   assert.ok(Math.abs(option[1] - home[1] - 0.6 * S) < 0.001);
   assert.ok(Math.abs(line[0] - home[0] - 87.5 * S) < 0.001);
   assert.ok(top[".top-home"].children.some((el) => el.dataset.path === "Lobby"));
-  assert.ok(!host.children.some((button) => button.attrs["aria-current"]), "the hall has no bottom-nav selection");
+  assert.ok(
+    !host.children.some((button) => button.attrs["aria-current"]),
+    "the Student Hall has no bottom-nav selection",
+  );
 });
 
-test("Hall reflows Settings into Home and restores sibling geometry across repeated transitions", async () => {
+test("StudentHall reflows Settings into Home and restores sibling geometry across repeated transitions", async () => {
   const { setTopActions } = await import("../../src/bmpt/web/js/app/nav.js");
   await renderNav(-1, { game: true });
   const original = structuredClone(Object.fromEntries(Object.entries(top).map(([key, node]) => [key, node.style])));
@@ -257,7 +260,7 @@ test("native-control clearance is preserved at fractional window scales", async 
   }
 });
 
-test("page names remain accessible while Hall removes Back and leaving restores the current route", async () => {
+test("page names remain accessible while Student Hall removes Back and leaving restores the current route", async () => {
   const { setTitle, setTopActions } = await import("../../src/bmpt/web/js/app/nav.js");
   const classes = new Set();
   top[".topbar"] = Object.assign(new El(), {
@@ -278,12 +281,12 @@ test("page names remain accessible while Hall removes Back and leaving restores 
     setTopActions(true);
     setTitle("Student Hall", action);
     assert.equal(back.hidden, true);
-    assert.ok(classes.has("hall-home"));
+    assert.ok(classes.has("student-hall-home"));
     assert.equal(top[".topbar"].attrs["aria-label"], "Student Hall");
     setTopActions(false);
     setTitle("Batch Import", action);
     assert.equal(back.hidden, false);
-    assert.ok(!classes.has("hall-home"));
+    assert.ok(!classes.has("student-hall-home"));
     assert.equal(top[".topbar"].attrs["aria-label"], "Batch Import");
     setTitle("Students", null);
     assert.equal(back.hidden, true);
@@ -294,15 +297,15 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
   test(`every page retains its accessible name without a visible title in ${locale}`, async () => {
     const { setTitle, setTopActions } = await import("../../src/bmpt/web/js/app/nav.js");
     const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url))).webui;
-    for (const [name, hall] of [
+    for (const [name, studentHall] of [
       [ui.top.students, false],
-      [ui.hall.title, true],
+      [ui.studentHall.title, true],
       [ui.nav.import, false],
     ]) {
-      setTopActions(hall);
+      setTopActions(studentHall);
       setTitle(name, () => {});
       assert.equal(top[".topbar"].attrs["aria-label"], name);
-      assert.equal(top[".topbar .back"].hidden, hall);
+      assert.equal(top[".topbar .back"].hidden, studentHall);
     }
     const html = readFileSync(new URL("../../src/bmpt/web/index.html", import.meta.url), "utf8");
     assert.doesNotMatch(html, /class="title"/);

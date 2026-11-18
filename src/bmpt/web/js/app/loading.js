@@ -94,11 +94,11 @@ export const covering = () => active() && overlay.mode === "full";
 /** Whether automatic popups must wait: for page work, input holds and independent writer progress. */
 export const busy = () => pending.size > 0 || active() || held() || (!!writerOverlay && !writerOverlay.closing);
 
-// How a job over mods names an alt ({alt, core}) in its progress line (job-progress.js modLine): the roster's
+// How a job over mods names an alt ({alt, core}) in its progress line (job-progress.js modLine): the student list's
 // names once the App has them (setNames), the key until then.
 let nameOf = (entry) => entry?.alt || entry?.core || "";
 /**
- * Give a job's progress line the roster's names for alts; until then it shows the key.
+ * Give a job's progress line the student list's names for alts; until then it shows the key.
  * @param {(entry: {alt?: string, core?: string}) => string} fn Names an alt or core.
  */
 export function setNames(fn) {

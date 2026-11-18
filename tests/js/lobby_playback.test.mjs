@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-talk.js", import.meta.url), "utf8");
+const source = readFileSync(
+  new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-talk.js", import.meta.url),
+  "utf8",
+);
 const dialogue = source.slice(source.indexOf("function play(anim"), source.indexOf("const playingAll"));
 const linesSetter = source.slice(source.indexOf("function setLines("), source.indexOf("function setVolume("));
 const detail = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-strip.js", import.meta.url), "utf8");
@@ -62,7 +65,7 @@ function player(cues = []) {
   `,
   )(...Object.values(env));
   const clickPlay = (selected = controls.selected()) =>
-    new Function("Lobby", "lobbySeq", `${toggle}; togglePlayAll();`)(controls, selected);
+    new Function("MemorialLobby", "memorialLobbySeq", `${toggle}; togglePlayAll();`)(controls, selected);
   return { starts, subtitles, voices, controls, clickPlay };
 }
 

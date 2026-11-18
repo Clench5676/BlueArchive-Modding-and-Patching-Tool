@@ -923,7 +923,7 @@ export function textViewer({ title, text, copy, close = T("display.close"), onCo
 
 // --- ordinary refusals ---
 // A refusal declines an action because of a state or a rule (a task still running, the game open, no game
-// folder, a Hall rule): nothing broke, so it reads as the game's neutral notice (title quit.title, Confirm
+// folder, a Student Hall rule): nothing broke, so it reads as the game's neutral notice (title quit.title, Confirm
 // only), without Failed and without an Error Report button. Every other code is a real failure and keeps both,
 // including codes that report something unreadable or unknown (game_status_unavailable, mod_configuration_unreadable).
 export const REFUSALS = Object.freeze(noticeNames());

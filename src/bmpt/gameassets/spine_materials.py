@@ -2,7 +2,8 @@
 
 spine-unity draws every submesh with the material of its atlas page (the SpineAtlasAsset's materials, matched by their
 main texture). Most pages use the plain spine shaders, which the web UI's spine-player reproduces; some use other
-shaders: Aru's third page multiplies (Spine/Blend Modes/Skeleton PMA Multiply), water and river pages of three lobbies
+shaders: Aru's third page multiplies (Spine/Blend Modes/Skeleton PMA Multiply), water and river pages of three
+memorial lobbies
 scroll a noise distortion (Spine/Skeleton MX Standard - NoiseFlowAnimation) and one game screen glitches
 (Spine/Skeleton MX Portrait Noise). Those pages are described here ("pages"), by the page's file name without its
 extension, with the shader's blend and the material's own values; the plain pages are left out.
@@ -16,7 +17,8 @@ An Additive slot always adds: the mesh generator writes its premultiplied vertex
 alpha 0 (pmaVertexColors). "blend" lists the modes that have replacement materials, by page; a replacement that is not
 set (a null reference) is None.
 
-The renderer never writes the dark colour (SkeletonRenderer.tintBlack is off in every lobby prefab), and none of these
+The renderer never writes the dark colour (SkeletonRenderer.tintBlack is off in every memorial lobby prefab), and none
+of these
 shaders reads it: "tintBlack" says whether it applies.
 
 Everything here works on plain typetrees and material descriptions, so it runs without game files; the service reads
@@ -170,7 +172,7 @@ def skeleton(
 def layer(
     resolve: Callable[[str, int, dict], tuple[str, Any] | None] | None, sa_pid: int, sa: Mapping[str, Any]
 ) -> dict:
-    """Attach SkeletonAnimation material data to a lobby layer for skeleton-materials.js.
+    """Attach SkeletonAnimation material data to a memorial lobby layer for skeleton-materials.js.
 
     Args:
         resolve: Reads a skeleton pointer by owner path ID; None leaves page and blend maps empty.
@@ -195,10 +197,11 @@ def layer(
 
 
 def textures(layers: Iterable[Mapping[str, Any]]) -> dict[str, dict]:
-    """Collect material textures beyond atlas pages as lobby.json fx.textures entries.
+    """Collect material textures beyond atlas pages as memorial-lobby.json fx.textures entries.
 
     Args:
-        layers: Exported lobby layers with page and replacement materials; textures use particle-serving locators.
+        layers: Exported memorial lobby layers with page and replacement materials; textures use particle-serving
+        locators.
     """
     out = {}
     for l in layers:

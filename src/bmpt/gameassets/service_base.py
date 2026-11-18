@@ -1,4 +1,4 @@
-"""What the game asset service and its 3D model part share: the cache schema, the model lock, lobby effects."""
+"""What the game asset service and its 3D chibi part share: the cache schema, the chibi lock, memorial lobby effects."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import threading
 from typing import Any
 
 from ..core import preview_gate, spans
-from . import lobby
+from . import memorial_lobby
 from .unity import reference
 
 
@@ -16,15 +16,17 @@ logger = logging.getLogger("bmpt.gameassets.service")  # the game asset service 
 _SCHEMA = "gameassets-v2/"
 
 
-class _ModelLock:
-    """The model lock: one reader at a time of those that hold several bundles open at once.
+class _ChibiLock:
+    """The chibi lock: one reader at a time of those that hold several bundles open at once.
 
-    Those readers are model and clip exports, the selection-frame layout, lobby particles and office models, each
+    Those readers are chibi and clip exports, the selection-frame layout, memorial lobby particles and office chibis,
+    each
     keeping the path lock of every bundle it read until it ends, so two of them could wait on each other's bundles. Held
-    for one export (about 1 s for a model, 0.5 s for a clip, no step inside it); taken after the library's lock, never
-    before it. A costume build needs no model lock: it reads bundles from memory after each individually locked load
+    for one export (about 1 s for a chibi, 0.5 s for a clip, no step inside it); taken after the library's lock, never
+    before it. A costume build needs no chibi lock: it reads bundles from memory after each individually locked load
     (``unity.load_bundle``). A foreground preview that waits for it while a job or background work holds it (the costume
-    check's export, a lobby warm-up) waits outside its own time (``preview_gate.waiting``): the page's deadline leaves
+    check's export, a memorial lobby warm-up) waits outside its own time (``preview_gate.waiting``): the page's
+    deadline leaves
     the wait out.
     """
 
@@ -72,15 +74,16 @@ class _ModelLock:
         self.release()
 
 
-_MODEL_LOCK = _ModelLock()
+_CHIBI_LOCK = _ChibiLock()
 
 
-def model_lock(what: str) -> Any:
-    """Wrap the model lock with wait/hold spans named model-lock.<what> for the supplied operation label."""
-    return spans.held(f"model-lock.{what}", _MODEL_LOCK, hold=True)
+def chibi_lock(what: str) -> Any:
+    """Wrap the chibi lock with wait/hold spans named chibi-lock.<what> for the supplied operation label."""
+    return spans.held(f"chibi-lock.{what}", _CHIBI_LOCK, hold=True)
 
 
-# Unity's built-in meshes live in "Library/unity default resources", outside the bundles; the lobbies' effect quads
+# Unity's built-in meshes live in "Library/unity default resources", outside the bundles; the memorial lobbies'
+# effect quads
 # use its Quad
 _BUILTIN_QUAD = ("library/unity default resources", 10210)
 
@@ -96,7 +99,7 @@ def _builtin_quad(owner: Any, pointer: dict | None) -> tuple[str, None] | None:
 
 
 class _FxResolver:
-    """Reads what a lobby's renderers point at, for lobby.read_prefab.
+    """Reads what a memorial lobby's renderers point at, for memorial_lobby.read_prefab.
 
     A particle material is read as (id, particles.material) with its textures (particles.texture), a mesh as (id,
     particles.mesh) (Unity's built-in Quad as ("quad", None)), the render queue of a skeleton's atlas pages ("pages": a
@@ -130,7 +133,7 @@ class _FxResolver:
             or None for an absent, incompatible, or unreadable object.
         """
         from . import particles
-        from .model_glb import read_mesh
+        from .chibi_glb import read_mesh
 
         g = self.graph
         own = self.objects.get(owner)
@@ -155,19 +158,19 @@ class _FxResolver:
             elif kind == "animator" and obj.type.name == "AnimatorController":
                 out = self._animator(obj, oid)
             elif kind == "timeline" and obj.type.name == "MonoBehaviour":
-                from . import intro
+                from . import memorial_lobby_intro
 
-                out = (oid, intro.read_timeline(g, obj, sound=self._sound))
+                out = (oid, memorial_lobby_intro.read_timeline(g, obj, sound=self._sound))
             elif kind == "sprite" and obj.type.name == "Sprite":
                 out = (oid, self._sprite(obj))
         except Exception:  # an unreadable object: the system is left out
-            logger.debug("Cannot read lobby particle %s %s", kind, oid, exc_info=True)
+            logger.debug("Cannot read Memorial Lobby particle %s %s", kind, oid, exc_info=True)
             out = None
         self.done[(kind, oid)] = out
         return out
 
     def _sound(self, asset: Any, data: dict) -> dict | None:
-        """A TimeLineAudioController's AudioData as a sound event (lobby.sound_event), with its id: the asset's."""
+        """Read an AudioData asset as a sound event identified by its asset ID."""
 
         def clip_id(pointer: dict) -> str | None:
             if not pointer.get("m_PathID"):
@@ -175,11 +178,11 @@ class _FxResolver:
             cab, pid = reference(asset, pointer)
             return f"{cab.lower()}_{pid}"
 
-        event = lobby.sound_event({"m_Name": "Intro", "AudioData": data}, clip_id)
+        event = memorial_lobby.sound_event({"m_Name": "Intro", "AudioData": data}, clip_id)
         return {**event, "id": f"{asset.assets_file.name.lower()}_{asset.path_id}"} if event else None
 
     def _sprite(self, obj: Any) -> dict | None:
-        """A Sprite as intro.sprite draws it.
+        """A Sprite as memorial_lobby_intro.sprite draws it.
 
         That is its texture (particles.texture), its rect in the texture's pixels, its size in units (rect / pixels per
         unit) and its pivot (0 to 1). The pixels are read when served.
@@ -238,10 +241,10 @@ class _FxResolver:
     def _state(self, obj: Any, tree: dict) -> tuple[str | None, dict | None, dict]:
         """A material's shader name, the shader's parsed form and the render state of its colour pass.
 
-        The parsed form holds the parts read here; the render state is this material's (model.shader_state: blend and
+        The parsed form holds the parts read here; the render state is this material's (chibi.shader_state: blend and
         queue).
         """
-        from .model import shader_state
+        from .chibi import shader_state
 
         g = self.graph
         shader = g.deref(obj, tree.get("m_Shader"))
@@ -337,10 +340,11 @@ class _FxResolver:
     def _animator(self, controller: Any, oid: str) -> tuple[str, dict] | None:
         """The clip an AnimatorController's first layer plays in its default state.
 
-        The lobbies' controllers have one state, looping one clip. The clip is decoded (model.decode_clip) with its
+        The memorial lobbies' controllers have one state, looping one clip. The clip is decoded (chibi.decode_clip)
+        with its
         bindings.
         """
-        from .model_glb import decode_clip
+        from .chibi_glb import decode_clip
 
         g = self.graph
         tree = g.tree(controller)

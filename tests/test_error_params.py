@@ -184,7 +184,7 @@ def test_a_mod_stored_under_another_target_names_the_entry_file(env):
     (stored,) = env.library.add([source])
     candidate = env.services.batch_import._latest[entry["id"]]
     candidate.error = "mod_target_ambiguous"
-    candidate.entry["assignment"] = "another-target"
+    candidate.entry["assigned_alt"] = "another-target"
     assert stored.target != "another-target"
     env.services.batch_import._judge(candidate, env.library, env.library.current_pin())
     assert candidate.entry["reason"] == "mod_target_ambiguous"
@@ -192,7 +192,7 @@ def test_a_mod_stored_under_another_target_names_the_entry_file(env):
 
 
 def test_assigning_a_blocked_entry_keeps_the_recorded_file(env, monkeypatch):
-    monkeypatch.setattr(env.catalog, "assignment_variant", lambda key: SimpleNamespace(key=key), raising=False)
+    monkeypatch.setattr(env.catalog, "assignment_alt", lambda key: SimpleNamespace(key=key), raising=False)
     source = make_mod(env.original, env.tmp / "incoming")
     other = game_bundle(env.tmp / "incoming", "other_spr", payload=b"x")
     other.write_bytes(b"broken")
@@ -265,7 +265,7 @@ def test_export_names_the_colliding_member(setup_library, monkeypatch):
             folder=env.tmp / "exports",
             server="global",
             platform="windows",
-            kind=None,
+            resource_type=None,
             log=lambda *_: None,
             progress=lambda *_: None,
         )

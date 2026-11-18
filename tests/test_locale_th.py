@@ -23,7 +23,7 @@ def test_thai_is_offered_with_its_native_name():
 
 
 def test_thai_uses_the_official_memorial_lobby_term():
-    assert strings()["webui"]["tab"]["lobby"] == "ล็อบบี้ความทรงจำ"
+    assert strings()["webui"]["tab"]["memorialLobby"] == "ล็อบบี้ความทรงจำ"
 
 
 def test_thai_uses_half_width_punctuation_without_han_or_kana():

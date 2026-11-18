@@ -21,7 +21,7 @@ official = pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Set BAMT_TEST_GAME_
 # own bundles), and a slot with no prefab to build on (a model slot of the variant's own bundles: Arona's, Ayame's
 # story forms'; mods apply there, costumes do not). A costume stretching past the limit is still offered, and
 # a shader the game does not load with the slot's prefab is carried with the costume.
-RULE_REFUSALS: set[str] = {"static model", "no prefab"}
+RULE_REFUSALS: set[str] = {"static chibi", "no prefab"}
 WORKERS = 3
 
 _state = {}
@@ -46,15 +46,15 @@ def _open(view: str, work: str) -> None:
 def _jobs() -> list[tuple[str, str, str | None]]:
     catalog = _state["catalog"]
     jobs = []
-    for family in catalog.families():
-        models = [v for v in family.variants if v.model or getattr(v, "field_model", None)]
-        jobs += [("own", v.key, None) for v in models]
-        for target in models:
-            if target.model:
+    for family in catalog.students():
+        chibis = [v for v in family.alts if v.chibi or getattr(v, "field_chibi", None)]
+        jobs += [("own", v.key, None) for v in chibis]
+        for target in chibis:
+            if target.chibi:
                 jobs += [
                     ("pair", target.key, source.key)
-                    for source in models
-                    if source.key != target.key and (source.model or "").lower() != target.model.lower()
+                    for source in chibis
+                    if source.key != target.key and (source.chibi or "").lower() != target.chibi.lower()
                 ]
     return jobs
 
@@ -85,23 +85,23 @@ def _outcome(fn) -> dict:
 def _run(job: tuple[str, str, str | None]) -> dict:
     kind, key, other = job
     game, library, catalog = _state["game"], _state["library"], _state["catalog"]
-    variant = catalog.variant(key)
+    variant = catalog.alt(key)
     if kind == "own":
-        core = variant.model or variant.field_model
-        if variant.model:
-            fn = lambda: game.model_glb(
+        core = variant.chibi or variant.field_chibi
+        if variant.chibi:
+            fn = lambda: game.chibi_glb(
                 core,
                 overrides=library.official_bundles(core, current_fallback=True),
                 reads=library.preview_reads("official"),
             )
         else:
-            fn = lambda: game.model_glb(core)
+            fn = lambda: game.chibi_glb(core)
         return {"job": job, **_outcome(fn)}
     built = {}
     row = {"job": job, "build": _outcome(lambda: built.update(parts=library.costume_preview(key, other)))}
     if row["build"]["ok"]:
         row["export"] = _outcome(
-            lambda: game.model_glb(variant.model, overrides=built["parts"], reads=library.preview_reads("official"))
+            lambda: game.chibi_glb(variant.chibi, overrides=built["parts"], reads=library.preview_reads("official"))
         )
         verdict = library.costume_verdict(key, other)
         row["past_limit"] = bool(verdict and verdict.get("preview"))
@@ -165,7 +165,7 @@ def _open_models(view: str) -> None:
     from bmpt.gameassets.discovery import cab_names
 
     paths = list(Path(view).rglob("*.bundle"))
-    index, models = {}, defaultdict(list)
+    index, chibis = {}, defaultdict(list)
     for path in paths:
         if re.search(
             r"characters|-_mx-npcs-|^character-|-_mx-shaders-|-_mx-program-animators-|^field-|animatorbase|"
@@ -175,25 +175,25 @@ def _open_models(view: str) -> None:
             for cab in cab_names(path):
                 index[cab] = path
         if match := re.match(r"character-(.+?)-_mx", path.name):
-            models[match.group(1)].append(path)
-    _state.update(index=index, models=models)
+            chibis[match.group(1)].append(path)
+    _state.update(index=index, chibis=chibis)
 
 
 def _worn(dev: str) -> tuple[str, list[str] | None]:
     """A model's worn items as "<renderer>/<item's top node>", " (packed)" after one the costume encloses (not
     carried); None for a model without a prefab of its own bundles."""
-    from bmpt.gameassets import model_adapt as ma, model_props as mp
+    from bmpt.gameassets import chibi_adapt as ma, chibi_props as mp
     from bmpt.gameassets.errors import AssetNotFound
-    from bmpt.gameassets.model import model_root
+    from bmpt.gameassets.chibi import chibi_root
 
-    files = _state["models"].get(dev, [])
+    files = _state["chibis"].get(dev, [])
     with ma.BundleGraph(_state["index"]) as graph:
         try:
-            root, _, _ = model_root(graph, files, dev)
+            root, _, _ = chibi_root(graph, files, dev)
         except AssetNotFound:
             return dev, None
         s = ma.Skeleton.of(graph, root)
-        clips = ma.prefab_clips(graph, s, ma.own_prefabs(ma._model_prefabs(graph, files), dev))
+        clips = ma.prefab_clips(graph, s, ma.own_prefabs(ma._chibi_prefabs(graph, files), dev))
         idle = next(iter(s.poses(ma.pick(clips, ma.IDLE_CLIPS)[:1], frames=1)), None)
         worn = mp.worn_items(s, ma.roles(s, idle), clips, idle)
         return dev, sorted(
@@ -206,7 +206,7 @@ def test_official_the_worn_items_of_every_student_model_are_pinned(tmp_path):
     """The worn items (model_props) of every student model with a 3D model, against the pinned list: a game update or
     a change of the rule shows here as a diff to look at, then to pin."""
     _open(str(GAME_DIR), str(tmp_path))
-    devs = sorted({v.model.lower() for f in _state["catalog"].families() for v in f.variants if v.model})
+    devs = sorted({v.chibi.lower() for f in _state["catalog"].students() for v in f.alts if v.chibi})
     with ProcessPoolExecutor(4, initializer=_open_models, initargs=(str(GAME_DIR),)) as pool:
         found = {dev: items for dev, items in pool.map(_worn, devs, chunksize=4) if items}
     pinned = json.loads(WORN.read_text())["worn"]

@@ -1,6 +1,6 @@
-// Quitting from the student list, as the PC client's back key does in the lobby: the top bar's back button, or Escape
-// on the list, opens the game's quit prompt (title Notice, line Quit?, Cancel and Confirm). Without the DOM (tested in
-// Node from tests/test_quit.py); main.js wires it.
+// Quitting from the student list, as the PC client's back key does on the home screen: the top bar's back button, or
+// Escape on the list, opens the game's quit prompt (title Notice, line Quit?, Cancel and Confirm). Without the DOM
+// (tested in Node from tests/test_quit.py); main.js wires it.
 import { errorText } from "../core/i18n.js";
 
 // the hosts of the popups and screens that take Escape themselves: the asset consent, scan consent and update popups,
@@ -22,8 +22,8 @@ export function quitKey(ev, { byId, covering = false }) {
   if (ev.defaultPrevented || ev.isComposing || ev.keyCode === 229 || ev.repeat) return false;
   if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return false;
   if (covering) return false;
-  const roster = byId("screen-roster");
-  if (!roster || roster.hidden) return false;
+  const studentList = byId("screen-student-list");
+  if (!studentList || studentList.hidden) return false;
   return !HOSTS.some((id) => {
     const host = byId(id);
     return !!host && !host.hidden;

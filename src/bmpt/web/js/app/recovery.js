@@ -21,7 +21,7 @@
   let webgl = { supported: null, renderer: null, disabled: !!config.safeMode };
   let importList = () => null;
   const context = () => ({
-    page: location.hash || "#/roster",
+    page: location.hash || "#/student-list",
     phase,
     timings,
     language: document.documentElement?.lang || config.language,

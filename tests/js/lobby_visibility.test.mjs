@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { overlaps, worldBounds } from "../../src/bmpt/web/js/lobby/lobby-health.js";
+import { overlaps, worldBounds } from "../../src/bmpt/web/js/memorial-lobby/memorial-lobby-health.js";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/lobby/lobby-scene.js", import.meta.url), "utf8");
+const source = readFileSync(
+  new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-scene.js", import.meta.url),
+  "utf8",
+);
 const code = source.slice(source.indexOf("function reveal("), source.indexOf("function setIntro("));
 function harness(mode = "left") {
   let now = 1,
@@ -94,7 +97,7 @@ test("revealing a tab restarts its stopped root player and defers drawing checks
 });
 
 for (const failure of ["frames", "size", "pixels", "bounds"])
-  test(`a visible lobby with no ${failure} reports a cause instead of remaining empty`, () => {
+  test(`a visible memorial lobby with no ${failure} reports a cause instead of remaining empty`, () => {
     const h = harness();
     h.reveal();
     if (failure === "size") h.p.canvas.width = 0;
@@ -118,7 +121,7 @@ test("a revealed intro cannot wait forever for visibility, a hold, or an unchang
     }
     assert.equal(h.errors.length, 1);
     assert.equal(h.errors[0].step, "intro watchdog");
-    assert.equal(h.errors[0].url, "/layout/revision/lobby.json");
+    assert.equal(h.errors[0].url, "/layout/revision/memorial-lobby.json");
   }
 });
 

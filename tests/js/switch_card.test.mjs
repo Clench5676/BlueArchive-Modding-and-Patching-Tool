@@ -142,7 +142,7 @@ test("saturated colours and their interpolated midpoints retain at least 4.5:1 n
 });
 
 for (const [kind, top, height] of [
-  ["lobby", -26, 253],
+  ["memorialLobby", -26, 253],
   ["special L2D", -26, 253],
 ]) {
   test(`${kind} sampling follows its crop and applies matching fill and text together`, async () => {
@@ -273,7 +273,7 @@ test("an absent or failed still leaves the fallback card and text usable", async
   assert.deepEqual(text.style, {});
 });
 
-test("model switch cards use the same edge palette as lobby cards", async () => {
+test("chibi switch cards use the same edge palette as memorial lobby cards", async () => {
   const previous = globalThis.document;
   globalThis.document = {
     createElement: () => ({

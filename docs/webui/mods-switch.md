@@ -53,7 +53,7 @@ configuration: Off puts every entry of every known install back to official, On 
 - **The classic modal** (`classicModal`): a write the open classic window refuses opens "Classic UI Open" with the
   box "Apply automatically once it closes" (queued through `classic.queue`), Bring to Front and Confirm. When the
   queue has run, one popup lists the dropped calls.
-- **What a writer job switched** (`library.changed`): the roster is read again, thumbnails under the changed cores
+- **What a writer job switched** (`library.changed`): the student list is read again, thumbnails under the changed cores
   are forgotten, and the detail screen reloads the current resource type under a still of the scene, waiting while a popup or
   fullscreen view is open. The screen's reads of `student.get` have no client deadline (a writer job can hold the
   library lock); a read that finishes after the screen was read anew is dropped.

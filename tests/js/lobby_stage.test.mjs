@@ -1,6 +1,6 @@
-// Tests for web/js/lobby/lobby-stage.js (every skeleton and effect of a memorial lobby drawn in the game's order in the
-// bottom player's context), with web/js/lobby/particles-gl.js placing the effects, against stand-ins for spine-player,
-// its canvas and WebGL2. Run by tests/test_lobby_stage.py with Node's test runner.
+// Tests for web/js/memorial-lobby/memorial-lobby-stage.js (every skeleton and effect of a memorial lobby drawn in the
+// game's order in the bottom player's context), with web/js/memorial-lobby/particles-gl.js placing the effects, against
+// stand-ins for spine-player, its canvas and WebGL2. Run by tests/test_lobby_stage.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -67,14 +67,14 @@ globalThis.spine = {
 };
 globalThis.performance ??= { now: () => Date.now() };
 
-const Stage = await import("../../src/bmpt/web/js/lobby/lobby-stage.js");
-const GL = await import("../../src/bmpt/web/js/lobby/particles-gl.js");
+const Stage = await import("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-stage.js");
+const GL = await import("../../src/bmpt/web/js/memorial-lobby/particles-gl.js");
 const Linear = await import("../../src/bmpt/web/js/core/linear.js");
-const P = await import("../../src/bmpt/web/js/lobby/particles.js");
+const P = await import("../../src/bmpt/web/js/memorial-lobby/particles.js");
 
-// The layers and effects of three lobbies as lobby.json gives them (the queues of their atlas pages and of their
-// effects' materials, the effects' sorting fudge and depth): two skeletons each, the second the intro's scene parked
-// beside the lobby, whose pages interleave with the character's by render queue.
+// The layers and effects of three memorial lobbies as memorial-lobby.json gives them (the queues of their atlas pages and of
+// their effects' materials, the effects' sorting fudge and depth): two skeletons each, the second the intro's scene
+// parked beside the memorial lobby, whose pages interleave with the character's by render queue.
 const WAKAMO = {
   layers: [
     { name: "Wakamo_home", order: 0, queue: 2900, pages: { Wakamo_home: 3050, Wakamo_home2: 2900 }, z: 0 },
@@ -244,10 +244,10 @@ function sys(name, order, queue, z, fudge) {
     ls: [1, 1, 1],
   };
 }
-const effectsOf = (lobby) =>
+const effectsOf = (memorialLobby) =>
   GL.create(
     {
-      systems: lobby.systems.map((s) => sys(...s)),
+      systems: memorialLobby.systems.map((s) => sys(...s)),
       materials: {
         m: {
           program: "additive",
@@ -266,10 +266,10 @@ const effectsOf = (lobby) =>
   );
 
 test("the effects draw after the last part of any skeleton that sorts before them", () => {
-  const check = (lobby, expected) => {
-    const players = lobby.layers.map((layer) => ({ bamtLayer: layer }));
-    const list = Stage.order(lobby.layers).map((s) => ({ ...s, owner: players[0] }));
-    const fx = effectsOf(lobby);
+  const check = (memorialLobby, expected) => {
+    const players = memorialLobby.layers.map((layer) => ({ bamtLayer: layer }));
+    const list = Stage.order(memorialLobby.layers).map((s) => ({ ...s, owner: players[0] }));
+    const fx = effectsOf(memorialLobby);
     fx.layers(players, list);
     assert.deepEqual(
       list.map((s, i) => fx.drawsAfter(players[0], i)),
@@ -292,8 +292,8 @@ test("the effects draw after the last part of any skeleton that sorts before the
   fx.dispose();
 });
 
-// a spine-player as lobby.js makes it: its canvas asks for a context while it is made (initialize), its renderer
-// records what it draws (the names of the slots with an attachment) and its batches
+// a spine-player as memorial-lobby.js makes it: its canvas asks for a context while it is made (initialize), its
+// renderer records what it draws (the names of the slots with an attachment) and its batches
 const page = (name) => ({ region: { page: { name: `${name}.png` } } });
 function makePlayer(name, layer, slots, log) {
   const canvas = new FakeCanvas();
@@ -340,8 +340,9 @@ function makePlayer(name, layer, slots, log) {
   player.addEventListener(globalThis.window, "resize", resize);
   return player;
 }
-// what lobby.js does: the bottom player first, the others with its context; each ready once loaded, then the stage
-function lobby(spec, slots, fx, { share = true, log = [] } = {}) {
+// what memorial-lobby.js does: the bottom player first, the others with its context; each ready once loaded, then the
+// stage
+function memorialLobby(spec, slots, fx, { share = true, log = [] } = {}) {
   const players = [];
   spec.layers.forEach((layer, i) => {
     players.push(Stage.make(share && i ? players[0] : null, () => makePlayer(layer.name, layer, slots[i], log)));
@@ -386,7 +387,7 @@ test("the guests draw with the host's context and only through the host, posed b
   const fx = fakeFx([2, 4], log);
   const {
     players: [host, guest],
-  } = lobby(WAKAMO, slots, fx, { log });
+  } = memorialLobby(WAKAMO, slots, fx, { log });
   assert.equal(guest.context.gl, host.context.gl, "the guest's canvas got the host's context");
   assert.equal(Stage.hostOf(guest), host);
   assert.equal(Stage.hostOf(host), null);
@@ -480,7 +481,7 @@ test("the guests draw with the host's context and only through the host, posed b
 test("a lost and restored context reaches the guests' textures and shaders", () => {
   const {
     players: [host, guest],
-  } = lobby(SHIGURE, [[["a", "Shigure_home"]], [["b", "Shigure_00"]], [["c", "Shigure_01"]]], null);
+  } = memorialLobby(SHIGURE, [[["a", "Shigure_home"]], [["b", "Shigure_00"]], [["c", "Shigure_01"]]], null);
   const seen = [];
   guest.canvas.addEventListener("webglcontextrestored", () => seen.push("restored"));
   guest.canvas.addEventListener("webglcontextlost", () => seen.push("lost"));
@@ -489,7 +490,7 @@ test("a lost and restored context reaches the guests' textures and shaders", () 
   assert.deepEqual(seen, ["lost", "restored"]);
 });
 
-test("a lobby of one skeleton draws its parts as before; one of a single part, as spine-player does", () => {
+test("a memorial lobby of one skeleton draws its parts as before; one of a single part, as spine-player does", () => {
   const log = [];
   const hibiki = {
     layers: [{ name: "Hibiki_home", order: 0, queue: 2900, pages: { Hibiki_home: 3050, Hibiki_home2: 2900 }, z: 0 }],
@@ -497,7 +498,7 @@ test("a lobby of one skeleton draws its parts as before; one of a single part, a
   const fx = fakeFx([0, 1], log);
   const {
     players: [p],
-  } = lobby(
+  } = memorialLobby(
     hibiki,
     [
       [
@@ -527,7 +528,7 @@ test("a lobby of one skeleton draws its parts as before; one of a single part, a
     "end Hibiki_home",
   ]);
   const one = [];
-  const plain = lobby(
+  const plain = memorialLobby(
     { layers: [{ name: "Airi_home", order: 0, queue: 3050, pages: { Airi_home: 3050 }, z: 0 }] },
     [
       [
@@ -547,7 +548,7 @@ test("skeletons with contexts of their own each draw their own parts, stacked", 
   const fx = fakeFx([1], log);
   const {
     players: [home, scene],
-  } = lobby(
+  } = memorialLobby(
     WAKAMO,
     [
       [
@@ -579,7 +580,8 @@ test("skeletons with contexts of their own each draw their own parts, stacked", 
 });
 
 test("a scene only the intro shows draws nothing while hidden, and the effects on at rest keep their places", async () => {
-  // Aru's lobby: her skeleton and the intro's scene, both at 3000, her bokeh at 3000 and her dust over everything
+  // Aru's memorial lobby: her skeleton and the intro's scene, both at 3000, her bokeh at 3000 and her dust over
+  // everything
   const ARU = {
     layers: [
       { name: "Aru_home", order: 0, queue: 3000, pages: { Aru_home: 3000 }, z: 0 },
@@ -627,7 +629,11 @@ test("a scene only the intro shows draws nothing while hidden, and the effects o
 });
 
 test("the guests' slot colours are tinted for linear light around the host's draw, and given back", () => {
-  const { players } = lobby(SHIGURE, [[["a", "Shigure_home"]], [["b", "Shigure_00"]], [["c", "Shigure_01"]]], null);
+  const { players } = memorialLobby(
+    SHIGURE,
+    [[["a", "Shigure_home"]], [["b", "Shigure_00"]], [["c", "Shigure_01"]]],
+    null,
+  );
   const [host, guest] = players;
   // every slot white but the guest's, a 0.5 grey: decoded from sRGB while the host draws it, as the game's shader
   // sees it

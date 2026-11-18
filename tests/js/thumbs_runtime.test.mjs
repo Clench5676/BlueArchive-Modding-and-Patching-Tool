@@ -309,7 +309,7 @@ test("every memorial lobby still uses revisioned prefab framing before its first
     };
   };
   try {
-    assert.ok(await thumb(base("lobby_camera"), "landscape", null, true));
+    assert.ok(await thumb(base("memorial_lobby_camera"), "landscape", null, true));
     const view = players.at(-1).config.viewport;
     assert.ok(urls[0].endsWith(`/${"a".repeat(64)}/framing.json`));
     assert.ok(Math.abs(view.x * 0.72 + 37.5 + 1480) < 1e-8);

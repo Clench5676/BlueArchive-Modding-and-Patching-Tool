@@ -11,7 +11,7 @@ test("old cross-server refreshes cannot commit after a newer refresh and recover
     routes = [],
     nav = [],
     started = [];
-  const ctx = { invalidateRoster() {} },
+  const ctx = { invalidateStudentList() {} },
     env = {
       ctx,
       previewCache: { configure() {} },
@@ -20,7 +20,7 @@ test("old cross-server refreshes cannot commit after a newer refresh and recover
       route: async () => routes.push(ctx.info.resourceVersion),
       StudentHall: { hide() {} },
       Detail: { hide() {} },
-      Roster: { hide() {} },
+      StudentList: { hide() {} },
       BatchImport: { invalidate() {} },
       NGUI: { init: async () => {} },
       noGame: () => routes.push("missing"),
@@ -59,39 +59,39 @@ test("old cross-server refreshes cannot commit after a newer refresh and recover
   assert.ok(!refresh.includes("location.reload"));
   assert.deepEqual(started.at(-1), ["recovered", 0]);
 });
-test("old roster responses cannot replace a new server snapshot", async () => {
+test("old student list responses cannot replace a new server snapshot", async () => {
   const code = source.slice(source.indexOf("// one students.list at a time"), source.indexOf("// the portraits whose"));
   let resolve;
   const api = new Function(
     "rpc",
-    `let resourceEpoch=0,rosterData=null,rosterStale=true;const forgetReplaced=()=>{};${code};return {roster,change(){resourceEpoch++},data:()=>rosterData};`,
+    `let resourceEpoch=0,studentListData=null,studentListStale=true;const forgetReplaced=()=>{};${code};return {studentList,change(){resourceEpoch++},data:()=>studentListData};`,
   )(() => new Promise((r) => (resolve = r)));
-  const old = api.roster();
+  const old = api.studentList();
   api.change();
   resolve({ students: ["global"] });
   await assert.rejects(old, { name: "AbortError" });
   assert.equal(api.data(), null);
 });
-test("roster readers share one students.list, and a read begun before an invalidation does not settle it", async () => {
+test("studentList readers share one students.list, and a read begun before an invalidation does not settle it", async () => {
   const code = source.slice(source.indexOf("// one students.list at a time"), source.indexOf("// the portraits whose"));
   const calls = [];
   const api = new Function(
     "rpc",
-    `let resourceEpoch=0,rosterData=null,rosterStale=true;const forgetReplaced=()=>{};${code};return {roster,invalidate(){rosterStale=true;rosterGen+=1},stale:()=>rosterStale};`,
+    `let resourceEpoch=0,studentListData=null,studentListStale=true;const forgetReplaced=()=>{};${code};return {studentList,invalidate(){studentListStale=true;studentListGen+=1},stale:()=>studentListStale};`,
   )(() => new Promise((r) => calls.push(r)));
-  const a = api.roster(),
-    b = api.roster();
+  const a = api.studentList(),
+    b = api.studentList();
   assert.equal(calls.length, 1, "one request for both");
   api.invalidate();
-  const c = api.roster();
+  const c = api.studentList();
   assert.equal(calls.length, 2, "an invalidation asks again");
   calls[0]({ students: ["old"] });
   assert.deepEqual(await a, { students: ["old"] });
   assert.equal(await b, await a);
-  assert.equal(api.stale(), true, "the older answer leaves the roster stale");
+  assert.equal(api.stale(), true, "the older answer leaves the student list stale");
   calls[1]({ students: ["new"] });
   assert.deepEqual(await c, { students: ["new"] });
   assert.equal(api.stale(), false);
-  assert.deepEqual(await api.roster(), { students: ["new"] });
+  assert.deepEqual(await api.studentList(), { students: ["new"] });
   assert.equal(calls.length, 2);
 });

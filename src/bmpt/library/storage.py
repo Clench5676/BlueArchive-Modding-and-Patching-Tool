@@ -19,7 +19,7 @@ from typing import Any
 
 from bmpt.engine import Bundle
 from ..core.filelock import replace as replace_file
-from ..host.store_formats import managed_bytes, runtime_store
+from ..host.store_formats import legacy_document, managed_bytes, runtime_store
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,11 @@ def atomic_json(path: Path, data: dict[str, Any]) -> None:
         data: JSON document to serialize with ASCII escapes and two-space indentation.
     """
     store = runtime_store(path)
-    raw = managed_bytes(store, data) if store else (json.dumps(data, ensure_ascii=True, indent=2) + "\n").encode()
+    raw = (
+        managed_bytes(store, data)
+        if store
+        else (json.dumps(legacy_document(path, data), ensure_ascii=True, indent=2) + "\n").encode()
+    )
     atomic_bytes(path, raw)
 
 

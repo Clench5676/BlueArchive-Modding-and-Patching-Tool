@@ -967,7 +967,7 @@ export function findNamed(tree, name) {
 const layouts = new Map();
 /**
  * Load a prefab layout, shared by name.
- * Cold exports scan prefab bundles and can wait for a lobby's bundle locks. The scene owns the slow-load
+ * Cold exports scan prefab bundles and can wait for a memorial lobby's bundle locks. The scene owns the slow-load
  * indicator and navigation cancellation; elapsed time alone does not make a valid server response fail.
  * @param {string} name "Root" for a prefab root, or "Root.Node" for the first node of that name inside it.
  * @returns {Promise<NguiNode>}
@@ -976,7 +976,7 @@ export function layout(name) {
   if (!layouts.has(name)) {
     const revision = resourceRevision;
     const [root, sub] = name.split(".");
-    // Cold exports scan prefab bundles and can wait for a lobby's bundle locks. The scene owns the slow-load
+    // Cold exports scan prefab bundles and can wait for a memorial lobby's bundle locks. The scene owns the slow-load
     // indicator and navigation cancellation; elapsed time alone does not make a valid server response fail.
     const request = sub
       ? layout(root).then((tree) => findNamed(tree, sub))

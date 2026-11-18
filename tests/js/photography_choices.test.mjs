@@ -4,12 +4,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { compact, flat } from "./helpers/source-text.mjs";
 import { test } from "node:test";
-import { otherMode, actionCaption, choiceLayout } from "../../src/bmpt/web/js/photography/camera.js";
+import { otherMode, actionCaption, choiceLayout } from "../../src/bmpt/web/js/thumbnail-capture/camera.js";
 
 import { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 import { row } from "../../src/bmpt/web/js/ui/ui-grid.js";
 const web = new URL("../../src/bmpt/web/js/", import.meta.url);
-const controller = readFileSync(new URL("photography/controller.js", web), "utf8");
+const controller = readFileSync(new URL("thumbnail-capture/controller.js", web), "utf8");
 const dense = compact(controller);
 const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const ui = (locale) =>
@@ -17,14 +17,14 @@ const ui = (locale) =>
 const fill = (text, params = {}) => text.replace(/\{(\w+)\}/g, (_, key) => params[key]);
 
 test("the other mode is offered only when the student has it", () => {
-  assert.equal(otherMode("portrait", { hasPortrait: true, hasLobby: true }), "lobby");
-  assert.equal(otherMode("lobby", { hasPortrait: true, hasLobby: true }), "portrait");
+  assert.equal(otherMode("portrait", { hasPortrait: true, hasMemorialLobby: true }), "memorialLobby");
+  assert.equal(otherMode("memorialLobby", { hasPortrait: true, hasMemorialLobby: true }), "portrait");
   assert.equal(
-    otherMode("portrait", { hasPortrait: true, hasLobby: false }),
+    otherMode("portrait", { hasPortrait: true, hasMemorialLobby: false }),
     null,
     "no memorial lobby: nothing to switch to",
   );
-  assert.equal(otherMode("lobby", { hasPortrait: false, hasLobby: true }), null, "no portrait");
+  assert.equal(otherMode("memorialLobby", { hasPortrait: false, hasMemorialLobby: true }), null, "no portrait");
   assert.equal(otherMode("portrait", {}), null);
   assert.equal(otherMode("portrait", undefined), null);
 });
@@ -32,7 +32,7 @@ test("the other mode is offered only when the student has it", () => {
 function harness({ mode = "portrait", info } = {}) {
   const code =
     controller.slice(
-      controller.indexOf("function photographyToolbarLayout("),
+      controller.indexOf("function thumbnailCaptureToolbarLayout("),
       controller.indexOf("// The captions of the two text buttons"),
     ) +
     controller.slice(
@@ -106,7 +106,7 @@ function harness({ mode = "portrait", info } = {}) {
   return { run, host, drawn, hits, corners };
 }
 test("a skin without a memorial lobby gets no mode button in the portrait camera", async () => {
-  const h = harness({ mode: "portrait", info: { hasPortrait: true, hasLobby: false } });
+  const h = harness({ mode: "portrait", info: { hasPortrait: true, hasMemorialLobby: false } });
   await h.run(h.host);
   assert.deepEqual(
     [h.host.children.length, h.drawn.length, h.hits.length, h.corners.length],
@@ -115,16 +115,16 @@ test("a skin without a memorial lobby gets no mode button in the portrait camera
   );
 });
 test("a skin without a portrait gets no mode button in the memorial camera", async () => {
-  const h = harness({ mode: "lobby", info: { hasPortrait: false, hasLobby: true } });
+  const h = harness({ mode: "memorialLobby", info: { hasPortrait: false, hasMemorialLobby: true } });
   await h.run(h.host);
   assert.deepEqual([h.host.children.length, h.drawn.length, h.hits.length], [0, 0, 0]);
 });
 test("a skin with both modes keeps the right edge and names the mode it switches to", async () => {
   for (const [mode, name] of [
-    ["portrait", "lobby"],
-    ["lobby", "portrait"],
+    ["portrait", "memorialLobby"],
+    ["memorialLobby", "portrait"],
   ]) {
-    const h = harness({ mode, info: { hasPortrait: true, hasLobby: true } });
+    const h = harness({ mode, info: { hasPortrait: true, hasMemorialLobby: true } });
     await h.run(h.host);
     assert.equal(h.hits.length, 1);
     const box = h.hits[0].box;
@@ -133,7 +133,7 @@ test("a skin with both modes keeps the right edge and names the mode it switches
     assert.ok(Math.abs(box[3] - FULLSCREEN_BUTTON.h * (1920 / 2960)) < 1e-9);
     assert.ok(Math.abs(box[1] + box[3] / 2 - (25 + (FULLSCREEN_BUTTON.h * (1920 / 2960)) / 2)) < 1e-9);
     assert.equal(h.hits[0].label, name);
-    assert.equal(h.hits[0].dataset.photoAction, "Mode");
+    assert.equal(h.hits[0].dataset.thumbnailAction, "Mode");
     const [anchor, options] = h.corners[0].slice(1);
     assert.ok(Math.abs(anchor[0] + anchor[2] - 1890) < 1e-9);
     assert.equal(anchor[1], 25);
@@ -151,20 +151,20 @@ test("a dialogue is captioned like the detail screen, never by its clip name", (
   for (const locale of LOCALES) {
     const strings = ui(locale),
       T = (key, params) => {
-        assert.equal(key, "lobby.dialogue");
-        return fill(strings.lobby.dialogue, params);
+        assert.equal(key, "memorialLobby.dialogue");
+        return fill(strings.memorialLobby.dialogue, params);
       };
     for (const n of [1, 2, 9, 10, 12, 99]) {
       const caption = actionCaption({ anim: `Talk_${String(n).padStart(2, "0")}_M`, n }, T);
-      assert.equal(caption, fill(strings.lobby.dialogue, { n }), locale);
+      assert.equal(caption, fill(strings.memorialLobby.dialogue, { n }), locale);
       assert.ok(!/Talk_|_M$/.test(caption), `${locale}: no clip name in ${caption}`);
     }
   }
 });
 test("the number comes from the dialogue, whatever its place in the list", () => {
   const T = (key, params) => `${key}:${params.n}`;
-  assert.equal(actionCaption({ anim: "Talk_07_M", n: 7 }, T), "lobby.dialogue:7");
-  assert.equal(actionCaption({ anim: "Talk_00_M", n: 0 }, T), "lobby.dialogue:0", "zero is a number");
+  assert.equal(actionCaption({ anim: "Talk_07_M", n: 7 }, T), "memorialLobby.dialogue:7");
+  assert.equal(actionCaption({ anim: "Talk_00_M", n: 0 }, T), "memorialLobby.dialogue:0", "zero is a number");
 });
 test("an idle pose has no dialogue number and no label yet: it keeps its clip name", () => {
   const T = () => assert.fail("an idle pose is not a dialogue");
@@ -173,12 +173,12 @@ test("an idle pose has no dialogue number and no label yet: it keeps its clip na
 test("the Dialogue / Actions list captions its buttons through actionCaption in both name and label", () => {
   assert.match(dense, /UI\.button\(actionArea,"Sequence"\+index,actionCaption\(sequences\[index\],T\),/);
   assert.doesNotMatch(dense, /UI\.button\(actionArea,"Sequence"\+index,sequences\[index\]\.anim,/);
-  assert.equal(choiceLayout("lobby", 5).columns, 3, "unchanged: the list keeps its geometry");
+  assert.equal(choiceLayout("memorialLobby", 5).columns, 3, "unchanged: the list keeps its geometry");
 });
 
 // Blank space in the Expressions / Actions list is the list's, not the pan surface's: no grab cursor, no pan or
 // zoom there.
-const css = flat(readFileSync(new URL("../../src/bmpt/web/css/photography.css", import.meta.url), "utf8"));
+const css = flat(readFileSync(new URL("../../src/bmpt/web/css/thumbnail-capture.css", import.meta.url), "utf8"));
 const rule = (selector) =>
   [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
     .filter(([, sel]) =>
@@ -206,8 +206,8 @@ test("the choice list covers its whole box and its scroll area takes the pointer
     ["portrait", 1],
     ["portrait", 7],
     ["portrait", 30],
-    ["lobby", 2],
-    ["lobby", 14],
+    ["memorialLobby", 2],
+    ["memorialLobby", 14],
   ]) {
     const box = choiceLayout(kind, count),
       shield = choiceShield(host, box);
@@ -217,16 +217,20 @@ test("the choice list covers its whole box and its scroll area takes the pointer
       { left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` },
       `${kind} ${count}`,
     );
-    assert.equal(shield.className, "photo-choice-shield");
+    assert.equal(shield.className, "thumbnail-choice-shield");
   }
   assert.match(
     dense,
     /choiceShield\(panelHost,box\);await choicePanel\(panelHost,box\);/,
     "drawn with every expanded list",
   );
-  assert.match(rule(".photo-choice-shield"), /pointer-events: ?auto/);
-  assert.match(rule("#photo-overlay .popup-cards"), /pointer-events: ?auto/, "the gaps between cards scroll the list");
-  assert.doesNotMatch(rule(".photo-choice-shield"), /cursor/, "the game pointer, not the pan surface's grab");
+  assert.match(rule(".thumbnail-choice-shield"), /pointer-events: ?auto/);
+  assert.match(
+    rule("#thumbnail-overlay .popup-cards"),
+    /pointer-events: ?auto/,
+    "the gaps between cards scroll the list",
+  );
+  assert.doesNotMatch(rule(".thumbnail-choice-shield"), /cursor/, "the game pointer, not the pan surface's grab");
 });
 
 // the caption fits its 185 x 53 button as the other captions of the row do (UI.button: 40 down to 26, up to two lines)
@@ -258,7 +262,7 @@ for (const locale of LOCALES)
       widths = [185 / S - 60],
       heights = [53 / S - 20];
     for (let n = 0; n <= 99; n++) {
-      const caption = fill(strings.lobby.dialogue, { n }),
+      const caption = fill(strings.memorialLobby.dialogue, { n }),
         f = NGUI.fitText(caption, 40, 26, widths[0], 2);
       assert.ok(!f.overflow, `${locale}: ${caption}`);
       for (const line of f.text.split("\n"))

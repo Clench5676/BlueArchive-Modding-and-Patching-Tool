@@ -1,4 +1,4 @@
-// Escape belongs to the top layer: a message over a fullscreen view (detail.js) or over the camera (photography/
+// Escape belongs to the top layer: a message over a fullscreen view (detail.js) or over the camera (thumbnail-capture/
 // controller.js, a capture error) closes alone, and the view under it stays until the next Escape. The real popup
 // stack (web/js/ui/popup.js) on a stand-in DOM; the screens' key handlers are taken from their sources.
 import assert from "node:assert/strict";
@@ -120,7 +120,7 @@ function detailFullscreen() {
     open: true,
     fullscreen: true,
     Visual: { isOpen: () => false },
-    photoSession: false,
+    thumbnailSession: false,
     setFullscreen: async (on) => {
       calls.push(on);
     },
@@ -168,7 +168,10 @@ test("with a popup open the fullscreen handler does nothing, whatever order the 
   }
 });
 
-const controller = readFileSync(new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url), "utf8");
+const controller = readFileSync(
+  new URL("../../src/bmpt/web/js/thumbnail-capture/controller.js", import.meta.url),
+  "utf8",
+);
 const cameraKeys = controller.slice(controller.indexOf("// Escape leaves the camera"));
 
 test("Escape on a capture error over the camera closes the error only; the next one leaves the camera", () => {

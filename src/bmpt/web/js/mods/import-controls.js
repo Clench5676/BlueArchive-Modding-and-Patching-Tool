@@ -208,10 +208,10 @@ export function createImportControls(P, { ui, bars, tracked }) {
       },
     };
   }
-  // Match roster.js's native input and clear hit area to the rendered prefab labels/icons.
+  // Match student-list.js's native input and clear hit area to the rendered prefab labels/icons.
   function inputControl(caption, value, { type = "text", width = 650, search = false } = {}) {
     const wrap = el("div", "import-input-wrap"),
-      input = el("input", `roster-search${search ? " import-search" : ""}`);
+      input = el("input", `student-list-search${search ? " import-search" : ""}`);
     input.type = type;
     input.value = value;
     input.setAttribute("aria-label", caption);

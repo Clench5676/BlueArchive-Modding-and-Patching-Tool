@@ -12,7 +12,7 @@ const { ACTION_DEFS, actionLabel, actionsOf, groupLabel, menuOf, parseClip, sect
 );
 const L = await import("../../src/bmpt/web/js/ui/action-list-layout.js");
 // the clip names of three official chibis' controllers (names only), as their GLB lists them (extras.clips)
-const MODELS = JSON.parse(readFileSync(new URL("./fixtures/model_clips.json", import.meta.url), "utf8"));
+const CHIBIS = JSON.parse(readFileSync(new URL("./fixtures/model_clips.json", import.meta.url), "utf8"));
 
 const GROUPS_ALL = [...new Set(ACTION_DEFS.map((d) => d.group))];
 const parse = (suffix, dev = "Hoshino_Swimsuit") => parseClip(`${dev}_${suffix}`, dev.toLowerCase());
@@ -72,10 +72,10 @@ test("only the character's own clips count: the shared base controller's and unk
   }
 });
 
-const ofModel = (core) => actionsOf(MODELS[core].names, MODELS[core].dev);
+const ofChibi = (core) => actionsOf(CHIBIS[core].names, CHIBIS[core].dev);
 
-test("Hifumi: six groups, both cover sets, the attack's four clips in order, no random variants", () => {
-  const actions = ofModel("hihumi_original"),
+test("Hifumi: six groups, both cover sets, the attack's four clips in order, no random alts", () => {
+  const actions = ofChibi("hihumi_original"),
     tabs = menuOf(actions);
   assert.deepEqual(
     tabs.map((t) => t.id),
@@ -112,8 +112,8 @@ test("Hifumi: six groups, both cover sets, the attack's four clips in order, no 
   assert.equal(new Set(actions.map((a) => a.key)).size, actions.length, "keys are unique");
 });
 
-test("Hoshino (Swimsuit): a section per battle form after the shared one, random variants of either", () => {
-  const actions = ofModel("hoshino_swimsuit"),
+test("Hoshino (Swimsuit): a section per battle form after the shared one, random alts of either", () => {
+  const actions = ofChibi("hoshino_swimsuit"),
     tabs = menuOf(actions);
   assert.deepEqual(
     tabs.map((t) => t.id),
@@ -163,7 +163,7 @@ test("Hoshino (Swimsuit): a section per battle form after the shared one, random
 });
 
 test("Ayane: two group cards, Basic and Combat", () => {
-  const actions = ofModel("ayane_original");
+  const actions = ofChibi("ayane_original");
   assert.deepEqual(
     actions.map((a) => a.key),
     ["idle", "reaction", "walk", "pickup", "tacticalEntry"],
@@ -409,7 +409,7 @@ for (const locale of LOCALES)
     );
     // the bar's usual actions keep the siblings' size and the card's centre (within a unit or two of it)
     for (const id of ["idle", "combatIdle", "attack", "ex"]) {
-      const c = L.cardText(fits[0], T(`model.action.${id}`));
+      const c = L.cardText(fits[0], T(`chibi.action.${id}`));
       assert.ok(
         c.name.fs === fits[0].fs && Math.abs(c.nameY) <= 2,
         `${locale} ${c.name.text} at ${c.name.fs}, ${c.nameY}`,

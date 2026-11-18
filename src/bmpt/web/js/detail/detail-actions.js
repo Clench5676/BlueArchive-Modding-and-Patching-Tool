@@ -73,7 +73,7 @@ export function editModName(mod, redraw = null) {
     ModAlias.open({
       mod,
       onSaved: async () => {
-        ctx.invalidateRoster();
+        ctx.invalidateStudentList();
         if (!open || page !== pageToken) return;
         await reload();
         if (open && page === pageToken) await redraw?.();
@@ -85,10 +85,10 @@ export async function toggleFav() {
   const v = alt();
   await call(() => rpc("favorites.set", { alt: v.key, on: !isFav(v) }));
   v.favorite = !isFav(v);
-  ctx.invalidateRoster();
+  ctx.invalidateStudentList();
   renderAll();
 }
-// Add Portrait, Add Memorial Lobby and Add 3D Model open Import Mod: every mod comes in through one import.
+// Add Portrait, Add Memorial Lobby and Add Chibi open Import Mod: every mod comes in through one import.
 export function addMods() {
   location.hash = "#/import";
 }
@@ -123,7 +123,7 @@ export async function job(method, params, options = {}) {
   const target = shownStudent?.alts?.find((v) => v.key === targetKey) || alt();
   const kind = params.resourceType || mod?.resourceType || switchKind() || "portrait";
   // the progress line (job-progress.js modJob): the student, the kind, the mod's own name or the alt whose
-  // files it takes, how far a build is (a 3D model's costume) and the step; one item, so no count
+  // files it takes, how far a build is (a Chibi's costume) and the step; one item, so no count
   const who = progressName(target, "", name, shownStudent);
   const sourceKey = typeof params.source === "string" && params.source.startsWith("alt:") ? params.source.slice(4) : "";
   const sourceAlt = sourceKey ? shownStudent?.alts?.find((v) => v.key === sourceKey) : null;
@@ -249,7 +249,7 @@ export async function runUpdate(c = shownMod()) {
   return done;
 }
 // Update of an Optimize Physics copy: its costume built again under the current costume rule, in place; where
-// the student's model is configured with it, applied again
+// the student's Chibi is configured with it, applied again
 async function runRebuild(c) {
   const v = alt(),
     applied = isApplied(v, "chibi", c.key);
@@ -268,7 +268,7 @@ export async function runCompatibility() {
   if (open) await renderScreen();
 }
 export async function remapped() {
-  ctx.invalidateRoster();
+  ctx.invalidateStudentList();
   await reload();
 }
 async function runRemap(c) {
@@ -284,7 +284,7 @@ export async function jumpRepaired(c) {
 }
 // Go To from the update summary (update-impact.js, main.js openMod): once the mod's student page is in on the tab of
 // its kind, the switch opens with the mod's card selected (its details hold Update) and in view. A request the page
-// did not reach soon (a hall that kept the screen, another route) is dropped.
+// did not reach soon (a Student Hall that kept the screen, another route) is dropped.
 let wanted = null;
 const WANTED_MS = 30000;
 /**
@@ -320,7 +320,7 @@ export function runExport() {
   const c = shownMod();
   if (busy) return;
   const target = c ? `mod:${c.id}` : `alt:${alt().key}`;
-  ModExport.open({ scope: "single", target, kind: switchKind() || "portrait" });
+  ModExport.open({ scope: "single", target, resourceType: switchKind() || "portrait" });
 }
 // switch: the chosen source is written into the alt's game files of that kind, so the game shows it; the library
 // keeps what it replaces (an official file until it is official again, a mod in the library)
@@ -339,9 +339,9 @@ export async function applyCandidate(key, kind = "portrait", { again = false } =
           forget(spinePrefix(`official-${kind}`, core));
         }
       },
-      // the applied portrait or lobby swaps in with the rest of the screen; the old one shows until then
+      // the applied portrait or memorial lobby swaps in with the rest of the screen; the old one shows until then
       after: async (ok, result) => {
-        ctx.invalidateRoster();
+        ctx.invalidateStudentList();
         if (!ok) return reload();
         if (result?.unchanged) return reload();
         resetPreview(kind);
@@ -366,7 +366,7 @@ export async function saveCandidate(key, kind) {
     Loading.hold(
       async () => {
         const sources = await rpc("ui.preview", { alt: v.key, resourceType: kind, source: sourceOf(key) });
-        ctx.invalidateRoster();
+        ctx.invalidateStudentList();
         if (!open || shownStudent !== student || alt() !== v) return;
         v.previewSources = sources;
         if (kind === "chibi") judgeCross(v);

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..records import stored_target
+
 import contextlib
 import errno
 import tempfile
@@ -31,7 +33,7 @@ from ..judge import (
     crc_state,
     now,
 )
-from ..models import Pin
+from ..records import Pin
 from ..safety import check_resource_path
 from ..storage import (
     atomic_clone,
@@ -70,7 +72,7 @@ class SwitchPlanMixin:
         files = {path.name: path for path in paths}
         targets = (
             self._other_targets(files, pin)
-            if record["kind"] == "other"
+            if record["resource_type"] == "other"
             else self._spine_parts(core_of(paths[0].name), pin)
         )
         stale = dict(stale or {})
@@ -94,12 +96,12 @@ class SwitchPlanMixin:
         planned = list(groups.values())
         older = {name: path for name, path in files.items() if path not in current.values()}
         if older:
-            if record["kind"] == "other":
+            if record["resource_type"] == "other":
                 planned.append(
                     PlannedGroup(
                         prefix="",
                         category=None,
-                        core=record["target"],
+                        core=stored_target(record),
                         files=[PlannedFile(path, parse_filename(name), Action.UPDATE) for name, path in older.items()],
                         target_paths=self._other_targets(older, pin),
                     )
@@ -114,7 +116,7 @@ class SwitchPlanMixin:
         if not planned or any(
             file.action not in (Action.DIRECT_REPLACE, Action.UPDATE) for group in planned for file in group.files
         ):
-            raise ServiceError("game_file_not_found", variant=record["target"])
+            raise ServiceError("game_file_not_found", alt=stored_target(record))
         return planned
 
     @staticmethod
@@ -396,7 +398,7 @@ class SwitchPlanMixin:
             try:
                 data = read_runtime(path)
                 if (
-                    data["version"] != 1
+                    data["version"] != 2
                     or data["phase"] not in ("preparing", "writing", "committed")
                     or not path.resolve().is_relative_to(self.root / "transactions")
                 ):
@@ -818,7 +820,7 @@ class SwitchPlanMixin:
                 }
                 if build_keys and target in build_keys:
                     record["build"] = build_keys[target]
-                if source.startswith("variant:"):
+                if source.startswith("alt:"):
                     # built by this program, under its costume rule: an older rule asks for an update
                     record["costume_rule"] = COSTUME_RULE
                 previous = self._applied.get(str(target.resolve()))
@@ -895,7 +897,7 @@ class SwitchPlanMixin:
                         }
                     )
                 transaction = {
-                    "version": 1,
+                    "version": 2,
                     "phase": "preparing",
                     "pin": {
                         "key": pin.key,

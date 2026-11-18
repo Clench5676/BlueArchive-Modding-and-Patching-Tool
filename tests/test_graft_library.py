@@ -51,7 +51,7 @@ MOD_ATLAS = "page.png\nsize:16,16\nfilter:Linear,Linear\nb\nbounds:0,0,8,8\na\nb
 
 
 @pytest.fixture
-def lobby(setup_library, monkeypatch):
+def memorial_lobby(setup_library, monkeypatch):
     monkeypatch.setattr("bmpt.library.integrity.inspect", inspect_bundle)
     env = setup_library
     env.original.unlink()
@@ -77,21 +77,21 @@ def lobby(setup_library, monkeypatch):
     return env
 
 
-def test_the_check_tells_which_new_animations_a_lobby_mod_takes_and_why_not_the_others(lobby):
-    report = lobby.library.compatibility(lobby.entry.id)
-    graft = report["graft"]
-    assert graft["kind"] == "own" and graft["available"]
+def test_the_check_tells_which_new_animations_a_lobby_mod_takes_and_why_not_the_others(memorial_lobby):
+    report = memorial_lobby.library.compatibility(memorial_lobby.entry.id)
+    graft = report["add_animations"]
+    assert graft["resource_type"] == "own" and graft["available"]
     assert graft["animations"] == {"test.skel": ["Talk_01", "Look_01"]}
     assert graft["refused"] == {"test.skel": {"Hat_01": ["bone:hat"]}}
 
 
-def test_a_lobby_graft_carries_the_animations_their_events_and_regions_and_keeps_the_mods_rig(lobby):
-    library = lobby.library
-    first = library.graft(lobby.entry.id)
+def test_a_lobby_graft_carries_the_animations_their_events_and_regions_and_keeps_the_mods_rig(memorial_lobby):
+    library = memorial_lobby.library
+    first = library.add_animations(memorial_lobby.entry.id)
     assert first["plain"] and first["rigs"]["test.atlas"]["animations"] == ["Talk_01", "Look_01"]
-    preview = library.graft_check(first["token"], {"test.atlas": {"failed": []}})
+    preview = library.add_animations_check(first["token"], {"test.atlas": {"failed": []}})
     report = preview["report"]
-    assert report["grafted"] == ["Talk_01", "Look_01"] and report["animations"]
+    assert report["added_animations"] == ["Talk_01", "Look_01"] and report["animations"]
     assert report["refused"] == {"Hat_01": ["bone:hat"]} and report["partial"]
     saved = library.accept_remap(preview["preview"])
     built = remap.read_inputs(sorted(saved.mod.file.parent.glob("*.bundle")))
@@ -107,23 +107,23 @@ def test_a_lobby_graft_carries_the_animations_their_events_and_regions_and_keeps
     assert built.textures["page"].getpixel((1, 1)) == (200, 0, 0, 255)  # the mod's art as it was
 
 
-def test_an_animation_the_page_cannot_pose_is_built_out_and_reported(lobby):
-    library = lobby.library
-    first = library.graft(lobby.entry.id)
-    preview = library.graft_check(first["token"], {"test.atlas": {"failed": ["Talk_01"]}})
+def test_an_animation_the_page_cannot_pose_is_built_out_and_reported(memorial_lobby):
+    library = memorial_lobby.library
+    first = library.add_animations(memorial_lobby.entry.id)
+    preview = library.add_animations_check(first["token"], {"test.atlas": {"failed": ["Talk_01"]}})
     report = preview["report"]
-    assert report["grafted"] == ["Look_01"] and report["refused"]["Talk_01"] == ["pose:"]
+    assert report["added_animations"] == ["Look_01"] and report["refused"]["Talk_01"] == ["pose:"]
     saved = library.accept_remap(preview["preview"])
     sk = Skeleton(remap.read_inputs(sorted(saved.mod.file.parent.glob("*.bundle"))).skeletons["test.skel"])
     assert [a["name"] for a in sk.animations] == ["Idle_01", "Look_01"] and sk.events == []
 
 
-def test_a_pose_check_naming_what_the_graft_did_not_carry_is_refused(lobby):
-    library = lobby.library
-    first = library.graft(lobby.entry.id)
+def test_a_pose_check_naming_what_the_graft_did_not_carry_is_refused(memorial_lobby):
+    library = memorial_lobby.library
+    first = library.add_animations(memorial_lobby.entry.id)
     with pytest.raises(ServiceError) as caught:
-        library.graft_check(first["token"], {"test.atlas": {"failed": ["Hat_01"]}})
+        library.add_animations_check(first["token"], {"test.atlas": {"failed": ["Hat_01"]}})
     assert caught.value.code == "bad_params"
     with pytest.raises(ServiceError) as caught:
-        library.graft_build(library.graft(lobby.entry.id)["token"], {})
+        library.add_animations_build(library.add_animations(memorial_lobby.entry.id)["token"], {})
     assert caught.value.code == "bad_params"

@@ -97,10 +97,10 @@ export function jobProgress({ action, name, current = 1, total = 1, step = "", f
 // and its step (0% before it reports one). A one-item job leaves the count out.
 const KIND_KEYS = {
   portrait: "tab.portrait",
-  memorialLobby: "tab.lobby",
-  chibi: "tab.model",
+  memorialLobby: "tab.memorialLobby",
+  chibi: "tab.chibi",
   other: "import.other",
-  thumbnail: "photo.modName",
+  thumbnail: "thumbnail.modName",
 };
 const MOD_ACTIONS = {
   process: "progress.modsProcess",
@@ -119,7 +119,7 @@ const plainName = (entry) => entry?.alt || entry?.core || "";
  * @param {object} [p] A job's progress: {current, total, action, alt, kind, core, name, source, step,
  *     fraction}.
  * @param {object} [options]
- * @param {(entry: {alt?: string, core?: string}) => string} [options.nameOf] Names an alt as the roster
+ * @param {(entry: {alt?: string, core?: string}) => string} [options.nameOf] Names an alt as the student list
  *     does.
  * @param {string} [options.action] A string key that overrides the job's verb.
  * @returns {{text: string, parts: Array<[string, number]>}|null} parts are [text, shrink], shrink 0 for text

@@ -20,8 +20,8 @@ from PIL import Image
 from bmpt.host.config import APP_DIR_NAME, Settings
 from bmpt.host.data_upgrade import DataUpgrade
 from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
-from bmpt.gameassets import model, service
-from bmpt.gameassets import model_service
+from bmpt.gameassets import chibi, service
+from bmpt.gameassets import chibi_service
 from bmpt.gameassets.cache import PreviewCache, pack_preview_files, unpack_preview_files
 from bmpt.webui.api import build_api
 from bmpt.webui.server import AssetResponse, WebApp
@@ -343,13 +343,13 @@ def test_model_export_reuses_disk_and_revalidates_dependencies(tmp_path, monkeyp
         builds.append(1)
         return b"glTF" + dependency.read_bytes()
 
-    monkeypatch.setattr(model, "export_chibi", export)
-    assert game.model_glb("ch0242") == b"glTFold"
+    monkeypatch.setattr(chibi, "export_chibi", export)
+    assert game.chibi_glb("ch0242") == b"glTFold"
     restarted, _ = _game(tmp_path, PreviewCache(preview.root, allowed=True))
-    assert restarted.model_glb("ch0242") == b"glTFold"
+    assert restarted.chibi_glb("ch0242") == b"glTFold"
     assert len(builds) == 1
     dependency.write_bytes(b"new")
-    assert restarted.model_glb("ch0242") == b"glTFnew"
+    assert restarted.chibi_glb("ch0242") == b"glTFnew"
     assert len(builds) == 2
 
 
@@ -375,17 +375,17 @@ def test_model_preview_reuses_disk_exports_only_for_the_locations_its_rule_admit
     def reads(trusted):
         return PreviewReads(lambda path: path, "official", trusted)
 
-    monkeypatch.setattr(model, "export_chibi", export)
+    monkeypatch.setattr(chibi, "export_chibi", export)
     library = lambda path: path.resolve().is_relative_to(tmp_path / "library")  # noqa: E731
-    assert game.model_glb("ch0242", reads=reads(library)) == b"glTFofficial"
+    assert game.chibi_glb("ch0242", reads=reads(library)) == b"glTFofficial"
     restarted, _ = _game(tmp_path, PreviewCache(preview.root, allowed=True))
-    assert restarted.model_glb("ch0242", reads=reads(library)) == b"glTFofficial"
+    assert restarted.chibi_glb("ch0242", reads=reads(library)) == b"glTFofficial"
     assert len(builds) == 1
     kept.write_bytes(b"official, kept again")
-    assert restarted.model_glb("ch0242", reads=reads(library)) == b"glTFofficial, kept again"
+    assert restarted.chibi_glb("ch0242", reads=reads(library)) == b"glTFofficial, kept again"
     assert len(builds) == 2
     again, _ = _game(tmp_path, PreviewCache(preview.root, allowed=True))
-    assert again.model_glb("ch0242", reads=reads(lambda path: False)) == b"glTFofficial, kept again"
+    assert again.chibi_glb("ch0242", reads=reads(lambda path: False)) == b"glTFofficial, kept again"
     assert len(builds) == 3  # a location outside the resource folders that the rule does not admit is not reused
 
 
@@ -411,12 +411,12 @@ def test_model_dependency_replaced_during_decode_is_not_cached(tmp_path, monkeyp
             dependency.write_bytes(b"new")
         return b"glTF" + decoded
 
-    monkeypatch.setattr(model_service, "open_bundle", opener)
-    monkeypatch.setattr(model, "export_chibi", export)
-    with pytest.raises(AssetNotFound, match="Model dependency changed"):
-        game.model_glb("ch0242")
+    monkeypatch.setattr(chibi_service, "open_bundle", opener)
+    monkeypatch.setattr(chibi, "export_chibi", export)
+    with pytest.raises(AssetNotFound, match="Chibi dependency changed"):
+        game.chibi_glb("ch0242")
     assert not preview.root.exists(), "old decoded bytes must never be persisted with the new source stamp"
-    assert not any(key[1].startswith("gameassets-v2/model/") for key in game.cache._items)
+    assert not any(key[1].startswith("gameassets-v2/chibi/") for key in game.cache._items)
 
 
 def test_missing_model_cab_is_not_persisted_and_new_dependency_exports_on_restart(tmp_path, monkeypatch):
@@ -447,16 +447,16 @@ def test_missing_model_cab_is_not_persisted_and_new_dependency_exports_on_restar
         texture = graph.deref(owner, {"m_FileID": 1, "m_PathID": 7})
         return b"glTF" + (texture.data if texture else b"partial")
 
-    monkeypatch.setattr(model_service, "open_bundle", opener)
-    monkeypatch.setattr(model, "export_chibi", export)
-    assert game.model_glb("ch0242") == b"glTFpartial"
-    assert game.model_glb("ch0242") == b"glTFpartial", "existing memory-only render behavior is retained"
+    monkeypatch.setattr(chibi_service, "open_bundle", opener)
+    monkeypatch.setattr(chibi, "export_chibi", export)
+    assert game.chibi_glb("ch0242") == b"glTFpartial"
+    assert game.chibi_glb("ch0242") == b"glTFpartial", "existing memory-only render behavior is retained"
     assert not preview.root.exists(), "an unresolved CAB must not become a persistent partial GLB"
     dependency.write_bytes(b"complete-texture")
     restarted, _ = _game(tmp_path, PreviewCache(preview.root, allowed=True))
-    assert restarted.model_glb("ch0242") == b"glTFcomplete-texture"
+    assert restarted.chibi_glb("ch0242") == b"glTFcomplete-texture"
     warm, _ = _game(tmp_path, PreviewCache(preview.root, allowed=True))
-    assert warm.model_glb("ch0242") == b"glTFcomplete-texture"
+    assert warm.chibi_glb("ch0242") == b"glTFcomplete-texture"
     assert len(builds) == 2
 
 
@@ -472,7 +472,7 @@ def test_engine_refs_and_missing_ids_in_loaded_cabs_do_not_disable_model_cache(t
     def opener(path):
         yield SimpleNamespace(objects=[])
 
-    with model.BundleGraph({"cab-loaded": str(tmp_path / "loaded.bundle")}, opener=opener) as graph:
+    with chibi.BundleGraph({"cab-loaded": str(tmp_path / "loaded.bundle")}, opener=opener) as graph:
         assert graph.deref(owner, {"m_FileID": 1, "m_PathID": 100}) is None
         assert graph.deref(owner, {"m_FileID": 2, "m_PathID": 200}) is None
         assert graph.missing_cabs == set()
@@ -486,18 +486,18 @@ def test_real_complete_models_still_persist(tmp_path, monkeypatch, core):
     preview = PreviewCache(tmp_path / "previews", allowed=True)
     directories = get_search_dirs(game_dir)
     game = GameAssets(directories, AssetCache(root=tmp_path / "light"), preview_cache=preview)
-    if core not in game.model_cores():
+    if core not in game.chibi_cores():
         pytest.skip("Model is unavailable in the local install")
-    data = game.model_glb(core)
+    data = game.chibi_glb(core)
     assert data.startswith(b"glTF")
     assert list(preview.root.glob("*.preview")), "valid models must retain their cross-session cache"
     restarted = GameAssets(
         directories, AssetCache(root=tmp_path / "light"), preview_cache=PreviewCache(preview.root, allowed=True)
     )
     monkeypatch.setattr(
-        model, "export_chibi", lambda *args, **_: pytest.fail("Complete cached model was exported again")
+        chibi, "export_chibi", lambda *args, **_: pytest.fail("Complete cached model was exported again")
     )
-    assert restarted.model_glb(core) == data
+    assert restarted.chibi_glb(core) == data
 
 
 @pytest.fixture
@@ -594,7 +594,7 @@ def test_thumbnail_rpc_opt_in_clear_and_input_validation(preview_app, preview_se
         )
     assert rpc(app, "preview.cacheGet", renderer="spine", key="x" * 4097)["error"]["code"] == "bad_params"
     # an entry belongs to the renderer that drew it; an unnamed or unknown renderer is refused
-    assert rpc(app, "preview.cacheGet", renderer="model", key="test")["result"]["data"] is None
+    assert rpc(app, "preview.cacheGet", renderer="chibi", key="test")["result"]["data"] is None
     assert rpc(app, "preview.cacheGet", renderer="other", key="test")["error"]["code"] == "bad_params"
     assert "error" in rpc(app, "preview.cacheGet", key="test")
     assert rpc(app, "preview.cacheGet", renderer="spine", key="\udcff")["error"]["code"] == "bad_params"
@@ -694,7 +694,7 @@ def test_thumbnails_survive_a_game_update_but_not_another_install(preview_app, p
     )
     services.game.resource_version = "rv2"  # the game updated
     assert rpc(app, "preview.cacheGet", renderer="spine", key="k")["result"]["data"] == encoded
-    assert rpc(app, "preview.cacheGet", renderer="model", key="k")["result"]["data"] is None
+    assert rpc(app, "preview.cacheGet", renderer="chibi", key="k")["result"]["data"] is None
     # the install's folders name it: a still of one install is no still of another
     services.game.resource_dirs = [tmp_path / "install-a"]
     first = services.preview_thumbnail_key("k", "spine")

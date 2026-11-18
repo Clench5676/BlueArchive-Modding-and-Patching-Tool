@@ -1,0 +1,997 @@
+"""Skirt bones for a costume put on another alt's chibi (Rule B).
+
+The game keeps legs inside skirts by keying the skirt bones in every clip of the costume's own chibi. A costume moved
+onto another chibi has no such curves in that chibi's clips. Rule B rebuilds them: the costume's own skirt chains (the
+secondary bones hanging off the pelvis around the legs, which the group choice left rigid) become new bones of the
+slot's skeleton, and every clip of the slot that moves the body gets rotation curves for the chains' first bones,
+solved frame by frame:
+
+- the legs: how far the costume's own leg vertices, on the slot's leg bones in that frame, reach from the body axis
+  (the pelvis-carried vertical), per height and direction around it;
+- all chains at once turn about their first bones' heads and move those heads (Gauss-Newton on their rotation
+  vectors and shifts) to carry the cloth inside the legs' reach straight out, away from the body axis, while the cloth
+  already clear holds its place and no edge of the cloth grows (the cloth between two chains pulls the one turned less
+  along); never farther out than it was at rest, at most ``MAX_ANGLE`` from the pelvis. A turn moves only the cloth
+  below a head, so a knee raised to the height of the heads (the costume's chains often start at the pelvis) needs
+  the head itself to move: shifts cost ``SHIFT_COST`` against turns and stay within ``MAX_SHIFT``. The rest of each
+  chain follows as it hangs at rest;
+- in time: each frame starts from the turns of the frame before, let back toward rest (``RELEASE``), so that a chain
+  lifted by a leg falls back over a few frames instead of jumping; a looping clip is run twice, so that its end leads
+  into its start;
+- optionally (``smooth_weights``) the cloth's weights blend across the seams between chains, so that chains turned
+  apart pull the cloth between them instead of tearing it; at rest every bone sits where it was, so the rest pose does
+  not change.
+
+A chain follows the pelvis wherever no leg pushes it. ``chibi_adapt`` measures the result like the hem rules
+(``chibi_hems``) and picks it only where it keeps the legs inside best within the same stretch limit.
+
+Clips: the curves go into the clips' dense part (``add_dense_curves``), which the game reads beside the streamed and
+constant parts; nothing else of a clip changes.
+
+Pure numpy; the chibi plumbing is in ``chibi_adapt``.
+"""
+
+from __future__ import annotations
+
+import math
+import zlib
+from dataclasses import dataclass, field
+from typing import Any, Mapping, Sequence
+
+import numpy as np
+
+MARGIN = 0.015  # cloth keeps this far outside the legs (metres)
+STEP = 0.01  # height of a cell of the legs' reach along the body axis (metres)
+SECTORS = 64  # cells around the body axis
+LOW, HIGH = -1.6, 0.6  # heights the cells cover, from the pelvis (metres)
+ITERATIONS = 8  # Gauss-Newton steps per frame
+HOLD = 0.1  # weight of cloth already clear of the legs, against the cloth pushed out
+MIN_ANGLE = 1e-4  # a smaller step ends a frame's iterations (radians)
+MAX_ANGLE = math.radians(100)  # a chain turns at most this far from where the pelvis carries it (the game's own
+# clips turn a front skirt up to 100 degrees when the knees come up)
+MAX_SHIFT = 0.06  # a chain's first bone moves at most this far from where the pelvis carries it (metres)
+SHIFT_COST = 1.0  # weight of a first bone's shift against a pushed vertex's place
+SMOOTH_SWEEPS = 6  # weight blending sweeps across the seams (the "smooth" alt)
+SOLVE_EVERY = 3  # clip frames between solved frames; the frames between are interpolated
+RELEASE = 0.3  # share of its turn a chain keeps after 0.1 s without a push (it falls back toward rest)
+LENGTH_WEIGHT = 10.0  # weight of an edge's length against a pushed vertex's place
+DAMPING = 1e-4  # keeps each update small where nothing pins a chain
+
+UP, FRONT = np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0])  # Unity's vertical and forward
+DOWN = -UP
+
+
+# --- rotations -----------------------------------------------------------------------------------------------------
+
+
+def rigid_fit(a: np.ndarray, b: np.ndarray, w: np.ndarray) -> np.ndarray:
+    """Fit a proper rigid 4 by 4 transform carrying corresponding points from a to b.
+
+    Args:
+        a: Source 3D positions, shaped as points by 3.
+        b: Corresponding target positions in the destination space.
+        w: Per-point weights with a positive total.
+    """
+    total = float(w.sum())
+    ca, cb = (a * w[:, None]).sum(axis=0) / total, (b * w[:, None]).sum(axis=0) / total
+    h = ((a - ca) * w[:, None]).T @ (b - cb)
+    u, _, vt = np.linalg.svd(h)
+    d = 1.0 if np.linalg.det(vt.T @ u.T) >= 0 else -1.0
+    out = np.eye(4)
+    out[:3, :3] = vt.T @ np.diag([1.0, 1.0, d]) @ u.T
+    out[:3, 3] = cb - out[:3, :3] @ ca
+    return out
+
+
+def angle_of(r: np.ndarray) -> float:
+    """Return a 3 by 3 rotation matrix's angle in radians, clamping trace roundoff."""
+    return math.acos(max(-1.0, min(1.0, (float(np.trace(r)) - 1) / 2)))
+
+
+def rotation_axis(r: np.ndarray) -> np.ndarray:
+    """Return a unit axis for a 3 by 3 rotation matrix, including zero and half turns."""
+    axis = np.array([r[2, 1] - r[1, 2], r[0, 2] - r[2, 0], r[1, 0] - r[0, 1]])
+    n = float(np.linalg.norm(axis))
+    if n < 1e-9:  # no turn, or half a turn: the axis is the eigenvector of eigenvalue 1
+        values, vectors = np.linalg.eigh((r + r.T) / 2)
+        return vectors[:, int(np.argmax(values))]
+    return axis / n
+
+
+def axis_angle(axis: np.ndarray, angle: float) -> np.ndarray:
+    """Build a 3 by 3 rotation from a unit axis and angle in radians."""
+    x, y, z = axis
+    c, s, t = math.cos(angle), math.sin(angle), 1 - math.cos(angle)
+    return np.array(
+        [
+            [t * x * x + c, t * x * y - s * z, t * x * z + s * y],
+            [t * x * y + s * z, t * y * y + c, t * y * z - s * x],
+            [t * x * z - s * y, t * y * z + s * x, t * z * z + c],
+        ]
+    )
+
+
+def rotation_vector(r: np.ndarray) -> np.ndarray:
+    """Convert a 3 by 3 rotation to a vector whose direction is its axis and length its radians."""
+    angle = angle_of(r)
+    return rotation_axis(r) * angle if angle > 1e-9 else np.zeros(3)
+
+
+def from_vector(v: np.ndarray) -> np.ndarray:
+    """Convert an axis-times-radians vector to a 3 by 3 rotation, using identity near zero."""
+    angle = float(np.linalg.norm(v))
+    return axis_angle(v / angle, angle) if angle > 1e-9 else np.eye(3)
+
+
+def scale_of(m: np.ndarray) -> np.ndarray:
+    """Return a diagonal 3 by 3 scale from the lengths of an affine matrix's linear columns."""
+    return np.diag(np.linalg.norm(m[:3, :3], axis=0))
+
+
+def quaternion(r: np.ndarray) -> np.ndarray:
+    """Convert a rotation matrix to a unit (x, y, z, w) quaternion matching chibi_adapt.trs."""
+    m = r
+    trace = m[0, 0] + m[1, 1] + m[2, 2]
+    if trace > 0:
+        s = math.sqrt(trace + 1.0) * 2
+        q = [(m[2, 1] - m[1, 2]) / s, (m[0, 2] - m[2, 0]) / s, (m[1, 0] - m[0, 1]) / s, 0.25 * s]
+    elif m[0, 0] > m[1, 1] and m[0, 0] > m[2, 2]:
+        s = math.sqrt(1.0 + m[0, 0] - m[1, 1] - m[2, 2]) * 2
+        q = [0.25 * s, (m[0, 1] + m[1, 0]) / s, (m[0, 2] + m[2, 0]) / s, (m[2, 1] - m[1, 2]) / s]
+    elif m[1, 1] > m[2, 2]:
+        s = math.sqrt(1.0 + m[1, 1] - m[0, 0] - m[2, 2]) * 2
+        q = [(m[0, 1] + m[1, 0]) / s, 0.25 * s, (m[1, 2] + m[2, 1]) / s, (m[0, 2] - m[2, 0]) / s]
+    else:
+        s = math.sqrt(1.0 + m[2, 2] - m[0, 0] - m[1, 1]) * 2
+        q = [(m[0, 2] + m[2, 0]) / s, (m[1, 2] + m[2, 1]) / s, 0.25 * s, (m[1, 0] - m[0, 1]) / s]
+    q = np.array(q)
+    return q / np.linalg.norm(q)
+
+
+def continuous(quaternions: np.ndarray) -> np.ndarray:
+    """Copy frame-by-4 quaternions, flipping signs so each frame lies nearest its predecessor."""
+    out = quaternions.copy()
+    for i in range(1, len(out)):
+        if float(out[i] @ out[i - 1]) < 0:
+            out[i] = -out[i]
+    return out
+
+
+def resample(times: np.ndarray, quaternions: np.ndarray, at: np.ndarray) -> np.ndarray:
+    """Interpolate continuous quaternion samples with normalized linear blending.
+
+    Args:
+        times: Increasing source sample times or normalized clip phases.
+        quaternions: Sign-continuous (x, y, z, w) rows aligned with times.
+        at: Target times in the same units, clamped to source endpoints by interpolation.
+    """
+    out = np.stack([np.interp(at, times, quaternions[:, k]) for k in range(4)], axis=1)
+    return out / np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-12)
+
+
+# --- the legs' reach -----------------------------------------------------------------------------------------------
+
+
+@dataclass
+class Frame:
+    """The body axis of a pose: through ``centre`` along ``up``, angles measured from ``front``."""
+
+    centre: np.ndarray
+    up: np.ndarray
+    front: np.ndarray
+
+    def cylinder(self, points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Return each 3D point's height, angle in radians, radial distance, and outward unit direction."""
+        d = points - self.centre
+        height = d @ self.up
+        radial = d - np.outer(height, self.up)
+        distance = np.linalg.norm(radial, axis=1)
+        side = np.cross(self.up, self.front)
+        angle = np.arctan2(radial @ side, radial @ self.front)
+        direction = np.where(distance[:, None] > 1e-9, radial / np.maximum(distance, 1e-9)[:, None], self.front)
+        return height, angle, distance, direction
+
+
+ROWS = round((HIGH - LOW) / STEP)
+
+
+def cells(height: np.ndarray, angle: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Map cylindrical coordinates to reach-grid cells and a height-range mask.
+
+    Args:
+        height: Axis-relative heights in metres, binned between LOW and HIGH in STEP increments.
+        angle: Corresponding angles in radians, wrapped around SECTORS bins.
+
+    Returns:
+        Clamped row indices, wrapped column indices, and whether each height lies in range.
+    """
+    rows = np.floor((height - LOW) / STEP).astype(int)
+    columns = np.floor((angle + math.pi) / (2 * math.pi) * SECTORS).astype(int) % SECTORS
+    inside = (rows >= 0) & (rows < ROWS)
+    return np.clip(rows, 0, ROWS - 1), columns, inside
+
+
+def envelope(frame: Frame, legs: np.ndarray) -> np.ndarray:
+    """Build a height-by-angle leg-reach grid, widened one cell to cover gaps between vertices.
+
+    Args:
+        frame: Body axis and reference directions for the current pose.
+        legs: Posed leg positions in metres in the same space as frame.
+
+    Returns:
+        Maximum radial reach per cell, or negative infinity where no leg reaches.
+    """
+    height, angle, distance, _ = frame.cylinder(legs)
+    rows, columns, inside = cells(height, angle)
+    grid = np.full((ROWS, SECTORS), -np.inf)
+    np.maximum.at(grid, (rows[inside], columns[inside]), distance[inside])
+    wide = grid.copy()
+    for dr in (-1, 0, 1):
+        shifted = np.roll(grid, dr, axis=0)
+        if dr == 1:
+            shifted[0] = -np.inf
+        elif dr == -1:
+            shifted[-1] = -np.inf
+        for dc in (-1, 0, 1):
+            wide = np.maximum(wide, np.roll(shifted, dc, axis=1))
+    return wide
+
+
+def reach(grid: np.ndarray, frame: Frame, points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Look up leg reach, radial distance, and outward direction for each point.
+
+    Args:
+        grid: Widened leg envelope indexed by height and angle.
+        frame: Body-axis frame used to construct the grid.
+        points: Test positions in the frame's coordinate space, in metres.
+    """
+    height, angle, distance, direction = frame.cylinder(points)
+    rows, columns, inside = cells(height, angle)
+    return np.where(inside, grid[rows, columns], -np.inf), distance, direction
+
+
+def _skew(v: np.ndarray) -> np.ndarray:
+    """Per row, the matrix of the cross product with it (``_skew(v) @ w == v x w``)."""
+    out = np.zeros((len(v), 3, 3))
+    out[:, 0, 1], out[:, 0, 2] = -v[:, 2], v[:, 1]
+    out[:, 1, 0], out[:, 1, 2] = v[:, 2], -v[:, 0]
+    out[:, 2, 0], out[:, 2, 1] = -v[:, 1], v[:, 0]
+    return out
+
+
+def skin(rest: np.ndarray, joints: np.ndarray, weights: np.ndarray, matrices: np.ndarray) -> np.ndarray:
+    """Skin rest vertices through per-influence affine matrices.
+
+    Args:
+        rest: Rest positions shaped as vertices by 3.
+        joints: Matrix indices shaped as vertices by influences.
+        weights: Corresponding influence weights in the same shape as joints.
+        matrices: Bone skin matrices shaped as bones by 4 by 4.
+    """
+    homogeneous = np.c_[rest, np.ones(len(rest))]
+    out = np.zeros((len(rest), 3))
+    for k in range(joints.shape[1]):
+        out += weights[:, k : k + 1] * np.einsum("nij,nj->ni", matrices[joints[:, k]], homogeneous)[:, :3]
+    return out
+
+
+@dataclass
+class Legs:
+    """The costume's leg vertices (the prefab root's space) and their influences as slot nodes."""
+
+    rest: np.ndarray
+    joints: np.ndarray
+    weights: np.ndarray
+
+
+# --- chains --------------------------------------------------------------------------------------------------------
+
+
+@dataclass
+class Chains:
+    """Describe added bones, their anchors, rest transforms, and parent-ordered subtrees.
+
+    A negative parent denotes the slot anchor; rest world matrices use prefab-root space.
+    Each subtree starts with its own bone and puts parents before children.
+    """
+
+    anchor: int
+    parents: list[int]
+    local: np.ndarray
+    rest: np.ndarray
+    subtree: list[list[int]] = field(default_factory=list)
+    anchors: list[int] = field(default_factory=list)  # per bone, the slot node a root hangs off (empty: ``anchor``)
+
+    def __post_init__(self) -> None:
+        """Derive parent-ordered subtrees when the caller supplies none."""
+        if not self.subtree:
+            children: dict[int, list[int]] = {}
+            for i, p in enumerate(self.parents):
+                children.setdefault(p, []).append(i)
+            for i in range(len(self.parents)):
+                out, todo = [], [i]
+                while todo:
+                    j = todo.pop(0)
+                    out.append(j)
+                    todo.extend(children.get(j, []))
+                self.subtree.append(out)
+
+    @property
+    def roots(self) -> list[int]:
+        """Return chain bone indices whose parent is a slot anchor."""
+        return [i for i, p in enumerate(self.parents) if p < 0]
+
+    def anchor_of(self, i: int) -> int:
+        """Return bone i's per-root slot anchor, falling back to the shared anchor."""
+        return self.anchors[i] if self.anchors else self.anchor
+
+    def posed_in(self, pose: Sequence[np.ndarray], turns: Mapping[int, np.ndarray] | None = None) -> np.ndarray:
+        """Pose chains below their individual slot anchors, restoring each bone's stored scale.
+
+        Args:
+            pose: Slot-node world matrices supplying anchor placements.
+            turns: Scale-free local 4 by 4 transforms by chain bone index; None retains rest locals.
+        """
+        out = np.zeros((len(self.parents), 4, 4))
+        for i, p in enumerate(self.parents):  # parents come first
+            local = self.local[i]
+            if turns is not None and i in turns:
+                local = turns[i].copy()
+                local[:3, :3] = turns[i][:3, :3] @ scale_of(self.local[i])
+            out[i] = (out[p] if p >= 0 else np.asarray(pose[self.anchor_of(i)])) @ local
+        return out
+
+    def hanging(self, i: int) -> np.ndarray:
+        """Return chain bone i's rest local 4 by 4 transform without scale, in turn format."""
+        out = self.local[i].copy()
+        out[:3, :3] = self.local[i][:3, :3] @ np.linalg.inv(scale_of(self.local[i]))
+        return out
+
+    def posed(self, anchor: np.ndarray, turns: Mapping[int, np.ndarray] | None = None) -> np.ndarray:
+        """Pose all chains below one shared anchor, restoring stored bone scales.
+
+        Args:
+            anchor: Shared anchor's world 4 by 4 transform.
+            turns: Scale-free local 4 by 4 transforms by chain bone index; None retains rest locals.
+        """
+        out = np.zeros((len(self.parents), 4, 4))
+        for i, p in enumerate(self.parents):  # parents come first
+            local = self.local[i]
+            if turns is not None and i in turns:
+                local = turns[i].copy()
+                local[:3, :3] = turns[i][:3, :3] @ scale_of(self.local[i])
+            out[i] = (out[p] if p >= 0 else anchor) @ local
+        return out
+
+
+@dataclass
+class Cloth:
+    """Hold chain-carried cloth vertices in prefab-root space, skin influences, and edges.
+
+    Influence columns index chain bones first (0 .. len(chains) - 1), followed by fixed slot nodes.
+    """
+
+    rest: np.ndarray
+    joints: np.ndarray
+    weights: np.ndarray
+    fixed: list[int]
+    edges: np.ndarray = field(default_factory=lambda: np.zeros((0, 2), int))
+
+
+def smooth_weights(chain: np.ndarray, edges: np.ndarray, sweeps: int | None = None) -> np.ndarray:
+    """Blend neighboring chain influences while retaining each vertex's total chain weight.
+
+    Args:
+        chain: Vertex-by-chain-bone weight matrix; vertices with no chain weight remain unchanged.
+        edges: Vertex-index pairs defining neighbors for smoothing.
+        sweeps: Number of blending passes; None uses SMOOTH_SWEEPS.
+    """
+    sweeps = SMOOTH_SWEEPS if sweeps is None else sweeps
+    share = chain.sum(axis=1)
+    on = share > 1e-9
+    out = chain.copy()
+    if not len(edges):
+        return out
+    a, b = edges[:, 0], edges[:, 1]
+    for _ in range(sweeps):
+        unit = out / np.where(on, share, 1.0)[:, None]
+        total = np.zeros_like(unit)
+        count = np.zeros(len(unit))
+        np.add.at(total, a, unit[b] * on[b][:, None])
+        np.add.at(total, b, unit[a] * on[a][:, None])
+        np.add.at(count, a, on[b])
+        np.add.at(count, b, on[a])
+        mixed = np.where((count > 0)[:, None], 0.5 * unit + 0.5 * total / np.maximum(count, 1)[:, None], unit)
+        out = np.where(on[:, None], mixed * share[:, None], out)
+    return out
+
+
+class Solver:
+    """Solve chain-root turns and shifts that keep cloth outside posed legs."""
+
+    def __init__(self, chains: Chains, cloth: Cloth, legs: Legs, t_rest: Sequence[np.ndarray], pelvis: int):
+        """Prepare skinning, rest clearances, and Gauss-Newton constraints.
+
+        Args:
+            chains: Added bones and their slot anchors.
+            cloth: Carried cloth geometry and chain/fixed-node influence columns.
+            legs: Costume leg vertices weighted onto destination slot nodes.
+            t_rest: Slot-node rest world matrices in prefab-root space.
+            pelvis: Slot pelvis node defining the body's cylindrical frame.
+        """
+        self.chains, self.cloth, self.legs, self.pelvis = chains, cloth, legs, pelvis
+        n = len(chains.parents)
+        rest = [np.asarray(m) for m in t_rest]
+        self.inverse = np.array([np.linalg.inv(m) for m in chains.rest])
+        self.fixed_inverse = np.array([np.linalg.inv(rest[f]) for f in cloth.fixed]).reshape(-1, 4, 4)
+        self.leg_nodes = sorted(set(legs.joints.ravel().tolist()))
+        lookup = {node: k for k, node in enumerate(self.leg_nodes)}
+        self.leg_columns = np.vectorize(lookup.get, otypes=[int])(legs.joints)
+        self.leg_inverse = np.array([np.linalg.inv(rest[f]) for f in self.leg_nodes]).reshape(-1, 4, 4)
+        self.pelvis_rest = np.linalg.inv(rest[pelvis][:3, :3])
+        self.roots = chains.roots
+        on_chain = cloth.joints < n
+        self.masks = {
+            i: (np.isin(cloth.joints, chains.subtree[i]) & on_chain & (cloth.weights > 0)).astype(float)
+            for i in self.roots
+        }
+        # each influence's share per root (vertices x influences x roots), the roots' total share, the edges' lengths
+        self.parts = (
+            np.stack([self.masks[r] * cloth.weights for r in self.roots], axis=2)
+            if self.roots
+            else np.zeros(cloth.weights.shape + (0,))
+        )
+        self.part_share = self.parts.sum(axis=1)
+        self.homogeneous = np.c_[cloth.rest, np.ones(len(cloth.rest))]
+        self.vertices = np.arange(len(cloth.rest))
+        self.root_indices = np.asarray(self.roots, dtype=int)
+        self.jacobian = np.zeros((len(cloth.rest), 3, len(self.roots), 6))
+        for axis in range(3):
+            self.jacobian[:, axis, :, 3 + axis] = self.part_share
+        e = cloth.edges
+        self.lengths = np.linalg.norm(cloth.rest[e[:, 1]] - cloth.rest[e[:, 0]], axis=1) if len(e) else np.zeros(0)
+        self.edge_share = (self.part_share[e[:, 1]] - self.part_share[e[:, 0]]).T[:, :, None]
+        self.shift_cost = SHIFT_COST * np.eye(3)
+        self.damping = DAMPING * np.eye(6 * len(self.roots))
+        # how far outside the legs each cloth vertex was at rest: it never has to be farther out than that
+        frame = self.frame(rest)
+        legs_reach, distance, _ = reach(envelope(frame, legs.rest), frame, cloth.rest)
+        self.allowance = np.minimum(MARGIN, np.where(np.isfinite(legs_reach), distance - legs_reach, np.inf))
+
+    def frame(self, pose: Sequence[np.ndarray]) -> Frame:
+        """Build the body-axis frame from slot world matrices and the pelvis's rest orientation."""
+        m = np.asarray(pose[self.pelvis])
+        turn = m[:3, :3] @ self.pelvis_rest
+        up, front = turn @ UP, turn @ FRONT
+        return Frame(m[:3, 3].copy(), up / np.linalg.norm(up), front / np.linalg.norm(front))
+
+    def legs_at(self, pose: Sequence[np.ndarray]) -> np.ndarray:
+        """Skin the costume's leg vertices under the slot-node world matrices in pose."""
+        matrices = np.array([pose[f] for f in self.leg_nodes]) @ self.leg_inverse
+        return skin(self.legs.rest, self.leg_columns, self.legs.weights, matrices)
+
+    def push(
+        self, points: np.ndarray, rows: np.ndarray, grid: np.ndarray, frame: Frame
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Find outward targets and a move mask for points inside the allowed leg clearance.
+
+        Args:
+            points: Current cloth positions in prefab-root space, in metres.
+            rows: Original cloth vertex indices selecting each point's rest-clearance allowance.
+            grid: Current leg envelope from envelope.
+            frame: Body-axis frame used for that envelope.
+        """
+        legs_reach, distance, direction = reach(grid, frame, points)
+        needed = legs_reach + self.allowance[rows]
+        moved = np.isfinite(legs_reach) & (distance < needed - 1e-6)
+        target = points.copy()
+        target[moved] += direction[moved] * (needed[moved] - distance[moved])[:, None]
+        return target, moved
+
+    def solve(self, pose: Sequence[np.ndarray], start: Mapping[int, np.ndarray] | None = None) -> dict[int, np.ndarray]:
+        """Solve scale-free local 4 by 4 transforms for each chain root.
+
+        Args:
+            pose: Destination slot-node world matrices for the frame.
+            start: Initial root transforms, typically the released previous frame; None starts hanging at rest.
+        """
+        ch = self.chains
+        fixed = np.array([np.asarray(pose[f]) for f in self.cloth.fixed]).reshape(-1, 4, 4) @ self.fixed_inverse
+        frame = self.frame(pose)
+        grid = envelope(frame, self.legs_at(pose))
+        base = ch.posed_in(pose)
+        world = ch.posed_in(pose, start) if start else base.copy()
+        self._joint(world, base, fixed, grid, frame)
+        out = {}
+        for i in self.roots:
+            local = np.linalg.inv(np.asarray(pose[ch.anchor_of(i)])) @ world[i]
+            local[:3, :3] = local[:3, :3] @ np.linalg.inv(scale_of(local))
+            out[i] = local
+        return out
+
+    def released(self, turns: Mapping[int, np.ndarray], seconds: float) -> dict[int, np.ndarray]:
+        """Relax root rotations and shifts toward rest with the RELEASE decay rate.
+
+        Args:
+            turns: Scale-free local root transforms to relax without mutating them.
+            seconds: Elapsed time in seconds; negative intervals are treated as zero.
+        """
+        keep = RELEASE ** (max(seconds, 0.0) / 0.1)
+        out = {}
+        for i, r in turns.items():
+            rest = self.chains.hanging(i)
+            m = rest.copy()
+            m[:3, :3] = from_vector(rotation_vector(r[:3, :3] @ rest[:3, :3].T) * keep) @ rest[:3, :3]
+            m[:3, 3] = rest[:3, 3] + (r[:3, 3] - rest[:3, 3]) * keep
+            out[i] = m
+        return out
+
+    def sequence(
+        self, times: Sequence[float], pose: Any, loop: bool = False, *, step=lambda: None
+    ) -> list[dict[int, np.ndarray]]:
+        """Solve consecutive root turns, relaxing each preceding frame toward rest.
+
+        A looping clip runs twice, starting the second pass from the first pass's end.
+
+        Args:
+            times: Frame times in seconds defining relaxation intervals.
+            pose: Frame-index callback returning destination slot-node world matrices.
+            loop: Whether to run a second pass to connect the end to the start.
+            step: No-argument yield/cancellation callback before pose reads and frame solves.
+        """
+        poses = []
+        for k in range(len(times)):
+            step()
+            poses.append(pose(k))
+        out: list[dict[int, np.ndarray]] = []
+        previous, last = None, None
+        for run in range(2 if loop and len(times) > 1 else 1):
+            out = []
+            for k, t in enumerate(times):
+                step()
+                if previous is not None:
+                    interval = t - last if k else (times[1] - times[0] if len(times) > 1 else 0.0)
+                    previous = self.released(previous, interval)
+                previous = self.solve(poses[k], previous)
+                last = t
+                out.append(previous)
+        return out
+
+    def posed(self, pose: Sequence[np.ndarray], turns: Mapping[int, np.ndarray]) -> np.ndarray:
+        """Return chain world matrices from slot-node pose matrices and scale-free local root turns."""
+        return self.chains.posed_in(pose, turns)
+
+    def _carry(self, world: np.ndarray, root: int) -> None:
+        ch = self.chains
+        for j in ch.subtree[root][1:]:  # the chain follows its first bone as it hangs at rest
+            world[j] = world[ch.parents[j]] @ ch.local[j]
+
+    def _joint(self, world: np.ndarray, base: np.ndarray, fixed: np.ndarray, grid: np.ndarray, frame: Frame) -> None:
+        """Solve all chains together with Gauss-Newton steps.
+
+        Steps on the roots' turns (rotation vectors about their heads) and the heads' shifts carry the cloth inside
+        the legs out, hold the cloth already clear, and keep the cloth's edges from growing.
+        """
+        c, roots = self.cloth, self.roots
+        if not roots:
+            return
+        count, width = len(c.rest), 6 * len(roots)
+        everything, homogeneous = self.vertices, self.homogeneous
+        jacobian = self.jacobian.copy()
+        blocks = np.arange(len(roots))
+        edges = c.edges
+        for _ in range(ITERATIONS):
+            matrices = world @ self.inverse
+            if len(fixed):
+                matrices = np.concatenate([matrices, fixed])
+            # each influence's place, the vertices, and each root's share of them
+            places = np.einsum("vkij,vj->vki", matrices[c.joints], homogeneous, optimize=True)[..., :3]
+            points = (c.weights[..., None] * places).sum(axis=1)
+            target, moved = self.push(points, everything, grid, frame)
+            if not moved.any():
+                break
+            partial = np.einsum("vkr,vki->rvi", self.parts, places, optimize=True)
+            heads = world[self.root_indices, :3, 3]
+            arm = partial - self.part_share.T[:, :, None] * heads[:, None, :]  # (roots, vertices, 3)
+            # a vertex moves by sum_r (omega_r x arm_r + share_r shift_r) = sum_r (-[arm_r]x omega_r + share_r shift_r)
+            jacobian = jacobian.reshape(count, 3, len(roots), 6)
+            jacobian[:, 0, :, 1], jacobian[:, 0, :, 2] = arm[:, :, 2].T, -arm[:, :, 1].T
+            jacobian[:, 1, :, 0], jacobian[:, 1, :, 2] = -arm[:, :, 2].T, arm[:, :, 0].T
+            jacobian[:, 2, :, 0], jacobian[:, 2, :, 1] = arm[:, :, 1].T, -arm[:, :, 0].T
+            jacobian = jacobian.reshape(3 * count, width)
+            weight = np.repeat(np.where(moved, 1.0, HOLD), 3)
+            residual = np.where(moved[:, None], target - points, 0.0).ravel()
+            a = (jacobian * weight[:, None]).T @ jacobian
+            b = jacobian.T @ (weight * residual)
+            if len(edges):
+                d = points[edges[:, 1]] - points[edges[:, 0]]
+                length = np.linalg.norm(d, axis=1)
+                unit = d / np.maximum(length, 1e-12)[:, None]
+                # an edge grows by unit . (move_b - move_a)
+                #   = sum_r omega_r . ((arm_rb - arm_ra) x unit) + shift_r . unit (share_rb - share_ra)
+                turn = np.cross(arm[:, edges[:, 1]] - arm[:, edges[:, 0]], unit[None])
+                shift = self.edge_share * unit[None]
+                rows = np.concatenate([turn, shift], axis=2).transpose(1, 0, 2).reshape(len(edges), width)
+                stretch = np.minimum(0.0, self.lengths - length)  # pull grown edges back, keep the others
+                a += LENGTH_WEIGHT * rows.T @ rows
+                b += LENGTH_WEIGHT * rows.T @ stretch
+            # a shift costs against the turns: the heads move only where a turn cannot reach
+            shifted = world[self.root_indices, :3, 3] - base[self.root_indices, :3, 3]
+            a.reshape(len(roots), 6, len(roots), 6)[blocks, 3:, blocks, 3:] += self.shift_cost
+            b.reshape(len(roots), 6)[:, 3:] -= SHIFT_COST * shifted
+            a += self.damping
+            step = np.linalg.solve(a, b).reshape(len(roots), 6)
+            if float(np.abs(step[:, :3]).max()) < MIN_ANGLE and float(np.abs(step[:, 3:]).max()) < MIN_ANGLE * 0.1:
+                break
+            for k, r in enumerate(roots):
+                turned = from_vector(step[k, :3]) @ world[r][:3, :3]
+                total = turned @ base[r][:3, :3].T
+                if angle_of(total) > MAX_ANGLE:
+                    turned = axis_angle(rotation_axis(total), MAX_ANGLE) @ base[r][:3, :3]
+                world[r][:3, :3] = turned
+                moved = shifted[k] + step[k, 3:]
+                length = float(np.linalg.norm(moved))
+                if length > MAX_SHIFT:
+                    moved *= MAX_SHIFT / length
+                world[r][:3, 3] = base[r][:3, 3] + moved
+                self._carry(world, r)
+
+
+# --- clips ---------------------------------------------------------------------------------------------------------
+
+# --- springs (Optimize Physics: hair, ribbons and loose cloth that the group choice left rigid) --------------------
+
+SPRING_DAMPING = 0.45  # damping ratio of a chain's swing
+SPRING_SPEED = 1.5  # a chain's natural frequency, times a pendulum's of its length
+SPRING_RATES = (4.0, 25.0)  # its bounds (radians per second)
+SPRING_SUBSTEP = 1 / 120  # seconds per integration step
+MIN_LENGTH = 0.01  # a chain shorter than this (metres, head to farthest bone) does not swing
+HANGING = math.radians(60)  # a chain whose tip lies within this of straight down at rest hangs (hair, ribbons)
+GRAVITY = 0.5  # the share of its rest direction in the world a hanging chain keeps as the head turns
+
+
+class Spring:
+    """Simulate anchor-driven chain swings for baking into slot clips like Rule B turns.
+
+    Each root's
+    chain tip (its farthest bone) is a damped spring toward where the anchor carries it at rest, kept at the chain's
+    length from the root's head; the root turns to point at it, at most ``limits[root]`` radians, and the chain follows
+    as it hangs at rest. A clip starts at rest; a looping one is run twice, the second time from the first's end, so
+    that its end leads into its start.
+    """
+
+    def __init__(
+        self,
+        chains: Chains,
+        limits: Mapping[int, float],
+        keys: Mapping[tuple[str, ...], tuple[np.ndarray, Mapping[int, np.ndarray]]] | None = None,
+        own_rest: np.ndarray | None = None,
+    ):
+        """Prepare swing limits and optional source animation keys.
+
+        A slot clip matching a source suffix uses keyed rotations instead of the swing.
+
+        Args:
+            chains: Added chain hierarchy with shared anchor and rest matrices.
+            limits: Maximum turn in radians by chain-root index; unlisted roots do not swing.
+            keys: Lower-case clip suffix token tuples mapped to 0..1 phases and local quaternion samples per bone.
+                None provides no source-key matching.
+            own_rest: Each chain bone's source-local rest matrix; None disables keyed retargeting.
+        """
+        self.chains = chains
+        self.keys = dict(keys or {})
+        self.own_rest = own_rest
+        self.roots = [r for r in chains.roots if r in limits]
+        self.limits = np.array([limits[r] for r in self.roots])
+        self.inverse = np.array([np.linalg.inv(m) for m in chains.rest])
+        tips, lengths = [], []
+        for r in self.roots:
+            inverse = np.linalg.inv(chains.rest[r])
+            places = [(inverse @ chains.rest[j])[:3, 3] for j in chains.subtree[r]]
+            far = max(places, key=lambda v: float(np.linalg.norm(v)))
+            tips.append(far)
+            lengths.append(float(np.linalg.norm(chains.rest[r][:3, :3] @ far)))
+        self.tips = np.array(tips).reshape(-1, 3)  # in each root's own space
+        self.lengths = np.array(lengths)  # world length, head to tip
+        # each chain's tip direction at rest in the prefab's space; those that point down hang under gravity
+        rest_dirs = np.array([chains.rest[r][:3, :3] @ t for r, t in zip(self.roots, self.tips)]).reshape(-1, 3)
+        norms = np.maximum(np.linalg.norm(rest_dirs, axis=1, keepdims=True), 1e-9)
+        self.rest_dirs = rest_dirs / norms
+        self.hanging = np.array([float(d @ DOWN) >= math.cos(HANGING) for d in self.rest_dirs], bool)
+        self.rates = np.clip(SPRING_SPEED * np.sqrt(9.81 / np.maximum(self.lengths, MIN_LENGTH)), *SPRING_RATES)
+
+    def _rest(self, anchor: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """The roots' world matrices at rest below ``anchor``, their heads and their tips' targets."""
+        worlds = np.array([anchor @ self.chains.local[r] for r in self.roots]).reshape(-1, 4, 4)
+        heads = worlds[:, :3, 3]
+        targets = np.einsum("rij,rj->ri", worlds[:, :3, :3], self.tips) + heads
+        return worlds, heads, targets
+
+    def sequence(self, times: Sequence[float], pose: Any, loop: bool = False) -> list[dict[int, np.ndarray]]:
+        """Simulate scale-free local root transforms below the anchor for consecutive frames.
+
+        Args:
+            times: Nonempty sample times in seconds defining integration intervals.
+            pose: Frame-index callback returning destination slot-node world matrices.
+            loop: Whether to run twice so the ending swing carries into the start.
+        """
+        anchors = [np.asarray(pose(k)[self.chains.anchor]) for k in range(len(times))]
+        rests = [self._rest(a) for a in anchors]
+        x, v = rests[0][2].copy(), np.zeros_like(rests[0][2])
+        out: list[dict[int, np.ndarray]] = []
+        for run in range(2 if loop and len(times) > 1 else 1):
+            out = []
+            for k in range(len(times)):
+                if k or run:
+                    before = rests[k - 1] if k else rests[-1]
+                    dt = (times[k] - times[k - 1]) if k else (times[1] - times[0])
+                    x, v = self._advance(x, v, before, rests[k], max(float(dt), 0.0))
+                out.append(self._turns(anchors[k], rests[k], x))
+        return out
+
+    def _advance(
+        self, x: np.ndarray, v: np.ndarray, before: tuple, after: tuple, dt: float
+    ) -> tuple[np.ndarray, np.ndarray]:
+        steps = max(1, int(math.ceil(dt / SPRING_SUBSTEP)))
+        h = dt / steps
+        w = self.rates[:, None]
+        for i in range(1, steps + 1):
+            f = i / steps
+            head = before[1] + f * (after[1] - before[1])
+            target = before[2] + f * (after[2] - before[2])
+            v = v + h * (w * w * (target - x) - 2 * SPRING_DAMPING * w * v)
+            x = x + h * v
+            # the tip stays at the chain's length from the head; what moved it along the chain is dropped
+            d = x - head
+            n = np.maximum(np.linalg.norm(d, axis=1, keepdims=True), 1e-9)
+            x = head + d / n * self.lengths[:, None]
+            v = v - (v * (d / n)).sum(axis=1, keepdims=True) * (d / n)
+        return x, v
+
+    def _turns(self, anchor: np.ndarray, rest: tuple, x: np.ndarray) -> dict[int, np.ndarray]:
+        worlds, heads, targets = rest
+        out = {}
+        inverse = np.linalg.inv(anchor)
+        for k, r in enumerate(self.roots):
+            u0, u = targets[k] - heads[k], x[k] - heads[k]
+            turn = np.eye(3)
+            n0, n1 = float(np.linalg.norm(u0)), float(np.linalg.norm(u))
+            if n0 > 1e-9 and n1 > 1e-9:
+                axis = np.cross(u0, u)
+                s, c = float(np.linalg.norm(axis)), float(u0 @ u)
+                angle = min(math.atan2(s, c), float(self.limits[k]))
+                if s > 1e-12 and angle > 1e-6:
+                    turn = axis_angle(axis / s, angle)
+            world = worlds[k].copy()
+            world[:3, :3] = turn @ world[:3, :3]
+            local = inverse @ world
+            local[:3, :3] = local[:3, :3] @ np.linalg.inv(scale_of(local))
+            out[r] = local
+        return out
+
+    def keyed(self, name: str, times: Sequence[float]) -> list[dict[int, np.ndarray]] | None:
+        """Retarget matching source rotation keys onto the slot clip's time span.
+
+        Each bone turns relative to its rest as the source turns relative to its own;
+        positions stay fixed and local 4 by 4 output transforms omit bone scale.
+
+        Args:
+            name: Slot clip name whose trailing lower-case tokens select the source clip.
+            times: Slot sample times in seconds, normalized across their first-to-last span.
+
+        Returns:
+            Per-frame bone transforms, or None without matching keys, source rest matrices, or times.
+        """
+        tokens = [t for t in name.lower().split("_") if t]
+        match = next(
+            (self.keys[tuple(tokens[i:])] for i in range(1, len(tokens) - 1) if tuple(tokens[i:]) in self.keys), None
+        )
+        if match is None or self.own_rest is None or not len(times):
+            return None
+        phases, rotations = match
+        start, span = float(times[0]), max(float(times[-1]) - float(times[0]), 1e-9)
+        at = np.clip((np.asarray(times, float) - start) / span, 0.0, 1.0)
+        out: list[dict[int, np.ndarray]] = [{} for _ in at]
+        for bone, quaternions in rotations.items():
+            q = resample(phases, continuous(quaternions), at)
+            rest = self.own_rest[bone]
+            scale = scale_of(rest)
+            back = np.linalg.inv(rest)
+            for k, quaternion_ in enumerate(q):
+                x, y, z, w = (float(v) for v in quaternion_ / max(float(np.linalg.norm(quaternion_)), 1e-12))
+                own = np.eye(4)
+                own[:3, :3] = (
+                    np.array(
+                        [
+                            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+                        ]
+                    )
+                    @ scale
+                )
+                own[:3, 3] = rest[:3, 3]
+                local = self.chains.local[bone] @ back @ own
+                local[:3, :3] = local[:3, :3] @ np.linalg.inv(scale_of(local))
+                out[k][bone] = local
+        return out
+
+    def settle(self, turns: list[dict[int, np.ndarray]], anchors: Sequence[np.ndarray]) -> list[dict[int, np.ndarray]]:
+        """Apply gravity to hanging chains while leaving ears and antennae unchanged.
+
+        Each hanging root turns its tip GRAVITY of the way back toward its rest direction in the
+        world, about its own head, so hair hangs down as the head tilts instead of keeping its angle to the head; the
+        other chains (ears, antennae) are left as they are. Every hanging root gets a turn in every frame.
+
+        Args:
+            turns: Per-frame scale-free local bone transforms; input mappings remain unchanged.
+            anchors: Corresponding anchor world matrices used to measure world-down settling.
+        """
+        out = []
+        for frame, anchor in zip(turns, anchors):
+            frame = dict(frame)
+            for k, r in enumerate(self.roots):
+                if not self.hanging[k]:
+                    continue
+                local = frame.get(r, self.chains.hanging(r))
+                world = anchor @ local
+                world[:3, :3] = world[:3, :3] @ scale_of(self.chains.local[r])
+                d = world[:3, :3] @ self.tips[k]
+                n = float(np.linalg.norm(d))
+                if n < 1e-9:
+                    continue
+                d = d / n
+                want = (1 - GRAVITY) * d + GRAVITY * self.rest_dirs[k]
+                want /= max(float(np.linalg.norm(want)), 1e-9)
+                axis = np.cross(d, want)
+                s_, c_ = float(np.linalg.norm(axis)), float(d @ want)
+                if s_ < 1e-9:
+                    frame[r] = local
+                    continue
+                turn = axis_angle(axis / s_, math.atan2(s_, c_))
+                settled = world.copy()
+                settled[:3, :3] = turn @ world[:3, :3]
+                out_local = np.linalg.inv(anchor) @ settled
+                out_local[:3, :3] = out_local[:3, :3] @ np.linalg.inv(scale_of(out_local))
+                frame[r] = out_local
+            out.append(frame)
+        return out
+
+    def posed(self, pose: Sequence[np.ndarray], turns: Mapping[int, np.ndarray]) -> np.ndarray:
+        """Return chain world matrices under the slot pose's shared anchor and scale-free local turns."""
+        return self.chains.posed(np.asarray(pose[self.chains.anchor]), turns)
+
+
+def binding_dims(binding: Mapping[str, int]) -> int:
+    """Count generic-binding scalar curves using the same layout as chibi.binding_dims."""
+    if binding["typeID"] == 4:
+        return 4 if binding["attribute"] == 2 else 3 if binding["attribute"] in (1, 3, 4) else 1
+    return 1
+
+
+MUSCLE_FIXED = 2528  # bytes of a generic clip's muscle constant besides its arrays (checked on 5,882 official clips)
+
+
+def muscle_size(tree: Mapping[str, Any]) -> int:
+    """Compute a clip typetree's muscle size: fixed bytes, 4 per sample/word/reference, and 8 per value delta."""
+    muscle = tree["m_MuscleClip"]
+    clip = muscle["m_Clip"]["data"]
+    return (
+        MUSCLE_FIXED
+        + 4
+        * (
+            len(clip["m_StreamedClip"]["data"])
+            + len(clip["m_DenseClip"]["m_SampleArray"])
+            + len(clip["m_ConstantClip"]["data"])
+        )
+        + 8 * len(muscle["m_ValueArrayDelta"])
+        + 4 * len(muscle["m_ValueArrayReferencePose"])
+    )
+
+
+def dense_grid(tree: Mapping[str, Any]) -> np.ndarray | None:
+    """Find writable dense sample times, or None for legacy, incompatible, or durationless clips.
+
+    Args:
+        tree: AnimationClip typetree; existing dense curves/frame counts define the grid,
+            otherwise the clip's own rate is measured from its start time in seconds.
+    """
+    grid = _grid(tree)
+    return None if grid is None else grid[0] + np.arange(grid[2]) / grid[1]
+
+
+def _grid(tree: Mapping[str, Any]) -> tuple[float, float, int] | None:
+    """(begin, rate, frames) of :func:`dense_grid`."""
+    if tree.get("m_Legacy") or "m_MuscleClip" not in tree:
+        return None
+    muscle = tree["m_MuscleClip"]
+    clip = muscle["m_Clip"]["data"]
+    streamed, dense, constant = clip["m_StreamedClip"], clip["m_DenseClip"], clip["m_ConstantClip"]
+    curves = streamed["curveCount"] + dense["m_CurveCount"] + len(constant["data"])
+    if tree.get("m_MuscleClipSize") != muscle_size(tree) or len(muscle["m_ValueArrayDelta"]) != curves:
+        return None
+    if len(dense["m_SampleArray"]) != dense["m_CurveCount"] * dense["m_FrameCount"]:
+        return None
+    # the new curves go between the dense and the constant ones: a binding must end there
+    position, total, boundary = streamed["curveCount"] + dense["m_CurveCount"], 0, False
+    for binding in tree["m_ClipBindingConstant"]["genericBindings"]:
+        boundary |= total == position
+        total += binding_dims(binding)
+    boundary |= total == position
+    if total != curves or not boundary:
+        return None
+    start, stop = float(muscle["m_StartTime"]), float(muscle["m_StopTime"])
+    if dense["m_CurveCount"] or dense["m_FrameCount"] > 1:
+        rate, begin, frames = float(dense["m_SampleRate"]), float(dense["m_BeginTime"]), int(dense["m_FrameCount"])
+    else:
+        rate, begin = float(tree.get("m_SampleRate") or 30.0), start
+        frames = int(math.ceil((stop - start) * rate - 1e-3)) + 1
+    if rate <= 0 or frames < 2 or not stop > start:
+        return None
+    return begin, rate, frames
+
+
+def add_dense_curves(tree: dict, bindings: list[dict], samples: np.ndarray) -> None:
+    """Insert dense curves before constants, updating bindings, value deltas, and muscle size.
+
+    Args:
+        tree: Mutable AnimationClip typetree with a writable dense_grid layout.
+        bindings: New generic bindings in the order of the added scalar curves.
+        samples: dense_grid frames by added scalar curves, stored as float32.
+
+    Raises:
+        ValueError: The clip layout, frame count, or binding component count does not match the samples.
+    """
+    grid = _grid(tree)
+    frames, added = samples.shape
+    if grid is None or grid[2] != frames:
+        raise ValueError("clip layout not supported")
+    if sum(binding_dims(b) for b in bindings) != added:
+        raise ValueError("bindings and samples differ")
+    muscle = tree["m_MuscleClip"]
+    clip = muscle["m_Clip"]["data"]
+    streamed, dense = clip["m_StreamedClip"], clip["m_DenseClip"]
+    old = dense["m_CurveCount"]
+    position = streamed["curveCount"] + old
+    generic = tree["m_ClipBindingConstant"]["genericBindings"]
+    index, total = 0, 0
+    while index < len(generic) and total < position:
+        total += binding_dims(generic[index])
+        index += 1
+    generic[index:index] = bindings
+    previous = np.array(dense["m_SampleArray"], dtype=np.float32).reshape(frames, old)
+    dense["m_SampleArray"] = np.concatenate([previous, samples.astype(np.float32)], axis=1).ravel().tolist()
+    dense["m_BeginTime"], dense["m_SampleRate"], dense["m_FrameCount"] = grid
+    dense["m_CurveCount"] = old + added
+    first, last = samples[0].astype(np.float32), samples[-1].astype(np.float32)
+    deltas = [{"m_Start": float(a), "m_Stop": float(b)} for a, b in zip(first, last)]
+    muscle["m_ValueArrayDelta"][position:position] = deltas
+    tree["m_MuscleClipSize"] = muscle_size(tree)
+
+
+def rotation_binding(template: Mapping[str, Any], path: str) -> dict:
+    """Create a four-curve local-quaternion Transform binding.
+
+    Args:
+        template: Existing generic binding whose remaining schema fields are preserved.
+        path: Transform hierarchy path below the animated root, hashed with CRC32.
+    """
+    return _transform_binding(template, path, 2)
+
+
+def position_binding(template: Mapping[str, Any], path: str) -> dict:
+    """Create a three-curve local-position Transform binding.
+
+    Args:
+        template: Existing generic binding whose remaining schema fields are preserved.
+        path: Transform hierarchy path below the animated root, hashed with CRC32.
+    """
+    return _transform_binding(template, path, 1)
+
+
+def _transform_binding(template: Mapping[str, Any], path: str, attribute: int) -> dict:
+    binding = dict(template)
+    binding.update(path=zlib.crc32(path.encode()), attribute=attribute, typeID=4, customType=0, isPPtrCurve=0)
+    if "script" in binding:
+        binding["script"] = {"m_FileID": 0, "m_PathID": 0}
+    return binding

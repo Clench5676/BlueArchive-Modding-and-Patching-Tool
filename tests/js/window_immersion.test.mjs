@@ -7,9 +7,9 @@ const source = (file) => readFileSync(new URL(`../../src/bmpt/${file}`, import.m
 const scenes = [
   ["portrait fullscreen", ["fullscreen"], []],
   ["memorial lobby fullscreen", ["fullscreen"], []],
-  ["portrait camera", ["fullscreen"], ["photo-active"]],
-  ["memorial lobby camera", ["fullscreen"], ["photo-active", "photo-lobby"]],
-  ["Student Hall fullscreen", ["hall-fullscreen"], []],
+  ["portrait camera", ["fullscreen"], ["thumbnail-active"]],
+  ["memorial lobby camera", ["fullscreen"], ["thumbnail-active", "thumbnail-memorial-lobby"]],
+  ["Student Hall fullscreen", ["student-hall-fullscreen"], []],
 ];
 for (const [name, stage, root] of scenes)
   test(`${name} hides the whole bar and restores on exit`, () => {
@@ -17,14 +17,17 @@ for (const [name, stage, root] of scenes)
     assert.equal(isImmersive([], []), false);
   });
 test("camera preparation is immersive even before the shared detail fullscreen flag arrives", () => {
-  assert.ok(isImmersive([], ["photo-active"]));
-  assert.equal(isImmersive([], ["photo-lobby"]), false);
+  assert.ok(isImmersive([], ["thumbnail-active"]));
+  assert.equal(isImmersive([], ["thumbnail-memorial-lobby"]), false);
   assert.match(flat(source("web/js/detail/detail-fullscreen.js")), /stage\(\)\.classList\.toggle\("fullscreen", on\)/);
   assert.match(
-    flat(source("web/js/photography/controller.js")),
-    /document\.documentElement\.classList\.add\(["']photo-active["']\)/,
+    flat(source("web/js/thumbnail-capture/controller.js")),
+    /document\.documentElement\.classList\.add\(["']thumbnail-active["']\)/,
   );
-  assert.match(flat(source("web/js/hall/student-hall-fullscreen.js")), /stage\.classList\.add\("hall-fullscreen"\)/);
+  assert.match(
+    flat(source("web/js/student-hall/student-hall-fullscreen.js")),
+    /stage\.classList\.add\("student-hall-fullscreen"\)/,
+  );
   assert.match(
     flat(source("web/js/window/window-chrome.js")),
     /observe\(document\.documentElement, \{ attributes: true, attributeFilter: \[["']class["']\]/,
@@ -35,7 +38,7 @@ test("camera preparation is immersive even before the shared detail fullscreen f
     css,
     /\.chrome-hide-top \.topbar, \.chrome-hide-bottom \.nav \{[^}]*visibility: hidden;[^}]*pointer-events: none/,
   );
-  assert.doesNotMatch(css, /\.stage\.(hall-)?fullscreen \.(topbar|nav) \{|\.window-immersive \.topbar/);
+  assert.doesNotMatch(css, /\.stage\.(student-hall-)?fullscreen \.(topbar|nav) \{|\.window-immersive \.topbar/);
   assert.doesNotMatch(flat(source("web/js/app/nav.js")), /back\.style\.visibility/);
 });
 for (const platform of ["darwin", "win32", "fallback"])

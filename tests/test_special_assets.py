@@ -22,7 +22,7 @@ def catalog_for(paths, portraits=()):
     game = SimpleNamespace(
         spine_cores=lambda kind: (
             {core: [] for core in portraits}
-            if kind == "spr"
+            if kind == "portrait"
             else {parse_filename(path.name).core: [path] for path in paths}
         ),
         collection_names=lambda: {},
@@ -66,8 +66,8 @@ def test_discovery_groups_special_parts_and_excludes_shared_and_non_spine(tmp_pa
     ]
     paths = [game_bundle(tmp_path, core, part=part, category=category) for category, core, part in slots]
     game = GameAssets([tmp_path], AssetCache(root=tmp_path / "cache"))
-    assert game.spine_cores("spr") == {"test_spr": [paths[6]]}
-    assert game.spine_cores("lobby") == {
+    assert game.spine_cores("portrait") == {"test_spr": [paths[6]]}
+    assert game.spine_cores("memorialLobby") == {
         "arona_workpage_daytime": paths[:2],
         "plana_workpage": [paths[2]],
         "cafe": [paths[3]],
@@ -89,33 +89,32 @@ def test_catalog_names_families_variants_and_install_maps(tmp_path):
     ]
     paths = [game_bundle(tmp_path, core, category="spinebackground") for core in cores]
     catalog = catalog_for(paths, ["arona_spr", "np0032_spr", "np0035_spr"])
-    assert {f.key for f in catalog.families()} == {"arona", "np0032", "np0035", "special"}
+    assert {f.key for f in catalog.students()} == {"arona", "np0032", "np0035", "special"}
     for core, family in zip(cores, ["arona", "arona", "np0035", "np0032", "np0035", "special", "special", "arona"]):
-        v = catalog.variant_for_core(core.upper())
+        v = catalog.alt_for_core(core.upper())
         assert v.key == f"special:{core}"
-        assert (v.family, v.spr, v.lobby, v.spine_category, v.recruitable) == (
+        assert (v.student, v.portrait, v.memorial_lobby, v.spine_category, v.released_on_server) == (
             family,
             None,
             core,
             "spinebackground",
             False,
         )
-        assert catalog.variant_for_asset_core(core).key == v.key
-    assert catalog.family("np0032").names["zh-TW"] == "\u78a7"
-    assert catalog.family("np0035").names["zh-CN"] == "\u666e\u62c9\u5a1c"
-    assert catalog.variant("special:arona_workpage_daytime").names["en"]["short"] == "Work Page - Daytime"
+        assert catalog.alt_for_asset_core(core).key == v.key
+    assert catalog.student("np0032").names["zh-TW"] == "\u78a7"
+    assert catalog.student("np0035").names["zh-CN"] == "\u666e\u62c9\u5a1c"
+    assert catalog.alt("special:arona_workpage_daytime").names["en"]["short"] == "Work Page - Daytime"
     assert (
-        catalog.variant("special:arona_workpage_night").names["zh-CN"]["short"]
-        == "\u4efb\u52a1\u5927\u5385 - \u591c\u665a"
+        catalog.alt("special:arona_workpage_night").names["zh-CN"]["short"] == "\u4efb\u52a1\u5927\u5385 - \u591c\u665a"
     )
-    assert catalog.variant("special:event_new_background").names["en"]["short"] == "event_new_background"
+    assert catalog.alt("special:event_new_background").names["en"]["short"] == "event_new_background"
     for portraits in ([], ["arona_spr"]):
         mapped = catalog.core_map(portraits, cores, special_cores=cores)
         for core in cores:
             assert mapped.key(core) == f"special:{core}"
-            assert mapped.core(f"special:{core}", "lobby") == core
-            assert mapped.names[f"special:{core}"] == catalog.variant(f"special:{core}").names
-    assert catalog.variant("arona").lobby is None
+            assert mapped.core(f"special:{core}", "memorialLobby") == core
+            assert mapped.names[f"special:{core}"] == catalog.alt(f"special:{core}").names
+    assert catalog.alt("arona").memorial_lobby is None
 
 
 @pytest.mark.parametrize(
@@ -145,41 +144,41 @@ def test_special_add_apply_switch_toggle_reload_restore(setup_library, category,
     key = f"special:{core}"
     (first,) = env.library.add([make_mod(target, env.tmp / "first", b"first mod")])
     (second,) = env.library.add([make_mod(target, env.tmp / "second", b"second mod")])
-    assert (first.target, first.kind, first.core) == (key, "lobby", core)
+    assert (first.target, first.resource_type, first.core) == (key, "memorialLobby", core)
     assert parse_filename(first.file.name).category == category
     assert env.library.preview_bundles(first.id)[-1] == first.file
-    assert env.library.apply(key, f"mod:{first.id}", kind="lobby").files == [target]
+    assert env.library.apply(key, f"mod:{first.id}", resource_type="memorialLobby").files == [target]
     assert target.read_bytes() == first.file.read_bytes()
     assert companion.read_bytes() == companion_bytes
     assert env.library.live_bundles(core)[-1] == target
     state = env.library.state(key)
-    assert all(f.kind == "lobby" and f.restorable for f in state.files)
+    assert all(f.resource_type == "memorialLobby" and f.restorable for f in state.files)
     assert key in env.library.modified()
     if scan:
         entry = next(e for e in env.library.entries() if e.core == core)
-        assert (entry.variant, entry.kind) == (key, "lobby")
-    env.library.apply(key, f"mod:{second.id}", kind="lobby")
+        assert (entry.alt, entry.resource_type) == (key, "memorialLobby")
+    env.library.apply(key, f"mod:{second.id}", resource_type="memorialLobby")
     assert target.read_bytes() == second.file.read_bytes()
     off = env.library.toggle(False, True)
     assert off.failed == []
     assert target.read_bytes() == original
-    assert env.library.configured(key)["lobby"] == f"mod:{second.id}"
-    deferred = env.library.apply(key, f"mod:{first.id}", kind="lobby")
+    assert env.library.configured(key)["memorialLobby"] == f"mod:{second.id}"
+    deferred = env.library.apply(key, f"mod:{first.id}", resource_type="memorialLobby")
     assert deferred.deferred and deferred.files == []
     assert target.read_bytes() == original
     env.library = ModLibrary(env.root, env.catalog, None, env.settings, scan_allowed=lambda: scan)
     on = env.library.toggle(True, False)
     assert on.failed == []
     assert target.read_bytes() == first.file.read_bytes()
-    env.library.restore(key, kind="lobby")
+    env.library.restore(key, resource_type="memorialLobby")
     assert target.read_bytes() == original
     assert companion.read_bytes() == companion_bytes
-    assert env.library.configured(key)["lobby"] is None
-    env.library.apply(key, f"mod:{first.id}", kind="lobby")
+    assert env.library.configured(key)["memorialLobby"] is None
+    env.library.apply(key, f"mod:{first.id}", resource_type="memorialLobby")
     with pytest.raises(ServiceError, match="asset_delete_confirm"):
         env.library.remove(first.id)
     removed = env.library.remove(first.id, confirm=True)
-    assert removed.failed == [] and removed.kinds == ["lobby"]
+    assert removed.failed == [] and removed.resource_types == ["memorialLobby"]
     assert target.read_bytes() == original
 
 
@@ -202,7 +201,7 @@ def test_container_owns_all_scene_layers(tmp_path, monkeypatch, category, core):
     objects(monkeypatch, ["arona_home.skel", "background.skel", "page"], containers)
     assert content_cores(path) == {core}
     name, target, kind = identify(path, path.name, catalog_for([path], ["arona_spr"]))
-    assert (name, target, kind) == (path.name, f"special:{core}", "lobby")
+    assert (name, target, kind) == (path.name, f"special:{core}", "memorialLobby")
 
 
 def test_background_container_overrules_renamed_student_filename(tmp_path, monkeypatch):
@@ -217,7 +216,7 @@ def test_background_container_overrules_renamed_student_filename(tmp_path, monke
     parsed = parse_filename(name)
     assert (key, kind, parsed.category, parsed.core) == (
         "special:plana_workpage",
-        "lobby",
+        "memorialLobby",
         "spinebackground",
         "plana_workpage",
     )
@@ -229,7 +228,7 @@ def test_background_container_overrules_renamed_student_filename(tmp_path, monke
 def test_background_parts_without_containers_keep_the_filename(tmp_path, monkeypatch, names):
     path = game_bundle(tmp_path, "arona_workpage", category="spinebackground")
     objects(monkeypatch, names)
-    assert identify(path, path.name, catalog_for([path])) == (path.name, "special:arona_workpage", "lobby")
+    assert identify(path, path.name, catalog_for([path])) == (path.name, "special:arona_workpage", "memorialLobby")
 
 
 @pytest.mark.parametrize(
@@ -267,7 +266,7 @@ def test_special_rpc_and_preview_use_existing_lobby_routes(setup_library, monkey
         )
         assert v["state"]["files"][0]["resourceType"] == "memorialLobby"
         (entry,) = env.library.add([make_mod(target, env.tmp / "input")])
-        env.library.apply(v["key"], f"mod:{entry.id}", kind="lobby")
+        env.library.apply(v["key"], f"mod:{entry.id}", resource_type="memorialLobby")
         for kind, key, expected in [
             ("memorialLobby", v["memorialLobby"], entry.file.read_bytes()),
             ("mod", entry.id, entry.file.read_bytes()),

@@ -1,8 +1,8 @@
 """The progress line of a job over mods, the line the web UI shows in the bottom-left corner while it runs.
 
 A report is the job's progress dict: ``current`` (the item at hand, counted from 1) of ``total``, ``action`` (the job's
-verb: process, apply, restore, check, add, export), who the item is (``variant``, ``kind``, ``core`` for a file
-no variant owns; ``name``: the mod's own name, or ``source``: the variant whose costume or files it takes),
+verb: process, apply, restore, check, add, export), who the item is (``alt``, ``kind``, ``core`` for a file
+no alt owns; ``name``: the mod's own name, or ``source``: the alt whose costume or files it takes),
 its ``step`` (a web UI string key) and ``fraction`` (how far the item is, 0..1, only growing within the item).
 The web UI words it (job-progress.js ``modLine``).
 
@@ -27,10 +27,10 @@ STEP_RESTORE = "import.step.restore"
 
 # Group detailed costume-build phases into the UI's coarser progress steps.
 COSTUME_STEPS = {
-    **dict.fromkeys(("stage", "read", "skeleton", "clips", "idle", "worn", "probes"), "import.step.readModel"),
+    **dict.fromkeys(("stage", "read", "skeleton", "clips", "idle", "worn", "probes"), "import.step.readChibi"),
     **dict.fromkeys(("plan", "arms", "hems", "rigid", "springs", "face", "chains"), "import.step.fitCostume"),
     **dict.fromkeys(
-        ("open", "materials", "meshes", "carried", "halo", "prefabs", "curves", "check"), "import.step.buildModel"
+        ("open", "materials", "meshes", "carried", "halo", "prefabs", "curves", "check"), "import.step.buildChibi"
     ),
     "save": STEP_SAVE,
 }
@@ -120,8 +120,8 @@ class ItemProgress:
         self,
         current: int,
         *,
-        variant: str = "",
-        kind: str = "",
+        alt: str = "",
+        resource_type: str = "",
         name: str = "",
         source: str = "",
         core: str = "",
@@ -132,18 +132,18 @@ class ItemProgress:
 
         Args:
             current: One-based position of the item in the job.
-            variant: Variant key identifying the affected student, or empty when unavailable.
-            kind: Asset kind used to label the operation, or empty when unavailable.
+            alt: alt key identifying the affected student, or empty when unavailable.
+            resource_type: Asset kind used to label the operation, or empty when unavailable.
             name: Mod label to show for this item, or empty when it has none.
-            source: Variant whose costume or files are borrowed, or empty for a mod's own files.
-            core: Bundle core identifying a file without a variant, or empty when unused.
+            source: alt whose costume or files are borrowed, or empty for a mod's own files.
+            core: Bundle core identifying a file without an alt, or empty when unused.
             step: Initial UI string key for the item's current phase.
             action: UI verb overriding the job's default; empty uses the default.
         """
         self._item = {
             "current": current,
-            "variant": variant,
-            "kind": kind,
+            "alt": alt,
+            "resource_type": resource_type,
             "name": name,
             "source": source,
             "core": core,

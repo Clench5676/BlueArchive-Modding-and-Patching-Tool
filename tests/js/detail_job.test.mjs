@@ -222,7 +222,7 @@ test("detail actions keep the verb, target, kind and step from progress in all l
   }
 });
 
-test("a 3D model's costume build shows its percentage and step, only growing while the action runs", async () => {
+test("a chibi's costume build shows its percentage and step, only growing while the action runs", async () => {
   for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const strings = JSON.parse(
       readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),

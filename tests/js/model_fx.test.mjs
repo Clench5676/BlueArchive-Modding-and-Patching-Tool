@@ -1,5 +1,5 @@
-// Tests for web/js/model/model-fx.js (the halo's particles in the 3D model view): the lobby programs' GLSL rewritten
-// for three.js, the blend, and each system placed by its glTF node (glTF mirrors Unity on X). Run by
+// Tests for web/js/chibi/chibi-fx.js (the halo's particles in the chibi view): the memorial lobby programs' GLSL
+// rewritten for three.js, the blend, and each system placed by its glTF node (glTF mirrors Unity on X). Run by
 // tests/test_particles_player.py with Node's test runner; "three" resolves to the bundled copy.
 import assert from "node:assert/strict";
 import { register } from "node:module";
@@ -13,15 +13,15 @@ register(
   return next(spec, ctx); }`)}`,
 );
 const THREE = await import("three");
-const { blendOf, createModelFx, fragment3d, rows, vertex3d, viewOf } = await import(
-  "../../src/bmpt/web/js/model/model-fx.js"
+const { blendOf, createChibiFx, fragment3d, rows, vertex3d, viewOf } = await import(
+  "../../src/bmpt/web/js/chibi/chibi-fx.js"
 );
-const { PROGRAMS } = await import("../../src/bmpt/web/js/lobby/particles-gl.js");
-const { IDENTITY, WORLD } = await import("../../src/bmpt/web/js/lobby/particles.js");
+const { PROGRAMS } = await import("../../src/bmpt/web/js/memorial-lobby/particles-gl.js");
+const { IDENTITY, WORLD } = await import("../../src/bmpt/web/js/memorial-lobby/particles.js");
 
 const near = (a, b, eps = 1e-5, what = "") => assert.ok(Math.abs(a - b) <= eps, `${what} ${a} != ${b}`);
 
-test("every lobby program, rewritten for three.js: 3D positions, V flipped, sRGB at the end", () => {
+test("every memorial lobby program, rewritten for three.js: 3D positions, V flipped, sRGB at the end", () => {
   for (const kind of Object.keys(PROGRAMS)) {
     const v = vertex3d(kind),
       f = fragment3d(kind);
@@ -63,7 +63,7 @@ test("rows: a three.js matrix as particles.js reads it", () => {
   assert.deepEqual(rows(m), [4, 0, 0, 1, 0, 5, 0, 2, 0, 0, 6, 3]);
 });
 
-// one system as model.py exports it: one particle at its node, still, a quad of size 0.1 (Unity units)
+// one system as chibi.py exports it: one particle at its node, still, a quad of size 0.1 (Unity units)
 function halo(over = {}) {
   return {
     systems: [
@@ -156,7 +156,7 @@ function drawn(fx) {
 
 test("a system plays where its node is, the quad facing the camera at its Unity size", () => {
   const { root, nodes, node, camera } = scene();
-  const fx = createModelFx(halo(), { nodes, textures: [], root });
+  const fx = createChibiFx(halo(), { nodes, textures: [], root });
   fx.update(0.016, camera);
   const corners = drawn(fx);
   assert.equal(corners.length, 6);
@@ -181,9 +181,9 @@ test("a system plays where its node is, the quad facing the camera at its Unity 
   fx.dispose();
 });
 
-test("the simulation runs in Unity's space: a system's +x is glTF's -x, in lobby units", () => {
+test("the simulation runs in Unity's space: a system's +x is glTF's -x, in memorial lobby units", () => {
   const { root, nodes, node, camera } = scene();
-  const fx = createModelFx(
+  const fx = createChibiFx(
     halo({
       main: { ...halo().systems[0].main, speed: 1 },
       shape: {
@@ -206,7 +206,7 @@ test("the simulation runs in Unity's space: a system's +x is glTF's -x, in lobby
   );
   fx.update(0.016, camera);
   const s = fx.effects().systems[0];
-  // the system's matrix: Unity units to lobby units (WORLD), the node's place mirrored on X
+  // the system's matrix: Unity units to memorial lobby units (WORLD), the node's place mirrored on X
   const unity = new THREE.Matrix4().makeScale(-1, 1, 1);
   const want = new THREE.Matrix4()
     .makeScale(WORLD, WORLD, WORLD)
@@ -228,7 +228,7 @@ test("the simulation runs in Unity's space: a system's +x is glTF's -x, in lobby
 
 test("the camera in the simulation's space; a still's effects are the same every time", () => {
   const { root, nodes, camera } = scene();
-  const fx = createModelFx(
+  const fx = createChibiFx(
     halo({
       emission: { rate: 3, dist: 0, bursts: [] },
       shape: {
@@ -274,11 +274,11 @@ test("the camera in the simulation's space; a still's effects are the same every
 
 test("no system with a node, or one whose texture could not be read: nothing, or that system left out", () => {
   const { root, nodes } = scene();
-  assert.equal(createModelFx(halo({ node: 9 }), { nodes, textures: [], root }), null);
-  assert.equal(createModelFx(null, { nodes, textures: [], root }), null);
+  assert.equal(createChibiFx(halo({ node: 9 }), { nodes, textures: [], root }), null);
+  assert.equal(createChibiFx(null, { nodes, textures: [], root }), null);
   const fx = halo();
   fx.materials.m.tex._Tex_Main = { id: "missing", st: [1, 1, 0, 0] };
-  const made = createModelFx(fx, { nodes, textures: [], root });
+  const made = createChibiFx(fx, { nodes, textures: [], root });
   assert.equal(made.stats().systems, 0);
   made.dispose();
 });

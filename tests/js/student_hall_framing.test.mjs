@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  LOBBY_CHARACTER_POS,
+  HOME_CHARACTER_POS,
   PORTRAIT_ANCHOR,
   PORTRAIT_BASE_SCALE,
   portraitScale,
   portraitRect,
-} from "../../src/bmpt/web/js/hall/student-hall-framing.js";
+} from "../../src/bmpt/web/js/student-hall/student-hall-framing.js";
 import { portraitViewport, stagePoint } from "../../src/bmpt/web/js/detail/portrait-view.js";
-import { createDraft } from "../../src/bmpt/web/js/hall/student-hall-model.js";
+import { createDraft } from "../../src/bmpt/web/js/student-hall/student-hall-chibi.js";
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-7, `${actual} != ${expected}`);
 const box = { left: 0, top: 0, width: 1920, height: 1080 };
 
 test("ordinary LobbyCommon portrait projection matches its authored CharPos and the game UI camera", () => {
-  const view = portraitViewport(LOBBY_CHARACTER_POS, { origin: [960, 540], s: 1920 / 2960, box });
+  const view = portraitViewport(HOME_CHARACTER_POS, { origin: [960, 540], s: 1920 / 2960, box });
   close(PORTRAIT_BASE_SCALE, 0.72);
   close(PORTRAIT_ANCHOR.x, 887.3513513513514);
   close(PORTRAIT_ANCHOR.y, 1114.7027027027027);
@@ -47,7 +47,7 @@ test("intentional stored positions and relative zoom remain untouched while hit 
   close(rect.height, 561.6);
   assert.deepEqual(entry, before);
 });
-test("new entries use the verified lobby anchor with relative scale one", () => {
+test("new entries use the verified memorial lobby anchor with relative scale one", () => {
   const state = createDraft({ revision: 0, mode: "portraits", portraits: [], memorialLobbies: [], active: null });
   state.begin("layout");
   const entry = state.add({ alt: "hero", source: "mod:a", resourceType: "portrait" }, () => "first");
@@ -83,7 +83,7 @@ import {
   visibleHead,
   readyAlpha,
   ALPHA_SIDE,
-} from "../../src/bmpt/web/js/hall/student-hall-framing.js";
+} from "../../src/bmpt/web/js/student-hall/student-hall-framing.js";
 const runtimeContext = vm.createContext({
   console,
   TextDecoder,
@@ -372,7 +372,7 @@ test("with createImageBitmap the page is decoded and shrunk off the main thread 
       },
     };
   };
-  const image = { width: 4096, height: 4096, src: "http://hall/page.png" },
+  const image = { width: 4096, height: 4096, src: "http://student-hall/page.png" },
     texture = { getImage: () => image },
     data = { skins: [{ getAttachments: () => [{ attachment: { region: { texture } } }] }] };
   const blob = { bytes: "png" },
@@ -386,12 +386,12 @@ test("with createImageBitmap the page is decoded and shrunk off the main thread 
         return { ok: true, blob: async () => blob };
       },
     );
-    assert.deepEqual(fetched, ["http://hall/page.png"], "the page's own bytes, decoded off the main thread");
+    assert.deepEqual(fetched, ["http://student-hall/page.png"], "the page's own bytes, decoded off the main thread");
     assert.deepEqual(calls, [[blob, { resizeWidth: ALPHA_SIDE, resizeHeight: ALPHA_SIDE, resizeQuality: "low" }]]);
     assert.equal(drawn[0][0].bitmap, true, "the decoded bitmap is what is read");
     assert.equal(closed, 1);
     assert.equal(readyAlpha(texture).width, ALPHA_SIDE);
-    const other = { width: 2048, height: 1024, src: "http://hall/other.png" },
+    const other = { width: 2048, height: 1024, src: "http://student-hall/other.png" },
       second = { getImage: () => other };
     await preparePickPages(
       { skins: [{ getAttachments: () => [{ attachment: { region: { texture: second } } }] }] },
@@ -495,7 +495,10 @@ test("the visible head ignores Spine's bounds: transparent props, additive halos
   assert.equal(visibleHead(skeleton, Runtime, pages), null);
 });
 
-import { portraitToolbarLayout, PORTRAIT_TOOLBAR_HEIGHT } from "../../src/bmpt/web/js/hall/student-hall-framing.js";
+import {
+  portraitToolbarLayout,
+  PORTRAIT_TOOLBAR_HEIGHT,
+} from "../../src/bmpt/web/js/student-hall/student-hall-framing.js";
 import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 for (const locale of ["en-US", "zh-CN"])
   test(`portrait toolbar centres equal icons with scaled gaps in ${locale}`, () => {

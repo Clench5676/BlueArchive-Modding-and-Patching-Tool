@@ -27,7 +27,9 @@ def _now() -> str:
 
 
 def _changed_of(result: Any) -> dict[str, list[str]]:
-    """``library.changed``'s data for a job's result: the cores and kinds it switched or added."""
+    """Return the cores and resource types a job changed for the library.changed event."""
+    from ..library.judge import core_of, resource_type_of_file, sorted_resource_types
+
     if hasattr(result, "duplicates") or (
         isinstance(result, list) and any(isinstance(m, dict) and "target" in m for m in result)
     ):
@@ -36,12 +38,16 @@ def _changed_of(result: Any) -> dict[str, list[str]]:
             *getattr(result, "configured", []),
             *getattr(result, "installed", []),
         ]
-        return {"cores": sorted({m.core for m in switched}), "kinds": sorted({m.kind for m in switched}), "mods": True}
-    cores, kinds = getattr(result, "cores", None), getattr(result, "kinds", None)
-    if cores is not None and kinds is not None:
+        return {
+            "cores": sorted({m.core for m in switched}),
+            "resource_types": sorted_resource_types({m.resource_type for m in switched}),
+            "mods": True,
+        }
+    cores, resource_types = getattr(result, "cores", None), getattr(result, "resource_types", None)
+    if cores is not None and resource_types is not None:
         return {
             "cores": sorted(cores),
-            "kinds": sorted(kinds),
+            "resource_types": sorted_resource_types(resource_types),
             **(
                 {"mods": True}
                 if getattr(result, "mods_changed", False)
@@ -51,24 +57,29 @@ def _changed_of(result: Any) -> dict[str, list[str]]:
         }
     files = getattr(result, "files", None)
     if isinstance(files, list):
-        from ..library.judge import core_of
-
         names = [core_of(Path(f).name) for f in files if isinstance(f, (str, Path))]
         cores = sorted({c for c in names if c})
-        from ..library.judge import kind_of_file
-
-        kinds = sorted(
+        resource_types = sorted_resource_types(
             {
-                kind_of_file(Path(f).name) or ("spr" if parse_filename(Path(f).name).core.endswith("_spr") else "lobby")
+                resource_type_of_file(Path(f).name)
+                or ("portrait" if parse_filename(Path(f).name).core.endswith("_spr") else "memorialLobby")
                 for f in files
                 if isinstance(f, (str, Path))
             }
         )
-        return {"cores": cores, "kinds": kinds, **({"mods": True} if getattr(result, "kept_current", False) else {})}
+        return {
+            "cores": cores,
+            "resource_types": resource_types,
+            **({"mods": True} if getattr(result, "kept_current", False) else {}),
+        }
     mod = getattr(result, "mod", None)
     if mod is not None and getattr(mod, "core", None):
-        return {"cores": [mod.core], "kinds": [mod.kind], **({"mods": True} if hasattr(result, "report") else {})}
-    return {"cores": [], "kinds": []}
+        return {
+            "cores": [mod.core],
+            "resource_types": [mod.resource_type],
+            **({"mods": True} if hasattr(result, "report") else {}),
+        }
+    return {"cores": [], "resource_types": []}
 
 
 def _touched(result: Any) -> tuple[set[tuple[str, str]], set[str]]:
@@ -255,13 +266,13 @@ class JobsMixin:
         ):
             changed = _changed_of(result)
             cores = set(changed["cores"]) if not failed and kind in ("apply", "restore") else None
-            variant = getattr(result, "variant", None)
-            if cores is not None and not cores and variant:
-                # nothing written (unchanged or deferred): only the configuration of the variant's cores changed
+            alt = getattr(result, "alt", None)
+            if cores is not None and not cores and alt:
+                # nothing written (unchanged or deferred): only the configuration of the alt's cores changed
                 try:
-                    cores = library.variant_cores(variant)
+                    cores = library.alt_cores(alt)
                 except Exception:
-                    logger.exception("variant cores not read")
+                    logger.exception("Alt cores not read")
                     cores = None
             if cores is not None:
                 cores.update(pruned)
@@ -452,36 +463,36 @@ class JobsMixin:
             self.check_classic()
             return self.submit("mods.retryFailed", run, writes="game", library=library)
 
-    def submit_apply(self, variant: str, source: str, kind: str = "spr") -> str:
+    def submit_apply(self, alt: str, source: str, resource_type: str = "portrait") -> str:
         """Submit ``actions.apply``: one entry of the current install, pinned at submit.
 
         Args:
-            variant: The variant key.
-            source: The source to switch to: ``official``, ``mod:<id>`` or ``variant:<key>``.
-            kind: The asset kind, ``spr``, ``lobby``, ``model`` or ``other``.
+            alt: The alt key.
+            source: The source to switch to: ``official``, ``mod:<id>`` or ``alt:<key>``.
+            resource_type: The resource type to switch.
 
         Returns:
             The job's id.
 
         Raises:
-            ServiceError: ``bad_params`` for an unknown kind; ``classic_open`` only when it would write a game file
-                (an apply while mods are off only changes the configuration).
+            ServiceError: ``bad_params`` for an unknown resource type. ``classic_open`` when the apply would write
+                a game file. An apply while mods are off only changes the configuration.
         """
-        if kind not in ("spr", "lobby", "model", "other"):
-            raise ServiceError("bad_params", kind=kind)
+        if resource_type not in ("portrait", "memorialLobby", "chibi", "other"):
+            raise ServiceError("bad_params", kind=resource_type)
         library = self.library
         pin = self._current_pin(library)
 
         def run(log: Any, progress: Any) -> Any:
             self._check_pin(library, pin)
-            return library.apply(variant, source, log=log, progress=progress, kind=kind, pin=pin)
+            return library.apply(alt, source, log=log, progress=progress, resource_type=resource_type, pin=pin)
 
         with self.classic.starting():
-            if self.classic_open() and library.would_write(variant, source, kind, pin=pin, setting=True):
+            if self.classic_open() and library.would_write(alt, source, resource_type, pin=pin, setting=True):
                 raise ServiceError("classic_open")
             return self.submit("apply", run, writes="game", library=library)
 
-    def submit_restore(self, variant: str, kind: str = "spr") -> str:
+    def submit_restore(self, alt: str, resource_type: str = "portrait") -> str:
         """Submit ``actions.restore``: one entry of the current install back to official, pinned at submit.
 
         A restore that writes nothing (the files are official already) is allowed while a classic window is open;
@@ -489,26 +500,26 @@ class JobsMixin:
         with ``classic_open``.
 
         Args:
-            variant: The variant key.
-            kind: The asset kind, ``spr``, ``lobby``, ``model`` or ``other``.
+            alt: The alt key.
+            resource_type: The resource type to switch.
 
         Returns:
             The job's id.
 
         Raises:
-            ServiceError: ``bad_params`` for an unknown kind; ``classic_open`` when the restore would write.
+            ServiceError: ``bad_params`` for an unknown resource_type; ``classic_open`` when the restore would write.
         """
-        if kind not in ("spr", "lobby", "model", "other"):
-            raise ServiceError("bad_params", kind=kind)
+        if resource_type not in ("portrait", "memorialLobby", "chibi", "other"):
+            raise ServiceError("bad_params", kind=resource_type)
         library = self.library
         pin = self._current_pin(library)
 
         def run(log: Any, progress: Any) -> Any:
             self._check_pin(library, pin)
-            return library.restore(variant, log=log, kind=kind, pin=pin, progress=progress)
+            return library.restore(alt, log=log, resource_type=resource_type, pin=pin, progress=progress)
 
         with self.classic.starting():
-            if self.classic_open() and library.would_write(variant, "official", kind, pin=pin):
+            if self.classic_open() and library.would_write(alt, "official", resource_type, pin=pin):
                 raise ServiceError("classic_open")
             return self.submit("restore", run, writes="game", library=library)
 
@@ -531,9 +542,9 @@ class JobsMixin:
         if method == "mods.restoreDrift":
             return self.submit_restore_drift(params.get("entries"))
         if method == "actions.apply":
-            return self.submit_apply(params.get("variant"), params.get("source"), params.get("kind", "spr"))
+            return self.submit_apply(params.get("alt"), params.get("source"), params.get("resource_type", "portrait"))
         if method == "actions.restore":
-            return self.submit_restore(params.get("variant"), params.get("kind", "spr"))
+            return self.submit_restore(params.get("alt"), params.get("resource_type", "portrait"))
         raise ServiceError("bad_params", method=method)
 
     def submit_judge(self) -> str | None:

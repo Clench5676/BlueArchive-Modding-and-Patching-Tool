@@ -4,7 +4,7 @@ Its menu: one Enable Mods item for every known install, Back to Official while a
 The icon is shown while the preference ``tray`` is on, only in the app window, and it goes with the app: closing the
 window quits.
 
-- **The model** is pure: ``tray_menu(snapshot, strings)``, ``tray_tooltip``, ``toggle_action`` and ``needs_window``
+- **The chibi** is pure: ``tray_menu(snapshot, strings)``, ``tray_tooltip``, ``toggle_action`` and ``needs_window``
   read only a ``mods.state`` snapshot. Opening the menu never calls ``ps``, never builds the library and never takes
   the library lock; it only asks the game watch for a fresh answer on the watch's own thread, which the next opening
   shows.
@@ -50,7 +50,7 @@ CLOSE_WAIT_MS = 2000  # how long quitting waits for the tray icon's own thread t
 RESULT_KEYS = ("failed", "stuck", "left", "held")  # a toggle's entries that bring the window to the front
 
 
-# --- the model ---
+# --- the chibi ---
 
 
 @dataclass(frozen=True)

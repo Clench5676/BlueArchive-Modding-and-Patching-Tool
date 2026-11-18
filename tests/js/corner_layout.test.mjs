@@ -66,14 +66,23 @@ test("native bounds cause a horizontal move only on a strict intersection", () =
 
 // Source boxes retain prefab sizes. Sibling groups move together, preserving their original gaps.
 const visual = [171 * S, 116 * S],
-  hall = [156 * S, 104 * S];
+  studentHall = [156 * S, 104 * S];
 const visualTop = [
   ["top-left", [0, 0, ...visual]],
   ["top-right", [0, 0, ...visual]],
 ];
 const scenes = [
-  ["Student Hall", false, [["top-right", [1875 - (4 * hall[0] + 60), 145 - hall[1] / 2, 4 * hall[0] + 60, hall[1]]]]],
-  ["Student Hall fullscreen", true, [["top-right", [1875 - hall[0], 145 - hall[1] / 2, ...hall]]]],
+  [
+    "Student Hall",
+    false,
+    [
+      [
+        "top-right",
+        [1875 - (4 * studentHall[0] + 60), 145 - studentHall[1] / 2, 4 * studentHall[0] + 60, studentHall[1]],
+      ],
+    ],
+  ],
+  ["Student Hall fullscreen", true, [["top-right", [1875 - studentHall[0], 145 - studentHall[1] / 2, ...studentHall]]]],
   ["portrait fullscreen", true, [...visualTop, ["bottom-right", [0, 0, ...visual]]]],
   ["memorial lobby fullscreen", true, [...visualTop, ["bottom-right", [0, 0, ...visual]]]],
   ...["portrait camera", "memorial lobby camera"].map((name) => [
@@ -93,11 +102,11 @@ for (const locale of locales)
     for (const [scene, immersive, groups] of scenes)
       test(`${scene}, ${locale}, ${platform || "no native chrome"}: shared edge margin`, () => {
         assert.ok(
-          strings.lobby.exit &&
+          strings.memorialLobby.exit &&
             strings.row.switch.portrait &&
-            strings.row.switch.lobby &&
-            strings.photo.occlusion &&
-            strings.photo.gridOn,
+            strings.row.switch.memorialLobby &&
+            strings.thumbnail.occlusion &&
+            strings.thumbnail.gridOn,
         );
         for (const [width, height] of [
           [960, 540],
@@ -158,18 +167,18 @@ for (const locale of locales)
             line: [CORNER_MARGIN + 87.5 * S, 7, 4 * S, 49 * S],
           };
         const stage = { left: 0, top: 0, right: width, width };
-        for (const hallHome of [false, true]) {
-          const first = topActionLayout(boxes, hallHome);
+        for (const studentHallHome of [false, true]) {
+          const first = topActionLayout(boxes, studentHallHome);
           const clearance = nativeRightClearance(
             stage,
             platform === "win32" ? g.native.bounds : null,
             first.option,
             g.scale,
           );
-          const row = topActionLayout(boxes, hallHome, clearance),
-            outer = row[hallHome ? "option" : "home"];
-          near(outer[0], Math.max(first[hallHome ? "option" : "home"][0], clearance));
-          near(row.option[1] + row.option[3] / 2, boxes.home[1] + boxes.home[3] / 2 + (hallHome ? 0 : 0.6 * S));
+          const row = topActionLayout(boxes, studentHallHome, clearance),
+            outer = row[studentHallHome ? "option" : "home"];
+          near(outer[0], Math.max(first[studentHallHome ? "option" : "home"][0], clearance));
+          near(row.option[1] + row.option[3] / 2, boxes.home[1] + boxes.home[3] / 2 + (studentHallHome ? 0 : 0.6 * S));
         }
       }
     });
@@ -265,7 +274,7 @@ test("the viewport clips the window while the scene artwork and sliding navigati
     css,
     /\.scene-clip \{[^}]*position: absolute;[^}]*inset: 0;[^}]*overflow: clip;[^}]*pointer-events: none;/,
   );
-  assert.match(css, /#student-hall > \.lobby,[^}]*overflow: clip;/);
+  assert.match(css, /#student-hall > \.memorial-lobby,[^}]*overflow: clip;/);
   // Inspect actual HTML ancestry: art clips inside the stage; controls stay outside that clip.
   const ancestry = new Map(),
     stack = [];
@@ -280,7 +289,7 @@ test("the viewport clips the window while the scene artwork and sliding navigati
     if (match[2] === "footer") assert.ok(stack.flat().includes("scene-clip"));
     stack.push(classes);
   }
-  for (const id of ["ngui-bg", "visual-bg", "portrait", "model", "lobby", "ngui", "ngui-chips", "ngui-expr"])
+  for (const id of ["ngui-bg", "visual-bg", "portrait", "chibi", "memorial-lobby", "ngui", "ngui-chips", "ngui-expr"])
     assert.ok(ancestry.get(id).includes("scene-clip"), id);
   for (const id of ["visual-ui", "fs-exit", "popup", "picker"]) assert.ok(!ancestry.get(id).includes("scene-clip"), id);
 });
@@ -317,7 +326,7 @@ test("immersive scene controls make room for a bar the pointer brought back (chr
   near(at("top-left", { top: 0, bottom: 0, offset: 55 }, native)[0], margin * 2);
 });
 
-test("a centred edge control (the photography shutter) moves as far as the bar reaches in", () => {
+test("a centred edge control (the thumbnail capture shutter) moves as far as the bar reaches in", () => {
   const stageEl = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 540 }) };
   const saved = [globalThis.document, globalThis.innerWidth, globalThis.innerHeight, globalThis.bamtChromeInsets];
   globalThis.document = { getElementById: () => stageEl, querySelector: () => null };

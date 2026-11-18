@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { clipRosterBand } from "../../src/bmpt/web/js/roster/roster-card.js";
+import { clipStudentListBand } from "../../src/bmpt/web/js/student-list/student-list-card.js";
 import { collectionStill } from "../../src/bmpt/web/js/detail/thumbs.js";
 import { maskCanvas } from "./sprite_mask_fixture.mjs";
 
 const source = (file) => readFileSync(new URL(`../../src/bmpt/web/js/${file}.js`, import.meta.url), "utf8");
 
 test("the native tag and portrait share the card's painted surface after deferred frame completion", async () => {
-  assert.doesNotMatch(source("roster/roster"), /w_ = 406/);
+  assert.doesNotMatch(source("student-list/student-list"), /w_ = 406/);
   const previous = globalThis.document,
     fake = maskCanvas();
   globalThis.document = fake.document;
@@ -34,7 +34,7 @@ test("the native tag and portrait share the card's painted surface after deferre
         ["Card/Sort/Sprite", { els: [band] }],
         ["Card/Char_Portrait", { els: [portrait] }],
       ]);
-      const clipping = clipRosterBand({ nodes, images, thumbnails: [new Promise(() => {})] }, "Card", {
+      const clipping = clipStudentListBand({ nodes, images, thumbnails: [new Promise(() => {})] }, "Card", {
         load: async (url) => {
           assert.equal(url, "card-silhouette");
           return { naturalWidth: 872, naturalHeight: 980 };

@@ -1,4 +1,4 @@
-// Boot and routing: #/roster (the student list) and #/student/<student>/<alt> (the detail screen). The game's
+// Boot and routing: #/student-list (the student list) and #/student/<student>/<alt> (the detail screen). The game's
 // loading screen covers the start and every change of screen until the new one is ready; a change inside the detail
 // screen (an alt chip, the arrows) is covered too, through its first complete frame.
 import { notify } from "../ui/popup.js";
@@ -12,15 +12,15 @@ import * as NGUI from "../ui/ngui.js";
 import * as Popup from "../ui/popup.js";
 import * as Prompts from "./prompts.js";
 import * as Impact from "./update-impact.js";
-import * as Roster from "../roster/roster.js";
-import * as StudentHall from "../hall/student-hall.js";
+import * as StudentList from "../student-list/student-list.js";
+import * as StudentHall from "../student-hall/student-hall.js";
 import * as Settings from "../settings/settings.js";
 import * as Update from "./update.js";
 import * as Tours from "./tours.js";
 import { on, rpc, spinePrefix } from "../core/api.js";
 import { setLibraryWaiting } from "../detail/preview-lifecycle.js";
 import { L, T, errorText, setStrings, languageRefresh } from "../core/i18n.js";
-import { neighbour, visit } from "../roster/roster-order.js";
+import { neighbour, visit } from "../student-list/student-list-order.js";
 import { hasAsset, primaryKind, tabOfKind } from "../mods/switch-sources.js";
 import { renderNav, setTitle, setTopActions } from "./nav.js";
 import { confirmQuit, quitKey } from "./quit.js";
@@ -66,8 +66,8 @@ globalThis.BAMTRecovery?.presentReport((result) =>
 );
 
 let info = null,
-  rosterData = null,
-  rosterStale = true,
+  studentListData = null,
+  studentListStale = true,
   resourceEpoch = 0,
   configurationRevision = 0;
 const startup = {};
@@ -84,19 +84,26 @@ async function timed(phase, work) {
     globalThis.BAMTRecovery?.end(phase, startup[phase]);
   }
 }
-// the roster's cards as the list showed them when it was left (its filters, search and sort): the detail screen's
-// arrows step through these, so visits and edits on the way do not reshuffle them; taken afresh once the roster shows
+// the student list's cards as the list showed them when it was left (its filters, search and sort): the detail screen's
+// arrows step through these, so visits and edits on the way do not reshuffle them; taken afresh once the student list
+// shows
 let stepCards = null;
 
 function relabelShell() {
   document.title = T("top.students");
   document.querySelector(".topbar .back").setAttribute("aria-label", T("a11y.back"));
-  $("fs-exit").setAttribute("aria-label", T("lobby.exit"));
+  $("fs-exit").setAttribute("aria-label", T("memorialLobby.exit"));
   $("top-option").setAttribute("aria-label", T("settings.button"));
-  $("top-home").setAttribute("aria-label", T("hall.home"));
+  $("top-home").setAttribute("aria-label", T("studentHall.home"));
   const back = document.querySelector(".topbar .back").onclick;
   setTitle(
-    T(!$("screen-hall").hidden ? "hall.title" : !$("screen-import").hidden ? "nav.import" : "top.students"),
+    T(
+      !$("screen-student-hall").hidden
+        ? "studentHall.title"
+        : !$("screen-import").hidden
+          ? "nav.import"
+          : "top.students",
+    ),
     back,
   );
   Loading.relabel();
@@ -109,10 +116,10 @@ const refreshLanguage = languageRefresh({
     relabelShell();
     await document.fonts.ready;
     await Promise.all([
-      renderNav(!$("screen-hall").hidden ? -1 : !$("screen-import").hidden ? 1 : 0),
+      renderNav(!$("screen-student-hall").hidden ? -1 : !$("screen-import").hidden ? 1 : 0),
       ModSwitch.relabel(),
       StudentHall.relabel(),
-      Roster.relabel(),
+      StudentList.relabel(),
       Detail.relabel(),
       BatchImport.relabel(),
     ]);
@@ -123,60 +130,60 @@ const ctx = {
   dragged: false,
   back: () => goBack(),
   go: (student, alt, kind) => {
-    const target = tabOfKind(kind) || (["portrait", "lobby", "model"].includes(kind) ? kind : null);
+    const target = tabOfKind(kind) || (["portrait", "memorialLobby", "chibi"].includes(kind) ? kind : null);
     const tab = target ? `/${target}` : "";
     location.hash = `#/student/${encodeURIComponent(student)}/${encodeURIComponent(alt)}${tab}`;
   },
-  invalidateRoster: () => {
-    rosterStale = true;
-    rosterGen += 1;
-    Roster.invalidate();
+  invalidateStudentList: () => {
+    studentListStale = true;
+    studentListGen += 1;
+    StudentList.invalidate();
   },
-  // students.list's data (read again once invalidated): Switch 3D Model's other students. ``stale``: the copy in
+  // students.list's data (read again once invalidated): Switch Chibi's other students. ``stale``: the copy in
   // hand at once, even when invalidated, read again in the background (students.list waits for the library's
   // lock, held by a costume check for seconds)
-  roster: ({ stale = false } = {}) => {
-    if (!stale || !rosterData || rosterEpoch !== resourceEpoch) return roster();
-    if (rosterStale) roster().catch(() => {});
-    return Promise.resolve(rosterData);
+  studentList: ({ stale = false } = {}) => {
+    if (!stale || !studentListData || studentListEpoch !== resourceEpoch) return studentList();
+    if (studentListStale) studentList().catch(() => {});
+    return Promise.resolve(studentListData);
   },
-  // the card before or after the shown alt (merged: student) in the roster's order, within its filters
+  // the card before or after the shown alt (merged: student) in the student list's order, within its filters
   step: async (delta, student, alt) => {
-    const data = await roster();
-    stepCards ||= Roster.order(data);
+    const data = await studentList();
+    stepCards ||= StudentList.order(data);
     const next = neighbour(
       stepCards,
-      () => Roster.order(data, { unfiltered: true }),
-      { student, alt, groupAlts: Roster.groupAlts() },
+      () => StudentList.order(data, { unfiltered: true }),
+      { student, alt, groupAlts: StudentList.groupAlts() },
       delta,
     );
     if (next) ctx.go(next.student, next.key);
   },
 };
 
-// one students.list at a time: callers while it runs share its answer, unless the roster was invalidated since it began
-// (rosterGen); rosterEpoch: the resources the data was read for
-let rosterRead = null,
-  rosterGen = 0,
-  rosterEpoch = -1;
-function roster() {
-  if (rosterData && !rosterStale) return Promise.resolve(rosterData);
-  if (rosterRead?.gen === rosterGen) return rosterRead.done;
-  const gen = rosterGen;
+// one students.list at a time: callers while it runs share its answer, unless the student list was invalidated since it
+// began (studentListGen); studentListEpoch: the resources the data was read for
+let studentListRead = null,
+  studentListGen = 0,
+  studentListEpoch = -1;
+function studentList() {
+  if (studentListData && !studentListStale) return Promise.resolve(studentListData);
+  if (studentListRead?.gen === studentListGen) return studentListRead.done;
+  const gen = studentListGen;
   const done = (async () => {
     const epoch = resourceEpoch,
       next = await rpc("students.list");
     if (epoch !== resourceEpoch) throw new DOMException("Game resources changed", "AbortError");
-    const before = rosterData;
-    rosterData = next;
-    rosterEpoch = epoch;
-    if (gen === rosterGen) rosterStale = false;
-    forgetReplaced(before, rosterData);
-    return rosterData;
+    const before = studentListData;
+    studentListData = next;
+    studentListEpoch = epoch;
+    if (gen === studentListGen) studentListStale = false;
+    forgetReplaced(before, studentListData);
+    return studentListData;
   })().finally(() => {
-    if (rosterRead?.done === done) rosterRead = null;
+    if (studentListRead?.done === done) studentListRead = null;
   });
-  rosterRead = { gen, done };
+  studentListRead = { gen, done };
   return done;
 }
 
@@ -194,10 +201,10 @@ function forgetReplaced(before, after) {
   }
 }
 
-// an entry's alt named as the roster names it (entries of cores the catalog does not map carry their shipped
-// names, else their core); resolves once the roster's data is in
+// an entry's alt named as the student list names it (entries of cores the catalog does not map carry their shipped
+// names, else their core); resolves once the student list's data is in
 async function altNames() {
-  const data = await roster().catch(() => rosterData);
+  const data = await studentList().catch(() => studentListData);
   const byKey = new Map((data?.students || []).flatMap((f) => f.alts.map((v) => [v.key, v])));
   return (entry) => {
     const v = byKey.get(entry?.alt);
@@ -205,13 +212,14 @@ async function altNames() {
   };
 }
 
-// the progress line's names (loading.js, job-progress.js modLine): the roster's as it is now, the key until it is in
+// the progress line's names (loading.js, job-progress.js modLine): the student list's as it is now, the key until it is
+// in
 let nameIndex = new Map(),
   nameIndexOf = null;
 function progressNames(entry) {
-  if (nameIndexOf !== rosterData) {
-    nameIndexOf = rosterData;
-    nameIndex = new Map((rosterData?.students || []).flatMap((f) => f.alts.map((v) => [v.key, v])));
+  if (nameIndexOf !== studentListData) {
+    nameIndexOf = studentListData;
+    nameIndex = new Map((studentListData?.students || []).flatMap((f) => f.alts.map((v) => [v.key, v])));
   }
   const v = nameIndex.get(entry?.alt);
   return studentName(v, (v && L(v.names)?.full) || entry?.alt || entry?.core || "");
@@ -220,7 +228,7 @@ function progressNames(entry) {
 // Go To from the update summary or the held entries' Details (update-impact.js): the mod's student page on the tab of
 // its kind, its switch open on the mod (Detail.takeWanted); Settings closes first
 async function openMod({ id, alt, resourceType }) {
-  const data = await roster().catch(() => rosterData);
+  const data = await studentList().catch(() => studentListData);
   const student = (data?.students || []).find((f) => f.alts.some((v) => v.key === alt));
   if (!student || !id) return;
   if (!$("settings").hidden) Settings.close();
@@ -231,8 +239,8 @@ async function openMod({ id, alt, resourceType }) {
 }
 
 // --- library.changed: a writer job switched game files ({cores, resourceTypes}), or anything may have changed (no data: the
-// classic UI closed, a job stopped midway, the mod list changed). The roster is read again, the thumbnails of those
-// cores are forgotten (both live and official sources, including other installs' bases) and the detail screen
+// classic UI closed, a job stopped midway, the mod list changed). The student list is read again, the thumbnails of
+// those cores are forgotten (both live and official sources, including other installs' bases) and the detail screen
 // reloads what it shows of them ---
 let heldChange,
   changeTimer = null,
@@ -251,7 +259,7 @@ function libraryChanged(data) {
       forget(spinePrefix(`official-${kind}`, core));
     }
   }
-  ctx.invalidateRoster();
+  ctx.invalidateStudentList();
   heldChange =
     heldChange === undefined
       ? change
@@ -269,18 +277,18 @@ async function applyChange({ now = false } = {}) {
   if (change === undefined) return;
   const my = changeRoute;
   if (!$("screen-detail").hidden) return Detail.filesChanged(change);
-  // The Hall and the list are drawn again once no popup is open and no write the user watches is under way: a
+  // The Student Hall and the list are drawn again once no popup is open and no write the user watches is under way: a
   // switch that flips midway (Enable Mods turned on or off) keeps the shown screen under Now Loading, and the
   // write's own end draws it, unless a route came meanwhile (it reads the list itself).
   const idle = () => Popup.whenIdle(200, () => !now && Loading.writing());
-  if (!$("screen-hall").hidden) {
+  if (!$("screen-student-hall").hidden) {
     await idle();
-    if (my === routeToken && !$("screen-hall").hidden) await route();
+    if (my === routeToken && !$("screen-student-hall").hidden) await route();
     return;
   }
-  if ($("screen-roster").hidden) return;
+  if ($("screen-student-list").hidden) return;
   await idle();
-  if (my === routeToken && !$("screen-roster").hidden) await route();
+  if (my === routeToken && !$("screen-student-list").hidden) await route();
 }
 
 // A completed toggle refreshes directly, even if its event has not arrived or is still being coalesced.
@@ -306,17 +314,17 @@ function watchFront() {
   document.addEventListener("visibilitychange", () => (document.hidden ? away() : back()));
 }
 
-// the visit the detail screen records (ui.visit) goes into the roster's data too, so "Recently Viewed" has it on the
-// way back; the alt is the one the detail screen shows for the link
+// the visit the detail screen records (ui.visit) goes into the student list's data too, so "Recently Viewed" has it on
+// the way back; the alt is the one the detail screen shows for the link
 function visited(shownStudent, key) {
   const vs = shownStudent?.alts || [];
   const shown = vs.some((v) => v.key === key && hasAsset(v)) ? key : (vs.find(hasAsset) || vs[0])?.key;
-  if (rosterData && shown) visit(rosterData, shown);
+  if (studentListData && shown) visit(studentListData, shown);
 }
 
 function showScreen(name) {
-  setTopActions(name === "hall", !!info?.gameFound);
-  for (const id of ["screen-hall", "screen-roster", "screen-detail", "screen-import", "screen-message"])
+  setTopActions(name === "student-hall", !!info?.gameFound);
+  for (const id of ["screen-student-hall", "screen-student-list", "screen-detail", "screen-import", "screen-message"])
     $(id).hidden = id !== `screen-${name}`;
 }
 
@@ -442,10 +450,10 @@ async function refreshConfiguration() {
   endRoute();
   StudentHall.hide();
   Detail.hide();
-  Roster.hide();
+  StudentList.hide();
   BatchImport.invalidate();
   stepCards = null;
-  ctx.invalidateRoster();
+  ctx.invalidateStudentList();
   const [next, prefs] = await Promise.all([rpc("app.info"), rpc("settings.get")]);
   if (revision !== configurationRevision) return;
   info = next;
@@ -475,34 +483,34 @@ let routeToken = 0,
 const navigation = routeHistory();
 let shownRoute = ROOT_ROUTE;
 let stagedDetail = null;
-// The hall screen loads hidden. A reload can start while another is still loading (a mod toggle refreshes directly
-// and again on its library event), so the screen as it was before the first one is what is put back, never the
+// The Student Hall screen loads hidden. A reload can start while another is still loading (a mod toggle refreshes
+// directly and again on its library event), so the screen as it was before the first one is what is put back, never the
 // hidden state an unfinished load left.
-let stagedHall = null;
-function stageHall(target) {
-  stagedHall ||= { hidden: target.hidden };
+let stagedStudentHall = null;
+function stageStudentHall(target) {
+  stagedStudentHall ||= { hidden: target.hidden };
   target.hidden = false;
   target.style.visibility = "hidden";
 }
-function unstageHall(target, committed) {
-  if (!stagedHall) return;
-  if (!committed) target.hidden = stagedHall.hidden;
+function unstageStudentHall(target, committed) {
+  if (!stagedStudentHall) return;
+  if (!committed) target.hidden = stagedStudentHall.hidden;
   target.style.visibility = "";
-  stagedHall = null;
+  stagedStudentHall = null;
 }
 function goBack() {
-  return withHallPermission(() => {
+  return withStudentHallPermission(() => {
     const destination = navigation.back(location.hash || ROOT_ROUTE);
     if (destination) location.hash = destination;
     else
       return Promise.resolve(askQuit()).then((result) => {
-        if (result !== "quit" && !$("screen-hall").hidden) return StudentHall.settleView?.();
+        if (result !== "quit" && !$("screen-student-hall").hidden) return StudentHall.settleView?.();
       });
   });
 }
-function withHallPermission(action) {
+function withStudentHallPermission(action) {
   const permission = ++permissionAttempt;
-  if ($("screen-hall").hidden) return action();
+  if ($("screen-student-hall").hidden) return action();
   return Promise.resolve(StudentHall.canLeave?.())
     .then((allowed) => {
       if (allowed !== false && permission === permissionAttempt) return action();
@@ -512,8 +520,8 @@ function withHallPermission(action) {
     });
 }
 function goHome() {
-  return withHallPermission(() => {
-    if ((location.hash || ROOT_ROUTE) === ROOT_ROUTE && !$("screen-hall").hidden) {
+  return withStudentHallPermission(() => {
+    if ((location.hash || ROOT_ROUTE) === ROOT_ROUTE && !$("screen-student-hall").hidden) {
       navigation.commit(ROOT_ROUTE, { home: true });
       return StudentHall.settleView?.();
     }
@@ -525,7 +533,7 @@ async function route() {
   ++permissionAttempt;
   const attempt = ++routeAttempt,
     address = location.hash || ROOT_ROUTE;
-  if (!$("screen-hall").hidden) {
+  if (!$("screen-student-hall").hidden) {
     try {
       const allowed = await StudentHall.canLeave?.();
       if (attempt !== routeAttempt) return;
@@ -556,41 +564,41 @@ async function route() {
   const current = () => my === routeToken && attempt === routeAttempt;
   const parts = address.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
   if (parts[0] !== "import") BatchImport.hide();
-  if (parts[0] !== "hall") {
+  if (parts[0] !== "student-hall") {
     StudentHall.hide();
-    unstageHall($("screen-hall"), false);
+    unstageStudentHall($("screen-student-hall"), false);
   }
-  renderNav(parts[0] === "hall" ? -1 : parts[0] === "import" ? 1 : 0);
+  renderNav(parts[0] === "student-hall" ? -1 : parts[0] === "import" ? 1 : 0);
   try {
-    if (parts[0] === "hall") {
-      Roster.hide();
+    if (parts[0] === "student-hall") {
+      StudentList.hide();
       await Loading.scene(
         async () => {
           Detail.suspend();
           Detail.hide();
-          const target = $("screen-hall");
+          const target = $("screen-student-hall");
           let committed = false;
-          stageHall(target);
+          stageStudentHall(target);
           try {
             await StudentHall.show(ctx);
             if (!current()) return;
-            showScreen("hall");
-            setTitle(T("hall.title"), goBack);
+            showScreen("student-hall");
+            setTitle(T("studentHall.title"), goBack);
             committed = true;
           } finally {
-            if (my === routeToken) unstageHall(target, committed);
+            if (my === routeToken) unstageStudentHall(target, committed);
           }
         },
         { until: ended },
       );
     } else if (parts[0] === "import") {
-      Roster.hide();
+      StudentList.hide();
       await Loading.scene(
         async (covered) => {
           await covered;
           if (!current()) return;
           Detail.suspend();
-          const data = await roster();
+          const data = await studentList();
           if (!current()) return;
           await BatchImport.show(ctx, data);
           if (!current()) return;
@@ -602,9 +610,10 @@ async function route() {
       );
     } else if (parts[0] === "student" && parts[1]) {
       // leaving the list: its cards as shown are the arrows' order
-      if (!stepCards && rosterData && !$("screen-roster").hidden) stepCards = Roster.order(rosterData);
-      Roster.invalidate();
-      Roster.hide();
+      if (!stepCards && studentListData && !$("screen-student-list").hidden)
+        stepCards = StudentList.order(studentListData);
+      StudentList.invalidate();
+      StudentList.hide();
       const inPlace = !$("screen-detail").hidden && !!Detail.currentAlt();
       await Loading.hold(
         () =>
@@ -645,19 +654,19 @@ async function route() {
     } else {
       const reveal = () => {
         Detail.hide();
-        showScreen("roster");
+        showScreen("student-list");
         stepCards = null;
         setTitle(T("top.students"), goBack);
       };
       const open = async (covered) => {
         await covered;
         if (!current()) return;
-        // Release detail page work before a roster RPC can wait on a writer's library lock.
+        // Release detail page work before a student list RPC can wait on a writer's library lock.
         Detail.suspend();
-        const data = await roster();
+        const data = await studentList();
         if (!current()) return;
         try {
-          await Roster.show(ctx, data);
+          await StudentList.show(ctx, data);
         } catch (err) {
           if (current()) reveal();
           throw err;
@@ -682,11 +691,11 @@ async function route() {
     }
     notify(errorText(err), { kind: "error", error: err });
     if (parts[0] === "student") Detail.stepFailed();
-    // a student the catalog does not have (a stale or mistyped link): the screen shown before, its portrait, lobby or
-    // 3D view, does not stay under that address; back to the list, under the error popup
+    // a student the catalog does not have (a stale or mistyped link): the screen shown before, its portrait,
+    // memorial lobby or 3D view, does not stay under that address; back to the list, under the error popup
     if (parts[0] === "student" && my === routeToken && String(err.code || "").startsWith("catalog_")) {
       Detail.hide();
-      location.replace("#/roster");
+      location.replace("#/student-list");
     } else if (location.hash !== shownRoute) {
       // The previous page has released its players/input. Re-enter its route to rebuild it, rather than exposing
       // its closed DOM under the failed destination's address (detail tabs deliberately ignore clicks when closed).
@@ -750,7 +759,7 @@ async function boot() {
   fitStage();
   addEventListener("resize", fitStage);
   // the page starts behind the loading screen: the game's UI is read, then the first screen is built; the bars come in
-  // as the game's lobby brings them (chrome-motion.js), also over a recovery page, with the window buttons
+  // as the game's home screen brings them (chrome-motion.js), also over a recovery page, with the window buttons
   try {
     await timed("boot", () => Loading.scene(start, { opaque: true }));
   } finally {
@@ -825,14 +834,14 @@ async function start() {
   ctx.prefs = await prefs;
   previewCache.configure(ctx.prefs);
   NGUI.setTierTags?.(ctx.prefs?.buttonSizeTags === true);
-  Roster.init(ctx.prefs?.studentList);
+  StudentList.init(ctx.prefs?.studentList);
   setStrings(info.language, await timed("strings", () => rpc("i18n.strings", { lang: info.language })));
   Loading.relabel();
   document.title = T("top.students");
   document.querySelector(".topbar .back").setAttribute("aria-label", T("a11y.back"));
-  $("fs-exit").setAttribute("aria-label", T("lobby.exit"));
+  $("fs-exit").setAttribute("aria-label", T("memorialLobby.exit"));
   $("top-option").setAttribute("aria-label", T("settings.button"));
-  $("top-home").setAttribute("aria-label", T("hall.home"));
+  $("top-home").setAttribute("aria-label", T("studentHall.home"));
   $("top-home").hidden = !info.gameFound;
   // subscribed before the no-game screen too, so choosing the game folder elsewhere reaches the page
   on("config.changed", () => refreshConfiguration().catch(console.error));
@@ -846,7 +855,7 @@ async function start() {
     setPrefs: (prefs) => {
       ctx.prefs = prefs;
     },
-    canLeave: () => $("screen-hall").hidden || StudentHall.canLeave?.(),
+    canLeave: () => $("screen-student-hall").hidden || StudentHall.canLeave?.(),
   };
   await ui;
   renderNav(-1, navOptions);
@@ -882,12 +891,12 @@ async function start() {
   on("library.waiting", (data) => setLibraryWaiting(!!data?.busy));
   on("preview.waiting", (data) => setLibraryWaiting(!!data?.busy, "job"));
   on("thumbnails.changed", () => {
-    ctx.invalidateRoster();
-    if ($("screen-roster").hidden) return;
+    ctx.invalidateStudentList();
+    if ($("screen-student-list").hidden) return;
     const token = routeToken;
     Popup.whenIdle()
       .then(() => {
-        if (token === routeToken && !$("screen-roster").hidden) return route();
+        if (token === routeToken && !$("screen-student-list").hidden) return route();
       })
       .catch(console.error);
   });
@@ -919,9 +928,9 @@ async function start() {
   // (update-impact.js gate; the summary follows with the start popups)
   await timed("update-check", () => Impact.gate()).catch((err) => console.error("update check", err));
   await timed("first-screen", route);
-  // the roster's prefabs, the slowest to export after a game update: asked for once the first screen is up (earlier
-  // they slow its own exports), never awaited, and taken up by Roster.show()
-  Roster.preload();
+  // the student list's prefabs, the slowest to export after a game update: asked for once the first screen is up
+  // (earlier they slow its own exports), never awaited, and taken up by StudentList.show()
+  StudentList.preload();
 }
 
 boot().catch((err) => {

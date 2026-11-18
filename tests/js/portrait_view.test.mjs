@@ -31,10 +31,10 @@ test("the skeleton's origin lands on CharacterPos, a unit is the node's scale", 
 });
 
 test("one scale across and down, at any device pixel ratio and box", () => {
-  // the stage, the box before the change, the 3D model's box
+  // the stage, the box before the change, the chibi's box
   const before = { left: 20, top: 40, width: 960, height: 1560 };
-  const model = { left: 0, top: 0, width: 1000, height: 1080 };
-  const boxes = [STAGE, before, model];
+  const chibi = { left: 0, top: 0, width: 1000, height: 1080 };
+  const boxes = [STAGE, before, chibi];
   const ref = stagePoint(portraitViewport(NODE, { origin: ORIGIN, s: S, box: STAGE }), STAGE, 0, 0);
   for (const box of boxes) {
     const view = portraitViewport(NODE, { origin: ORIGIN, s: S, box });

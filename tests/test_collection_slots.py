@@ -24,17 +24,17 @@ def test_collection_batches_have_distinct_slots_and_exact_targets(setup_library)
     new = collection(e.game_dir, "2026-07-02", b"new collection batch")
     assert core_of(old.name) != core_of(new.name)
     source = make_mod(old, e.tmp / "upload", payload=b"only old batch changed")
-    (mod,) = e.library.add([source], kind="other", direct=True)
+    (mod,) = e.library.add([source], resource_type="other", direct=True)
     untouched = new.read_bytes()
-    e.library.apply(mod.target, f"mod:{mod.id}", kind="other")
+    e.library.apply(mod.target, f"mod:{mod.id}", resource_type="other")
     assert old.read_bytes() == source.read_bytes() and new.read_bytes() == untouched
 
 
 def test_legacy_collection_slot_profile_is_migrated_without_game_writes(setup_library):
     e = setup_library
     path = collection(e.game_dir, "2024-11-18", b"original collection")
-    (mod,) = e.library.add([make_mod(path, e.tmp / "upload")], kind="other", direct=True)
-    e.library.apply(mod.target, f"mod:{mod.id}", kind="other")
+    (mod,) = e.library.add([make_mod(path, e.tmp / "upload")], resource_type="other", direct=True)
+    e.library.apply(mod.target, f"mod:{mod.id}", resource_type="other")
     parsed = parse_filename(path.name)
     old = "other:" + hashlib.sha256(repr((parsed.prefix, parsed.res_type)).encode()).hexdigest()
     new = core_of(path.name)

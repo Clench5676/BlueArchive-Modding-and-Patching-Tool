@@ -80,13 +80,13 @@ def test_legacy_pair_uses_current_repair_names_and_metadata_once(setup_library, 
     monkeypatch.setattr(Bundle, "load", lambda *a, **kw: pytest.fail("Migration must not load bundles"))
     library = reload_library(env)
     mods = {m.id: m for m in library.mods()}
-    assert mods[original["id"]].repaired_id == repaired["id"]
+    assert mods[original["id"]].repaired_copy_id == repaired["id"]
     fixed = mods[repaired["id"]]
-    assert fixed.repaired_from == original["id"]
-    assert fixed.label == translate("webui.remap.name", name="test_spr")
-    assert fixed.to_json()["repaired_from"] == original["id"]
+    assert fixed.repair_source_id == original["id"]
+    assert fixed.name == translate("webui.remap.name", name="test_spr")
+    assert fixed.to_json()["repair_source_id"] == original["id"]
     assert not fixed.user_added
-    assert len({m.repaired_from or m.id for m in mods.values()}) == 1
+    assert len({m.repair_source_id or m.id for m in mods.values()}) == 1
     for mod_id in mods:
         with pytest.raises(ServiceError, match="entry_changed"):
             library.remap(mod_id)
@@ -102,7 +102,7 @@ def test_legacy_pair_uses_current_repair_names_and_metadata_once(setup_library, 
     assert {m.id: m for m in reload_library(env).mods()} == mods
     assert path.read_bytes() == contents
     library.rename(original["id"], "Original alias")
-    assert next(m for m in reload_library(env).mods() if m.id == fixed.id).label == translate(
+    assert next(m for m in reload_library(env).mods() if m.id == fixed.id).name == translate(
         "webui.remap.name", name="Original alias"
     )
     library.rename(original["id"], "")
@@ -121,16 +121,16 @@ def test_deleted_original_leaves_a_tagged_standalone_repair(setup_library, missi
     write_legacy_state(env.root, [repaired] if missing == "record" else [original, repaired])
     library = reload_library(env)
     (fixed,) = library.mods()
-    assert fixed.repaired_from and fixed.repaired_from != fixed.id
-    assert not fixed.repaired_id
-    assert fixed.label == service.t("webui.remap.name", name="test_spr")
+    assert fixed.repair_source_id and fixed.repair_source_id != fixed.id
+    assert not fixed.repaired_copy_id
+    assert fixed.name == service.t("webui.remap.name", name="test_spr")
     with pytest.raises(ServiceError, match="entry_changed"):
         library.remap(fixed.id)
     assert reload_library(env).mods() == [fixed]
 
 
 @pytest.mark.parametrize("mismatch", ["core", "target", "kind", "added", "ambiguous"])
-def test_legacy_link_requires_unique_name_core_variant_kind_and_earlier_source(setup_library, mismatch):
+def test_legacy_link_requires_unique_name_core_alt_kind_and_earlier_source(setup_library, mismatch):
     env = setup_library
     original = legacy_record(env.root, 1)
     repaired = legacy_record(env.root, 2, "test_spr (remapped)")
@@ -149,9 +149,9 @@ def test_legacy_link_requires_unique_name_core_variant_kind_and_earlier_source(s
     library = reload_library(env)
     mods = {m.id: m for m in library.mods()}
     fixed = mods[repaired["id"]]
-    assert fixed.repaired_from not in mods
-    assert all(not m.repaired_id for m in mods.values())
-    assert len({m.repaired_from or m.id for m in mods.values()}) == len(records)
+    assert fixed.repair_source_id not in mods
+    assert all(not m.repaired_copy_id for m in mods.values())
+    assert len({m.repair_source_id or m.id for m in mods.values()}) == len(records)
 
 
 def test_migration_preserves_modern_metadata_and_ordinary_names(setup_library):
@@ -181,9 +181,9 @@ def test_multiple_legacy_repairs_share_the_source_and_keep_an_existing_jump(setu
     original["repaired_id"] = repairs[1]["id"]
     write_legacy_state(env.root, [original, *repairs])
     mods = {m.id: m for m in reload_library(env).mods()}
-    assert mods[original["id"]].repaired_id == repairs[1]["id"]
-    assert all(mods[r["id"]].repaired_from == original["id"] for r in repairs)
-    assert len({m.repaired_from or m.id for m in mods.values()}) == 1
+    assert mods[original["id"]].repaired_copy_id == repairs[1]["id"]
+    assert all(mods[r["id"]].repair_source_id == original["id"] for r in repairs)
+    assert len({m.repair_source_id or m.id for m in mods.values()}) == 1
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -198,11 +198,11 @@ def test_legacy_repair_chains_are_independent_of_record_order(setup_library, rev
     write_legacy_state(env.root, list(reversed(records)) if reverse else records)
     library = reload_library(env)
     mods = {m.id: m for m in library.mods()}
-    assert all(mods[r["id"]].repaired_from == original["id"] for r in (first, second))
-    assert len({m.repaired_from or m.id for m in mods.values()}) == 1
-    assert all(mods[r["id"]].label == service.t("webui.remap.name", name="Original alias") for r in (first, second))
+    assert all(mods[r["id"]].repair_source_id == original["id"] for r in (first, second))
+    assert len({m.repair_source_id or m.id for m in mods.values()}) == 1
+    assert all(mods[r["id"]].name == service.t("webui.remap.name", name="Original alias") for r in (first, second))
     library.remove(original["id"])
-    assert all(m.label == service.t("webui.remap.name", name="Original alias") for m in reload_library(env).mods())
+    assert all(m.name == service.t("webui.remap.name", name="Original alias") for m in reload_library(env).mods())
 
 
 def test_existing_empty_instance_migrates_legacy_state_on_refresh(setup_library):
@@ -211,7 +211,7 @@ def test_existing_empty_instance_migrates_legacy_state_on_refresh(setup_library)
     repaired = legacy_record(env.root, 2, "test_spr (remapped)")
     path = write_legacy_state(env.root, [original, repaired])
     mods = {m.id: m for m in env.library.mods()}
-    assert mods[repaired["id"]].repaired_from == original["id"]
+    assert mods[repaired["id"]].repair_source_id == original["id"]
     assert json.loads(path.read_text())["migrations"] == [LEGACY_REMAP]
 
 
@@ -231,7 +231,7 @@ def test_done_marker_survives_other_instance_saves_and_skips_later_similar_names
     later = legacy_record(env.root, 3, "test_spr (remapped)")
     state["mods"].append(later)
     path.write_text(json.dumps(state))
-    assert not next(m for m in reload_library(env).mods() if m.id == later["id"]).repaired_from
+    assert not next(m for m in reload_library(env).mods() if m.id == later["id"]).repair_source_id
 
 
 def test_failed_migration_write_keeps_disk_and_memory_retryable(setup_library, monkeypatch):
@@ -245,7 +245,7 @@ def test_failed_migration_write_keeps_disk_and_memory_retryable(setup_library, m
         patch_everywhere(patch, [service], "atomic_json", lambda *a, **kw: (_ for _ in ()).throw(OSError("disk full")))
         library = reload_library(env)
         assert path.read_bytes() == before
-        assert not library._records[repaired["id"]].get("repaired_from")
+        assert not library._records[repaired["id"]].get("repair_source_id")
     assert service.atomic_json is save
-    assert next(m for m in library.mods() if m.id == repaired["id"]).repaired_from == original["id"]
+    assert next(m for m in library.mods() if m.id == repaired["id"]).repair_source_id == original["id"]
     assert json.loads(path.read_text())["migrations"] == [LEGACY_REMAP]

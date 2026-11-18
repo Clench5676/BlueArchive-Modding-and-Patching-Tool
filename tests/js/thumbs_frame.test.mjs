@@ -58,7 +58,7 @@ test("a long weapon or wide wings never shrink the thumbnail", () => {
     wide = { x: -1674, y: -923, w: 3616, h: 2439 };
   for (const [frame, k] of [
     ["bust", 3.8],
-    ["roster", 3.8],
+    ["studentList", 3.8],
     ["card", 3.4],
     ["face", 3.3],
   ]) {

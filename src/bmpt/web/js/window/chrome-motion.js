@@ -1,12 +1,12 @@
-// The top bar and the bottom menu, moved as the game's lobby moves them (UILobby's UIAni_Lobby, ui-tokens.js
-// LOBBY_ENTRY). At the start both wait off the screen until the first screen shows (enter()), then come in on
-// the clip's own curves. Immersive scenes (window-layout.js isImmersive: detail and Hall fullscreen,
-// photography) send both away; a pointer at the window's top or bottom edge brings that edge's bar back, usable,
+// The top bar and the bottom menu, moved as the game's home screen moves them (UILobby's UIAni_Lobby, ui-tokens.js
+// HOME_ENTRY). At the start both wait off the screen until the first screen shows (enter()), then come in on
+// the clip's own curves. Immersive scenes (window-layout.js isImmersive: detail and Student Hall fullscreen,
+// thumbnail capture) send both away; a pointer at the window's top or bottom edge brings that edge's bar back, usable,
 // until the pointer has been off it for HIDE_DELAY, and leaving the window over a bar keeps it. The scenes' own
 // controls make room (corner-layout.js, bamtChromeInsets). The macOS window buttons travel with the top bar: the
 // same offsets go to the native side (window.motion). Offsets are viewport CSS pixels away from the screen: up
 // for the top bar, down for the bottom menu.
-import { LOBBY_ENTRY } from "../ui/ui-tokens.js";
+import { HOME_ENTRY } from "../ui/ui-tokens.js";
 import { reflowCorners } from "./corner-layout.js";
 import { rpc } from "../core/api.js";
 
@@ -94,8 +94,8 @@ export function createChromeMotion(env = {}) {
     extent: 0,
     base: null,
   });
-  const top = edge("top", LOBBY_ENTRY.top),
-    bottom = edge("bottom", LOBBY_ENTRY.bottom),
+  const top = edge("top", HOME_ENTRY.top),
+    bottom = edge("bottom", HOME_ENTRY.bottom),
     edges = [top, bottom];
   let entered = false,
     immersive = false,
@@ -162,8 +162,8 @@ export function createChromeMotion(env = {}) {
     );
   }
 
-  // Hall and detail fullscreen make the bars inert while they own the scene: a revealed bar is usable again, a leaving
-  // one gets their state back. Outside immersion the bars are left alone.
+  // Student Hall and detail fullscreen make the bars inert while they own the scene: a revealed bar is usable again, a
+  // leaving one gets their state back. Outside immersion the bars are left alone.
   function inert(e, away) {
     if (!immersive) return;
     for (const el of parts(e)) el.inert = away ? !!e.base?.get(el) : false;

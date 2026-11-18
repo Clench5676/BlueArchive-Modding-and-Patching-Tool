@@ -74,8 +74,8 @@ test("moving an element puts the centre of its ink on the bar's centre", () => {
 
 test("every element's ink lands on the bar's centre, from the prefab's geometry and the sprites' drawn rows", () => {
   const centre = Layout.barCentre();
-  // NUITop_Scenes/Top/Right: Lobby (Home) 62 x 59 at y -51.8, Option 60 x 62 at -52.4, Line (1) 4 x 49 at -54.2;
-  // nav.js puts Home's top at 7 and the others at the prefab's offsets from it (units to stage px: 1920 / 2960).
+  // NUITop_Scenes/Top/Right: Memorial lobby (Home) 62 x 59 at y -51.8, Option 60 x 62 at -52.4, Line (1) 4 x 49 at
+  // -54.2; nav.js puts Home's top at 7 and the others at the prefab's offsets from it (units to stage px: 1920 / 2960).
   // Their sprites are drawn to the edge (alpha rows 0 to the last), so the ink is the box.
   const home = { y: -51.8, h: 59 },
     option = { y: -52.4, h: 62 },

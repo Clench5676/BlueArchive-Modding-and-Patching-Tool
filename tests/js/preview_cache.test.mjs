@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createPreviewCache } from "../../src/bmpt/web/js/detail/preview-cache.js";
-import { createModelStills } from "../../src/bmpt/web/js/model/model-still.js";
+import { createChibiStills } from "../../src/bmpt/web/js/chibi/chibi-still.js";
 
 const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 const configured = (store, generation = "one", enabled = true) =>
@@ -86,7 +86,7 @@ test("stalled optional cache RPCs time out and fall back without blocking render
     );
   configured(store);
   assert.equal(await store.get(store.ticket("source", "spine")), null);
-  assert.equal(await store.modelTicket("source", "student", "live"), null);
+  assert.equal(await store.chibiTicket("source", "student", "live"), null);
   assert.equal(await store.assetTicket(store.ticket("source", "spine"), ["/asset/art/background/BG_Cafe.png"]), null);
   assert.equal(await store.put(store.ticket("source", "spine"), "blob:x"), false);
   assert.deepEqual(calls, [
@@ -160,13 +160,13 @@ test("oversized PNGs and cancelled reads do not alter picture quality or publish
   assert.equal(server.calls.length, 0);
 });
 
-test("model thumbnail identity includes exact validated GLB bytes", async () => {
+test("chibi thumbnail identity includes exact validated GLB bytes", async () => {
   const server = backend(),
     store = createPreviewCache(options(server));
   configured(store);
-  const a = await store.modelTicket("render-parameters", "student", "live");
+  const a = await store.chibiTicket("render-parameters", "student", "live");
   server.revision("b".repeat(64));
-  const b = await store.modelTicket("render-parameters", "student", "live");
+  const b = await store.chibiTicket("render-parameters", "student", "live");
   assert.notEqual(a.key, b.key);
   assert.equal(await store.put(a, "blob:a"), false, "do not publish art under a source that changed while rendering");
   assert.equal(await store.get(b), null);
@@ -192,22 +192,22 @@ test("background and framing dependencies invalidate stills and are rechecked af
   assert.equal(await store.get(b), "blob:persisted");
 });
 
-test("a persisted model still avoids renderer creation and does not rewrite cached PNGs", async () => {
+test("a persisted chibi still avoids renderer creation and does not rewrite cached PNGs", async () => {
   let reads = 0;
-  const thumbnail = createModelStills({
+  const thumbnail = createChibiStills({
     renderer: () => assert.fail("No GPU work on a persistent hit"),
     persistent: {
-      modelTicket: async () => ({}),
+      chibiTicket: async () => ({}),
       get: async () => {
         reads++;
-        return "blob:cached-model";
+        return "blob:cached-chibi";
       },
       put: () => assert.fail("No duplicate write on hit"),
     },
     report: () => assert.fail("Cache hit must not report an error"),
   });
-  assert.equal(await thumbnail("student", "live", { version: "source" }), "blob:cached-model");
-  assert.equal(await thumbnail("student", "live", { version: "source" }), "blob:cached-model");
+  assert.equal(await thumbnail("student", "live", { version: "source" }), "blob:cached-chibi");
+  assert.equal(await thumbnail("student", "live", { version: "source" }), "blob:cached-chibi");
   assert.equal(reads, 1);
   await new Promise(setImmediate);
 });
@@ -219,16 +219,16 @@ test("a still is kept only under the renderer that drew it, and the backend is t
   assert.equal(store.ticket("source"), null, "a ticket names its renderer");
   assert.equal(await store.put(store.ticket("source", "spine"), "blob:x"), true);
   assert.equal(await store.get(store.ticket("source", "spine")), "blob:persisted");
-  const model = await store.modelTicket("source", "hina", "official");
-  assert.equal(model.renderer, "model");
-  assert.equal(await store.put(model, "blob:x"), true);
+  const chibi = await store.chibiTicket("source", "hina", "official");
+  assert.equal(chibi.renderer, "chibi");
+  assert.equal(await store.put(chibi, "blob:x"), true);
   const sent = server.calls.filter(([method]) => method === "preview.cacheGet" || method === "preview.cachePut");
   assert.deepEqual(
     sent.map(([method, args]) => [method, args.renderer]),
     [
       ["preview.cachePut", "spine"],
       ["preview.cacheGet", "spine"],
-      ["preview.cachePut", "model"],
+      ["preview.cachePut", "chibi"],
     ],
   );
 });

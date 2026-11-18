@@ -60,11 +60,11 @@ test("the source picker, gallery and Settings use explicit treatment in all loca
   assert.match(popup, /buttons: buttons.map/);
   assert.ok(!popup.includes('[T("popup.apply"),T("act.update")'));
   const controller = await readFile(
-    new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url),
+    new URL("../../src/bmpt/web/js/thumbnail-capture/controller.js", import.meta.url),
     "utf8",
   );
   const dense = compact(controller);
-  assert.match(dense, /\[P\("export"\),safe\(exportPhoto\),false,"export"\]/);
+  assert.match(dense, /\[P\("export"\),safe\(exportThumbnail\),false,"export"\]/);
   assert.match(dense, /label:P\("saveSelection"\),fn:safe\(saveSelection\),primary:true,semantic:"save"/);
   for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const data = JSON.parse(await readFile(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"));

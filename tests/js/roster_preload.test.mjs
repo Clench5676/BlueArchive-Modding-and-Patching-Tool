@@ -1,14 +1,20 @@
-// The roster's prefabs are asked for once the first screen of a start with a game is up (main.js start()), never
-// awaited, and Roster.show() takes up that same request. start() and roster.js's prefab code run for real on stub
-// collaborators.
+// The student list's prefabs are asked for once the first screen of a start with a game is up (main.js start()), never
+// awaited, and StudentList.show() takes up that same request. start() and student-list.js's prefab code run for real on
+// stub collaborators.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
-const roster = readFileSync(new URL("../../src/bmpt/web/js/roster/roster.js", import.meta.url), "utf8");
+const studentList = readFileSync(
+  new URL("../../src/bmpt/web/js/student-list/student-list.js", import.meta.url),
+  "utf8",
+);
 const startCode = main.slice(main.indexOf("async function start()"), main.indexOf("\nboot()"));
-const prefabCode = roster.slice(roster.indexOf("const PREFABS ="), roster.indexOf("export async function show("));
+const prefabCode = studentList.slice(
+  studentList.indexOf("const PREFABS ="),
+  studentList.indexOf("export async function show("),
+);
 const flush = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 };
@@ -74,7 +80,7 @@ function runStart(gameFound) {
       log.push(["route"]);
       return screen.promise;
     },
-    Roster: { init() {}, preload: () => log.push(["preload"]) },
+    StudentList: { init() {}, preload: () => log.push(["preload"]) },
   };
   const run = new Function(
     "env",
@@ -86,7 +92,7 @@ function runStart(gameFound) {
   return { log, screen, done: run(env) };
 }
 
-test("a start with a game asks for the roster's prefabs once its first screen is up, without waiting for them", async () => {
+test("a start with a game asks for the student list's prefabs once its first screen is up, without waiting for them", async () => {
   const { log, screen, done } = runStart(true);
   await flush();
   assert.deepEqual(log, [["update-check"], ["route"]], "the first screen's exports go first");
@@ -134,7 +140,11 @@ test("show() and preload ask for the same prefabs, through the shared layout cac
     PREFABS,
   );
   assert.deepEqual(requested, PREFABS, "each prefab is requested once");
-  assert.match(roster, /const \[collection, unit, checkbox\] = await prefabs\(\);/, "show() takes the shared request");
+  assert.match(
+    studentList,
+    /const \[collection, unit, checkbox\] = await prefabs\(\);/,
+    "show() takes the shared request",
+  );
 });
 
 test("a failed preload is swallowed and asked for again by show()", async () => {

@@ -1,11 +1,11 @@
-// Tests that every memorial lobby instance (web/js/lobby/lobby.js createLobby) keeps its own state, and that the
-// module's default instance offers exactly an instance's API.
+// Tests that every memorial lobby instance (web/js/memorial-lobby/memorial-lobby.js createMemorialLobby) keeps its own
+// state, and that the module's default instance offers exactly an instance's API.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { latestLoad } from "../../src/bmpt/web/js/spine/spine-load.js";
-import { LOBBY_MODULES, joinedModules } from "./helpers/source-text.mjs";
-const Lobby = await import("../../src/bmpt/web/js/lobby/lobby.js");
+import { MEMORIAL_LOBBY_MODULES, joinedModules } from "./helpers/source-text.mjs";
+const MemorialLobby = await import("../../src/bmpt/web/js/memorial-lobby/memorial-lobby.js");
 
 const STATELESS = [
   "layersOf",
@@ -25,42 +25,43 @@ const STATELESS = [
   "zoomBounds",
 ];
 
-test("the default lobby exports the same names as an instance, and nothing an instance changes is shared", () => {
-  const a = Lobby.createLobby(),
-    b = Lobby.createLobby();
-  const names = Object.keys(Lobby)
-    .filter((name) => name !== "createLobby")
+test("the default memorial lobby exports the same names as an instance, and nothing an instance changes is shared", () => {
+  const a = MemorialLobby.createMemorialLobby(),
+    b = MemorialLobby.createMemorialLobby();
+  const names = Object.keys(MemorialLobby)
+    .filter((name) => name !== "createMemorialLobby")
     .sort();
   assert.deepEqual(Object.keys(a).sort(), names);
   assert.deepEqual(Object.keys(b).sort(), names);
   for (const name of names)
     if (STATELESS.includes(name)) {
-      assert.equal(a[name], Lobby[name], name);
-      assert.equal(b[name], Lobby[name], name);
+      assert.equal(a[name], MemorialLobby[name], name);
+      assert.equal(b[name], MemorialLobby[name], name);
     } else {
       assert.equal(typeof a[name], "function", name);
       assert.notEqual(a[name], b[name], name);
-      assert.notEqual(a[name], Lobby[name], name);
+      assert.notEqual(a[name], MemorialLobby[name], name);
     }
   const seq = { cues: [{ clip: "one" }] };
   a.setLines({ one: { "zh-CN": "First", "en-US": "First (en)" } });
   assert.deepEqual(a.textOf(seq), ["First"]);
   assert.deepEqual(b.textOf(seq), [], "lines set on one instance stay its own");
-  assert.deepEqual(Lobby.textOf(seq), []);
+  assert.deepEqual(MemorialLobby.textOf(seq), []);
   b.setLines({ one: { "zh-CN": "Second", "en-US": "Second (en)" } }, (line) => line?.["en-US"] || "");
   assert.deepEqual(b.textOf(seq), ["Second (en)"]);
   assert.deepEqual(a.textOf(seq), ["First"], "the line picker stays per instance");
-  for (const lobby of [a, b, Lobby]) {
-    assert.equal(lobby.meta(), null);
-    assert.equal(lobby.playing(), null);
-    assert.equal(lobby.playingAll(), false);
+  for (const memorialLobby of [a, b, MemorialLobby]) {
+    assert.equal(memorialLobby.meta(), null);
+    assert.equal(memorialLobby.playing(), null);
+    assert.equal(memorialLobby.playingAll(), false);
   }
 });
 
-// lobby.js and the parts of its instances as one body, to read an instance's state S and functions L
-const lobbyFile = (name) => readFile(new URL(`../../src/bmpt/web/js/lobby/${name}`, import.meta.url), "utf8");
-const [lobbyMain, ...lobbyParts] = await Promise.all(LOBBY_MODULES.map(lobbyFile));
-const source = joinedModules(lobbyMain, ...lobbyParts).replace(/^export /gm, "");
+// memorial-lobby.js and the parts of its instances as one body, to read an instance's state S and functions L
+const memorialLobbyFile = (name) =>
+  readFile(new URL(`../../src/bmpt/web/js/memorial-lobby/${name}`, import.meta.url), "utf8");
+const [memorialLobbyMain, ...memorialLobbyParts] = await Promise.all(MEMORIAL_LOBBY_MODULES.map(memorialLobbyFile));
+const source = joinedModules(memorialLobbyMain, ...memorialLobbyParts).replace(/^export /gm, "");
 const createContext = new Function("latestLoad", `${source}; return createContext;`)(latestLoad);
 
 test("two instances hold their own settings, dialogue state, timers and caches", () => {

@@ -76,8 +76,8 @@ def test_zip_bundles_import_like_files_and_nested_archives_stay_packed(env):
 def test_zip_and_loose_files_are_taken_together(env):
     loose = make_mod(env.original, env.tmp / "loose")
     other_target = game_bundle(env.game_dir, "test_home_gl")
-    lobby = make_mod(other_target, env.tmp / "made", payload=b"lobby mod")
-    archive = write_zip(env.tmp / "drop" / "lobby.zip", {lobby.name: lobby.read_bytes()})
+    memorial_lobby = make_mod(other_target, env.tmp / "made", payload=b"lobby mod")
+    archive = write_zip(env.tmp / "drop" / "lobby.zip", {memorial_lobby.name: memorial_lobby.read_bytes()})
     result = analyze(env, [loose, archive])
     assert result["skipped"] == 0
     assert sorted(entry["resourceType"] for entry in result["entries"]) == ["memorialLobby", "portrait"]
@@ -238,7 +238,7 @@ def test_an_exported_archive_imports_back(env):
         folder=env.tmp / "exports",
         server="global",
         platform="windows",
-        kind=None,
+        resource_type=None,
         log=lambda *_: None,
         progress=lambda *_: None,
     )

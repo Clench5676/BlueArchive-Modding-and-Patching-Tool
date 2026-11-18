@@ -76,7 +76,7 @@ export async function openAliases(draft = customAliases(), focusAt = null, key =
     const saved = await call(() => rpc("aliases.set", { alt: key, aliases: [...rows(), typed()] }));
     if (!saved || my !== aliasToken) return; // an error is shown and the editor stays
     close();
-    ctx.invalidateRoster();
+    ctx.invalidateStudentList();
     if (altId !== key) return;
     alt().customAliases = saved;
     renderScreen();

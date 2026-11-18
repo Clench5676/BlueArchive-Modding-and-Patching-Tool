@@ -1,4 +1,4 @@
-"""Small things a 3D model wears with its costume go with it on a costume switch (gameassets.model_props)."""
+"""Small things a 3D model wears with its costume go with it on a costume switch (gameassets.chibi_props)."""
 
 import copy
 import json
@@ -11,8 +11,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from bmpt.gameassets import model_adapt as ma
-from bmpt.gameassets import model_props as mp
+from bmpt.gameassets import chibi_adapt as ma
+from bmpt.gameassets import chibi_props as mp
 from module_patches import patch_everywhere
 
 # the real-install tests run only on an official game folder named by BAMT_TEST_GAME_DIR
@@ -380,7 +380,7 @@ def test_dropped_triangles_draw_nothing_and_keep_every_count(wide):
 
 
 def test_dropped_triangles_of_a_compressed_mesh():
-    from bmpt.gameassets.model_hems import pack_bits, unpack_bits
+    from bmpt.gameassets.chibi_hems import pack_bits, unpack_bits
 
     flat = [0, 1, 2, 3, 4, 5]
     tree = {
@@ -479,7 +479,7 @@ def _switch(view, tmp_path, target, source):
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
     from bmpt.gameassets.discovery import cab_names
-    from bmpt.gameassets.model import BundleGraph
+    from bmpt.gameassets.chibi import BundleGraph
 
     files, index = view
     slot = _slot(files, target)
@@ -507,7 +507,7 @@ def _switch(view, tmp_path, target, source):
 
 
 def _own_skeletons(graph, written, dev):
-    from bmpt.gameassets.model import _prefabs
+    from bmpt.gameassets.chibi import _prefabs
 
     prefabs = _prefabs(graph, [p for p in written if p.name.startswith("character-")])
     return {name: ma.Skeleton.of(graph, pointer.deref()) for name, pointer in ma.own_prefabs(prefabs, dev).items()}
@@ -544,7 +544,7 @@ def _kept(slot, written):
 
 
 def _exported(graph, written, dev):
-    from bmpt.gameassets.model import export_chibi
+    from bmpt.gameassets.chibi import export_chibi
 
     data = export_chibi(graph, [p for p in written if p.name.startswith("character-")], dev)
     doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
@@ -589,8 +589,8 @@ def test_official_the_sources_bottles_stay_in_her_bag(view, tmp_path):
 def test_official_a_mixed_renderer_draws_a_copy_without_its_worn_item(view, tmp_path):
     """Kasumi <- Mari: Kasumi's remote is worn, her drill in the same mesh is not: her drill renderer draws a new mesh,
     the remote's triangles drawing nothing and every other triangle as before; the official mesh stays."""
-    from bmpt.gameassets.model import _key
-    from bmpt.gameassets.model_glb import read_mesh
+    from bmpt.gameassets.chibi import _key
+    from bmpt.gameassets.chibi_glb import read_mesh
 
     result, slot, sources, written, official_graph, graph = _switch(view, tmp_path, "ch0089", "mari_original")
     assert result.dropped == ["CH0089_Drill_Mesh"]
@@ -612,7 +612,7 @@ def test_official_a_mixed_renderer_draws_a_copy_without_its_worn_item(view, tmp_
 def test_official_a_carried_item_leaves_the_rest_of_its_renderer_behind(view, tmp_path):
     """Mari <- Saki (Swimsuit): her bag (body and strap) is worn, the other things of its renderer are not: the
     carried mesh draws the bag's triangles only."""
-    from bmpt.gameassets.model_glb import read_mesh
+    from bmpt.gameassets.chibi_glb import read_mesh
 
     result, slot, sources, written, official_graph, graph = _switch(view, tmp_path, "mari_original", "ch0217")
     assert result.carried == ["CH0217_SkillProp"]
@@ -632,7 +632,7 @@ def test_official_a_carried_item_leaves_the_rest_of_its_renderer_behind(view, tm
     ],
 )
 def test_official_a_hat_goes_with_its_costume(view, tmp_path, target, source, dropped, carried, bone):
-    from bmpt.gameassets.model import _key
+    from bmpt.gameassets.chibi import _key
 
     result, slot, sources, written, official_graph, graph = _switch(view, tmp_path, target, source)
     assert result.dropped == dropped and result.carried == carried

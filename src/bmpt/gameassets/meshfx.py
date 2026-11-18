@@ -1,23 +1,23 @@
-"""Describe lobby prefab MeshRenderers and their looping Animators for web/js/lobby/mesh-fx.js.
+"""Describe memorial lobby prefab MeshRenderers and their looping Animators for web/js/memorial-lobby/mesh-fx.js.
 
-Besides its skeletons and particle systems a lobby prefab can carry meshes drawn with effect shaders: lens dirt and
-light quads (FX/FX_SHADER_Lobby_Order, One One; DSFX/FX_SHADER_Additive_0) in Akane's, Eimi's, Karin's, Shiroko's,
-Sumire's and Shun's lobbies, a water surface, clouds and a window glow (DSFX/FX_SHADER_AlphaBlend_Add_Distort_0) in
-Hanako's, Maki's and Utaha's. Most are Unity's built-in Quad (unity default resources, path id 10210), placed like the
-particle systems: under a SkeletonUtilityBone (Follow) they move with the bone. Four lobbies loop them with an
-Animator: its controller's default state plays one clip, which scales, moves and turns the quads and animates their
-material colours.
+Besides its skeletons and particle systems a memorial lobby prefab can carry meshes drawn with effect shaders: lens dirt
+and light quads (FX/FX_SHADER_Lobby_Order, One One; DSFX/FX_SHADER_Additive_0) in Akane's, Eimi's, Karin's, Shiroko's,
+Sumire's and Shun's memorial lobbies, a water surface, clouds and a window glow
+(DSFX/FX_SHADER_AlphaBlend_Add_Distort_0) in Hanako's, Maki's and Utaha's. Most are Unity's built-in Quad (unity default
+resources, path id 10210), placed like the particle systems: under a SkeletonUtilityBone (Follow) they move with the
+bone. Four memorial lobbies loop them with an Animator: its controller's default state plays one clip, which scales,
+moves and turns the quads and animates their material colours.
 
-A renderer is {"name", "path", "material", "mesh" ("quad" or a lobby.json fx.meshes id), "queue", "sortingLayer",
-"order", "layer" (the sorting layer's id), "z", "anchor", "chain", "static"}: drawn like a particle system with that
-material, sorted with the systems and the
-skeletons' atlas pages, placed by its anchor's bone (as particles.anchor_of) times the transforms in "chain" (each
-{"node", "p", "q", "s"}: local position, rotation quaternion and scale), or by "static" without an anchor (then the
-chain runs from the prefab root). A clip is {"duration", "rate", "loop", "tracks"}, a track one of
-{"node", "attr": "p" | "q" | "s" | "e", "order", "v"} (a transform's position, rotation, scale or Euler angles in
-degrees, in the rotation order "order") and {"renderer", "prop", "ch", "rgba", "v"} (one channel of a material
-property: Color channels "rgba" are converted to linear light like the material's colours, Vector channels are not),
-"v" holding the values at 0, 1 / rate, ... seconds (one value: constant). Nodes are indexes into the prefab walk.
+A renderer is {"name", "path", "material", "mesh" ("quad" or a memorial-lobby.json fx.meshes id), "queue",
+"sortingLayer", "order", "layer" (the sorting layer's id), "z", "anchor", "chain", "static"}: drawn like a particle
+system with that material, sorted with the systems and the skeletons' atlas pages, placed by its anchor's bone (as
+particles.anchor_of) times the transforms in "chain" (each {"node", "p", "q", "s"}: local position, rotation quaternion
+and scale), or by "static" without an anchor (then the chain runs from the prefab root). A clip is {"duration", "rate",
+"loop", "tracks"}, a track one of {"node", "attr": "p" | "q" | "s" | "e", "order", "v"} (a transform's position,
+rotation, scale or Euler angles in degrees, in the rotation order "order") and {"renderer", "prop", "ch", "rgba", "v"}
+(one channel of a material property: Color channels "rgba" are converted to linear light like the material's colours,
+Vector channels are not), "v" holding the values at 0, 1 / rate, ... seconds (one value: constant). Nodes are indexes
+into the prefab walk.
 
 Everything here works on plain typetrees, so it runs without game files; the service resolves the materials, meshes and
 animator controllers.
@@ -88,7 +88,7 @@ def clip(
     """Export Animator transform and material tracks using the module's clip schema.
 
     Args:
-        decoded: model.decode_clip result with second-based timing and sampled scalar curves.
+        decoded: chibi.decode_clip result with second-based timing and sampled scalar curves.
         bindings: Generic bindings in their stored curve order; unsupported components are omitted.
         loop: Whether the controller's clip repeats.
         paths: CRC32 of paths below the Animator GameObject (empty for itself) mapped to prefab node indices.
@@ -136,10 +136,10 @@ def build(
     data_scale: Callable[[str], float],
     resolve: Callable[[str, int, dict], Any] | None,
 ) -> dict:
-    """Build mesh renderers and their Animator clips from a lobby prefab walk.
+    """Build mesh renderers and their Animator clips from a memorial lobby prefab walk.
 
     Args:
-        nodes: lobby.read_prefab nodes in hierarchy order with first components, path IDs, and transforms.
+        nodes: memorial_lobby.read_prefab nodes in hierarchy order with first components, path IDs, and transforms.
         skeleton_of_go: Maps a skeleton GameObject path ID to its exported skeleton name, or None.
         data_scale: Returns Unity units per skeleton unit for each skeleton name.
         resolve: Reads material, mesh, or animator by owner path ID and pointer; None returns empty collections.

@@ -123,16 +123,16 @@ textarea {
   pointer-events: none;
 }
 .scene-clip > .portrait,
-.scene-clip > .lobby,
-.scene-clip > .model,
+.scene-clip > .memorial-lobby,
+.scene-clip > .chibi,
 .scene-clip > .nav {
   pointer-events: auto;
 }
-.screen:not(#screen-detail):not(#screen-hall),
+.screen:not(#screen-detail):not(#screen-student-hall),
 .popup-host,
 .consent-host,
-#student-hall > .lobby,
-#student-hall > .layer-host:not(.hall-chrome):not(.hall-fullscreen-exit) {
+#student-hall > .memorial-lobby,
+#student-hall > .layer-host:not(.student-hall-chrome):not(.student-hall-fullscreen-exit) {
   overflow: hidden;
   overflow: clip;
 }
@@ -240,7 +240,7 @@ textarea {
 .import-input-wrap {
   z-index: 1;
 }
-.import-input-wrap .roster-search {
+.import-input-wrap .student-list-search {
   z-index: 30;
 }
 .import-search-clear {
@@ -342,10 +342,10 @@ textarea {
   height: 32px;
 }
 
-/* the Enable Mods switch after Back (js/mods/mod-switch.js): two of the roster filter's segments (UICharacterCollection
-   FilterBtn: Common_Filter_Tab_Type1 and its flipped twin, 9-sliced and inclined 10 degrees like NGUI draws them, at
-   40/104 of their size), ON pressed in the Support segment's blue and OFF in the All segment's navy; its label; the
-   square "?" (Btn_Information: Common_Btn_Information in #2c4564 over a white square) */
+/* the Enable Mods switch after Back (js/mods/mod-switch.js): two of the student list filter's segments
+   (UICharacterCollection FilterBtn: Common_Filter_Tab_Type1 and its flipped twin, 9-sliced and inclined 10 degrees like
+   NGUI draws them, at 40/104 of their size), ON pressed in the Support segment's blue and OFF in the All segment's
+   navy; its label; the square "?" (Btn_Information: Common_Btn_Information in #2c4564 over a white square) */
 .mod-switch {
   display: flex;
   align-items: center;
@@ -353,7 +353,7 @@ textarea {
   margin-left: -12px;
   height: 64px;
 }
-.topbar.hall-home .mod-switch {
+.topbar.student-hall-home .mod-switch {
   margin-left: -134px;
 }
 .mod-switch[hidden] {
@@ -470,7 +470,7 @@ textarea {
   color: #828282;
 }
 
-/* --- roster --- */
+/* --- student list --- */
 .ngui-host {
   position: absolute;
   inset: 0;
@@ -514,7 +514,7 @@ textarea {
 }
 /* the search box's input over the game's InputField: Label_Search's colour and size, the placeholder like
    Label_Locale_Input; selectable although the stage is not */
-.roster-search {
+.student-list-search {
   position: absolute;
   z-index: 320;
   border: 0;
@@ -533,25 +533,25 @@ textarea {
   -webkit-user-select: text;
   user-select: text;
 }
-.roster-search::placeholder {
+.student-list-search::placeholder {
   color: #98a3ae;
   font-size: 0.92em;
   opacity: 1;
 }
-/* Hall's box is a search field: no browser clear button or decoration over the game's InputField */
-.roster-search::-webkit-search-cancel-button,
-.roster-search::-webkit-search-decoration {
+/* Student Hall's box is a search field: no browser clear button or decoration over the game's InputField */
+.student-list-search::-webkit-search-cancel-button,
+.student-list-search::-webkit-search-decoration {
   -webkit-appearance: none;
   appearance: none;
   display: none;
 }
 /* opened and focused before its box is drawn: it takes keystrokes unseen meanwhile */
-.roster-search.pending {
+.student-list-search.pending {
   opacity: 0;
 }
 /* keyboard focus (never shown for the pointer): one ring everywhere, 4 px in the app's focus blue, 2 px off the
    control, on the game's Raius10px corner (6.49 px at the stage's scale: ui-tokens.js FOCUS, which the token tests
-   keep equal). A roster card's ring sits inside its portrait frame, because the list clips. */
+   keep equal). A student list card's ring sits inside its portrait frame, because the list clips. */
 .hit:focus-visible,
 .card-hit:focus-visible,
 .nav-item:focus-visible,
@@ -571,7 +571,7 @@ textarea {
 .card-row .card-hit:focus-visible {
   outline-offset: -3px;
 }
-.roster-empty {
+.student-list-empty {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -702,7 +702,7 @@ textarea {
   object-fit: contain;
 }
 .portrait .spine-player,
-.lobby-layer .spine-player,
+.memorial-lobby-layer .spine-player,
 .thumb-player .spine-player {
   background: transparent !important;
 }
@@ -928,44 +928,44 @@ textarea {
   transform: translateX(70%);
   opacity: 0;
 }
-.stage.fullscreen .lobby-frost {
+.stage.fullscreen .memorial-lobby-frost {
   opacity: 0;
 }
-/* Hall hides its chrome independently of its portrait and memorial players, which stay. */
-#student-hall.hall-immersive > .hall-chrome,
-#student-hall.hall-immersive [data-actor-toolbar] {
+/* Student Hall hides its chrome independently of its portrait and memorial players, which stay. */
+#student-hall.student-hall-immersive > .student-hall-chrome,
+#student-hall.student-hall-immersive [data-actor-toolbar] {
   visibility: hidden;
   pointer-events: none;
 }
-.hall-fullscreen-exit {
+.student-hall-fullscreen-exit {
   z-index: 6;
 }
 
-/* the collection background dims behind the lobby */
+/* the collection background dims behind the memorial lobby */
 #ngui-bg.dim {
   filter: blur(6px) brightness(0.9);
 }
 
-/* memorial lobby: the lobby's skeletons fill the stage; the right side fades into a frosted blur */
-.lobby {
+/* memorial lobby: the memorial lobby's skeletons fill the stage; the right side fades into a frosted blur */
+.memorial-lobby {
   position: absolute;
   inset: 0;
   z-index: 1;
 }
-.lobby[hidden] {
+.memorial-lobby[hidden] {
   display: none;
 }
-/* fullscreen past the painted art (zoom-out Unlocked, Custom): the game's lobby camera clears to black; the bottom
-   layer draws that black itself, graded with PP on (linear.js), so this shows only without WebGL2 */
-.stage.fullscreen .lobby.open-edge {
+/* fullscreen past the painted art (zoom-out Unlocked, Custom): the game's memorial lobby camera clears to black; the
+   bottom layer draws that black itself, graded with PP on (linear.js), so this shows only without WebGL2 */
+.stage.fullscreen .memorial-lobby.open-edge {
   background: #000;
 }
-.lobby-view,
-.lobby-layer {
+.memorial-lobby-view,
+.memorial-lobby-layer {
   position: absolute;
   inset: 0;
 }
-.lobby-unavailable {
+.memorial-lobby-unavailable {
   position: absolute;
   left: 120px;
   top: 450px;
@@ -974,12 +974,12 @@ textarea {
   color: #607689;
   font-size: 28px;
 }
-.stage.fullscreen .lobby-unavailable {
+.stage.fullscreen .memorial-lobby-unavailable {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
 }
-.lobby-extend {
+.memorial-lobby-extend {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -987,11 +987,11 @@ textarea {
   filter: blur(26px) saturate(1.05);
   transform: scale(1.08);
 }
-.lobby-extend[hidden] {
+.memorial-lobby-extend[hidden] {
   display: none;
 }
 /* the framing being left, faded out over the new one when switching between the left view and fullscreen */
-.lobby-fade {
+.memorial-lobby-fade {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -999,20 +999,20 @@ textarea {
   pointer-events: none;
   opacity: 0;
 }
-/* fullscreen: the character can be touched (lobby-touch.js); the pointer shows what a press does */
-.stage.fullscreen .lobby {
+/* fullscreen: the character can be touched (memorial-lobby-touch.js); the pointer shows what a press does */
+.stage.fullscreen .memorial-lobby {
   touch-action: none;
 }
-.lobby.grab {
+.memorial-lobby.grab {
   cursor: grab;
 }
-.lobby.grabbing {
+.memorial-lobby.grabbing {
   cursor: grabbing;
 }
-.lobby.talk {
+.memorial-lobby.talk {
   cursor: var(--cursor-press);
 }
-.lobby-frost {
+.memorial-lobby-frost {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -1024,9 +1024,9 @@ textarea {
   background: linear-gradient(90deg, rgba(225, 240, 250, 0) 38%, rgba(225, 240, 250, 0.22) 66%);
 }
 
-/* 3D model: the left area over the dimmed collection background; fullscreen it takes the whole stage (the camera
-   glides over, model.js) */
-.model {
+/* chibi: the left area over the dimmed collection background; fullscreen it takes the whole stage (the camera
+   glides over, chibi.js) */
+.chibi {
   position: absolute;
   left: 0;
   top: 0;
@@ -1034,13 +1034,13 @@ textarea {
   height: 1080px;
   z-index: 1;
 }
-.model[hidden] {
+.chibi[hidden] {
   display: none;
 }
-.stage.fullscreen .model {
+.stage.fullscreen .chibi {
   width: 1920px;
 }
-.model-view {
+.chibi-view {
   display: block;
   width: 100%;
   height: 100%;
@@ -1049,15 +1049,15 @@ textarea {
   touch-action: none;
   cursor: grab;
 }
-.model-view:active {
+.chibi-view:active {
   cursor: grabbing;
 }
-.model-view.ready {
+.chibi-view.ready {
   opacity: 1;
 }
 
 /* Game dialogue balloons; only their host's entry/exit motion belongs to CSS. Geometry comes from the prefab. */
-.lobby-subtitle {
+.memorial-lobby-subtitle {
   position: absolute;
   inset: 0;
   z-index: 6;
@@ -1066,14 +1066,14 @@ textarea {
     opacity 0.26s ease,
     translate 0.26s ease;
 }
-.lobby-subtitle[hidden] {
+.memorial-lobby-subtitle[hidden] {
   display: none;
 }
-.lobby-subtitle.out {
+.memorial-lobby-subtitle.out {
   opacity: 0;
   translate: 0 -24px;
 }
-.lobby-subtitle.in {
+.memorial-lobby-subtitle.in {
   opacity: 0;
   translate: 0 24px;
   transition: none;
@@ -1490,18 +1490,18 @@ textarea {
 /* the detail screen's left side loads laid out but transparent (a hidden canvas has no size); the part it replaces,
    or a still of it, fades out once everything is in */
 .portrait.pending,
-.lobby.pending,
-.model.pending {
+.memorial-lobby.pending,
+.chibi.pending {
   opacity: 0;
 }
 .portrait.leaving,
-.lobby.leaving,
-.model.leaving,
+.memorial-lobby.leaving,
+.chibi.leaving,
 .left-freeze.leaving {
   opacity: 0;
   transition: opacity 0.35s ease;
 }
-.model.pending .model-view {
+.chibi.pending .chibi-view {
   transition: none;
 }
 .left-freeze {

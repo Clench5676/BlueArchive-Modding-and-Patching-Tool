@@ -93,7 +93,7 @@ def _tell(busy: bool) -> None:
 
 @contextmanager
 def waiting() -> Iterator[None]:
-    """Mark a foreground preview as waiting for a job (the model lock a job holds, a costume build of the same pair).
+    """Mark a foreground preview as waiting for a job (the chibi lock a job holds, a costume build of the same pair).
 
     Meanwhile the preview does not count as foreground, so the job it waits for does not yield to it, and the wait is
     told (``on_wait``) so the page's deadline leaves it out. Does nothing on a thread that answers no preview.

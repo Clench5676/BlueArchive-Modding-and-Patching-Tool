@@ -64,12 +64,12 @@ def test_every_import_of_a_pixel_file_is_classified(renderer):
 
 def test_the_vendor_runtimes_in_use_are_the_listed_ones():
     imports = _import_map()
-    assert imports["three"].removeprefix("./") in stills.RENDERERS["model"]
+    assert imports["three"].removeprefix("./") in stills.RENDERERS["chibi"]
     root = re.search(r'const ROOT = "([^"]+)"', (WEB / "js/spine/spine-runtime.js").read_text()).group(1)
     assert root + "spine-player.min.js" in stills.RENDERERS["spine"]
-    # the still entry points: the 3D still loads model.js, the Spine stills live in thumbs.js
-    assert 'import("./model.js")' in (WEB / "js/model/model-still.js").read_text()
-    assert {"js/model/model-still.js", "js/model/model.js"} <= set(stills.RENDERERS["model"])
+    # the still entry points: the 3D still loads chibi.js, the Spine stills live in thumbs.js
+    assert 'import("./chibi.js")' in (WEB / "js/chibi/chibi-still.js").read_text()
+    assert {"js/chibi/chibi-still.js", "js/chibi/chibi.js"} <= set(stills.RENDERERS["chibi"])
     assert "js/detail/thumbs.js" in stills.RENDERERS["spine"]
 
 
@@ -79,14 +79,13 @@ def test_a_change_to_a_pixel_file_changes_only_its_renderers_revision(tmp_path):
             (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(WEB / name, tmp_path / name)
     before = {name: stills.revision(name, tmp_path) for name in stills.RENDERERS}
-    assert before["model"] != before["spine"]
+    assert before["chibi"] != before["spine"]
     changed = tmp_path / "changed"
     shutil.copytree(tmp_path, changed, ignore=shutil.ignore_patterns("changed"))
     with (changed / "js/core/png-decode.js").open("a") as file:
         file.write("\n// changed\n")
-    assert stills.revision("model", changed) != before["model"]
+    assert stills.revision("chibi", changed) != before["chibi"]
     assert stills.revision("spine", changed) == before["spine"]
-    assert stills.revision("model", WEB) == stills.revision("model", WEB)
 
 
 def test_an_unknown_renderer_is_refused():

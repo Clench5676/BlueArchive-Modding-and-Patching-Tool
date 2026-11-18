@@ -20,7 +20,7 @@ from PIL import Image, ImageChops, ImageStat
 from ba_modding_toolkit import core
 from ba_modding_toolkit.core import mod_install
 from ba_modding_toolkit.bundle import Bundle
-from bmpt.catalog.models import CoreMap
+from bmpt.catalog.records import CoreMap
 from bmpt.host.config import Settings
 from bmpt.core.errors import ServiceError
 from ba_modding_toolkit.i18n import I18n
@@ -37,35 +37,35 @@ from module_patches import patch_everywhere
 
 
 @dataclass
-class FakeVariant:
+class FakeAlt:
     key: str
-    spr: str | None
-    lobby: str | None = None
-    family: str = "test"
+    portrait: str | None
+    memorial_lobby: str | None = None
+    student: str = "test"
 
 
 class FakeCatalog:
-    def __init__(self, *variants):
-        self.variants = {v.key: v for v in variants}
+    def __init__(self, *alts):
+        self.alts = {v.key: v for v in alts}
 
-    def variant(self, key):
-        return self.variants[key]
+    def alt(self, key):
+        return self.alts[key]
 
-    def variant_for_core(self, core):
-        return next((v for v in self.variants.values() if core in (v.spr, v.lobby)), None)
+    def alt_for_core(self, core):
+        return next((v for v in self.alts.values() if core in (v.portrait, v.memorial_lobby)), None)
 
-    def families(self):
-        return [SimpleNamespace(key="test", variants=list(self.variants.values()))]
+    def students(self):
+        return [SimpleNamespace(key="test", alts=list(self.alts.values()))]
 
     def core_map(self, spr_cores, lobby_cores, special_cores=()):
         """Any install's cores by the variants' cores; another core by the plain rule (the core less its suffix)."""
-        keys, spr, lobby = {}, {}, {}
+        keys, portrait, memorial_lobby = {}, {}, {}
         for core_name in [*spr_cores, *lobby_cores]:
-            variant = self.variant_for_core(core_name.lower())
-            key = variant.key if variant else core_name.lower().removesuffix("_spr").split("_home")[0]
+            alt = self.alt_for_core(core_name.lower())
+            key = alt.key if alt else core_name.lower().removesuffix("_spr").split("_home")[0]
             keys[core_name.lower()] = key
-            (spr if core_name.lower().endswith("_spr") else lobby).setdefault(key, core_name)
-        return CoreMap(keys, spr, lobby, {})
+            (portrait if core_name.lower().endswith("_spr") else memorial_lobby).setdefault(key, core_name)
+        return CoreMap(keys, portrait, memorial_lobby, {})
 
 
 def header_bundle(payload=b"official"):
@@ -98,9 +98,7 @@ def make_mod(source, directory, payload=b"modded!!", fixed=False):
 def setup_library(tmp_path, monkeypatch, header_only_bundles):
     game_dir = tmp_path / "game"
     original = game_bundle(game_dir)
-    catalog = FakeCatalog(
-        FakeVariant("test", "test_spr", "test_home_gl"), FakeVariant("other", "other_spr", family="other")
-    )
+    catalog = FakeCatalog(FakeAlt("test", "test_spr", "test_home_gl"), FakeAlt("other", "other_spr", student="other"))
     settings = Settings(tmp_path / "config.toml")
     settings.set("game_resource_dir", str(game_dir))
     settings.set("enable_crc_correction", "false")
@@ -167,10 +165,10 @@ def test_direct_install_build_progress_names_processing(setup_library, monkeypat
     assert progress[-1] == (1, 1, f"Applying: {env.original.name}")
 
 
-@pytest.mark.parametrize("kind", ["spr", "lobby"])
-def test_apply_already_crc_fixed_mod_copies_without_unity_rebuild(setup_library, monkeypatch, kind):
+@pytest.mark.parametrize("resource_type", ["portrait", "memorialLobby"])
+def test_apply_already_crc_fixed_mod_copies_without_unity_rebuild(setup_library, monkeypatch, resource_type):
     env = setup_library
-    target = env.original if kind == "spr" else game_bundle(env.game_dir, "test_home_gl", part="textures")
+    target = env.original if resource_type == "portrait" else game_bundle(env.game_dir, "test_home_gl", part="textures")
     mod = make_mod(target, env.tmp / "fixed", fixed=True)
     entry = env.library.add([mod])[0]
     monkeypatch.setattr(env.settings, "crc_needed", lambda path: True)
@@ -183,7 +181,7 @@ def test_apply_already_crc_fixed_mod_copies_without_unity_rebuild(setup_library,
     monkeypatch.setattr(Bundle, "save", no_rebuild)
     patch_everywhere(monkeypatch, ["bmpt.library.service"], "install_staged", no_rebuild)
     patch_everywhere(monkeypatch, ["bmpt.library.service"], "rebuild", no_rebuild)
-    result = env.library.apply("test", f"mod:{entry.id}", kind=kind)
+    result = env.library.apply("test", f"mod:{entry.id}", resource_type=resource_type)
     assert result.files == [target]
     assert target.read_bytes() == mod.read_bytes()
     assert next(part for part in env.library.state("test").files if part.file == target).applied == f"mod:{entry.id}"
@@ -211,15 +209,15 @@ def test_add_deduplicates_preserves_filename_and_detects_targets(setup_library):
     entry = entries[0]
     assert entry.file == env.root / "mods" / entry.id / mod.name
     assert entry.file.read_bytes() == mod.read_bytes()
-    assert (entry.target, entry.kind, entry.fresh, entry.date) == ("test", "spr", True, "2026-01-01")
+    assert (entry.target, entry.resource_type, entry.fresh, entry.date) == ("test", "portrait", True, "2026-01-01")
     assert entry.added.endswith("+00:00")
     assert entry.user_added and reload_library(env).mods()[0].user_added
     assert env.library.add([mod]) == []
-    lobby = game_bundle(env.tmp / "lobby", "test_home_gl", payload=b"lobby")
-    assert env.library.add([lobby])[0].kind == "lobby"
-    lobby = game_bundle(env.tmp / "home", "test_home", payload=b"home")
-    env.catalog.variants["test"].lobby = "test_home"
-    assert env.library.add([lobby])[0].target == "test"
+    memorial_lobby = game_bundle(env.tmp / "memorialLobby", "test_home_gl", payload=b"lobby")
+    assert env.library.add([memorial_lobby])[0].resource_type == "memorialLobby"
+    memorial_lobby = game_bundle(env.tmp / "home", "test_home", payload=b"home")
+    env.catalog.alts["test"].memorial_lobby = "test_home"
+    assert env.library.add([memorial_lobby])[0].target == "test"
     json.dumps(entry.to_json())
 
 
@@ -262,11 +260,11 @@ def test_add_separates_cores_dates_and_kinds(setup_library):
     ]
     entries = env.library.add(sources)
     assert len(entries) == 4
-    assert {(entry.target, entry.kind, entry.date) for entry in entries} == {
-        ("test", "spr", "2026-01-01"),
-        ("test", "spr", "2026-02-01"),
-        ("other", "spr", "2026-01-01"),
-        ("test", "lobby", "2026-01-01"),
+    assert {(entry.target, entry.resource_type, entry.date) for entry in entries} == {
+        ("test", "portrait", "2026-01-01"),
+        ("test", "portrait", "2026-02-01"),
+        ("other", "portrait", "2026-01-01"),
+        ("test", "memorialLobby", "2026-01-01"),
     }
 
 
@@ -337,7 +335,7 @@ def test_preview_matches_individual_parts_and_keeps_official_fallbacks(setup_lib
     env = setup_library
     env.original.unlink()
     targets = [game_bundle(env.game_dir, part=part, payload=part.encode()) for part in parts]
-    lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
+    memorial_lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
     # Install another mod so the preview must use a retained original rather
     # than the currently installed skeleton/atlas.
     (old,) = env.library.add([make_mod(targets[-2], env.tmp / "old", payload=b"old atlas")])
@@ -357,7 +355,7 @@ def test_preview_matches_individual_parts_and_keeps_official_fallbacks(setup_lib
     ]
     assert result == expected + mod_paths
     assert all(env.library._is_official(path) for path in expected)
-    assert lobby not in result
+    assert memorial_lobby not in result
 
 
 def test_preview_keeps_preload_parts_before_mod_overrides(setup_library):
@@ -368,8 +366,12 @@ def test_preview_keeps_preload_parts_before_mod_overrides(setup_library):
     assert env.library.preview_bundles(entry.id) == [preload, entry.file]
 
 
-@pytest.mark.parametrize("core,kind", [("test_spr", "spr"), ("test_home_gl", "lobby"), ("other_spr", "spr")])
-def test_official_preview_uses_kept_parts_and_is_unavailable_without_them(setup_library, monkeypatch, core, kind):
+@pytest.mark.parametrize(
+    "core,resource_type", [("test_spr", "portrait"), ("test_home_gl", "memorialLobby"), ("other_spr", "portrait")]
+)
+def test_official_preview_uses_kept_parts_and_is_unavailable_without_them(
+    setup_library, monkeypatch, core, resource_type
+):
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.webui.services import Services
 
@@ -392,14 +394,14 @@ def test_official_preview_uses_kept_parts_and_is_unavailable_without_them(setup_
 
     monkeypatch.setattr("bmpt.gameassets.service.extract_spine", extract)
     services = Services(env.settings, env.tmp / "ui", game=game, catalog=env.catalog, library=env.library)
-    resource_type = {"spr": "portrait", "lobby": "memorialLobby"}[kind]
+    resource_type = {"portrait": "portrait", "memorialLobby": "memorialLobby"}[resource_type]
     prefix = f"spine/official-{resource_type}/{core}"
     try:
         before = json.loads(services.asset(f"{prefix}/manifest.json", {}).body)["revision"]
         assert services.asset(f"{prefix}/{before}/skeleton.skel", {}).body == expected
         (entry,) = env.library.add([make_mod(targets[0], env.tmp / "input", payload=b"modified")])
-        variant = "other" if core == "other_spr" else "test"
-        env.library.apply(variant, f"mod:{entry.id}", kind=kind)
+        alt = "other" if core == "other_spr" else "test"
+        env.library.apply(alt, f"mod:{entry.id}", resource_type=resource_type)
         kept = env.root / "originals" / targets[0].name
         assert targets[0].read_bytes() != expected
         assert env.library.official_bundles(core) == [kept, targets[1]]
@@ -432,7 +434,7 @@ def test_live_bundles_put_the_parts_that_carry_a_mod_last(setup_library):
     assert sorted(targets) == targets  # the order the game folder lists them
     assert env.library.live_bundles("test_home_gl") == targets
     (entry,) = env.library.add([make_mod(targets[0], env.tmp / "input", payload=b"modified")])
-    env.library.apply("test", f"mod:{entry.id}", kind="lobby")
+    env.library.apply("test", f"mod:{entry.id}", resource_type="memorialLobby")
     assert env.library.live_bundles("TEST_HOME_GL") == [targets[1], targets[0]]
     assert env.library.live_bundles("test_home_gl") == env.library.live_bundles("test_home_gl")
     # the preview of the mod and the official parts leave the other category out too
@@ -441,14 +443,14 @@ def test_live_bundles_put_the_parts_that_carry_a_mod_last(setup_library):
     expect_error("game_file_not_found", lambda: env.library.live_bundles("absent_home"))
 
 
-@pytest.mark.parametrize("kind,core_name", [("spr", "test_spr"), ("lobby", "test_home_gl")])
-def test_live_spine_files_merge_in_the_previews_order(setup_library, monkeypatch, kind, core_name):
+@pytest.mark.parametrize("resource_type,core_name", [("portrait", "test_spr"), ("memorialLobby", "test_home_gl")])
+def test_live_spine_files_merge_in_the_previews_order(setup_library, monkeypatch, resource_type, core_name):
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.webui.api import build_api
     from bmpt.webui.services import Services
 
     env = setup_library
-    first = env.original if kind == "spr" else game_bundle(env.game_dir, core_name, part="textassets")
+    first = env.original if resource_type == "portrait" else game_bundle(env.game_dir, core_name, part="textassets")
     targets = [first, game_bundle(env.game_dir, core_name, part="textures")]
     cache = AssetCache(root=env.tmp / "cache", allowed=True)
     game = GameAssets([env.game_dir], cache)
@@ -460,13 +462,13 @@ def test_live_spine_files_merge_in_the_previews_order(setup_library, monkeypatch
 
     monkeypatch.setattr("bmpt.gameassets.service.extract_spine", extract)
     services = Services(env.settings, env.tmp / "ui", cache=cache, game=game, catalog=env.catalog, library=env.library)
-    resource_type = {"spr": "portrait", "lobby": "memorialLobby"}[kind]
+    resource_type = {"portrait": "portrait", "memorialLobby": "memorialLobby"}[resource_type]
     prefix = f"spine/{resource_type}/{core_name}"
     try:
         for name in ("manifest.json", "skeleton.skel"):
             services.asset(f"{prefix}/{name}", {})
         (entry,) = env.library.add([make_mod(targets[0], env.tmp / "input", payload=b"modified")])
-        env.library.apply("test", f"mod:{entry.id}", kind=kind)
+        env.library.apply("test", f"mod:{entry.id}", resource_type=resource_type)
         revision = json.loads(services.asset(f"{prefix}/manifest.json", {}).body)["revision"]
         for clear in (False, True):
             if clear:
@@ -492,7 +494,7 @@ def test_partial_mod_preview_uses_same_size_live_mod_without_claiming_it_officia
     result = env.library.apply("test", f"mod:{entry.id}")
     assert result.incomplete and result.kept_current
     assert env.original.read_bytes() == header_bundle(b"modified")
-    assert env.library.selection("test")["spr"]["incomplete"]
+    assert env.library.selection("test")["portrait"]["incomplete"]
     expect_error("official_unavailable", lambda: env.library.official_bundles("test_spr"))
 
 
@@ -510,7 +512,7 @@ def test_legacy_single_file_record_can_apply_and_reset_other_parts(setup_library
                         "files": [mod.name],
                         "label": "Legacy",
                         "target": "test",
-                        "kind": "spr",
+                        "kind": "portrait",
                         "added": "2026-01-01T00:00:00+00:00",
                         "seen": False,
                     }
@@ -552,10 +554,10 @@ def test_add_rejects_unsupported_targets(setup_library, name):
 
 def test_add_accepts_every_memorial_lobby_core(setup_library):
     env = setup_library
-    env.catalog.variants["other"].lobby = "other_home_teen"
-    lobby = game_bundle(env.game_dir, "other_home_teen", payload=b"teen lobby")
-    (entry,) = env.library.add([make_mod(lobby, env.tmp / "input")])
-    assert (entry.kind, entry.target) == ("lobby", "other")
+    env.catalog.alts["other"].memorial_lobby = "other_home_teen"
+    memorial_lobby = game_bundle(env.game_dir, "other_home_teen", payload=b"teen lobby")
+    (entry,) = env.library.add([make_mod(memorial_lobby, env.tmp / "input")])
+    assert (entry.resource_type, entry.target) == ("memorialLobby", "other")
 
 
 def test_state_round_trip_seen_labels_favorites_and_removal(setup_library):
@@ -565,7 +567,7 @@ def test_state_round_trip_seen_labels_favorites_and_removal(setup_library):
     env.library.mark_seen(entry.id)
     env.library.set_favorite("test", True)
     library = reload_library(env)
-    assert library.mods()[0].label == "My portrait"
+    assert library.mods()[0].name == "My portrait"
     assert library.mods()[0].fresh is False
     assert library.favorites() == {"test"}
     snapshot = library.favorites()
@@ -579,21 +581,21 @@ def test_state_round_trip_seen_labels_favorites_and_removal(setup_library):
     expect_error("mod_not_found", lambda: library.mark_seen(entry.id))
 
 
-@pytest.mark.parametrize("kind", ["spr", "lobby"])
-def test_mod_alias_is_metadata_only_and_empty_restores_default(setup_library, kind):
+@pytest.mark.parametrize("resource_type", ["portrait", "memorialLobby"])
+def test_mod_alias_is_metadata_only_and_empty_restores_default(setup_library, resource_type):
     env = setup_library
-    target = env.original if kind == "spr" else game_bundle(env.game_dir, "test_home_gl")
+    target = env.original if resource_type == "portrait" else game_bundle(env.game_dir, "test_home_gl")
     source = make_mod(target, env.tmp / "input")
     (entry,) = env.library.add([source])
-    env.library.apply("test", f"mod:{entry.id}", kind=kind)
+    env.library.apply("test", f"mod:{entry.id}", resource_type=resource_type)
     before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (target, source, entry.file)}
     files = set(env.root.rglob("*.bundle"))
     profiles = (env.root / "profiles.json").read_bytes()
     saved = env.library.rename(entry.id, "  ../Cafe\u0301\n <paint>\u200b  ")
     assert (env.root / "profiles.json").read_bytes() == profiles
-    assert saved.alias == saved.label == "../Caf\u00e9 <paint>"
+    assert saved.alias == saved.name == "../Caf\u00e9 <paint>"
     (record,) = json.loads((env.root / "state.json").read_text())["mods"]
-    assert record["label"] == entry.label
+    assert record["label"] == entry.name
     assert record["alias"] == saved.alias
     library = reload_library(env)
     assert library.mods()[0] == saved
@@ -602,7 +604,7 @@ def test_mod_alias_is_metadata_only_and_empty_restores_default(setup_library, ki
     profiles = (env.root / "profiles.json").read_bytes()
     cleared = library.rename(entry.id, " \n\t ")
     assert (env.root / "profiles.json").read_bytes() == profiles
-    assert cleared.alias == "" and cleared.label == entry.label
+    assert cleared.alias == "" and cleared.name == entry.name
     assert reload_library(env).mods()[0] == cleared
     assert "alias" not in json.loads((env.root / "state.json").read_text())["mods"][0]
     assert set(env.root.rglob("*.bundle")) == files
@@ -630,24 +632,24 @@ def test_repaired_default_name_tracks_original_alias_and_has_its_own_override(se
     env.library.rename(entry.id, "Original alias")
     source = make_mod(env.original, env.tmp / "repaired", payload=b"repaired")
     stored = env.library._store(
-        {source.name: source}, "Original alias", entry.target, entry.kind, repaired_from=entry.id
+        {source.name: source}, "Original alias", entry.target, entry.resource_type, repair_source_id=entry.id
     )
-    repaired_id = stored["id"]
-    repaired = next(m for m in reload_library(env).mods() if m.id == repaired_id)
-    assert repaired.label_base == "Original alias"
-    assert repaired.to_json()["label_base"] == "Original alias"
-    label = lambda: next(m.label for m in reload_library(env).mods() if m.id == repaired_id)
+    repaired_copy_id = stored["id"]
+    repaired = next(m for m in reload_library(env).mods() if m.id == repaired_copy_id)
+    assert repaired.base_name == "Original alias"
+    assert repaired.to_json()["base_name"] == "Original alias"
+    label = lambda: next(m.name for m in reload_library(env).mods() if m.id == repaired_copy_id)
     assert label() == translate("webui.remap.name", name="Original alias")
     env.library.rename(entry.id, "Changed alias")
     assert label() == translate("webui.remap.name", name="Changed alias")
-    env.library.rename(repaired_id, "Own alias")
+    env.library.rename(repaired_copy_id, "Own alias")
     env.library.rename(entry.id, "")
     assert label() == "Own alias"
-    env.library.rename(repaired_id, "")
-    assert label() == translate("webui.remap.name", name=entry.label)
+    env.library.rename(repaired_copy_id, "")
+    assert label() == translate("webui.remap.name", name=entry.name)
     env.library.remove(entry.id, confirm=True)
     assert label() == translate("webui.remap.name", name="Original alias")
-    assert next(m for m in reload_library(env).mods() if m.id == repaired_id).label_base == "Original alias"
+    assert next(m for m in reload_library(env).mods() if m.id == repaired_copy_id).base_name == "Original alias"
 
 
 @pytest.mark.parametrize(
@@ -861,8 +863,8 @@ def test_multi_part_install_rolls_back_every_part_on_write_failure(setup_library
         kept = env.root / "originals" / path.name
         if kept.exists():
             assert kept.read_bytes() == before[path]
-    assert env.library.configured("test")["spr"] == f"mod:{entry.id}"
-    assert not env.library.selection("test")["spr"]["installed"]
+    assert env.library.configured("test")["portrait"] == f"mod:{entry.id}"
+    assert not env.library.selection("test")["portrait"]["installed"]
 
 
 @pytest.mark.parametrize("fixed", [False, True])
@@ -891,14 +893,14 @@ def test_invalid_kept_original_is_never_overwritten(setup_library):
     assert backup.read_bytes() == b"invalid"
 
 
-@pytest.mark.parametrize("kind", ["spr", "lobby"])
+@pytest.mark.parametrize("resource_type", ["portrait", "memorialLobby"])
 @pytest.mark.parametrize("correct_crc", [False, True])
 def test_missing_official_apply_keeps_all_outside_parts_and_repair_clears_state(
-    setup_library, monkeypatch, kind, correct_crc
+    setup_library, monkeypatch, resource_type, correct_crc
 ):
     env = setup_library
-    core_name = "test_spr" if kind == "spr" else "test_home_gl"
-    first = env.original if kind == "spr" else game_bundle(env.game_dir, core_name)
+    core_name = "test_spr" if resource_type == "portrait" else "test_home_gl"
+    first = env.original if resource_type == "portrait" else game_bundle(env.game_dir, core_name)
     second = game_bundle(env.game_dir, core_name, part="textures")
     official = {path: path.read_bytes() for path in (first, second)}
     for path in official:
@@ -906,13 +908,13 @@ def test_missing_official_apply_keeps_all_outside_parts_and_repair_clears_state(
     outside = {path: path.read_bytes() for path in official}
     (mod,) = env.library.add([make_mod(first, env.tmp / "input", fixed=correct_crc)])
     monkeypatch.setattr(env.settings, "crc_needed", lambda path: correct_crc)
-    result = env.library.apply("test", f"mod:{mod.id}", kind=kind)
+    result = env.library.apply("test", f"mod:{mod.id}", resource_type=resource_type)
     assert result.kept_current and result.incomplete
     (kept,) = [entry for entry in env.library.mods() if entry.id != mod.id]
     kept_files = {path.name: path.read_bytes() for path in kept.file.parent.glob("*.bundle")}
     assert kept_files == {path.name: data for path, data in outside.items()}
     assert first.read_bytes() == mod.file.read_bytes() and second.read_bytes() == outside[second]
-    expect_error("official_unavailable", lambda: env.library.restore("test", kind=kind))
+    expect_error("official_unavailable", lambda: env.library.restore("test", resource_type=resource_type))
     off = env.library.toggle(False, True)
     assert any(item["core"] == core_name for item in off.stuck)
     assert first.read_bytes() == mod.file.read_bytes() and second.read_bytes() == outside[second]
@@ -920,12 +922,16 @@ def test_missing_official_apply_keeps_all_outside_parts_and_repair_clears_state(
     # A repair returns genuine official bytes; the existing state and switch heal without a reset.
     for path, data in official.items():
         path.write_bytes(data)
-    assert all(part.restorable and part.official for part in env.library.state("test").files if part.kind == kind)
+    assert all(
+        part.restorable and part.official
+        for part in env.library.state("test").files
+        if part.resource_type == resource_type
+    )
     assert not env.library.preview_incomplete(mod.id)
     assert not env.library.toggle(True, False).failed
     assert first.read_bytes() == mod.file.read_bytes() and second.read_bytes() == official[second]
     assert (env.root / "originals" / first.name).read_bytes() == official[first]
-    assert not env.library.apply("test", f"mod:{mod.id}", kind=kind).incomplete
+    assert not env.library.apply("test", f"mod:{mod.id}", resource_type=resource_type).incomplete
 
 
 def test_failed_apply_without_official_rolls_back_the_outside_bytes(setup_library, monkeypatch):
@@ -1213,48 +1219,51 @@ def test_target_mismatch_and_missing_targets(setup_library):
     expect_error("game_file_not_found", lambda: env.library.apply("test", f"mod:{entry.id}"))
 
 
-@pytest.mark.parametrize("kind", ["spr", "lobby"])
-def test_mod_apply_and_restore_are_isolated_by_kind(setup_library, kind):
+@pytest.mark.parametrize("resource_type", ["portrait", "memorialLobby"])
+def test_mod_apply_and_restore_are_isolated_by_kind(setup_library, resource_type):
     env = setup_library
-    lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
-    originals = {path: path.read_bytes() for path in (env.original, lobby)}
+    memorial_lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
+    originals = {path: path.read_bytes() for path in (env.original, memorial_lobby)}
     entries = env.library.add(
         [
             make_mod(env.original, env.tmp / "input", payload=b"portrait mod"),
-            make_mod(lobby, env.tmp / "input", payload=b"lobby mod"),
+            make_mod(memorial_lobby, env.tmp / "input", payload=b"lobby mod"),
         ]
     )
-    mods = {entry.kind: entry for entry in entries}
-    selected, other = (env.original, lobby) if kind == "spr" else (lobby, env.original)
-    other_kind = "lobby" if kind == "spr" else "spr"
-    env.library.apply("test", f"mod:{mods[other_kind].id}", kind=other_kind)
+    mods = {entry.resource_type: entry for entry in entries}
+    selected, other = (env.original, memorial_lobby) if resource_type == "portrait" else (memorial_lobby, env.original)
+    other_kind = "memorialLobby" if resource_type == "portrait" else "portrait"
+    env.library.apply("test", f"mod:{mods[other_kind].id}", resource_type=other_kind)
     before = other.read_bytes()
-    expect_error("mod_target_mismatch", lambda: env.library.apply("test", f"mod:{mods[other_kind].id}", kind=kind))
-    env.library.apply("test", f"mod:{mods[kind].id}", kind=kind)
-    assert selected.read_bytes() == mods[kind].file.read_bytes()
+    expect_error(
+        "mod_target_mismatch",
+        lambda: env.library.apply("test", f"mod:{mods[other_kind].id}", resource_type=resource_type),
+    )
+    env.library.apply("test", f"mod:{mods[resource_type].id}", resource_type=resource_type)
+    assert selected.read_bytes() == mods[resource_type].file.read_bytes()
     assert other.read_bytes() == before
-    env.library.restore("test", kind=kind)
+    env.library.restore("test", resource_type=resource_type)
     assert selected.read_bytes() == originals[selected]
     assert other.read_bytes() == before
-    env.library.apply("test", f"mod:{mods[kind].id}", kind=kind)
-    env.library.apply("test", "official", kind=kind)
+    env.library.apply("test", f"mod:{mods[resource_type].id}", resource_type=resource_type)
+    env.library.apply("test", "official", resource_type=resource_type)
     assert selected.read_bytes() == originals[selected]
     assert other.read_bytes() == before
 
 
-@pytest.mark.parametrize("kind", ["spr", "lobby", None])
-def test_variant_apply_and_restore_select_kinds(setup_library, monkeypatch, kind):
+@pytest.mark.parametrize("resource_type", ["portrait", "memorialLobby", None])
+def test_alt_apply_and_restore_select_kinds(setup_library, monkeypatch, resource_type):
     env = setup_library
-    lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
+    memorial_lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
     game_bundle(env.game_dir, "other_spr", payload=b"other portrait")
     game_bundle(env.game_dir, "other_home", payload=b"other lobby")
-    env.catalog.variants["other"].lobby = "other_home"
-    originals = {path: path.read_bytes() for path in (env.original, lobby)}
-    for path, current in ((env.original, "spr"), (lobby, "lobby")):
+    env.catalog.alts["other"].memorial_lobby = "other_home"
+    originals = {path: path.read_bytes() for path in (env.original, memorial_lobby)}
+    for path, current in ((env.original, "portrait"), (memorial_lobby, "memorialLobby")):
         (entry,) = env.library.add([make_mod(path, env.tmp / "input", payload=current.encode())])
-        env.library.apply("test", f"mod:{entry.id}", kind=current)
+        env.library.apply("test", f"mod:{entry.id}", resource_type=current)
     before = {path: path.read_bytes() for path in originals}
-    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", lambda sources, *args: sources)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_alt_sources", lambda sources, *args: sources)
     calls = []
 
     def update(sources, targets, output, *args, **kwargs):
@@ -1268,12 +1277,14 @@ def test_variant_apply_and_restore_select_kinds(setup_library, monkeypatch, kind
         return RebuildResult(True, "updated", pairs)
 
     patch_everywhere(monkeypatch, [service], "rebuild", update)
-    selected = {path for path in originals if kind is None or (path == env.original) == (kind == "spr")}
-    result = env.library.apply("test", "variant:other", kind=kind)
+    selected = {
+        path for path in originals if resource_type is None or (path == env.original) == (resource_type == "portrait")
+    }
+    result = env.library.apply("test", "alt:other", resource_type=resource_type)
     assert set(result.files) == selected
     assert set(calls) == {path.name for path in selected}
     assert all(path.read_bytes() == before[path] for path in originals.keys() - selected)
-    restored = env.library.restore("test", kind=kind)
+    restored = env.library.restore("test", resource_type=resource_type)
     assert set(restored.files) == selected
     assert all(path.read_bytes() == originals[path] for path in selected)
     assert all(path.read_bytes() == before[path] for path in originals.keys() - selected)
@@ -1281,14 +1292,14 @@ def test_variant_apply_and_restore_select_kinds(setup_library, monkeypatch, kind
 
 def test_default_portrait_choices_ignore_unavailable_lobby_originals(setup_library, monkeypatch):
     env = setup_library
-    lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
+    memorial_lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
     other_lobby = game_bundle(env.game_dir, "other_home", payload=b"other lobby")
     game_bundle(env.game_dir, "other_spr", payload=b"other portrait")
-    env.catalog.variants["other"].lobby = "other_home"
+    env.catalog.alts["other"].memorial_lobby = "other_home"
     # Classic installs can leave a modified lobby without a retained original.
-    for path in (lobby, other_lobby):
+    for path in (memorial_lobby, other_lobby):
         path.write_bytes(header_bundle(b"external lobby mod"))
-    untouched = {path: path.read_bytes() for path in (lobby, other_lobby)}
+    untouched = {path: path.read_bytes() for path in (memorial_lobby, other_lobby)}
     original = env.original.read_bytes()
     (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
@@ -1297,7 +1308,7 @@ def test_default_portrait_choices_ignore_unavailable_lobby_originals(setup_libra
     env.library.apply("test", f"mod:{entry.id}")
     env.library.apply("test", "official")
     assert env.original.read_bytes() == original
-    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", lambda sources, *args: sources)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_alt_sources", lambda sources, *args: sources)
 
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
@@ -1305,14 +1316,14 @@ def test_default_portrait_choices_ignore_unavailable_lobby_originals(setup_libra
         return RebuildResult(True, "updated", [FilePair(result, targets[0])])
 
     patch_everywhere(monkeypatch, [service], "rebuild", update)
-    env.library.apply("test", "variant:other")
+    env.library.apply("test", "alt:other")
     assert {path: path.read_bytes() for path in untouched} == untouched
-    expect_error("official_unavailable", lambda: env.library.restore("test", kind=None))
+    expect_error("official_unavailable", lambda: env.library.restore("test", resource_type=None))
 
 
-def test_cross_variant_mod_uses_mod_parts_official_baselines_and_tracks_source(setup_library, monkeypatch):
+def test_cross_alt_mod_uses_mod_parts_official_baselines_and_tracks_source(setup_library, monkeypatch):
     env = setup_library
-    env.catalog.variants["other"].family = "test"
+    env.catalog.alts["other"].student = "test"
     target_atlas = game_bundle(env.game_dir, part="002", payload=b"target atlas")
     source_atlas = game_bundle(env.game_dir, "other_spr", part="002", payload=b"source atlas")
     source_texture = game_bundle(env.game_dir, "other_spr", payload=b"source texture")
@@ -1341,7 +1352,7 @@ def test_cross_variant_mod_uses_mod_parts_official_baselines_and_tracks_source(s
         result.write_bytes(header_bundle(b"adapted selected mod"))
         return RebuildResult(True, "updated", [FilePair(result, target)])
 
-    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", adapt)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_alt_sources", adapt)
     patch_everywhere(monkeypatch, [service], "rebuild", update)
     result = env.library.apply("test", f"mod:{source_mod.id}")
     assert set(result.files) == {target_atlas, env.original}
@@ -1354,22 +1365,24 @@ def test_cross_variant_mod_uses_mod_parts_official_baselines_and_tracks_source(s
     assert all(path.read_bytes() == official[path] for path in (target_atlas, env.original))
 
 
-def test_cross_variant_mod_rejects_other_kind_and_missing_targets(setup_library):
+def test_cross_alt_mod_rejects_other_kind_and_missing_targets(setup_library):
     env = setup_library
-    env.catalog.variants["other"].family = "test"
-    lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
-    (entry,) = env.library.add([make_mod(lobby, env.tmp / "input")])
+    env.catalog.alts["other"].student = "test"
+    memorial_lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
+    (entry,) = env.library.add([make_mod(memorial_lobby, env.tmp / "input")])
     expect_error("mod_target_mismatch", lambda: env.library.apply("other", f"mod:{entry.id}"))
-    expect_error("game_file_not_found", lambda: env.library.apply("other", f"mod:{entry.id}", kind="lobby"))
+    expect_error(
+        "game_file_not_found", lambda: env.library.apply("other", f"mod:{entry.id}", resource_type="memorialLobby")
+    )
 
 
-def test_variant_swap_uses_official_source_and_keeps_target_original(setup_library, monkeypatch):
+def test_alt_swap_uses_official_source_and_keeps_target_original(setup_library, monkeypatch):
     env = setup_library
     other = game_bundle(env.game_dir, "other_spr", payload=b"variant!")
     entry = env.library.add([make_mod(other, env.tmp / "input")])[0]
     env.library.apply("other", f"mod:{entry.id}")
     calls = []
-    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", lambda sources, *args: sources)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_alt_sources", lambda sources, *args: sources)
 
     def update(sources, targets, output, *args, **kwargs):
         calls.append((sources, targets, kwargs))
@@ -1379,11 +1392,11 @@ def test_variant_swap_uses_official_source_and_keeps_target_original(setup_libra
 
     patch_everywhere(monkeypatch, [service], "rebuild", update)
     original_bytes = env.original.read_bytes()
-    result = env.library.apply("test", "variant:other")
+    result = env.library.apply("test", "alt:other")
     assert result.files == [env.original]
     assert calls[0][0] == [env.root / "originals" / other.name]
     assert calls[0][2]["match_strategy"] == "name_type"
-    assert env.library.state("test").applied == "variant:other"
+    assert env.library.state("test").applied == "alt:other"
     env.library.restore("test")
     assert env.original.read_bytes() == original_bytes
 
@@ -1394,8 +1407,8 @@ def test_official_preview_uses_kept_parts_while_a_mod_remains_in_game(setup_libr
     source = game_bundle(env.game_dir, core_name, payload=b"official source")
     official = source.read_bytes()
     (entry,) = env.library.add([make_mod(source, env.tmp / "input")])
-    kind = "spr" if core_name.endswith("_spr") else "lobby"
-    env.library.apply(entry.target, f"mod:{entry.id}", kind=kind)
+    resource_type = "portrait" if core_name.endswith("_spr") else "memorialLobby"
+    env.library.apply(entry.target, f"mod:{entry.id}", resource_type=resource_type)
     live = source.read_bytes()
     bundles = env.library.official_bundles(core_name)
     assert bundles == [env.root / "originals" / source.name]
@@ -1405,9 +1418,9 @@ def test_official_preview_uses_kept_parts_while_a_mod_remains_in_game(setup_libr
 
 
 @pytest.mark.parametrize("source_type", ["variant", "mod"])
-def test_variant_swap_rejects_incompatible_texture_page_counts(setup_library, monkeypatch, source_type):
+def test_alt_swap_rejects_incompatible_texture_page_counts(setup_library, monkeypatch, source_type):
     env = setup_library
-    env.catalog.variants["other"].family = "test"
+    env.catalog.alts["other"].student = "test"
     other = game_bundle(env.game_dir, "other_spr", payload=b"variant!")
     (entry,) = env.library.add([make_mod(other, env.tmp / "input")])
 
@@ -1419,7 +1432,7 @@ def test_variant_swap_rejects_incompatible_texture_page_counts(setup_library, mo
 
     monkeypatch.setattr(Bundle, "load", load)
     before = {path: path.read_bytes() for path in (env.original, other)}
-    source = "variant:other" if source_type == "variant" else f"mod:{entry.id}"
+    source = "alt:other" if source_type == "variant" else f"mod:{entry.id}"
     expect_error("alt_incompatible", lambda: env.library.apply("test", source))
     assert {path: path.read_bytes() for path in before} == before
     assert not (env.root / "originals").exists()
@@ -1692,7 +1705,7 @@ def test_extract_uses_core_and_returns_core_folder(setup_library, monkeypatch):
     assert progress == [{"current": 1, "total": 1, "step": "import.step.extract"}]
     assert folder == env.tmp / "extracted" / "test_spr"
     assert (folder / "test.atlas").read_bytes() == b"atlas"
-    env.library.extract("variant:test", env.tmp / "extracted")
+    env.library.extract("alt:test", env.tmp / "extracted")
     assert calls == [[entry.file], [env.original]]
 
 
@@ -1795,7 +1808,7 @@ def kept_copy(env, path):
 
 def swap_by_copying(monkeypatch, payload=b"adapted"):
     """Variant swaps and cross-variant mods without UnityPy: the adapted result is a fixed payload."""
-    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_variant_sources", lambda sources, *args: sources)
+    patch_everywhere(monkeypatch, ["bmpt.library.service"], "adapt_alt_sources", lambda sources, *args: sources)
 
     def update(sources, targets, output, *args, **kwargs):
         result = output / targets[0].name
@@ -1805,28 +1818,28 @@ def swap_by_copying(monkeypatch, payload=b"adapted"):
     patch_everywhere(monkeypatch, [service], "rebuild", update)
 
 
-@pytest.mark.parametrize("kind", ["spr", "lobby"])
-def test_switching_keeps_the_official_file_until_it_is_restored(setup_library, kind):
+@pytest.mark.parametrize("resource_type", ["portrait", "memorialLobby"])
+def test_switching_keeps_the_official_file_until_it_is_restored(setup_library, resource_type):
     env = setup_library
-    lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
-    target, other = (env.original, lobby) if kind == "spr" else (lobby, env.original)
+    memorial_lobby = game_bundle(env.game_dir, "test_home_gl", payload=b"lobby")
+    target, other = (env.original, memorial_lobby) if resource_type == "portrait" else (memorial_lobby, env.original)
     official = target.read_bytes()
     (first,) = env.library.add([make_mod(target, env.tmp / "first", payload=b"first mod")])
     (second,) = env.library.add([make_mod(target, env.tmp / "second", payload=b"second mod")])
     backup = kept_copy(env, target)
-    env.library.apply("test", f"mod:{first.id}", kind=kind)
+    env.library.apply("test", f"mod:{first.id}", resource_type=resource_type)
     assert target.read_bytes() == first.file.read_bytes() and backup.read_bytes() == official
     # a mod over a mod: the official copy stays as it is and the replaced mod stays in the library
-    env.library.apply("test", f"mod:{second.id}", kind=kind)
+    env.library.apply("test", f"mod:{second.id}", resource_type=resource_type)
     assert target.read_bytes() == second.file.read_bytes() and backup.read_bytes() == official
     assert first.file.read_bytes() == header_bundle(b"first mod")
     assert not kept_copy(env, other).exists()
-    env.library.apply("test", "official", kind=kind)
+    env.library.apply("test", "official", resource_type=resource_type)
     assert target.read_bytes() == official and not backup.exists()
     # switched again: kept again, from the verified game file
-    env.library.apply("test", f"mod:{first.id}", kind=kind)
+    env.library.apply("test", f"mod:{first.id}", resource_type=resource_type)
     assert backup.read_bytes() == official
-    env.library.restore("test", kind=kind)
+    env.library.restore("test", resource_type=resource_type)
     assert target.read_bytes() == official and not any((env.root / "originals").iterdir())
     assert [entry.id for entry in env.library.mods()] == [first.id, second.id]
     assert reload_library(env).state("test").backup is False
@@ -1846,14 +1859,14 @@ def test_parts_reset_to_official_release_their_kept_copies(setup_library):
     assert kept_copy(env, env.original).exists()
 
 
-def test_variant_swap_keeps_and_releases_only_the_target_copy(setup_library, monkeypatch):
+def test_alt_swap_keeps_and_releases_only_the_target_copy(setup_library, monkeypatch):
     env = setup_library
     other = game_bundle(env.game_dir, "other_spr", payload=b"variant!")
     (entry,) = env.library.add([make_mod(other, env.tmp / "input")])
     env.library.apply("other", f"mod:{entry.id}")
     swap_by_copying(monkeypatch)
     official = env.original.read_bytes()
-    env.library.apply("test", "variant:other")
+    env.library.apply("test", "alt:other")
     assert kept_copy(env, env.original).read_bytes() == official
     env.library.restore("test")
     assert env.original.read_bytes() == official and not kept_copy(env, env.original).exists()
@@ -1861,9 +1874,9 @@ def test_variant_swap_keeps_and_releases_only_the_target_copy(setup_library, mon
     assert kept_copy(env, other).exists()
 
 
-def test_cross_variant_mod_keeps_and_releases_the_target_copy(setup_library, monkeypatch):
+def test_cross_alt_mod_keeps_and_releases_the_target_copy(setup_library, monkeypatch):
     env = setup_library
-    env.catalog.variants["other"].family = "test"
+    env.catalog.alts["other"].student = "test"
     other = game_bundle(env.game_dir, "other_spr", payload=b"other portrait")
     (entry,) = env.library.add([make_mod(other, env.tmp / "input")])
     swap_by_copying(monkeypatch)
@@ -2104,12 +2117,12 @@ def test_deleting_an_applied_mod_restores_official(setup_library):
     official = env.original.read_bytes()
     (entry,) = env.library.add([make_mod(env.original, env.tmp / "input")])
     env.library.apply("test", f"mod:{entry.id}")
-    assert env.library.removal_info(entry.id) == {"name": entry.label, "used": True}
+    assert env.library.removal_info(entry.id) == {"name": entry.name, "used": True}
     result = env.library.remove(entry.id, confirm=True)
     assert result.failed == [] and result.done
     assert env.original.read_bytes() == official
     assert not entry.file.exists() and reload_library(env).mods() == []
-    assert env.library.configured("test")["spr"] is None
+    assert env.library.configured("test")["portrait"] is None
 
 
 def test_deleting_a_mod_restores_every_game_folder(setup_library):
@@ -2152,9 +2165,9 @@ def test_the_in_use_refusals_have_their_messages(language):
     assert errors["mod_in_use"] and "{folder}" in errors["mod_in_use_elsewhere"]
 
 
-def test_deleting_a_mod_restores_an_adapted_variant(setup_library, monkeypatch):
+def test_deleting_a_mod_restores_an_adapted_alt(setup_library, monkeypatch):
     env = setup_library
-    env.catalog.variants["other"].family = "test"
+    env.catalog.alts["other"].student = "test"
     other = game_bundle(env.game_dir, "other_spr", payload=b"other portrait")
     (entry,) = env.library.add([make_mod(other, env.tmp / "input")])
     swap_by_copying(monkeypatch)
@@ -2176,7 +2189,7 @@ def test_switching_keeps_a_file_changed_outside_the_library_as_a_mod(setup_libra
     assert env.original.read_bytes() == official and not kept_copy(env, env.original).exists()
     (kept,) = [entry for entry in env.library.mods() if entry.id != first.id]
     assert kept.file.name == env.original.name and kept.file.read_bytes() == external
-    assert (kept.kind, kept.target, kept.fresh) == ("spr", "test", True)
+    assert (kept.resource_type, kept.target, kept.fresh) == ("portrait", "test", True)
     assert not kept.user_added
     assert [m.id for m in reload_library(env).mods()] == [first.id, kept.id]
     # switching back puts it in the game again
@@ -2281,7 +2294,7 @@ def test_integration_real_bundle_add_apply_compare_restore(tmp_path, monkeypatch
     settings = Settings(tmp_path / "config.toml")
     settings.set("game_resource_dir", str(game_dir))
     settings.set("compression_method", "lz4")
-    catalog = FakeCatalog(FakeVariant("test", parsed.core))
+    catalog = FakeCatalog(FakeAlt("test", parsed.core))
     library = ModLibrary(tmp_path / "library", catalog, object(), settings)
     loaded = Bundle.load(original)
     texture = next(obj for obj in loaded.env.objects if obj.type == AssetType.Texture2D)
@@ -2299,7 +2312,7 @@ def test_integration_real_bundle_add_apply_compare_restore(tmp_path, monkeypatch
     result = library.apply("test", f"mod:{entry.id}", progress=lambda *args: events.append(args))
     assert result.files == [original] and events
     installed = next(file for file in library.state("test").files if file.file == original)
-    assert (installed.applied, installed.crc, installed.original) == (f"mod:{entry.id}", "fixed", True)
+    assert (installed.applied, installed.crc, installed.has_kept_official) == (f"mod:{entry.id}", "fixed", True)
     differences = library.compare(entry.id)
     changed = [asset for asset in differences.assets if asset.status == "changed"]
     assert [(asset.name, asset.type) for asset in changed] == [(texture.peek_name(), "Texture2D")]
@@ -2323,7 +2336,7 @@ def test_integration_real_bundle_add_apply_compare_restore(tmp_path, monkeypatch
 
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Blue Archive install unavailable")
-def test_integration_variant_swap_adapts_names_and_atlas_pages(tmp_path, monkeypatch):
+def test_integration_alt_swap_adapts_names_and_atlas_pages(tmp_path, monkeypatch):
     monkeypatch.setattr(safety, "check_game_not_running", lambda: None)
     resources = get_search_dirs(GAME_DIR)
     all_files = [path for directory in resources for path in directory.glob("assets-_mx-spinecharacters-*.bundle")]
@@ -2358,9 +2371,9 @@ def test_integration_variant_swap_adapts_names_and_atlas_pages(tmp_path, monkeyp
     settings = Settings(tmp_path / "config.toml")
     settings.set("game_resource_dir", str(game_dir))
     settings.set("compression_method", "lz4")
-    catalog = FakeCatalog(FakeVariant("test", cores[0]), FakeVariant("other", cores[1]))
+    catalog = FakeCatalog(FakeAlt("test", cores[0]), FakeAlt("other", cores[1]))
     library = ModLibrary(tmp_path / "library", catalog, object(), settings)
-    result = library.apply("test", "variant:other")
+    result = library.apply("test", "alt:other")
     assert result.files
 
     def assets(core_name):
@@ -2389,7 +2402,7 @@ def test_integration_variant_swap_adapts_names_and_atlas_pages(tmp_path, monkeyp
             if obj.type == AssetType.TextAsset and obj.peek_name().endswith(".atlas"):
                 assert target_texture_name + ".png" in obj.read().m_Script.splitlines()
     assert all(
-        file.crc == "fixed" and file.applied == "variant:other"
+        file.crc == "fixed" and file.applied == "alt:other"
         for file in library.state("test").files
         if file.file in result.files
     )
@@ -2446,7 +2459,7 @@ def test_duplicate_add_reports_the_existing_mod_even_with_another_filename(setup
     for path in (source, renamed, plain):
         result = reload_library(env).add([path])
         assert result == []
-        assert [(m.id, m.label) for m in result.duplicates] == [(entry.id, "My mod")]
+        assert [(m.id, m.name) for m in result.duplicates] == [(entry.id, "My mod")]
         assert result.to_json()["duplicates"][0]["target"] == "test"
     assert len(list((env.root / "mods").iterdir())) == 1
 
@@ -2495,7 +2508,7 @@ def test_add_recognizes_an_untracked_installed_mod_without_writing_game_files(se
     assert result.installed == [entry]
     assert env.original.stat().st_mtime_ns == before.st_mtime_ns
     assert env.original.read_bytes() == source.read_bytes()
-    assert env.library.configured("test")["spr"] == f"mod:{entry.id}"
+    assert env.library.configured("test")["portrait"] == f"mod:{entry.id}"
     assert env.library.state("test").applied == f"mod:{entry.id}"
     assert len(env.library.mods()) == 1
 
@@ -2513,7 +2526,7 @@ def test_add_recognizes_installed_multipart_mods_with_official_parts(setup_libra
     (entry,) = result
     assert result.installed == [entry] and len(env.library.mods()) == 1
     assert before == {p: p.stat().st_mtime_ns for p in before}
-    assert env.library.configured("test")["spr"] == f"mod:{entry.id}"
+    assert env.library.configured("test")["portrait"] == f"mod:{entry.id}"
     assert env.library.apply("test", f"mod:{entry.id}").unchanged
     assert env.original.read_bytes() == source.read_bytes()
 
@@ -3046,11 +3059,11 @@ def test_missing_official_journal_recovers_outside_bytes_after_interrupted_rollb
 @pytest.mark.parametrize("source_type", ["mod", "variant"])
 def test_adapted_apply_without_official_target_keeps_the_outside_mod(setup_library, monkeypatch, source_type):
     env = setup_library
-    env.catalog.variants["other"].family = "test"
+    env.catalog.alts["other"].student = "test"
     other = game_bundle(env.game_dir, "other_spr")
     env.original.write_bytes(header_bundle(b"outside target"))
     outside = env.original.read_bytes()
-    source = "variant:other"
+    source = "alt:other"
     if source_type == "mod":
         (mod,) = env.library.add([make_mod(other, env.tmp / "incoming")])
         source = f"mod:{mod.id}"

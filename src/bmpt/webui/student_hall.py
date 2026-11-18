@@ -15,6 +15,7 @@ from concurrent.futures import FIRST_COMPLETED, Future, TimeoutError as FutureTi
 from typing import Any
 from uuid import UUID, uuid4
 
+from ..catalog.records import alt_resource_core
 from ..core.errors import ServiceError
 from ..lines import global_lines as globallines
 from ..gameassets.errors import AssetNotFound
@@ -30,41 +31,41 @@ PORTRAIT_ORIGIN = (960 - 112 * (1920 / 2960), 540 + 886 * (1920 / 2960))
 PORTRAIT_SCALE = (0.25, 1.5, 1)
 
 
-def empty_hall() -> dict:
-    """Return a hall with no entries, in the shape ``prefs.student_hall`` stores."""
+def empty_student_hall() -> dict:
+    """Return a student hall with no entries, in the shape ``prefs.student_hall`` stores."""
     return {
         "revision": 0,
         "mode": "portraits",
         "background": "",
         "portraitScale": PORTRAIT_SCALE[2],
         "portraits": [],
-        "memorials": [],
+        "memorialLobbies": [],
         "active": None,
     }
 
 
-def normalize_hall(value: Any) -> dict:
+def normalize_student_hall(value: Any) -> dict:
     """Canonicalize duplicate resources on read without writing or advancing the stored revision.
 
     Args:
-        value: The stored hall; anything that is not a dict gives an empty hall.
+        value: The stored student hall; anything that is not a dict gives an empty student hall.
 
     Returns:
-        A copy that holds each (variant, source) once per group. Of duplicate memorials, the first one kept takes
+        A copy that holds each (alt, source) once per group. Of duplicate memorials, the first one kept takes
         the id of the active one.
     """
-    result = copy.deepcopy(value) if isinstance(value, dict) else empty_hall()
+    result = copy.deepcopy(value) if isinstance(value, dict) else empty_student_hall()
     result.setdefault("portraitScale", PORTRAIT_SCALE[2])
-    for group in ("portraits", "memorials"):
+    for group in ("portraits", "memorialLobbies"):
         entries = result.get(group, [])
         if not isinstance(entries, list):
             continue
         seen, kept = {}, []
         for entry in entries:
-            key = (entry.get("variant"), entry.get("source")) if isinstance(entry, dict) else None
+            key = (entry.get("alt"), entry.get("source")) if isinstance(entry, dict) else None
             if key and all(isinstance(part, str) and part for part in key):
                 if key in seen:
-                    if group == "memorials" and entry.get("id") == result.get("active"):
+                    if group == "memorialLobbies" and entry.get("id") == result.get("active"):
                         seen[key]["id"] = entry["id"]
                     continue
                 seen[key] = entry
@@ -73,32 +74,34 @@ def normalize_hall(value: Any) -> dict:
     return result
 
 
-def validate_hall(value: Any) -> dict:
-    """Validate a complete hall snapshot without silently dropping entries or merging duplicate students.
+def validate_student_hall(value: Any) -> dict:
+    """Validate a complete student hall snapshot without silently dropping entries or merging duplicate students.
 
     Args:
-        value: The hall as the page sends it: ``mode`` (``portraits`` or ``memorial``), ``background``,
+        value: The student hall as the page sends it: ``mode`` (``portraits`` or ``memorial``), ``background``,
             ``portraitScale``, and the ``portraits`` and ``memorials`` lists. Each entry has a UUID ``id``, a
-            ``variant`` and a ``source`` (``official`` or ``mod:<id>``); a portrait also has ``mirror``, ``x``,
+            ``alt`` and a ``source`` (``official`` or ``mod:<id>``); a portrait also has ``mirror``, ``x``,
             ``y`` and ``scale``, which default to the standard place.
 
     Returns:
-        The clean hall at revision 0, with ``active`` set to the memorial asked for or else the first one.
+        The clean student hall at revision 0, with ``active`` set to the memorial asked for or else the first one.
 
     Raises:
         ServiceError: ``bad_params`` naming the invalid field; ``student_hall_duplicate_portrait`` or
-            ``student_hall_duplicate_memorial`` for the same variant and source twice in a group.
+            ``student_hall_duplicate_memorial`` for the same alt and source twice in a group.
     """
-    if not isinstance(value, dict) or value.get("mode") not in ("portraits", "memorial"):
-        raise ServiceError("bad_params", key="hall")
-    out = empty_hall()
+    if not isinstance(value, dict) or value.get("mode") not in ("portraits", "memorialLobby"):
+        raise ServiceError("bad_params", key="studentHall")
+    out = empty_student_hall()
     out["mode"] = value["mode"]
-    bg = value.get("background", "")
-    if not isinstance(bg, str) or (
-        bg and bg not in ("office-day", "office-night") and not re.fullmatch(r"BG_[a-zA-Z0-9_-]+(?:\.png)?", bg)
+    background = value.get("background", "")
+    if not isinstance(background, str) or (
+        background
+        and background not in ("office-day", "office-night")
+        and not re.fullmatch(r"BG_[a-zA-Z0-9_-]+(?:\.png)?", background)
     ):
         raise ServiceError("bad_params", key="background")
-    out["background"] = bg
+    out["background"] = background
     scale = value.get("portraitScale", PORTRAIT_SCALE[2])
     if (
         isinstance(scale, bool)
@@ -109,7 +112,7 @@ def validate_hall(value: Any) -> dict:
         raise ServiceError("bad_params", key="portraitScale")
     out["portraitScale"] = scale
     ids = set()
-    for group in ("portraits", "memorials"):
+    for group in ("portraits", "memorialLobbies"):
         sources = set()
         entries = value.get(group)
         if not isinstance(entries, list):
@@ -117,28 +120,28 @@ def validate_hall(value: Any) -> dict:
         for entry in entries:
             if not isinstance(entry, dict):
                 raise ServiceError("bad_params", key=group)
-            uid, variant, source = (entry.get(k) for k in ("id", "variant", "source"))
+            uid, alt, source = (entry.get(k) for k in ("id", "alt", "source"))
             try:
                 valid_id = isinstance(uid, str) and str(UUID(uid)) == uid
             except ValueError:
                 valid_id = False
-            if not valid_id or uid in ids or not isinstance(variant, str) or not variant or len(variant) > 200:
+            if not valid_id or uid in ids or not isinstance(alt, str) or not alt or len(alt) > 200:
                 raise ServiceError("bad_params", key="entry")
             if not isinstance(source, str) or not (source == "official" or re.fullmatch(r"mod:[a-zA-Z0-9_-]+", source)):
                 raise ServiceError("bad_params", key="source")
             ids.add(uid)
-            item = {"id": uid, "variant": variant, "source": source}
-            key = (variant, source)
+            item = {"id": uid, "alt": alt, "source": source}
+            key = (alt, source)
             if key in sources:
                 raise ServiceError(
                     "student_hall_duplicate_portrait" if group == "portraits" else "student_hall_duplicate_memorial"
                 )
             sources.add(key)
             if group == "portraits":
-                mirror = entry.get("mirror", False)
-                if not isinstance(mirror, bool):
-                    raise ServiceError("bad_params", key="mirror")
-                item["mirror"] = mirror
+                flip_horizontal = entry.get("flipHorizontal", False)
+                if not isinstance(flip_horizontal, bool):
+                    raise ServiceError("bad_params", key="flipHorizontal")
+                item["flipHorizontal"] = flip_horizontal
                 for key, default, lo, hi in (
                     ("x", PORTRAIT_ORIGIN[0], 0, 1920),
                     ("y", PORTRAIT_ORIGIN[1], 200, 1800),
@@ -156,43 +159,46 @@ def validate_hall(value: Any) -> dict:
             out[group].append(item)
     active = value.get("active")
     out["active"] = (
-        active if any(e["id"] == active for e in out["memorials"]) else next((e["id"] for e in out["memorials"]), None)
+        active
+        if any(e["id"] == active for e in out["memorialLobbies"])
+        else next((e["id"] for e in out["memorialLobbies"]), None)
     )
     return out
 
 
-def save_hall(state: Any, value: dict, revision: int) -> dict:
-    """Save a hall if nobody changed it since the caller read it.
+def save_student_hall(state: Any, value: dict, revision: int) -> dict:
+    """Save a student hall if nobody changed it since the caller read it.
 
     The comparison and the replacement run under the UI state's cross-process transaction lock.
 
     Args:
-        state: The ``UiState`` that stores the hall.
-        value: The complete hall, as ``validate_hall`` takes it.
-        revision: The revision the caller's hall was read at; it must still be the stored one.
+        state: The ``UiState`` that stores the student hall.
+        value: The complete student hall, as ``validate_student_hall`` takes it.
+        revision: The revision the caller's student hall was read at; it must still be the stored one.
 
     Returns:
-        A copy of the saved hall, whose revision is one more.
+        A copy of the saved student hall, whose revision is one more.
 
     Raises:
-        ServiceError: ``bad_params`` for an invalid hall or revision; ``student_hall_conflict`` when the stored revision
+        ServiceError: ``bad_params`` for an invalid student hall or revision; ``student_hall_conflict`` when the
+        stored revision
             differs; ``student_hall_last_portrait`` or ``student_hall_last_memorial`` when the save would empty a group.
     """
-    clean = validate_hall(value)
+    clean = validate_student_hall(value)
     if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:
         raise ServiceError("bad_params", key="revision")
 
     def change(data: dict) -> None:
         prefs = data.setdefault("prefs", {})
-        current = prefs.get("student_hall", empty_hall())
+        current = prefs.get("student_hall", empty_student_hall())
         if current.get("revision", 0) != revision:
             raise ServiceError("student_hall_conflict")
         if current.get("portraits") and not clean["portraits"]:
             raise ServiceError("student_hall_last_portrait")
-        if current.get("memorials") and not clean["memorials"]:
+        if current.get("memorialLobbies") and not clean["memorialLobbies"]:
             raise ServiceError("student_hall_last_memorial")
         clean["revision"] = revision + 1
-        for group in ("portraits", "memorials"):
+        for group in ("portraits", "memorialLobbies"):
             previous = {
                 row["id"]: row
                 for row in current.get(group, [])
@@ -206,7 +212,7 @@ def save_hall(state: Any, value: dict, revision: int) -> dict:
 
 
 def portrait_lines(page: dict) -> dict:
-    """Pick the ordinary Lobby voice lines out of a Kivo student page; memorial dialogue belongs to the scene player.
+    """Read the ordinary voice lines from a Kivo student page.
 
     Args:
         page: The page's data, whose ``voice`` rows (Japanese) and ``voice_cn`` rows (Chinese captions) hold the
@@ -259,7 +265,7 @@ class PortraitVoices(Kivo):
         self.memo = MemoryMemo(64 * 1024 * 1024, 160)
 
     def lines(self, page_id: str) -> dict:
-        """Return the Lobby voice lines of a Kivo student page.
+        """Return the Memorial Lobby voice lines of a Kivo student page.
 
         Args:
             page_id: The digits of the Kivo page.
@@ -396,7 +402,7 @@ class MemoryMemo:
 
 
 class LocalPortraitVoices:
-    """Ordinary Lobby AudioClips from installed audio bundles, decoded losslessly in memory."""
+    """Ordinary Memorial Lobby AudioClips from installed audio bundles, decoded losslessly in memory."""
 
     def __init__(self, services: Any):
         """Create the source over the installed game.
@@ -414,10 +420,11 @@ class LocalPortraitVoices:
         return self.memo.peek(key) if key and key[1] == id(self.services.game) else None
 
     def index(self) -> dict:
-        """Build, or return the kept, index of the Lobby clips in the installed audio bundles.
+        """Build, or return the kept, index of the Memorial Lobby clips in the installed audio bundles.
 
         Returns:
-            Clip id (such as ``shiroko_lobby_1``) mapped to the bundle, serialized file and object that hold it.
+            Clip id (such as ``shiroko_lobby_1``) mapped to the bundle, serialized file and object that hold
+            it.
             The index is rebuilt when the game's audio bundles change.
         """
         game = self.services.game
@@ -446,7 +453,7 @@ class LocalPortraitVoices:
         return value
 
     def audio(self, clip: str) -> bytes:
-        """Decode a Lobby clip from the game's bundles.
+        """Decode a Memorial Lobby clip from the game's bundles.
 
         Args:
             clip: The clip's id.
@@ -495,7 +502,7 @@ def dialogue_layout(game: Any) -> dict:
         game: The game assets service.
 
     Returns:
-        The ``DialogPanel/ChatDialog/Talk`` layout of the lobby prefab, placed at the origin.
+        The ``DialogPanel/ChatDialog/Talk`` layout of the memorial lobby prefab, placed at the origin.
 
     Raises:
         AssetNotFound: The game has no LobbyCommon prefab.
@@ -503,7 +510,7 @@ def dialogue_layout(game: Any) -> dict:
     hint = "ui-uilobbyelement-_mxload-prefabs-2025-07-02_assets_all_1158600183.bundle"
     path = next((path for path in game._paths() if path.name == hint), None)
     if path is None:
-        name = game._lobby_prefabs().get("lobbycommon")
+        name = game._memorial_lobby_prefabs().get("lobbycommon")
         if not name:
             raise AssetNotFound("LobbyCommon")
         path = game._bundle_path(name)
@@ -515,7 +522,7 @@ def dialogue_layout(game: Any) -> dict:
         talk["localPosition"] = [0, 0]
         return json.dumps(talk).encode()
 
-    return json.loads(game._cached("hall/dialogue-v1/" + json.dumps(spine_stamps([path])), read))
+    return json.loads(game._cached("student-hall/dialogue-v2/" + json.dumps(spine_stamps([path])), read))
 
 
 def portrait_motion_layout(game: Any, core: str | None) -> dict:
@@ -523,7 +530,7 @@ def portrait_motion_layout(game: Any, core: str | None) -> dict:
 
     Args:
         game: The game assets service.
-        core: The portrait's Spine core, such as a variant's ``spr``; None gives no motion.
+        core: The alt's portrait Spine core. None gives no motion.
 
     Returns:
         Animation name mapped to its clip (``track``, ``loop``, ``intro``, ``outro``, ``mode``, ``sync``); empty
@@ -531,12 +538,12 @@ def portrait_motion_layout(game: Any, core: str | None) -> dict:
     """
     if not core or not hasattr(game, "spine_cores"):
         return {}
-    paths = game.spine_cores("spr").get(core.lower(), [])
+    paths = game.spine_cores("portrait").get(core.lower(), [])
     if not paths:
         return {}
 
     def read() -> bytes:
-        from ..gameassets.lobby import Clips
+        from ..gameassets.memorial_lobby import Clips
 
         behaviours = []
         for path in paths:
@@ -547,7 +554,7 @@ def portrait_motion_layout(game: Any, core: str | None) -> dict:
         clips = Clips(behaviours, (core,)).clips
         return json.dumps(next((value for name, value in clips.items() if name.lower() == core.lower()), {})).encode()
 
-    return json.loads(game._cached("hall/portrait-motion-v1/" + core + json.dumps(spine_stamps(paths)), read))
+    return json.loads(game._cached("student-hall/portrait-motion-v2/" + core + json.dumps(spine_stamps(paths)), read))
 
 
 def expression_motion(name: str, clips: dict, seen: frozenset = frozenset()) -> dict | None:
@@ -582,7 +589,7 @@ def expression_motion(name: str, clips: dict, seen: frozenset = frozenset()) -> 
 def register_api(rpc: Any, s: Any) -> None:
     """Register the Student Hall RPC methods.
 
-    ``studentHall.get`` reads the hall and fills an empty one with Shiroko when available. The update and viewed
+    ``studentHall.get`` reads the student hall and fills an empty one with Shiroko when available. The update and viewed
     methods save the snapshot and viewed choices, and the options method lists portraits, scenes and backgrounds.
     The dialogue methods return the layout, lines and voice audio.
 
@@ -639,7 +646,7 @@ def register_api(rpc: Any, s: Any) -> None:
         stems = {
             v.key.lower(),
             str(getattr(v, "file_id", "")).lower(),
-            str(getattr(v, "spr", "") or "").lower().removesuffix("_spr"),
+            str(getattr(v, "portrait", "") or "").lower().removesuffix("_spr"),
         }
         clips = set(incoming) | {clip for clip in installed if clip.rsplit("_lobby_", 1)[0] in stems}
         groups: dict[str, list[tuple[int, str]]] = {}
@@ -662,7 +669,7 @@ def register_api(rpc: Any, s: Any) -> None:
             value["voice"] = clip in installed or remote
             value["voiceSource"] = "local" if clip in installed else "kivo" if remote else None
         motion = (
-            portrait_motion_layout(s.game, getattr(v, "spr", None))
+            portrait_motion_layout(s.game, getattr(v, "portrait", None))
             if any(row.get("animationName") for row in result.values())
             else {}
         )
@@ -676,53 +683,53 @@ def register_api(rpc: Any, s: Any) -> None:
     def get() -> dict:
         value = s.state.get("student_hall")
         if value is None:
-            family = next((item for item in s.catalog.families() if item.key == "shiroko"), None)
-            variant = next(
+            student = next((item for item in s.catalog.students() if item.key == "shiroko"), None)
+            alt = next(
                 (
                     v
-                    for v in (family.variants if family else [])
+                    for v in (student.alts if student else [])
                     if v.key in ("shiroko", "shiroko_original") or v.file_id.lower() == "shiroko_original"
                 ),
                 None,
             )
-            if variant is not None and variant.spr and variant.lobby:
-                initial = empty_hall()
+            if alt is not None and alt.portrait and alt.memorial_lobby:
+                initial = empty_student_hall()
                 initial["portraits"] = [
                     {
                         "id": str(uuid4()),
-                        "variant": variant.key,
+                        "alt": alt.key,
                         "source": "official",
                         "x": PORTRAIT_ORIGIN[0],
                         "y": PORTRAIT_ORIGIN[1],
                         "scale": 1,
-                        "mirror": False,
+                        "flipHorizontal": False,
                     }
                 ]
-                initial["memorials"] = [{"id": str(uuid4()), "variant": variant.key, "source": "official"}]
-                initial["active"] = initial["memorials"][0]["id"]
+                initial["memorialLobbies"] = [{"id": str(uuid4()), "alt": alt.key, "source": "official"}]
+                initial["active"] = initial["memorialLobbies"][0]["id"]
 
                 def initialize(data):
                     data.setdefault("prefs", {}).setdefault("student_hall", initial)
 
                 s.state._update(initialize)
                 value = s.state.get("student_hall")
-        return normalize_hall(value)
+        return normalize_student_hall(value)
 
     @rpc.method("studentHall.options")
     def options() -> dict:
         if not s.game_found():
             raise ServiceError("game_directory_missing")
-        families = s.catalog.families()
-        variants = {v.key: v for f in families for v in f.variants}
-        family_names = {family.key: family.names for family in families}
-        family_aliases = {family.key: list(getattr(family, "aliases", [])) for family in families}
-        schools = {family.key: family.school for family in families}
+        students = s.catalog.students()
+        alts = {v.key: v for f in students for v in f.alts}
+        student_names = {student.key: student.names for student in students}
+        student_aliases = {student.key: list(getattr(student, "aliases", [])) for student in students}
+        schools = {student.key: student.school for student in students}
         mods = s.library.mods()
-        if any(mod.target not in variants for mod in mods) and hasattr(s.catalog, "assignment_families"):
-            for family in s.catalog.assignment_families():
-                family_names.setdefault(family.key, family.names)
-                family_aliases.setdefault(family.key, list(getattr(family, "aliases", [])))
-                schools.setdefault(family.key, family.school)
+        if any(mod.target not in alts for mod in mods) and hasattr(s.catalog, "assignment_students"):
+            for student in s.catalog.assignment_students():
+                student_names.setdefault(student.key, student.names)
+                student_aliases.setdefault(student.key, list(getattr(student, "aliases", [])))
+                schools.setdefault(student.key, student.school)
         favorites = getattr(s.library, "favorites", lambda: set())()
         recent = s.state.recent()
         custom = s.state.aliases()
@@ -731,25 +738,28 @@ def register_api(rpc: Any, s: Any) -> None:
         for mod in mods:
             mod_counts[mod.target] = mod_counts.get(mod.target, 0) + 1
             counts = kind_counts.setdefault(mod.target, {})
-            counts[mod.kind] = counts.get(mod.kind, 0) + 1
-        viewed = s.state.get("hall_viewed", [])
+            counts[mod.resource_type] = counts.get(mod.resource_type, 0) + 1
+        viewed = s.state.get("student_hall_viewed", [])
 
         def metadata(v: Any, source: str, mod: Any = None) -> dict:
             key = f"{v.key}:{source}"
-            family = getattr(v, "family", v.key)
+            student = getattr(v, "student", v.key)
             return {
-                "family": family,
-                "familyNames": family_names.get(family, {}),
-                "school": schools.get(family),
-                "familyAliases": family_aliases.get(family, []),
-                "model": getattr(v, "model", None),
+                "student": student,
+                "studentNames": student_names.get(student, {}),
+                "school": schools.get(student),
+                "studentAliases": student_aliases.get(student, []),
+                "chibi": getattr(v, "chibi", None),
                 "fileId": getattr(v, "file_id", v.key),
                 "aliases": list(getattr(v, "aliases", [])),
-                "custom": custom.get(v.key, []),
+                "customAliases": custom.get(v.key, []),
                 "playable": getattr(v, "playable", False),
-                "recruitable": getattr(v, "recruitable", False),
-                "released": getattr(v, "recruitable", False),
-                "localKinds": [kind for kind in ("spr", "lobby", "model") if getattr(v, kind, None)],
+                "released_on_server": getattr(v, "released_on_server", False),
+                "localResourceTypes": [
+                    resource_type
+                    for resource_type in ("portrait", "memorialLobby", "chibi")
+                    if alt_resource_core(v, resource_type)
+                ],
                 "order": getattr(v, "order", 0),
                 "date": getattr(v, "date", None),
                 "favorite": v.key in favorites,
@@ -762,45 +772,49 @@ def register_api(rpc: Any, s: Any) -> None:
             }
 
         choices = []
-        for v in variants.values():
-            for kind in ("spr", "lobby"):
-                core = getattr(v, kind, None)
+        for v in alts.values():
+            for resource_type in ("portrait", "memorialLobby"):
+                core = alt_resource_core(v, resource_type)
                 if core:
                     choices.append(
                         {
-                            "variant": v.key,
+                            "alt": v.key,
                             "source": "official",
-                            "kind": kind,
+                            "resource_type": resource_type,
                             "core": core,
                             "names": v.names,
-                            "label": "",
-                            "portrait": f"/asset/art/officialThumbnail/{v.portrait}.png" if v.portrait else None,
+                            "name": "",
+                            "officialThumbnail": f"/asset/art/officialThumbnail/{v.official_thumbnail}.png"
+                            if v.official_thumbnail
+                            else None,
                             **metadata(v, "official"),
                         }
                     )
         for mod in mods:
-            # a lobby camera frames the game's lobby, not the hall's
-            if mod.kind not in ("spr", "lobby") or getattr(mod, "camera", None):
+            # a memorial lobby camera frames the game's memorial lobby, not the student hall's
+            if mod.resource_type not in ("portrait", "memorialLobby") or getattr(mod, "camera", None):
                 continue
-            v = variants.get(mod.target)
+            v = alts.get(mod.target)
             if v is None:
                 try:
-                    v = s.library.variant_metadata(mod.target)
+                    v = s.library.alt_metadata(mod.target)
                 except ServiceError:
                     continue
             choices.append(
                 {
-                    "variant": v.key,
+                    "alt": v.key,
                     "source": "mod:" + mod.id,
-                    "kind": mod.kind,
-                    "core": getattr(v, mod.kind, None),
+                    "resource_type": mod.resource_type,
+                    "core": alt_resource_core(v, mod.resource_type),
                     "names": v.names,
-                    "label": mod.alias or mod.label,
-                    "portrait": f"/asset/art/officialThumbnail/{v.portrait}.png" if v.portrait else None,
+                    "name": mod.alias or mod.name,
+                    "officialThumbnail": f"/asset/art/officialThumbnail/{v.official_thumbnail}.png"
+                    if v.official_thumbnail
+                    else None,
                     **metadata(v, "mod:" + mod.id, mod),
                 }
             )
-        backgrounds = s.game.collection_names()["bg"]
+        backgrounds = s.game.collection_names()["background"]
         office = getattr(s.game, "office_backgrounds", lambda: [])()
         return {
             "choices": choices,
@@ -809,16 +823,17 @@ def register_api(rpc: Any, s: Any) -> None:
 
     @rpc.method("studentHall.update")
     def update(value: dict, revision: int) -> dict:
-        return save_hall(s.state, value, revision)
+        return save_student_hall(s.state, value, revision)
 
     @rpc.method("studentHall.viewed")
     def viewed(alt: str, source: str) -> list[str]:
-        v = s.library.variant_metadata(alt)
+        v = s.library.alt_metadata(alt)
         if source == "official":
-            valid = bool(v.lobby)
+            valid = bool(v.memorial_lobby)
         else:
             valid = isinstance(source, str) and any(
-                "mod:" + mod.id == source and mod.target == alt and mod.kind == "lobby" for mod in s.library.mods()
+                "mod:" + mod.id == source and mod.target == alt and mod.resource_type == "memorialLobby"
+                for mod in s.library.mods()
             )
         if not valid:
             raise ServiceError("bad_params", key="source")
@@ -826,10 +841,13 @@ def register_api(rpc: Any, s: Any) -> None:
 
         def change(data: dict) -> None:
             prefs = data.setdefault("prefs", {})
-            prefs["hall_viewed"] = [key, *(item for item in prefs.get("hall_viewed", []) if item != key)][:500]
+            prefs["student_hall_viewed"] = [
+                key,
+                *(item for item in prefs.get("student_hall_viewed", []) if item != key),
+            ][:500]
 
         s.state._update(change)
-        return s.state.get("hall_viewed", [])
+        return s.state.get("student_hall_viewed", [])
 
     @rpc.method("studentHall.dialogueLayout")
     def balloon() -> dict:
@@ -840,7 +858,7 @@ def register_api(rpc: Any, s: Any) -> None:
         if lang not in ("en", "zh-CN", "zh-TW", "ja", "ko", "th"):
             raise ServiceError("bad_params", key="lang")
         try:
-            v = s.library.variant_metadata(alt)
+            v = s.library.alt_metadata(alt)
         except ServiceError as error:
             if error.code not in ("catalog_alt_not_found", "alt_not_found"):
                 raise
@@ -856,7 +874,7 @@ def register_api(rpc: Any, s: Any) -> None:
 
     @rpc.method("studentHall.voice")
     def voice(alt: str, clip: str) -> dict:
-        v = s.library.variant_metadata(alt)
+        v = s.library.alt_metadata(alt)
         if not isinstance(clip, str) or not re.fullmatch(r"[a-z0-9_]+_lobby_\d+(?:_\d+)?", clip):
             raise ServiceError("bad_params", key="clip")
         rows, _, _ = rows_for(v, "zh-CN")

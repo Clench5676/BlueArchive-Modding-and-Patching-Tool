@@ -6,21 +6,20 @@
 class ModLibrary:
     def __init__(self, root, catalog, game, settings, *, scan_allowed=..., data_id="local",
                  write_check=None): ...                # write_check: the caller's refusal right before game writes
-    def mods(self) -> list[ModEntry]               # id, file, label, target (variant key), kind, added, fresh,
-                                                   # size, date, crc, core
+    def mods(self) -> list[ModEntry]               # id, file, name, target, resource_type, added, fresh, size, date, crc, core
     def add(self, paths, ...) -> list[ModEntry]    # copies into the library; target from the file name's core;
-                                                   # one mod per core and kind, or per model slot (Import grouping)
+                                                   # one mod per core and resource type, or per chibi slot (Import grouping)
     def remove(self, mod_id, confirm=False)        # refused while a game folder shows it (below)
     def rename(self, mod_id, label); def mark_seen(self, mod_id)
-    def favorites(self) -> set[str]; def set_favorite(self, variant_key, on)
-    def state(self, variant_key, pin=None) -> VariantState   # game files, applied, crc, copy, restorable, official
-    def configured(self, variant_key, pin=None)    # {"spr": source | None, "lobby": source | None}
-    def modified(self, pin=None) -> dict[str, str] # the roster's Replaced flags
-    def apply(self, variant_key, source, log, progress, kind="spr", pin=None) -> ApplyResult   # also deferred
-    def restore(self, variant_key, log, kind="spr", pin=None) -> ApplyResult
+    def favorites(self) -> set[str]; def set_favorite(self, alt_id, on)
+    def state(self, alt_id, pin=None) -> AltState   # game files, applied, crc, copy, restorable, official
+    def configured(self, alt_id, pin=None)    # {"portrait": source | None, "memorialLobby": source | None}
+    def modified(self, pin=None) -> dict[str, str] # the student list's Replaced flags
+    def apply(self, alt_id, source, log, progress, resource_type="portrait", pin=None) -> ApplyResult   # also deferred
+    def restore(self, alt_id, log, resource_type="portrait", pin=None) -> ApplyResult
     def preview_bundles(self, mod_id, pin=None); def preview_complements(self, core, names, pin=None)
     def preview_incomplete(self, mod_id, pin=None) -> bool
-    def model_cores(self, variant_key, pin=None) -> list[str]  # prefab first, own installed dependency cores
+    def chibi_cores(self, alt_id, pin=None) -> list[str]  # prefab first, own installed dependency cores
     def official_bundles(self, core, pin=None, *, current_fallback=False) -> list[Path]  # verified originals
     def preview_reads(self, policy, pin=None) -> PreviewReads  # "official" | "configured"
     def prune(self) -> list[Path]                  # kept originals deleted (below)
@@ -103,6 +102,8 @@ Mod records store `name`, `target_alt` or `generic_target`, `assigned_alt`, `res
 and `repaired_copy_id`. Alt sources use `alt:<key>`. Profiles use `alt` and `resource_type` in configuration
 entries. UI preferences include `student_list` with `group_alts`, `student_hall`, `student_hall_viewed`, and
 `batch_import`. Configuration keys in `config.toml`, physical `originals/`, and `originals.json` retain their names.
+The library uses current names for live records. The storage codec preserves the on-disk `student_list_thumbnails` recipe
+and the `originals` field inside import provenance. The worn-item cache keeps its `chibis` key.
 
 ## Library behavior
 
@@ -124,7 +125,7 @@ instead of an unreadable file, kept as `.bad`); with neither readable the switch
 (`mod_configuration_unreadable`) and nothing is written. At each build the library finds each named install's record (its own,
 a moved install's, else one migrated from what the library already wrote there).
 
-**Entries.** One game core of a alt in one install (a portrait, or one memorial lobby core), keyed by the alt
+**Entries.** One game core of an alt in one install (a portrait, or one memorial lobby core), keyed by the alt
 key `Catalog.core_map` gives the core in its own install. Its state, first match wins: `damaged`, `missing`,
 `untracked` / `changed` (files the library did not write, without / with a configuration), `source_missing`, a
 take-over (a newer library write than the configuration, by another instance), `updated` / `reset` (a configured
@@ -175,7 +176,7 @@ The write-time Steam-busy check needs no consent.
 
 **What reads game files.** The scan consent (`scan_allowed`, asked at each use) covers every read the app makes on
 its own of files the library did not write: the scan (headers and last bytes, never a whole file), an Off's own pass,
-the roster's Replaced mark for mods outside the library, and a moved install's re-keying. Without it `scan` refuses
+the student list's Replaced mark for mods outside the library, and a moved install's re-keying. Without it `scan` refuses
 with `scan_off`, an Off reverts what the library wrote or configured and adopts the changed files it meets on the
 way, and the Replaced mark shows only what the library wrote. Needing no consent: names and stats, the library's own
 writes, the files a switch or the user's own action reaches (read in full), and the student the detail screen shows,
@@ -237,15 +238,15 @@ field chibis). The entry keeps its skeleton, clips,
 weapon, halo and props; the source's costume renderers are added as new objects to the slot's own bundles (existing
 objects never change in place, since other bundles reference them). Roles, bone mapping and checks use data only,
 never part names; a pair whose checks fail is refused with `source_unsupported`. A pair past the stretch limit
-(`model_adapt.stretch_limit`) is built for a preview only (`previewOnly`; Apply greyed); another student's model is a
+(`chibi_adapt.stretch_limit`) is built for a preview only (`previewOnly`; Apply greyed); another student's chibi is a
 deliberate choice whose "preview" verdict is applied like "ok". A pair can be applied only once checked to its end
 (`Services.costume_check`); verdicts are kept in `costume-verdicts.json`, keyed by the build signature with the
 costume rule's version `gameassets/costume_rule.COSTUME_RULE` (bumped with any change to what the build writes,
 refuses or measures; `tests/test_costume_rule.py` pins its sources). `chibi.checkCostumes` checks pairs in the
-background as cards come into view. A costume build holds the model lock (taken after the library's lock) and closes
+background as cards come into view. A costume build holds the chibi lock (taken after the library's lock) and closes
 every bundle it opened when it ends. Optimize Physics builds a costume with the physics rules as well and keeps the
 result as a Chibi Mod of the alt (`optimized_from`). The official chibi needs no optimization. An alt whose only
-chibi is a field player prefab exposes `fieldChibi`. The preview can also resolve a field NPC prefab or a model in
+chibi is a field player prefab exposes `fieldChibi`. The preview can also resolve a field NPC prefab or a chibi in
 its own dependency bundles and play its story clips.
 
 ## Game watch

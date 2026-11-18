@@ -179,7 +179,7 @@ test("error forwarding deduplicates and limits a burst to ten reports per minute
 test("settings and popup reports send the current list and displayed language", async () => {
   const h = harness();
   h.ctx.document.documentElement = { lang: "zh-CN" };
-  let rows = [{ id: "model", state: "blocked", reason: "mod_target_unknown" }];
+  let rows = [{ id: "chibi", state: "blocked", reason: "mod_target_unknown" }];
   h.api.importList(() => ({ rows, phase: "idle", revision: 4 }));
   await h.api.report();
   rows = [];

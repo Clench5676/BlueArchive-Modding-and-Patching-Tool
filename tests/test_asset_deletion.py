@@ -10,10 +10,10 @@ import pytest
 
 from bmpt.core.errors import ServiceError
 from bmpt.library import service, portrait_edit, asset_delete
-from bmpt.library.photographs import Photographs
+from bmpt.library.thumbnails import Thumbnails
 from bmpt.library.judge import core_of
 from bmpt.webui.state import UiState
-from bmpt.webui.thumbnails import Thumbnails
+from bmpt.webui.thumbnails import Thumbnails as ThumbnailService
 from test_library_profiles import world, japan, pin_of, OFFICIAL
 from test_library import header_bundle
 from ba_modding_toolkit.utils import CRCUtils
@@ -23,37 +23,37 @@ from test_photographs import capture
 def test_official_requests_are_rejected_and_official_looking_user_sources_are_deletable(world):
     for action in [
         lambda: world.library.remove("official", confirm=True),
-        lambda: world.library.delete_photograph("test", "official", confirm=True),
+        lambda: world.library.delete_thumbnail("test", "official", confirm=True),
     ]:
         with pytest.raises(ServiceError, match="asset_official"):
             action()
-    mod = world.add(world.spr, payload=b"official")
+    mod = world.add(world.portrait, payload=b"official")
     assert not world.library.remove(mod.id).failed
     assert not mod.file.exists()
 
 
 def test_applied_and_deferred_sources_require_confirmation_before_any_change(world):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     for enabled in [True, False]:
         if not enabled:
             world.toggle(False)
         world.library.apply("test", "mod:" + mod.id)
-        before = world.spr.read_bytes(), deepcopy(world.profiles())
+        before = world.portrait.read_bytes(), deepcopy(world.profiles())
         with pytest.raises(ServiceError, match="asset_delete_confirm"):
             world.library.remove(mod.id)
-        assert (world.spr.read_bytes(), world.profiles()) == before
+        assert (world.portrait.read_bytes(), world.profiles()) == before
         assert mod.file.exists()
     world.library._write_check = lambda *_: pytest.fail("Deletion wrote game files with Mods off")
     assert not world.library.remove(mod.id, confirm=True).failed
-    assert world.spr.read_bytes() == OFFICIAL
+    assert world.portrait.read_bytes() == OFFICIAL
     assert not world.folder()["configured"]
 
 
 @pytest.mark.parametrize("failure", ["cleanup", "reconcile"])
 def test_failure_after_restoration_undoes_game_source_and_configuration(world, monkeypatch, failure):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     world.library.apply("test", "mod:" + mod.id)
-    before = world.spr.read_bytes(), deepcopy(world.profiles())
+    before = world.portrait.read_bytes(), deepcopy(world.profiles())
     real = shutil.rmtree
     fired = []
 
@@ -76,13 +76,13 @@ def test_failure_after_restoration_undoes_game_source_and_configuration(world, m
         world.library.remove(mod.id, confirm=True, reconcile=reconcile)
     assert mod.file.exists()
     assert world.library.mods() == [mod]
-    assert (world.spr.read_bytes(), world.profiles()) == before
+    assert (world.portrait.read_bytes(), world.profiles()) == before
     assert not list((world.root / "asset-deletions").glob("*/journal.json"))
 
 
 def test_multi_install_failure_rolls_back_earlier_success(world):
     folder = japan(world)
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     pins = [world.library.current_pin(), pin_of(world, folder)]
     for pin in pins:
         world.library.apply("test", "mod:" + mod.id, pin=pin)
@@ -103,19 +103,19 @@ def test_multi_install_failure_rolls_back_earlier_success(world):
 
 def test_preview_source_reconciliation_keeps_hall_placement_and_other_skins(tmp_path):
     state = UiState(tmp_path / "ui.json")
-    state.set_preview_source("install", "a", "spr", "mod:gone")
-    state.set_preview_source("install", "b", "lobby", "mod:gone")
-    state.set_preview_source("install", "b", "model", "mod:keep")
-    hall = {
+    state.set_preview_source("install", "a", "portrait", "mod:gone")
+    state.set_preview_source("install", "b", "memorialLobby", "mod:gone")
+    state.set_preview_source("install", "b", "chibi", "mod:keep")
+    student_hall = {
         "revision": 4,
-        "portraits": [{"id": "one", "variant": "a", "source": "mod:gone", "x": 480}],
-        "memorials": [{"id": "two", "variant": "b", "source": "mod:gone"}],
+        "portraits": [{"id": "one", "alt": "a", "source": "mod:gone", "x": 480}],
+        "memorialLobbies": [{"id": "two", "alt": "b", "source": "mod:gone"}],
         "active": "two",
     }
-    state.set("student_hall", hall)
-    state.reconcile_deleted_source("mod:gone", lambda variant, kind: "official")
-    assert state.preview_sources("install", "a") == {"spr": "official"}
-    assert state.preview_sources("install", "b") == {"lobby": "official", "model": "mod:keep"}
+    state.set("student_hall", student_hall)
+    state.reconcile_deleted_source("mod:gone", lambda alt, kind: "official")
+    assert state.preview_sources("install", "a") == {"portrait": "official"}
+    assert state.preview_sources("install", "b") == {"memorialLobby": "official", "chibi": "mod:keep"}
     assert state.get("student_hall")["portraits"][0]["x"] == 480
     assert state.get("student_hall")["active"] == "two"
 
@@ -123,7 +123,7 @@ def test_preview_source_reconciliation_keeps_hall_placement_and_other_skins(tmp_
 @pytest.fixture
 def recipes(world, monkeypatch):
     lib = world.library
-    lib.photographs.family_of = lambda _: "same-family"
+    lib.thumbnails.student_of = lambda _: "same-family"
     # Model a Collection with three textures; real Unity encoding has separate verified-asset tests.
     initial = {"a": "official-a", "b": "official-b", "c": "official-c"}
 
@@ -142,7 +142,7 @@ def recipes(world, monkeypatch):
         / f"uis-01_common-14_charactercollect-_mxload-2026-01-01_000_assets_all_{CRCUtils.compute_crc32(raw)}.bundle"
     )
     target.write_bytes(raw)
-    keys = [lib.photographs.save("test", capture(color=(n, 90, 170, 255))[0], "portrait")["saved"] for n in [10, 20]]
+    keys = [lib.thumbnails.save("test", capture(color=(n, 90, 170, 255))[0], "portrait")["saved"] for n in [10, 20]]
 
     def patch(base, official, output, edits, **kwargs):
         values = decode(base)
@@ -164,7 +164,7 @@ def recipes(world, monkeypatch):
             lib,
             {"a": "skin-a", "b": "skin-b", "c": "skin-c"}[name],
             key,
-            lib.photographs.image("test", key) if key else None,
+            lib.thumbnails.image("test", key) if key else None,
             {"bundle": target.name, "name": name},
             pin,
             lambda _: None,
@@ -181,36 +181,36 @@ def recipes(world, monkeypatch):
 def test_gallery_applied_uses_each_collection_target_while_other_skin_deletion_stays_protected(recipes, enabled):
     world, target, _, _, _ = recipes
     lib = world.library
-    variants = {"skin-a": "a", "skin-b": "b"}
-    for key, name in variants.items():
-        lib.catalog.variants[key] = SimpleNamespace(
-            key=key, family="test", portrait=name, spr=None, lobby=None, names={}
+    alts = {"skin-a": "a", "skin-b": "b"}
+    for key, name in alts.items():
+        lib.catalog.alts[key] = SimpleNamespace(
+            key=key, student="test", official_thumbnail=name, portrait=None, memorial_lobby=None, names={}
         )
     keys = [
-        lib.photographs.save(variant, capture(color=(n, 80, 160, 255))[0], "portrait")["saved"]
-        for variant, n in zip(variants, [30, 40])
+        lib.thumbnails.save(alt, capture(color=(n, 80, 160, 255))[0], "portrait")["saved"]
+        for alt, n in zip(alts, [30, 40])
     ]
-    for variant, key in zip(variants, keys):
-        lib.apply_photograph(variant, key, {"bundle": target.name, "name": variants[variant]})
+    for alt, key in zip(alts, keys):
+        lib.apply_thumbnail(alt, key, {"bundle": target.name, "name": alts[alt]})
     if not enabled:
         world.toggle(False)
-    api = Thumbnails(
+    api = ThumbnailService(
         SimpleNamespace(
             library=lib,
-            thumbnail_store=lib.photographs,
-            catalog=SimpleNamespace(variant=lambda key: SimpleNamespace(portrait=variants.get(key), names={})),
+            thumbnail_store=lib.thumbnails,
+            catalog=SimpleNamespace(alt=lambda key: SimpleNamespace(official_thumbnail=alts.get(key), names={})),
             game=SimpleNamespace(
                 resource_version="synthetic", collection_target=lambda name: {"bundle": target.name, "name": name}
             ),
         )
     )
-    for variant, key, other in [("skin-a", keys[0], keys[1]), ("skin-b", keys[1], keys[0])]:
-        result = api.list(variant)
-        assert {entry["id"] for entry in result["photos"] if entry["applied"]} == {key}
+    for alt, key, other in [("skin-a", keys[0], keys[1]), ("skin-b", keys[1], keys[0])]:
+        result = api.list(alt)
+        assert {entry["id"] for entry in result["thumbnails"] if entry["applied"]} == {key}
         assert result["game"]["id"] == key and result["game"]["enabled"] == enabled
-        assert api.removal_info(variant, other)["used"]
+        assert api.removal_info(alt, other)["used"]
         with pytest.raises(ServiceError, match="asset_delete_confirm"):
-            lib.delete_photograph(variant, other)
+            lib.delete_thumbnail(alt, other)
 
 
 @pytest.mark.parametrize("enabled", [True, False])
@@ -222,17 +222,19 @@ def test_gallery_applied_uses_each_collection_target_while_other_skin_deletion_s
 def test_photo_removal_reports_target_skins_without_changing_confirmation(recipes, enabled, targets):
     world, target, _, _, _ = recipes
     lib = world.library
-    variants = {"skin-a": "a", "skin-b": "b"}
-    for variant, name in variants.items():
-        lib.catalog.variants[variant] = SimpleNamespace(key=variant, family="test", portrait=name, names={})
+    alts = {"skin-a": "a", "skin-b": "b"}
+    for alt, name in alts.items():
+        lib.catalog.alts[alt] = SimpleNamespace(
+            key=alt, student="test", official_thumbnail=name, portrait=None, memorial_lobby=None, names={}
+        )
     # Origin and preview selection must not be mistaken for the application target.
-    key = lib.photographs.save("skin-b", capture(color=(50, 80, 160, 255))[0], "portrait")["saved"]
-    lib.photographs.select("skin-a", key)
-    for variant in targets:
-        lib.apply_photograph(variant, key, {"bundle": target.name, "name": variants[variant]})
+    key = lib.thumbnails.save("skin-b", capture(color=(50, 80, 160, 255))[0], "portrait")["saved"]
+    lib.thumbnails.select("skin-a", key)
+    for alt in targets:
+        lib.apply_thumbnail(alt, key, {"bundle": target.name, "name": alts[alt]})
     if not enabled:
         world.toggle(False)
-    api = Thumbnails(SimpleNamespace(library=lib, catalog=lib.catalog))
+    api = ThumbnailService(SimpleNamespace(library=lib, catalog=lib.catalog))
     assert api.removal_info("skin-a", key) == {
         "official": False,
         "used": bool(targets),
@@ -250,14 +252,14 @@ def test_photo_removal_reports_target_skins_without_changing_confirmation(recipe
     before = target.read_bytes(), deepcopy(world.profiles())
     if targets:
         with pytest.raises(ServiceError, match="asset_delete_confirm"):
-            lib.delete_photograph("skin-a", key)
+            lib.delete_thumbnail("skin-a", key)
         assert (target.read_bytes(), world.profiles()) == before
-        assert lib.photographs.selection("skin-a") == key and lib.photographs.image("skin-a", key)
+        assert lib.thumbnails.selection("skin-a") == key and lib.thumbnails.image("skin-a", key)
     if not enabled:
         lib._write_check = lambda *_: pytest.fail("Mods-off photo deletion wrote the game")
-    lib.delete_photograph("skin-a", key, confirm=bool(targets))
+    lib.delete_thumbnail("skin-a", key, confirm=bool(targets))
     assert key not in portrait_edit.in_use(lib)
-    assert lib.photographs.selection("skin-a") is None and not lib.photographs._path(key).exists()
+    assert lib.thumbnails.selection("skin-a") is None and not lib.thumbnails._path(key).exists()
 
 
 def test_photo_usage_targets_retain_configured_and_applied_only_references(tmp_path):
@@ -267,16 +269,18 @@ def test_photo_usage_targets_retain_configured_and_applied_only_references(tmp_p
         "configured": {
             portrait_edit.TAG: {
                 "choices": {
-                    "a": {"photo": "shared", "variant": "skin-a"},
-                    "b": {"photo": "reset", "variant": "skin-b"},
-                    "legacy": {"photo": "unknown-target"},
+                    "a": {"thumbnail": "shared", "alt": "skin-a"},
+                    "b": {"thumbnail": "reset", "alt": "skin-b"},
+                    "legacy": {"thumbnail": "unknown-target"},
                 }
             }
         },
-        "applied": {portrait_edit.TAG: {"choices": {"b": {"photo": "shared", "variant": "skin-b"}}}},
+        "applied": {portrait_edit.TAG: {"choices": {"b": {"thumbnail": "shared", "alt": "skin-b"}}}},
     }
     config = {
-        "folders": {"install": {"configured": {"collection": {"source": "mod:configured", "photo_defaults": ["b"]}}}}
+        "folders": {
+            "install": {"configured": {"collection": {"source": "mod:configured", "thumbnail_defaults": ["b"]}}}
+        }
     }
     library = SimpleNamespace(
         _records=records,
@@ -293,20 +297,20 @@ def test_photo_usage_targets_retain_configured_and_applied_only_references(tmp_p
 def test_shared_photo_deletion_reconciles_all_skins_and_preserves_other_textures(recipes, enabled):
     world, target, keys, decode, core = recipes
     lib = world.library
-    lib.photographs.family_of = lambda _: "same-family"
-    lib.photographs.select("skin-a", keys[0])
-    lib.photographs.select("skin-b", keys[0])
+    lib.thumbnails.student_of = lambda _: "same-family"
+    lib.thumbnails.select("skin-a", keys[0])
+    lib.thumbnails.select("skin-b", keys[0])
     if not enabled:
         world.toggle(False)
     before = target.read_bytes(), target.stat().st_mtime_ns
     with pytest.raises(ServiceError, match="asset_delete_confirm"):
-        lib.delete_photograph("skin-a", keys[0])
+        lib.delete_thumbnail("skin-a", keys[0])
     if not enabled:
         lib._write_check = lambda *_: pytest.fail("Mods-off photo deletion wrote the game")
-    lib.delete_photograph("skin-a", keys[0], confirm=True)
-    assert lib.photographs.selection("skin-a") is None and lib.photographs.selection("skin-b") is None
+    lib.delete_thumbnail("skin-a", keys[0], confirm=True)
+    assert lib.thumbnails.selection("skin-a") is None and lib.thumbnails.selection("skin-b") is None
     assert keys[0] not in portrait_edit.in_use(lib) and keys[1] in portrait_edit.in_use(lib)
-    assert not lib.photographs._path(keys[0]).exists() and lib.photographs.image("test", keys[1])
+    assert not lib.thumbnails._path(keys[0]).exists() and lib.thumbnails.image("test", keys[1])
     if enabled:
         assert decode(target) == {"a": "official-a", "b": "official-b", "c": "custom-c"}
     else:
@@ -318,13 +322,13 @@ def test_photo_cleanup_failure_restores_shared_recipes_and_preview_choices(recip
     world, target, keys, decode, core = recipes
     lib = world.library
     key = keys[0]
-    lib.photographs.select("test", key)
+    lib.thumbnails.select("test", key)
     before = target.read_bytes(), deepcopy(world.profiles())
     real = Path.unlink
     fired = []
 
     def fail(path, *args, **kwargs):
-        if path == lib.photographs._path(key) and not fired:
+        if path == lib.thumbnails._path(key) and not fired:
             fired.append(True)
             raise OSError("Photo cleanup failed")
         return real(path, *args, **kwargs)
@@ -332,28 +336,28 @@ def test_photo_cleanup_failure_restores_shared_recipes_and_preview_choices(recip
     if failure == "unlink":
         monkeypatch.setattr(Path, "unlink", fail)
     else:
-        from bmpt.library import photographs
+        from bmpt.library import thumbnails
 
-        write = photographs.atomic_json
+        write = thumbnails.atomic_json
 
         def publish(path, data):
             write(path, data)
-            if key not in data["photos"] and not fired:
+            if key not in data["thumbnails"] and not fired:
                 fired.append(True)
                 raise OSError("Photo manifest flush failed")
 
-        monkeypatch.setattr(photographs, "atomic_json", publish)
+        monkeypatch.setattr(thumbnails, "atomic_json", publish)
     with pytest.raises(ServiceError, match="library_io_error"):
-        lib.delete_photograph("test", key, confirm=True)
+        lib.delete_thumbnail("test", key, confirm=True)
     assert (target.read_bytes(), world.profiles()) == before
-    assert lib.photographs.selection("test") == key
-    assert lib.photographs.image("test", key)
+    assert lib.thumbnails.selection("test") == key
+    assert lib.thumbnails.image("test", key)
 
 
 def test_applied_only_photo_recipe_is_reconciled_without_losing_neighbours(recipes):
     world, target, keys, decode, core = recipes
     world.library.profiles.update(lambda data: data["folders"][world.key()]["configured"].clear())
-    world.library.delete_photograph("test", keys[0], confirm=True)
+    world.library.delete_thumbnail("test", keys[0], confirm=True)
     assert decode(target) == {"a": "official-a", "b": "official-b", "c": "custom-c"}
     assert keys[1] in portrait_edit.in_use(world.library)
 
@@ -363,26 +367,27 @@ def test_permanent_photo_writer_failure_keeps_every_reference(recipes):
     before = target.read_bytes(), deepcopy(world.profiles())
     world.library._write_check = lambda *_: (_ for _ in ()).throw(ServiceError("classic_open"))
     with pytest.raises(ServiceError, match="classic_open"):
-        world.library.delete_photograph("test", keys[0], confirm=True)
+        world.library.delete_thumbnail("test", keys[0], confirm=True)
     assert (target.read_bytes(), world.profiles()) == before
-    assert world.library.photographs.image("test", keys[0])
+    assert world.library.thumbnails.image("test", keys[0])
 
 
 def test_generated_preview_is_managed_and_deletable_without_official_reclassification(tmp_path):
-    store = Photographs(tmp_path)
+    store = Thumbnails(tmp_path)
     key = store.save("a", capture()[0], "portrait", builtin=True)["saved"]
     store.select("a", key)
-    entry = store.list("a")["photos"][0]
+    entry = store.list("a")["thumbnails"][0]
     assert entry["provenance"] == "generated" and entry["managed"]
     store.delete("a", key)
-    assert store.selection("a") is None and not store.list("a")["photos"]
+    assert store.selection("a") is None and not store.list("a")["thumbnails"]
 
 
 def test_outer_recovery_restores_a_deleted_source_and_profiles(world):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     world.toggle(False)
     world.library.apply("test", "mod:" + mod.id)
-    config = deepcopy(world.profiles())
+    config = deepcopy(world.library.profiles.read())
+    raw_config = deepcopy(world.profiles())
     deletion = asset_delete.Deletion(world.library)
     deletion.publish()
     deletion.remember_mods([mod.id])
@@ -399,26 +404,27 @@ def test_outer_recovery_restores_a_deleted_source_and_profiles(world):
     assert (
         restored.profiles.read()["folders"][world.key()]["configured"] == config["folders"][world.key()]["configured"]
     )
+    assert world.profiles()["folders"][world.key()]["configured"] == raw_config["folders"][world.key()]["configured"]
     assert not list((world.root / "asset-deletions").glob("*/journal.json"))
 
 
 def test_preview_fallback_deduplicates_hall_sources_and_leaves_unrelated_revision_alone(tmp_path):
     state = UiState(tmp_path / "ui.json")
-    hall = {
+    student_hall = {
         "revision": 2,
         "portraits": [],
-        "memorials": [
-            {"id": "official", "variant": "a", "source": "official"},
-            {"id": "removed", "variant": "a", "source": "mod:gone"},
+        "memorialLobbies": [
+            {"id": "official", "alt": "a", "source": "official"},
+            {"id": "removed", "alt": "a", "source": "mod:gone"},
         ],
         "active": "removed",
     }
-    state.set("student_hall", hall)
+    state.set("student_hall", student_hall)
     state.reconcile_deleted_source("mod:other", lambda *args: "official")
-    assert state.get("student_hall") == hall
+    assert state.get("student_hall") == student_hall
     state.reconcile_deleted_source("mod:gone", lambda *args: "official")
     after = state.get("student_hall")
-    assert after["memorials"] == hall["memorials"][:1]
+    assert after["memorialLobbies"] == student_hall["memorialLobbies"][:1]
     assert after["active"] == "official" and after["revision"] == 3
 
 
@@ -435,7 +441,7 @@ def test_a_held_record_keeps_its_photos_in_use_until_its_file_returns(recipes, m
 
     def reopen():
         library = world.reload()
-        library.photographs.family_of = lambda _: "same-family"
+        library.thumbnails.student_of = lambda _: "same-family"
         monkeypatch.setattr(
             library, "_install_direct", lambda record, targets, *a, **k: {p: library._paths(record)[0] for p in targets}
         )
@@ -446,25 +452,25 @@ def test_a_held_record_keeps_its_photos_in_use_until_its_file_returns(recipes, m
     # the file is gone, the record is held: both photos are still referenced by the configuration and the applied file
     assert portrait_edit.usage_targets(held) == before_uses
     assert portrait_edit.in_use(held) == set(keys)
-    assert held.photograph_removal_info("test", keys[0])["used"]
+    assert held.thumbnail_removal_info("test", keys[0])["used"]
     snapshot = target.read_bytes(), deepcopy(world.profiles())
     with pytest.raises(ServiceError, match="asset_delete_confirm"):
-        held.delete_photograph("test", keys[0])
+        held.delete_thumbnail("test", keys[0])
     with pytest.raises(ServiceError, match="thumbnail_in_use"):
-        held.delete_photograph("test", keys[0], confirm=True)
+        held.delete_thumbnail("test", keys[0], confirm=True)
     with pytest.raises(ServiceError, match="thumbnail_in_use"):
-        portrait_edit.remove_photo(held, keys[1], lambda _: None)
+        portrait_edit.remove_thumbnail(held, keys[1], lambda _: None)
     assert (target.read_bytes(), world.profiles()) == snapshot
-    assert all(held.photographs.image("test", key) for key in keys)
+    assert all(held.thumbnails.image("test", key) for key in keys)
     # the file returns: the record is usable again, still names its photos, and a confirmed deletion rebuilds the recipe
     unhide(world, SimpleNamespace(id=recipe["id"]), parked)
     back = reopen()
     assert back._held_ids() == frozenset() and recipe["id"] in back._records
     assert portrait_edit.usage_targets(back) == before_uses
-    assert all(back.photographs.image("test", key) for key in keys)
+    assert all(back.thumbnails.image("test", key) for key in keys)
     with pytest.raises(ServiceError, match="asset_delete_confirm"):
-        back.delete_photograph("test", keys[0])
-    back.delete_photograph("test", keys[0], confirm=True)
+        back.delete_thumbnail("test", keys[0])
+    back.delete_thumbnail("test", keys[0], confirm=True)
     assert keys[0] not in portrait_edit.in_use(back) and keys[1] in portrait_edit.in_use(back)
 
 
@@ -479,7 +485,7 @@ def test_a_held_record_without_choices_or_with_broken_ones_uses_no_photo(tmp_pat
         {
             "id": "d" * 32,
             portrait_edit.TAG: {
-                "choices": {"x": {"photo": "held-photo", "variant": "skin-a"}, "y": {"photo": 5}, "z": "broken"}
+                "choices": {"x": {"thumbnail": "held-photo", "alt": "skin-a"}, "y": {"thumbnail": 5}, "z": "broken"}
             },
         },
     ]

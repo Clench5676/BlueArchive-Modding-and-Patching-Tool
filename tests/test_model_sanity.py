@@ -1,4 +1,4 @@
-"""The sanity pass and the named refusals of a costume build (gameassets.model_adapt)."""
+"""The sanity pass and the named refusals of a costume build (gameassets.chibi_adapt)."""
 
 import copy
 import struct
@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 
 from bmpt.core.errors import ServiceError
-from bmpt.gameassets import model_adapt as ma
-from bmpt.gameassets import model_geometry as mg
+from bmpt.gameassets import chibi_adapt as ma
+from bmpt.gameassets import chibi_geometry as mg
 
 
 def _bounds(centre=(0.0, 1.0, 0.0), extent=(0.5, 1.0, 0.3)):

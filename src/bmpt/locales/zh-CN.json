@@ -37,8 +37,8 @@
 		"info": {
 			"title": {
 				"portrait": "立绘信息",
-				"lobby": "记忆大厅信息",
-				"model": "3D 模型信息"
+				"memorialLobby": "记忆大厅信息",
+				"chibi": "3D 模型信息"
 			},
 			"details": "详情",
 			"current": "当前",
@@ -49,30 +49,30 @@
 		"row": {
 			"box": {
 				"portrait": "立绘",
-				"lobby": "记忆大厅",
-				"model": "3D 模型"
+				"memorialLobby": "记忆大厅",
+				"chibi": "3D 模型"
 			},
 			"switch": {
 				"portrait": "切换立绘",
-				"lobby": "切换记忆大厅",
-				"model": "切换 3D 模型"
+				"memorialLobby": "切换记忆大厅",
+				"chibi": "切换 3D 模型"
 			},
 			"add": {
 				"portrait": "添加立绘",
-				"lobby": "添加记忆大厅",
-				"model": "添加 3D 模型"
+				"memorialLobby": "添加记忆大厅",
+				"chibi": "添加 3D 模型"
 			},
 			"four": {
 				"portrait": "差分",
-				"lobby": "对话",
-				"model": "动作"
+				"memorialLobby": "对话",
+				"chibi": "动作"
 			}
 		},
 		"detail": {
 			"copyFailed": "复制名称失败。",
 			"failed": "预览不可用"
 		},
-		"lobby": {
+		"memorialLobby": {
 			"original": "原版",
 			"fullscreen": "全屏",
 			"playAll": "播放全部对话",
@@ -84,7 +84,7 @@
 			"cameraAlbum": "相册",
 			"cameraName": "镜头 {n}"
 		},
-		"model": {
+		"chibi": {
 			"original": "原版",
 			"has": "有",
 			"none": "无",
@@ -185,7 +185,7 @@
 			"classic": "{label} - 经典界面",
 			"import": "导入Mod"
 		},
-		"roster": {
+		"studentList": {
 			"title": "学生名单",
 			"merge": "合并换皮",
 			"search": "搜索",
@@ -224,9 +224,9 @@
 			}
 		},
 		"band": {
-			"modCounts": "立绘：{portraits}、记忆大厅：{lobbies}",
+			"modCounts": "立绘：{portraits}、记忆大厅：{memorialLobbies}",
 			"portrait": "立绘",
-			"lobby": "大厅",
+			"memorialLobby": "大厅",
 			"replaced": "已替换"
 		},
 		"bar": {
@@ -234,8 +234,8 @@
 		},
 		"tab": {
 			"portrait": "立绘",
-			"lobby": "记忆大厅",
-			"model": "3D 模型"
+			"memorialLobby": "记忆大厅",
+			"chibi": "3D 模型"
 		},
 		"status": {
 			"original": "游戏原版",
@@ -621,8 +621,8 @@
 			"thumbnail_in_use": "缩略图正在使用",
 			"thumbnail_library_invalid": "缩略图库无法读取",
 			"thumbnail_target_unavailable": "学生名单缩略图资源不可用",
-			"lobby_camera_unsupported": "此记忆大厅无法使用镜头",
-			"lobby_camera_failed": "镜头保存失败",
+			"memorial_lobby_camera_unsupported": "此记忆大厅无法使用镜头",
+			"memorial_lobby_camera_failed": "镜头保存失败",
 			"thumbnail_apply_failed": "缩略图应用失败",
 			"student_hall_last_portrait": "至少保留一个立绘",
 			"native_only": "请在桌面应用中使用"
@@ -843,18 +843,18 @@
 			"changes": "变动：",
 			"autoUpdate": "可自动更新：",
 			"remapUpdate": "按当前 .atlas 文件重新排布 Mod 贴图",
-			"graft": "保留 Mod 的 .skel 文件，补上原版新增差分",
-			"graftOldRig": "沿用 Mod 绘制时的 .skel 文件和 .atlas 文件，补上原版新增差分",
-			"graftAction": "补上新差分",
+			"addExpressions": "保留 Mod 的 .skel 文件，补上原版新增差分",
+			"addExpressionsOldRig": "沿用 Mod 绘制时的 .skel 文件和 .atlas 文件，补上原版新增差分",
+			"addExpressionsAction": "补上新差分",
 			"converterAction": "用转换工具补上",
 			"converterTitle": "下载 SpineSkeletonDataConverter",
 			"converterLicence": "第三方工具，许可 PolyForm Noncommercial 1.0.0，仅限非商业用途",
 			"converterMac": "需自行编译mac版",
 			"converterDownload": "下载",
 			"converterPage": "项目页面",
-			"graftAnimations": "保留 Mod 的 .skel 文件，补上原版新增动画",
-			"graftAnimationsAction": "补上新动画",
-			"graftRefused": "{name}，无法补上的动画：{names}",
+			"addAnimations": "保留 Mod 的 .skel 文件，补上原版新增动画",
+			"addAnimationsAction": "补上新动画",
+			"addAnimationsRefused": "{name}，无法补上的动画：{names}",
 			"refusedAnimation": "{name}（{why}）",
 			"why": {
 				"bone": "缺少骨骼 {name}",
@@ -893,23 +893,23 @@
 			"zoomOut": "缩小",
 			"marks": "标出改动",
 			"oldRig": "沿用旧 .skel 文件和 .atlas 文件：{names}",
-			"grafted": "新增差分：{n}",
-			"graftCorrected": "已自动校正：{n}",
-			"graftUnfixed": "需手动修复：{n}",
-			"graftRefused": "未补上的动画：{n}",
-			"graftGrown": "贴图加高 {n} 像素",
-			"graftUnanchored": "新差分按原版位置放置",
+			"addedExpressions": "新增差分：{n}",
+			"addAnimationsCorrected": "已自动校正：{n}",
+			"addAnimationsUnfixed": "需手动修复：{n}",
+			"addAnimationsRefused": "未补上的动画：{n}",
+			"addAnimationsGrown": "贴图加高 {n} 像素",
+			"addExpressionsUnanchored": "新差分按原版位置放置",
 			"expression": "差分 {name}（{n}/{total}）",
 			"previousExpression": "上一个差分",
 			"nextExpression": "下一个差分",
-			"graftDone": "已补上新差分",
-			"graftPartial": "已补上新差分，部分需核对",
-			"graftedAnimations": "新增动画：{n}",
+			"addExpressionsDone": "已补上新差分",
+			"addExpressionsPartial": "已补上新差分，部分需核对",
+			"addedAnimations": "新增动画：{n}",
 			"animation": "动画 {name}（{n}/{total}）",
 			"previousAnimation": "上一个动画",
 			"nextAnimation": "下一个动画",
-			"graftAnimationsDone": "已补上新动画",
-			"graftAnimationsPartial": "已补上新动画，部分未补上"
+			"addAnimationsDone": "已补上新动画",
+			"addAnimationsPartial": "已补上新动画，部分未补上"
 		},
 		"spine": {
 			"license": {
@@ -1055,9 +1055,9 @@
 				"add": "加入 Mod 仓库",
 				"apply": "应用 Mod",
 				"export": "导出文件",
-				"readModel": "读取模型",
+				"readChibi": "读取模型",
 				"fitCostume": "适配服装",
-				"buildModel": "生成模型",
+				"buildChibi": "生成模型",
 				"write": "写入游戏文件",
 				"restore": "还原官方文件"
 			},
@@ -1127,7 +1127,7 @@
 			"success": "导出成功，是否打开文件夹？",
 			"openFolder": "打开文件夹"
 		},
-		"hall": {
+		"studentHall": {
 			"title": "学生大厅",
 			"portraits": "立绘",
 			"memorial": "记忆大厅",
@@ -1181,12 +1181,12 @@
 			"layerBack": "置于底层",
 			"flipHorizontal": "水平翻转"
 		},
-		"photo": {
+		"thumbnail": {
 			"open": "拍摄缩略图",
 			"title": "缩略图摄影",
 			"back": "返回",
 			"portrait": "立绘",
-			"lobby": "记忆大厅",
+			"memorialLobby": "记忆大厅",
 			"gridOn": "隐藏九宫格",
 			"gridOff": "显示九宫格",
 			"capture": "拍摄",
@@ -1210,7 +1210,7 @@
 			"captureFailed": "拍摄失败",
 			"noAssets": "暂无可用资源",
 			"natural": "自然",
-			"photoLabel": "缩略图",
+			"thumbnailLabel": "缩略图",
 			"next": "下一页",
 			"previous": "上一页",
 			"applied": "已应用",
@@ -1238,7 +1238,7 @@
 					"title": "学生大头照",
 					"body": "学生详情全屏后增加大头照拍摄功能"
 				},
-				"hall-viewing-zoom": {
+				"student-hall-viewing-zoom": {
 					"title": "缩放学生大厅",
 					"body": "滚轮、捏合放大立绘场景，平移查看"
 				}

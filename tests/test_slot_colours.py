@@ -1,6 +1,6 @@
-"""The lobby's slot colours as each atlas page's shader takes them (web/js/spine/slot-colours.js): its Node tests, and
-on an official game folder (BAMT_TEST_GAME_DIR) the page shaders lobby.json names and the shaders' compiled vertex
-programs, which say how each one takes the vertex colour."""
+"""The memorial lobby's slot colours as each atlas page's shader takes them (web/js/spine/slot-colours.js): its Node
+tests, and on an official game folder (BAMT_TEST_GAME_DIR) the page shaders memorial-lobby.json names and the shaders'
+compiled vertex programs, which say how each one takes the vertex colour."""
 
 from __future__ import annotations
 
@@ -129,11 +129,11 @@ def test_real_lobby_page_shaders(tmp_path):
     game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache", allowed=False))
     # Takane's pages are all on MX Standard (her aurora: additive slots faded by their alpha), Hoshino's on
     # spine-unity's Spine/Skeleton
-    (takane,) = game.lobby_info("ch0229_home")["layers"]
+    (takane,) = game.memorial_lobby_info("ch0229_home")["layers"]
     assert takane["shaders"] == {
         page: "Spine/Skeleton MX Standard" for page in ("CH0229_home", "CH0229_home_2", "CH0229_home_3")
     }
-    hoshino = game.lobby_info("hoshino_home")["layers"]
+    hoshino = game.memorial_lobby_info("hoshino_home")["layers"]
     assert {shader for layer in hoshino for shader in layer["shaders"].values()} == {"Spine/Skeleton"}
     # every page with a queue has its shader, named as the atlas the web UI loads names it
     for layer in (takane, *hoshino):
@@ -143,7 +143,7 @@ def test_real_lobby_page_shaders(tmp_path):
     used = {
         shader
         for core in ("ch0229_home", "hoshino_home", "aru_home", "fuuka_home", "ch0310_home", "ch0319_home")
-        for layer in game.lobby_info(core)["layers"]
+        for layer in game.memorial_lobby_info(core)["layers"]
         for shader in layer["shaders"].values()
     }
     assert used == {

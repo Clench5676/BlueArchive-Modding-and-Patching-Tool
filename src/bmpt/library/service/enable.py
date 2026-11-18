@@ -18,13 +18,14 @@ from ...core.logging_utils import log_failure
 from .. import profiles as profiles_mod
 from .. import mod_progress, safety, toggle_timing
 from ..judge import (
+    sorted_resource_types,
     core_of,
     distinguishing_folders,
-    kind_of_file,
+    resource_type_of_file,
     leaves,
     now,
 )
-from ..models import (
+from ..records import (
     Pin,
     ToggleResult,
 )
@@ -95,17 +96,18 @@ class EnableMixin:
         """Count stored bundle bytes for one help popup or Settings row.
 
         Args:
-            kind: Storage category to count, built or originals.
+            kind: Storage category to count, built or officials.
 
         Returns:
-            A builtSize or originalsSize field containing the bundle byte count.
+            A builtSize or officialsSize field containing the bundle byte count.
 
         Raises:
             ServiceError: The storage category is invalid (bad_params).
         """
-        if kind not in ("built", "originals"):
+        if kind not in ("built", "officials"):
             raise ServiceError("bad_params", key="kind")
-        return {f"{kind}Size": _folder_size(self.root / kind)}
+        folder = "originals" if kind == "officials" else kind
+        return {f"{kind}Size": _folder_size(self.root / folder)}
 
     def _plan_toggle(
         self, enabled: bool, pins: list[Pin], config: dict | None, found: list[_Entry]
@@ -121,7 +123,7 @@ class EnableMixin:
 
         def add(pin: Pin, core: str) -> None:
             core = self._core_map(pin).slot(core)
-            if (pin.key, core) not in seen and self._kind(core, pin):
+            if (pin.key, core) not in seen and self._resource_type(core, pin):
                 seen.add((pin.key, core))
                 plan.append((pin, core))
 
@@ -158,7 +160,7 @@ class EnableMixin:
             cores.update(
                 core_of(Path(path).name)
                 for path in self._applied
-                if Path(path).is_relative_to(root) and kind_of_file(Path(path).name)
+                if Path(path).is_relative_to(root) and resource_type_of_file(Path(path).name)
             )
             pin = self._recorded_pin(key, folder)
             if pin is not None:
@@ -252,7 +254,7 @@ class EnableMixin:
             current = profiles_mod.enabled(config)
             if drift is None and retry is None:
                 from ..portrait_edit import refresh_missing
-                from ..lobby_camera import refresh
+                from ..memorial_lobby_camera import refresh
 
                 refresh_missing(self, pins, log)
                 refresh(self, pins, log)
@@ -263,7 +265,7 @@ class EnableMixin:
                 self._view(pins, "scan", config, snapshot=True) if drift is None and not enabled and allowed else None
             )
         if view is not None:
-            # previews go first: one loads while the pass runs (which pauses itself while a model preview is exported)
+            # previews go first: one loads while the pass runs (which pauses itself while a chibi preview is exported)
             with _errors("toggle"), toggle_timing.stage("off_scan"):
                 found = view.entries(pins, background=True)
         with toggle_timing.enter("library_wait", self._lock), _errors("toggle"), toggle_timing.stage("plan"):
@@ -332,7 +334,7 @@ class EnableMixin:
         }
         outcomes: dict[tuple[str, str], str | None] = {}
         cores: set[str] = set()
-        kinds: set[str] = set()
+        resource_types: set[str] = set()
         saved_at, unsaved = time.monotonic(), 0
         stop: ServiceError | None = None
         _background.paced = True  # other callers of the library go first between its entries (_let_others_in)
@@ -363,8 +365,8 @@ class EnableMixin:
                         item = {
                             "install": pin.key,
                             "core": core,
-                            "kind": self._kind(core, pin) or "spr",
-                            "variant": self._core_map(pin).key(core) or core,
+                            "resource_type": self._resource_type(core, pin) or "portrait",
+                            "alt": self._core_map(pin).key(core) or core,
                         }
                         if error.code not in STOPPING:  # a refusal of the moment belongs to the switch, not the choice
                             self._selection_error(pin, [core], error.to_json())
@@ -383,7 +385,7 @@ class EnableMixin:
                     result[name].append(value)
                 if entry is not None and ("done" in outcome or "adopted" in outcome):
                     cores.add(core)
-                    kinds.add(entry["kind"])
+                    resource_types.add(entry["resource_type"])
                 unsaved += 1
                 if unsaved >= SAVE_EVERY[0] or time.monotonic() - saved_at >= SAVE_EVERY[1]:
                     with _errors("toggle"):
@@ -408,7 +410,7 @@ class EnableMixin:
             result["skipped"],
             result["dropped"],
             sorted(cores),
-            sorted(kinds),
+            sorted_resource_types(resource_types),
             result["held"],
         )
 
@@ -450,7 +452,7 @@ class EnableMixin:
                 writes.append(
                     (
                         pin,
-                        self._untested_entry(pin, core_name, targets, entry.get("variant"), entry.get("kind")),
+                        self._untested_entry(pin, core_name, targets, entry.get("alt"), entry.get("resource_type")),
                         targets,
                     )
                 )
@@ -538,13 +540,13 @@ class EnableMixin:
         item = entry.item()
         outcome: dict[str, Any] = {}
         if entry.state == "source_missing":
-            self._configure(pin, entry.variant, {entry.kind: core}, None)
+            self._configure(pin, entry.alt, {entry.resource_type: core}, None)
             logger.info("Dropped the configuration of %s: %s is gone from the library", core, entry.configured)
             outcome["dropped"] = item
             view = self._view(pins, "full")
             entry = view.entry(pin, core)
         if entry.takeover:
-            self._configure(pin, entry.variant, {entry.kind: core}, entry.takeover)
+            self._configure(pin, entry.alt, {entry.resource_type: core}, entry.takeover)
             logger.info("Configured %s in %s with %s (taken over)", core, pin.key, entry.takeover)
             view = self._view(pins, "full")
             entry = view.entry(pin, core)
@@ -559,8 +561,8 @@ class EnableMixin:
                         self._check_space(sum(part.size for part in entry.parts if part.carried == "unknown"))
                     saved = entry.configured
                     mod_id = self._adopt_one(pin, core)
-                    if saved and view.source_exists(saved, pin.key, entry.kind):
-                        self._configure(pin, entry.variant, {entry.kind: core}, saved)
+                    if saved and view.source_exists(saved, pin.key, entry.resource_type):
+                        self._configure(pin, entry.alt, {entry.resource_type: core}, saved)
                 except ServiceError as error:
                     outcome["left"] = {**item, "code": error.code, "params": error.to_json()["params"]}
                     return outcome, "left", item
@@ -713,18 +715,18 @@ class EnableMixin:
             return len(dropped)
 
     @_serialized
-    def dismiss(self, kind: str, entries: list[dict]) -> None:
+    def dismiss(self, resource_type: str, entries: list[dict]) -> None:
         """Suppress entry prompts until filenames, sizes, or modification times change.
 
         Only file stats are read.
 
         Args:
-            kind: Prompt group, drift or untracked.
+            resource_type: Prompt group, drift or untracked.
             entries: Install/core descriptors whose current file signatures should be remembered.
                 Unknown installs and malformed descriptors are skipped.
         """
-        if kind not in ("drift", "untracked"):
-            raise ServiceError("bad_params", kind=kind)
+        if resource_type not in ("drift", "untracked"):
+            raise ServiceError("bad_params", resource_type=resource_type)
         pins = {pin.key: pin for pin in self.installs()}
         found = {}
         for item in entries:
@@ -743,7 +745,7 @@ class EnableMixin:
 
         def change(data: dict) -> None:
             for (key, core), (pin, files) in found.items():
-                self._folder(data, pin)["dismissed"].setdefault(kind, {})[core] = files
+                self._folder(data, pin)["dismissed"].setdefault(resource_type, {})[core] = files
 
         self._update_profiles(change)
 

@@ -1,0 +1,362 @@
+// Drafts and picker ordering are independent of DOM and game playback.
+import { order, normalizeView, fold, terms } from "../student-list/student-list-order.js";
+import { PORTRAIT_ANCHOR, studentHallScale } from "./student-hall-framing.js";
+
+const copy = (value) => structuredClone(value);
+/** The key of a portrait or memorial lobby source: its alt and its source. */
+export const sourceKey = (source) => `${source.alt}:${source.source}`;
+function canonicalDraft(value) {
+  const result = copy(value);
+  result.portraitScale = studentHallScale(result.portraitScale);
+  for (const group of ["portraits", "memorialLobbies"]) {
+    const kept = new Map();
+    result[group] = result[group].filter((entry) => {
+      if (!entry.alt || !entry.source) return true;
+      const key = sourceKey(entry),
+        first = kept.get(key);
+      if (!first) {
+        kept.set(key, entry);
+        return true;
+      }
+      if (group === "memorialLobbies" && entry.id === result.active) first.id = entry.id;
+      return false;
+    });
+  }
+  return result;
+}
+/**
+ * Make the Student Hall's editable draft over the saved data: begin() starts an edit, dirty() tells it differs,
+ * cancel() drops it and accept() makes it the saved data.
+ * @returns
+ *     {{current: () => object, saved: () => object, kind: () => string|null, begin: (kind: string) => object, dirty: ()
+ * => boolean, cancel: () => void, accept: (value: object) => void, add: Function}}
+ *     The draft's controls (more for the editors).
+ */
+export function createDraft(saved) {
+  let base = canonicalDraft(saved),
+    draft = null,
+    kind = null;
+  const content = (value) => JSON.stringify({ ...value, revision: 0 });
+  return {
+    current: () => draft || base,
+    saved: () => base,
+    kind: () => kind,
+    begin(next) {
+      if (!draft) {
+        draft = copy(base);
+        kind = next;
+      }
+      return draft;
+    },
+    dirty: () => !!draft && content(draft) !== content(base),
+    cancel() {
+      draft = null;
+      kind = null;
+    },
+    accept(value) {
+      base = canonicalDraft(value);
+      draft = null;
+      kind = null;
+    },
+    add(choice, uuid = () => crypto.randomUUID()) {
+      if (!draft) throw new Error("No Student Hall draft");
+      const entries = choice.resourceType === "portrait" ? draft.portraits : draft.memorialLobbies;
+      if (entries.some((entry) => sourceKey(entry) === sourceKey(choice))) return null;
+      const entry = { id: uuid(), alt: choice.alt, source: choice.source };
+      if (choice.resourceType === "portrait") {
+        const n = draft.portraits.length;
+        Object.assign(entry, { x: PORTRAIT_ANCHOR.x + (((n + 2) % 5) - 2) * 240, y: PORTRAIT_ANCHOR.y, scale: 1 });
+        draft.portraits.push(entry);
+      } else {
+        draft.memorialLobbies.push(entry);
+        draft.active ||= entry.id;
+      }
+      return entry;
+    },
+    remove(id) {
+      if (!draft) return false;
+      const list = kind === "layout" ? draft.portraits : draft.memorialLobbies;
+      if (list.length <= 1) return false;
+      const index = list.findIndex((entry) => entry.id === id);
+      if (index < 0) return false;
+      list.splice(index, 1);
+      if (draft.active === id) draft.active = list[Math.min(index, list.length - 1)]?.id || null;
+      return true;
+    },
+    move(id, before) {
+      if (!draft) return false;
+      const list = draft.memorialLobbies,
+        from = list.findIndex((e) => e.id === id),
+        to = list.findIndex((e) => e.id === before);
+      if (from < 0 || to < 0 || from === to) return false;
+      const [entry] = list.splice(from, 1);
+      list.splice(to, 0, entry);
+      return true;
+    },
+    layer(id, direction) {
+      if (!draft || kind !== "layout") return false;
+      const list = draft.portraits,
+        from = list.findIndex((entry) => entry.id === id);
+      if (from < 0) return false;
+      const to =
+        direction === "front"
+          ? list.length - 1
+          : direction === "back"
+            ? 0
+            : Math.max(0, Math.min(list.length - 1, from + direction));
+      if (from === to) return false;
+      const [entry] = list.splice(from, 1);
+      list.splice(to, 0, entry);
+      return true;
+    },
+    replacePortrait(id, choice, choices) {
+      if (!draft || kind !== "layout") return false;
+      const entry = draft.portraits.find((item) => item.id === id);
+      if (
+        !entry ||
+        !portraitReplacements(entry, choices, draft.portraits).some(
+          (candidate) => sourceKey(candidate) === sourceKey(choice),
+        )
+      )
+        return false;
+      entry.alt = choice.alt;
+      entry.source = choice.source;
+      return true;
+    },
+    flip(id) {
+      if (!draft || kind !== "layout") return false;
+      const entry = draft.portraits.find((item) => item.id === id);
+      if (!entry) return false;
+      entry.flipHorizontal = !entry.flipHorizontal;
+      return true;
+    },
+  };
+}
+
+/**
+ * Group the source choices of a kind into the students the student list order works on.
+ * @param {object[]} choices
+ * @param {string|null} [kind] The kind to keep; all by default.
+ */
+export function pickerData(choices, kind = null) {
+  if (kind) choices = choices.filter((choice) => choice.resourceType === kind);
+  const students = new Map(),
+    alts = new Map();
+  for (const choice of choices) {
+    const student = choice.student || choice.alt;
+    if (!students.has(student))
+      students.set(student, {
+        key: student,
+        studentNames: choice.studentNames || {},
+        aliases: choice.studentAliases || [],
+        school: choice.school,
+        alts: [],
+      });
+    if (!alts.has(choice.alt)) {
+      const v = {
+        key: choice.alt,
+        student,
+        names: choice.names || {},
+        aliases: choice.aliases || [],
+        customAliases: choice.customAliases || [],
+        fileId: choice.fileId,
+        chibi: choice.chibi,
+        officialThumbnail: choice.officialThumbnail,
+        favorite: !!choice.favorite,
+        releasedOnServer: choice.releasedOnServer ?? !!choice.core,
+        order: choice.order || 0,
+        recent: choice.recent,
+        added: choice.modAdded || choice.added,
+        mods: kind ? 0 : choice.mods || 0,
+        modsReported: !kind && Number.isFinite(choice.mods),
+        modNames: [],
+        modCounts: { portrait: 0, memorialLobby: 0 },
+      };
+      alts.set(choice.alt, v);
+      students.get(student).alts.push(v);
+    }
+    const v = alts.get(choice.alt);
+    v.aliases = [...new Set([...v.aliases, ...(choice.aliases || [])])];
+    v.customAliases = [...new Set([...v.customAliases, ...(choice.customAliases || [])])];
+    const added = choice.modAdded || choice.added;
+    if (added && (!v.added || Date.parse(added) > Date.parse(v.added))) v.added = added;
+    if (choice.resourceType === "portrait") v.portrait ||= choice.core || choice.source;
+    if (choice.resourceType === "memorialLobby") v.memorialLobby ||= choice.core || choice.source;
+    if (choice.source.startsWith("mod:")) {
+      if (!v.modsReported) v.mods++;
+      v.modCounts[choice.resourceType]++;
+      v.modNames.push(choice.name || "");
+      if (choice.resourceType === "portrait") v.replaced = choice.source;
+    }
+  }
+  return { students: [...students.values()] };
+}
+/**
+ * The students to pick from, in the student list's order for a view and a search.
+ * @param {object[]} choices
+ * @param {(names: object) => string} label Gives the UI language's name.
+ * @param {string|null} [kind]
+ * @returns {object[]}
+ */
+export function studentChoices(choices, view, query, label, locale, kind = null) {
+  return order(pickerData(choices, kind), normalizeView(view), {
+    query,
+    label,
+    collator: new Intl.Collator(locale, { numeric: true, sensitivity: "base" }),
+  });
+}
+const namesOf = (data) =>
+  Object.values(data || {}).flatMap((name) => (typeof name === "string" ? [name] : [name?.full, name?.short]));
+function sourceMatches(choice, words) {
+  const text = fold(
+    [
+      choice.name,
+      choice.alt,
+      choice.fileId,
+      ...(choice.aliases || []),
+      ...(choice.customAliases || []),
+      ...(choice.studentAliases || []),
+      ...namesOf(choice.names),
+      ...namesOf(choice.studentNames),
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+  return !words.length || words.every((word) => text.includes(word));
+}
+/**
+ * The picker's portrait rows: one per student, with the portraits that match the search.
+ * @param {object[]} choices
+ * @param {(names: object) => string} label Gives the UI language's name.
+ * @returns {object[]}
+ */
+export function portraitRows(choices, view, query, label, locale) {
+  const mods = choices.filter((c) => c.resourceType === "portrait");
+  const cards = studentChoices(choices, view, query, label, locale, "portrait"),
+    words = terms(query);
+  return cards
+    .map((card) => ({
+      student: card,
+      key: view.groupAlts ? card.student : card.key,
+      choices: mods.filter((c) => {
+        const belongs = view.groupAlts ? (c.student || c.alt) === card.student : c.alt === card.key;
+        return belongs && sourceMatches(c, words);
+      }),
+    }))
+    .filter((row) => row.choices.length);
+}
+/**
+ * The memorial lobbies to pick from, in the order of the view: the students' memorial lobbies first when they match.
+ * @param {object[]} choices
+ * @param {string|null} selected
+ * @param {object} [viewed] The students already viewed in the picker.
+ * @param {(names: object) => string} [label] Gives the UI language's name.
+ * @returns {object[]}
+ */
+export function memorialChoices(
+  choices,
+  students,
+  selected,
+  view,
+  query,
+  viewed = {},
+  label = (names) => names?.en,
+  locale = "en",
+) {
+  const keyOf = (choice) => (view.groupAlts ? choice.student || choice.alt : choice.alt);
+  const visible = new Set(students.map((card) => (view.groupAlts ? card.student : card.key))),
+    words = terms(query);
+  const selectedKey = view.groupAlts ? students.find((card) => card.key === selected)?.student || selected : selected;
+  const list = choices.filter(
+    (choice) =>
+      choice.resourceType === "memorialLobby" &&
+      visible.has(keyOf(choice)) &&
+      (!selected || keyOf(choice) === selectedKey) &&
+      sourceMatches(choice, words),
+  );
+  const mods = new Map(students.map((card) => [view.groupAlts ? card.student : card.key, card.mods || 0]));
+  const index = new Map(choices.map((choice, i) => [choice, i]));
+  const value = (choice) =>
+    viewed[sourceKey(choice)] ??
+    (choice.viewed != null ? -choice.viewed : choice.recent != null ? -1000 - choice.recent : -Infinity);
+  const time = (choice) => {
+    const parsed = Date.parse(choice.modAdded || choice.added || "");
+    return Number.isFinite(parsed) ? parsed : -Infinity;
+  };
+  const title = (choice) => [label(choice.names)?.full || choice.alt, choice.name].filter(Boolean).join(" - ");
+  const collator = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
+  const difference = (a, b) => (a === b ? 0 : a - b);
+  const direction = view.order === "asc" ? 1 : -1;
+  return list.sort((a, b) => {
+    const result =
+      view.sort === "recent"
+        ? difference(value(a), value(b))
+        : view.sort === "added"
+          ? difference(time(a), time(b))
+          : view.sort === "name"
+            ? collator.compare(title(a), title(b))
+            : view.sort === "mods"
+              ? difference(mods.get(keyOf(a)), mods.get(keyOf(b)))
+              : difference(a.order || 0, b.order || 0) || index.get(a) - index.get(b);
+    return direction * result || index.get(a) - index.get(b);
+  });
+}
+
+/**
+ * The room the Student Hall's content has, between its toolbars and the navigation.
+ * @param {{top: number, width: number}} rootBox
+ * @param {{bottom?: number}[]} [toolbarBoxes]
+ * @param {{top: number, height: number}|null} [navBox]
+ * @returns {{left: number, top: number, right: number, bottom: number}} The bounds in stage pixels.
+ */
+export function contentBounds(rootBox, toolbarBoxes = [], navBox = null) {
+  const scale = rootBox?.width > 0 ? 1920 / rootBox.width : 1,
+    top = rootBox?.top || 0;
+  const toolbarBottom = Math.max(
+    180,
+    ...toolbarBoxes.filter((box) => box.height > 0).map((box) => (box.bottom - top) * scale),
+  );
+  const navTop = navBox?.height > 0 ? (navBox.top - top) * scale : 976;
+  return { left: 24, top: toolbarBottom + 16, right: 1896, bottom: Math.min(1044, navTop - 16) };
+}
+
+/**
+ * The selected portrait after an editor event. The selection belongs to the editor session, never the persisted
+ * Student Hall draft.
+ * @param {string|null} selected The selected portrait's id.
+ * @param {object} options
+ * @param {"end"|"escape"|"click"|"drag"|"remove"|"redraw"} options.type The event: end and escape clear the
+ *     selection, click toggles it, drag takes the dragged one, remove clears a removed one and redraw keeps it
+ *     while it is still there.
+ * @param {string|null} [options.id]
+ * @param {string[]} [options.ids]
+ * @returns {string|null}
+ */
+export function portraitSelection(selected, { type, id = null, ids = [] }) {
+  if (["end", "escape"].includes(type)) return null;
+  if (type === "click") return selected === id ? null : id;
+  if (type === "drag") return id || selected;
+  if (type === "remove") return selected === id ? null : selected;
+  if (type === "redraw") return ids.includes(selected) ? selected : null;
+  return selected;
+}
+
+/**
+ * The choices a placed portrait can be replaced with: the choices of its student that are not placed yet.
+ * @param {object[]} choices
+ * @param {object[]} placed
+ * @returns {object[]}
+ */
+export function portraitReplacements(entry, choices, placed) {
+  const current = choices.find(
+    (choice) => choice.resourceType === "portrait" && sourceKey(choice) === sourceKey(entry),
+  );
+  if (!current?.student) return [];
+  const used = new Set(placed.map(sourceKey));
+  used.add(sourceKey(entry));
+  // Every other portrait of the student: a Mod portrait may also go back to its own alt's official art.
+  return choices.filter(
+    (choice) =>
+      choice.resourceType === "portrait" && choice.student === current.student && !used.has(sourceKey(choice)),
+  );
+}

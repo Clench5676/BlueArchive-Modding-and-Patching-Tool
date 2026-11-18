@@ -24,11 +24,11 @@ from .. import fingerprint, integrity, rig_archive, toggle_timing
 from ..original_checks import Verdict
 from ..judge import (
     core_of,
-    kind_of_file,
+    resource_type_of_file,
     now,
     says_official,
 )
-from ..models import Pin
+from ..records import Pin
 from ..safety import check_resource_path
 from ..storage import (
     Fingerprint,
@@ -371,7 +371,9 @@ class OriginalsMixin:
             if record.get("removed"):
                 return False
             # a held record has no bytes to show: the target's bytes are kept as a mod (held=False)
-            if view.source_exists(record.get("source", ""), pin.key, kind_of_file(target.name) or "spr", held=False):
+            if view.source_exists(
+                record.get("source", ""), pin.key, resource_type_of_file(target.name) or "portrait", held=False
+            ):
                 return False
         elif fingerprint.trailing is None:
             return False
@@ -407,7 +409,7 @@ class OriginalsMixin:
     def _core_targets(self, files: Mapping[str, Path], pin: Pin) -> list[Path]:
         """The official parts of the core a mod's files belong to."""
         name = next(iter(files))
-        if kind_of_file(name) == "other":
+        if resource_type_of_file(name) == "other":
             return self._other_targets(dict(files), pin)
         return self._spine_parts(core_of(name), pin)
 
@@ -717,7 +719,7 @@ class OriginalsMixin:
                 cores = sorted(
                     core
                     for core, paths in index.items()
-                    if paths and all(kind_of_file(path.name) == "spr" for path in paths)
+                    if paths and all(resource_type_of_file(path.name) == "portrait" for path in paths)
                 )
                 stamp = hashlib.sha1(
                     json.dumps([[core, sorted(p.name for p in index[core])] for core in cores]).encode()
@@ -918,7 +920,7 @@ class OriginalsMixin:
                 None uses only the saved fingerprint.
         """
         record = self._record(mod_id)
-        if record.get("kind") != "spr":
+        if record.get("resource_type") != "portrait":
             return {}
         painted = (self._read_built_against(record) or {}).get("painted") or {}
         known = {
@@ -940,7 +942,7 @@ class OriginalsMixin:
         so archiving only the installed rig does not redraw existing previews.
         """
         record = self._record(mod_id)
-        if record.get("kind") != "spr":
+        if record.get("resource_type") != "portrait":
             return ""
         paths = self._paths(record)
         rigs = self.rigs.rigs(core_of(paths[0].name)) if paths else []

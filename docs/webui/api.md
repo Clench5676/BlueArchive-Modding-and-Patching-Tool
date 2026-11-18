@@ -18,7 +18,7 @@ one changes are in the other files ([`README.md`](README.md)).
 | `student.get {key}` | a student with its alts, Mods and each alt's state, `configured` by resource type, `chibiCores`, `chibiFiles`, `version` |
 | `settings.get` / `settings.set {key, value}` | preferences, including `studentList`, `memorialLobbyZoomOut`, `memorialLobbyPostProcessing`, `memorialLobbyIntro`, and game folders |
 | `settings.pickFolder {start?}` / `settings.clearCache` / `settings.detectGame {server}` | native folder picker / clear the asset cache / detect installs with scan consent |
-| `memorialLobby.warm` / `memorialLobby.lines {alt, talks, lang}` | build the lobby prefab index in the background / the dialogue lines per language (`lines_unavailable` when no source can be read) |
+| `memorialLobby.warm` / `memorialLobby.lines {alt, talks, lang}` | build the memorial lobby prefab index in the background / the dialogue lines per language (`lines_unavailable` when no source can be read) |
 | `memorialLobby.camera.save {alt, memorialLobby, source, view, scale, offset}` | save memorial lobby framing as a Mod (job) |
 | `favorites.set {alt, on}` / `aliases.set {student?, alt?, aliases}` / `ui.visit {alt}` | favourites / save user aliases by alt or student / record a recent visit |
 | `mods.add {paths, background}` / `mods.pick {background}` | import files (identity is core plus SHA-1); with `background` a writer job |
@@ -47,7 +47,7 @@ one changes are in the other files ([`README.md`](README.md)).
 | `import.catalog` / `import.assignAlt {id, alt}` / `import.setSource {id, server, platform}` | offline assignment catalog / confirm ownership / choose a source by hand |
 | `export.options` / `export.start {scope, folder, server, platform, target?, resourceType?}` | ZIP export (see below) |
 | `studentHall.get` / `studentHall.update {value, revision}` / `studentHall.options` / `studentHall.dialogueLayout` / `studentHall.lines {alt, lang?}` / `studentHall.voice {alt, clip}` / `studentHall.viewed {alt, source}` | the Student Hall's persisted state (stale revisions rejected with `student_hall_conflict`), sources, dialogue and voices |
-| `thumbnails.*` | see [Student thumbnails](lobby-and-photography.md#student-thumbnails) |
+| `thumbnails.*` | see [Student thumbnails](memorial-lobby-and-thumbnails.md#student-thumbnails) |
 | `preview.cacheGet {key, renderer}` / `preview.cachePut {...}` / `preview.chibiRevision {alt, source}` / `preview.assetRevision {paths}` | the preview cache and the revisions persisted stills are keyed by |
 | `jobs.get {id}` / `jobs.cancel {id}` | a job's state and its last log lines / cancel a job |
 | `os.reveal {path}` | reveal in the file manager |
@@ -69,6 +69,7 @@ Student results use `students`, `alts`, `studentNames`, and `studentAliases` whe
 `portrait`, `memorialLobby`, `chibi`, `fieldChibi`, `officialThumbnail`, the selected `thumbnail`, `background`,
 `customAliases`, and `releasedOnServer`. `playable` describes availability on any server. A `resourceType` is
 `portrait`, `memorialLobby`, `chibi`, or `other`. Alt sources use `alt:<key>` alongside `official` and `mod:<id>`.
+`localResourceTypes` lists the installed resource types. `storedResourceTypes` lists the types with stored mods.
 
 Mod results distinguish `targetAlt` from `genericTarget` (`other:…`) and may include `assignedAlt`, `name`,
 `baseName`, `alias`, `repairSourceId`, and `repairedCopyId`. `hasKeptOfficial` describes the presence of a kept
@@ -80,6 +81,9 @@ copy, while `official` describes the live game bytes. Job `kind` identifies the 
 `memorialLobbyZoomOutCustomLimit`. The Student Hall uses `mode: "memorialLobby"`, `memorialLobbies`, and portrait
 entries with `flipHorizontal`. Dialogue uses `animationName` and `animationCues`. Portrait `expression` stays the
 name of the captured expression.
+
+Compatibility results expose `addAnimations` with `resourceType` (`own` or `oldRig` when available). An Add
+Animations review reports the carried animation names in `report.addedAnimations`.
 
 For `settings.set` with `key: "libraryDir"`, a path selects a destination. An existing library requires a choice
 with `value: {path, adopt: true}`. The backend requests a fresh choice when the destination inputs change.
@@ -163,17 +167,17 @@ verified official baselines, so conversions and rebuilds can become `blocked` wi
 replacements in current slots import even without an official copy. Output passes the normal library checks before
 add/apply. A direct copy honours the CRC option (On, Off, or Auto from the official file) and appends the configured
 Extra Bytes before the CRC fix. Spine import previews compose only the asset types the import writes
-(`gameassets.spine.Composition`); models expose the import preview through
-`/asset/chibi/<alt>.glb?source=import:<key>`, and every model source but `live` reads bundles outside the slot
+(`gameassets.spine.Composition`); chibis expose the import preview through
+`/asset/chibi/<alt>.glb?source=import:<key>`, and every chibi source but `live` reads bundles outside the slot
 through `ModLibrary.preview_reads` (so no source but `live` follows the Enable Mods switch). The reason keys exist
 under `webui.import.reason.*` and `webui.error.*` with the same text in all locales.
 
 ### Assign an alt
 
-`character-picker.js` uses the roster's search, filters and sorting over the offline assignment catalog (shipped
+`character-picker.js` uses the student list's search, filters and sorting over the offline assignment catalog (shipped
 student metadata plus the character map, so ownership can name a student whose resources are absent from the selected
 install). Confirming the owner persists `assigned_alt` with a self-contained, validated Mod. Re-analysis recognizes the
-stored result. `assigned_catalog.py` adds saved assigned students to roster/detail results without inventing resource
+stored result. `assigned_catalog.py` adds saved assigned students to student list/detail results without inventing resource
 handles: an assigned-only student can select its own Mod for preview, while Apply stays disabled without a local
 target. A manual label does not bypass bundle-readability, dependency or compatibility checks.
 
@@ -232,12 +236,12 @@ The [generation layout](library.md#generation-2-layout) defines the committed st
 | `/asset/spine/official-portrait/<core>/<file>`, `/asset/spine/official-memorialLobby/<core>/<file>`: verified official files, from kept originals when the game files are overwritten | heavy |
 | `/asset/spine/<resourceType>/<key>/manifest.json`: the revision of the selected ordered bundle set; `/asset/spine/<resourceType>/<key>/<revision>/<file>` serves only that revision | heavy |
 | `/asset/spine/portrait/<core>@<id>/<file>`, `/asset/spine/memorialLobby/<core>@<id>/<file>`: the core in another known install, `<id>` from `mods.state.installs` | heavy |
-| `/asset/spine/memorialLobby/<core>/lobby.json` (prefab layout, touch boxes, clips, idle pools, sounds, post-processing, effects, materials, pins, intro; no skeleton is extracted) | heavy |
+| `/asset/spine/memorialLobby/<core>/memorial-lobby.json` (prefab layout, touch boxes, clips, idle pools, sounds, post-processing, effects, materials, pins, intro; no skeleton is extracted) | heavy |
 | `/asset/spine/memorialLobby/<core>/fx_<id>.png`, `/asset/spine/memorialLobby/<core>/sfx_<id>.wav` | heavy |
-| `/asset/chibi/<alt>.glb` (`?source=` `live`, `official`, `mod:<id>`, `import:<key>`, `alt:<key>`; `&clip=<name>`: one clip of that model, [`model-actions.md`](model-actions.md#clips-on-demand)) | heavy |
-| `/asset/voice/<alt>/<clip>` (a lobby voice relayed from Kivo) | heavy |
-| `/asset/office/<day|night>/layout.json` and its texture routes (the Hall's office background) | heavy |
-| `/asset/thumbnails/...` | see [Student thumbnails](lobby-and-photography.md#student-thumbnails) |
+| `/asset/chibi/<alt>.glb` (`?source=` `live`, `official`, `mod:<id>`, `import:<key>`, `alt:<key>`; `&clip=<name>`: one clip of that chibi, [`chibi-actions.md`](chibi-actions.md#clips-on-demand)) | heavy |
+| `/asset/voice/<alt>/<clip>` (a memorial lobby voice relayed from Kivo) | heavy |
+| `/asset/office/<day|night>/layout.json` and its texture routes (the Student Hall's office background) | heavy |
+| `/asset/thumbnails/...` | see [Student thumbnails](memorial-lobby-and-thumbnails.md#student-thumbnails) |
 
 Layout widgets use `width`, `height`, `fillAmount`, `fillDirection`, `inclineAngle`, `effectStyle`, `alignment`,
 `className`, and `spriteName`. Layout nodes use `localPosition` and `localRotationZDegrees`. Memorial lobby clips
@@ -254,7 +258,7 @@ and official and preview parts are limited to the core's Spine category. Mod pre
 omitted parts selected by the same replacement mapping as import and apply; missing official data fails the whole
 preview with 404, leaving the plain card. Switch popups hold capture priority for their whole thumbnail scope; Spine
 loading has a 15 s deadline after dequeueing and three retries on an idle renderer queue, and closing a scope removes
-its pending work. The main portrait and lobby resolve their sources the same way and retry once when a rejected load
+its pending work. The main portrait and memorial lobby resolve their sources the same way and retry once when a rejected load
 has a newer manifest revision.
 
 ## Jobs and events

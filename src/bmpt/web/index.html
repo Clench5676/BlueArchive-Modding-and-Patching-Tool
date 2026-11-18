@@ -8,21 +8,21 @@
   <!-- the project's own logo (docs/logo.png), never a game asset -->
   <link rel="icon" type="image/png" sizes="64x64" href="favicon.png">
   <link rel="stylesheet" href="css/app.css">
-  <link rel="stylesheet" href="css/photography.css">
+  <link rel="stylesheet" href="css/thumbnail-capture.css">
 </head>
 <body>
   <div class="viewport">
     <div class="stage" id="stage">
-      <!-- shared office-lobby artwork, configurable library portraits and memorial playlist -->
-      <section class="screen" id="screen-hall" hidden>
+      <!-- shared home-screen background artwork, configurable library portraits and memorial playlist -->
+      <section class="screen" id="screen-student-hall" hidden>
         <div class="ngui-host" id="student-hall"></div>
       </section>
       <!-- student list: rendered from the game's prefab layouts -->
-      <section class="screen" id="screen-roster" hidden>
-        <div class="ngui-host" id="roster"></div>
+      <section class="screen" id="screen-student-list" hidden>
+        <div class="ngui-host" id="student-list"></div>
       </section>
 
-      <!-- student detail: game background < portrait or lobby < everything else from the UICharacterDetail prefab -->
+      <!-- student detail: game background < portrait or memorial lobby < everything else from the UICharacterDetail prefab -->
       <section class="screen" id="screen-detail" hidden>
         <div class="scene-clip">
           <div class="layer-host" id="ngui-bg"></div>
@@ -30,8 +30,8 @@
                over all -->
           <div class="visual-bg" id="visual-bg" hidden></div>
           <div class="portrait" id="portrait"></div>
-          <div class="model" id="model" hidden></div>
-          <div class="lobby" id="lobby" hidden></div>
+          <div class="chibi" id="chibi" hidden></div>
+          <div class="memorial-lobby" id="memorial-lobby" hidden></div>
           <div class="layer-host ui" id="ngui"></div>
           <div class="layer-host ui" id="ngui-chips"></div>
           <div class="layer-host ui" id="ngui-expr"></div>
@@ -87,7 +87,7 @@
     </div>
   </div>
 
-  <!-- three.js for the 3D model tab (js/model/model.js, loaded with the first model) -->
+  <!-- three.js for the Chibi tab (js/chibi/chibi.js, loaded with the first chibi) -->
   <script type="importmap">
     { "imports": { "three": "./vendor/three-0.160.0/build/three.module.min.js",
                    "three/addons/": "./vendor/three-0.160.0/examples/jsm/" } }

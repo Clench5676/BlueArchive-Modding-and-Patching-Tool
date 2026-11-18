@@ -3,9 +3,9 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { test } from "node:test";
 import { n, spr, insert } from "./control_prefabs.mjs";
-const detail = await readFile(new URL("../../src/bmpt/web/js/detail/detail-photo.js", import.meta.url), "utf8");
+const detail = await readFile(new URL("../../src/bmpt/web/js/detail/detail-thumbnail.js", import.meta.url), "utf8");
 // the module's exports as plain declarations
-const code = detail.slice(detail.indexOf("// Student photography retains")).replace(/^export /gm, "");
+const code = detail.slice(detail.indexOf("// Thumbnail capture retains")).replace(/^export /gm, "");
 const playbackFixture = n("Inventory_ListControl");
 insert(
   playbackFixture,
@@ -33,7 +33,7 @@ function harness({ start = "portrait", show } = {}) {
       nodes.set(id, {
         style: {},
         classList: classList(),
-        hidden: id === "lobby",
+        hidden: id === "memorial-lobby",
         querySelectorAll: () => (id === "portrait" ? [{ player }] : []),
       });
     return nodes.get(id);
@@ -47,8 +47,8 @@ function harness({ start = "portrait", show } = {}) {
     fullscreen: true,
     mainPlayer: player,
     shownStudent: { version: "r1" },
-    lobbyFrom: null,
-    lobbyStale: false,
+    memorialLobbyFrom: null,
+    memorialLobbyStale: false,
     previewAvailable: () => true,
     alt: () => ({ key: "cycling", portrait: "cycling_spr", memorialLobby: "cycling_home" }),
     current: () => ({ kind: "self" }),
@@ -57,25 +57,25 @@ function harness({ start = "portrait", show } = {}) {
     $: node,
     stage: () => node("stage"),
     document: { documentElement: { classList: classList() } },
-    Photo: { FRAME: { x: 780, y: 360, size: 360 } },
-    Lobby: {
+    ThumbnailCapture: { FRAME: { x: 780, y: 360, size: 360 } },
+    MemorialLobby: {
       show: async () => {
-        calls.push(["lobby.show"]);
+        calls.push(["memorialLobby.show"]);
         return show ? show() : {};
       },
-      suspend: () => calls.push(["lobby.suspend"]),
+      suspend: () => calls.push(["memorialLobby.suspend"]),
       frame: () => {},
-      photography: () => {},
+      thumbnailCapture: () => {},
       skipIntro: () => {},
-      prepareFrame: async () => calls.push(["lobby.frame"]),
-      resume: () => calls.push(["lobby.resume"]),
+      prepareFrame: async () => calls.push(["memorialLobby.frame"]),
+      resume: () => calls.push(["memorialLobby.resume"]),
       interactive: () => {},
-      hide: () => calls.push(["lobby.hide"]),
+      hide: () => calls.push(["memorialLobby.hide"]),
       meta: () => null,
     },
     Visual: {
       isOpen: () => true,
-      photography: () => {},
+      thumbnailCapture: () => {},
       captureReady: () => {},
       uiOut: () => {},
       close: () => calls.push(["visual.close"]),
@@ -83,7 +83,7 @@ function harness({ start = "portrait", show } = {}) {
     nextFrame: async () => calls.push(["commit.frame"]),
     slidOut: () => [],
     currentBase: () => "/portrait",
-    shownSource: () => "/lobby",
+    shownSource: () => "/memorial-lobby",
     shownLeft: null,
     shownKey: null,
     leftKey: (part) => part,
@@ -105,7 +105,15 @@ function harness({ start = "portrait", show } = {}) {
     },
   };
   // detail.js's setters of the screen's state the bridge writes
-  for (const name of ["tab", "fullscreen", "expression", "shownLeft", "shownKey", "lobbyFrom", "lobbyStale"]) {
+  for (const name of [
+    "tab",
+    "fullscreen",
+    "expression",
+    "shownLeft",
+    "shownKey",
+    "memorialLobbyFrom",
+    "memorialLobbyStale",
+  ]) {
     const setter = { fullscreen: "setFullscreenState", expression: "setExpressionState" }[name];
     env[setter ?? `set${name[0].toUpperCase()}${name.slice(1)}`] = (value) => {
       env[name] = value;
@@ -116,62 +124,62 @@ function harness({ start = "portrait", show } = {}) {
     env.fullscreen = on;
     if (!on) await env.bridge.release();
   };
-  vm.runInNewContext(code + "\nglobalThis.bridge=photoBridge;", env);
+  vm.runInNewContext(code + "\nglobalThis.bridge=thumbnailBridge;", env);
   return { env, calls, nodes, bridge: env.bridge };
 }
 test("preloads both modes once and switches without opening or rendering the detail page", async () => {
   const h = harness();
   await h.bridge.full("portrait");
-  await h.bridge.full("lobby");
+  await h.bridge.full("memorialLobby");
   await h.bridge.full("portrait");
-  await h.bridge.full("lobby");
-  assert.equal(h.env.tab, "lobby");
-  assert.equal(h.calls.filter(([x]) => x === "lobby.show").length, 1);
+  await h.bridge.full("memorialLobby");
+  assert.equal(h.env.tab, "memorialLobby");
+  assert.equal(h.calls.filter(([x]) => x === "memorialLobby.show").length, 1);
   assert.equal(h.calls.filter(([x]) => x === "detail.render").length, 0);
   assert.equal(
-    h.calls.filter(([x]) => x === "visual.close" || x === "portrait.dispose" || x === "lobby.hide").length,
+    h.calls.filter(([x]) => x === "visual.close" || x === "portrait.dispose" || x === "memorialLobby.hide").length,
     0,
   );
-  assert.equal(h.nodes.get("lobby").hidden, false);
+  assert.equal(h.nodes.get("memorial-lobby").hidden, false);
   assert.equal(h.nodes.get("portrait").hidden, true);
 });
 test("a target mode cannot be published before its resources have loaded", async () => {
   let ready;
   const loaded = new Promise((resolve) => (ready = resolve)),
     h = harness({ show: () => loaded });
-  const switchTo = h.bridge.full("lobby");
+  const switchTo = h.bridge.full("memorialLobby");
   await Promise.resolve();
   await Promise.resolve();
   assert.equal(h.env.tab, "portrait");
-  assert.ok(!h.calls.some(([name]) => name === "lobby.resume"));
+  assert.ok(!h.calls.some(([name]) => name === "memorialLobby.resume"));
   ready({});
   await switchTo;
-  assert.equal(h.env.tab, "lobby");
+  assert.equal(h.env.tab, "memorialLobby");
 });
 test("a preload failure preserves the current mode and does not destroy its player", async () => {
   const h = harness({ show: () => Promise.reject(new Error("Missing atlas")) });
-  await assert.rejects(() => h.bridge.full("lobby"), /Missing atlas/);
+  await assert.rejects(() => h.bridge.full("memorialLobby"), /Missing atlas/);
   assert.equal(h.env.tab, "portrait");
   assert.ok(!h.calls.some(([name]) => name === "portrait.dispose" || name === "visual.close"));
 });
 test("leaving the fullscreen session releases the inactive mode once", async () => {
   const h = harness();
-  await h.bridge.full("lobby");
+  await h.bridge.full("memorialLobby");
   await h.bridge.leave();
   await h.bridge.release();
   await h.bridge.release();
   assert.equal(h.calls.filter(([name]) => name === "portrait.dispose").length, 1);
   assert.equal(h.calls.filter(([name]) => name === "visual.close").length, 1);
-  assert.equal(h.calls.filter(([name]) => name === "lobby.hide").length, 0);
+  assert.equal(h.calls.filter(([name]) => name === "memorialLobby.hide").length, 0);
 });
-test("camera Back returns to the ready detail page instead of a full lobby without navigation", async () => {
+test("camera Back returns to the ready detail page instead of a full memorial lobby without navigation", async () => {
   const h = harness();
-  await h.bridge.full("lobby");
+  await h.bridge.full("memorialLobby");
   await h.bridge.leave();
   assert.equal(h.env.fullscreen, false);
-  assert.equal(h.env.shownLeft, "lobby");
-  assert.equal(h.nodes.get("lobby").hidden, false);
-  assert.equal(h.nodes.get("lobby").style.visibility, "");
+  assert.equal(h.env.shownLeft, "memorialLobby");
+  assert.equal(h.nodes.get("memorial-lobby").hidden, false);
+  assert.equal(h.nodes.get("memorial-lobby").style.visibility, "");
   assert.equal(h.calls.filter(([name]) => name === "detail.ready").length, 1);
   assert.ok(h.calls.some(([name, on]) => name === "fullscreen" && on === false));
 });

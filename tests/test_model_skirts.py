@@ -8,10 +8,10 @@ import zlib
 import numpy as np
 import pytest
 
-from bmpt.gameassets import model_skirts as ms
-from bmpt.gameassets.model_glb import bind_tracks, decode_clip
-from bmpt.gameassets import model_adapt as ma
-from bmpt.gameassets.model_adapt import trs
+from bmpt.gameassets import chibi_skirts as ms
+from bmpt.gameassets.chibi_glb import bind_tracks, decode_clip
+from bmpt.gameassets import chibi_adapt as ma
+from bmpt.gameassets.chibi_adapt import trs
 from module_patches import patch_everywhere
 
 

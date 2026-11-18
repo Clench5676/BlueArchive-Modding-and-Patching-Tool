@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from .records import stored_target
+
 import copy
 
-from .judge import core_of, kind_of_file, seconds
+from .judge import core_of, resource_type_of_file, seconds
 
 LEGACY_REMAP = "legacy_remapped_v020"
 # Legacy generated labels must be recognized independently of the current UI language.
@@ -35,18 +37,20 @@ def legacy_remapped(records: dict[str, dict]) -> dict[str, dict]:
     keys = {}
     for mod_id, record in records.items():
         cores = {core_of(name) for name in record["files"]}
-        if len(cores) != 1 or not all(kind_of_file(name) == record["kind"] for name in record["files"]):
+        if len(cores) != 1 or not all(
+            resource_type_of_file(name) == record["resource_type"] for name in record["files"]
+        ):
             continue
-        key = (record["target"], record["kind"], cores.pop())
+        key = (stored_target(record), record["resource_type"], cores.pop())
         keys[mod_id] = key
-        groups.setdefault((record["label"], *key), []).append(record)
+        groups.setdefault((record["name"], *key), []).append(record)
 
     repairs = {}
     for mod_id, record in records.items():
-        if mod_id not in keys or "user_added" in record or record.get("repaired_from"):
+        if mod_id not in keys or "user_added" in record or record.get("repair_source_id"):
             continue
         name = next(
-            (record["label"][: -len(suffix)] for suffix in _REMAP_SUFFIXES if record["label"].endswith(suffix)), ""
+            (record["name"][: -len(suffix)] for suffix in _REMAP_SUFFIXES if record["name"].endswith(suffix)), ""
         )
         if not name:
             continue
@@ -68,10 +72,10 @@ def legacy_remapped(records: dict[str, dict]) -> dict[str, dict]:
             seen.add(source_id)
             name, source_id = repairs[source_id]
         record = records[mod_id]
-        record["label"], record["repaired_from"] = name, source_id
+        record["name"], record["repair_source_id"] = name, source_id
         if source_id in records:
             source = records[source_id]
             alias = source.get("alias")
-            record["label"] = alias if isinstance(alias, str) and alias else source["label"]
-            source.setdefault("repaired_id", mod_id)
+            record["name"] = alias if isinstance(alias, str) and alias else source["name"]
+            source.setdefault("repaired_copy_id", mod_id)
     return records

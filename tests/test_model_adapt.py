@@ -1,4 +1,4 @@
-"""Another variant's costume on a student's 3D model slot (gameassets.model_adapt)."""
+"""Another variant's costume on a student's 3D model slot (gameassets.chibi_adapt)."""
 
 import copy
 import hashlib
@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bmpt.gameassets import model_adapt as ma
+from bmpt.gameassets import chibi_adapt as ma
 from module_patches import patch_everywhere
 
 # the real-install tests run only on an official game folder named by BAMT_TEST_GAME_DIR
@@ -542,7 +542,7 @@ def test_official_costume_on_a_slot(view, tmp_path, target, source, field, parts
     from ba_modding_toolkit.naming import parse_filename
     from ba_modding_toolkit.utils import compute_crc32
     from bmpt.gameassets.discovery import cab_names
-    from bmpt.gameassets.model import BundleGraph, _key, _prefabs, export_chibi
+    from bmpt.gameassets.chibi import BundleGraph, _key, _prefabs, export_chibi
     import UnityPy
 
     files, index = view
@@ -806,7 +806,7 @@ def test_official_added_parts_hang_below_the_primary_and_the_bounds_hold_the_pos
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
     from bmpt.gameassets.discovery import cab_names
-    from bmpt.gameassets.model import BundleGraph, _key, _prefabs
+    from bmpt.gameassets.chibi import BundleGraph, _key, _prefabs
 
     files, index = view
     target, source = "hoshino_original", "hoshino_swimsuit"
@@ -865,7 +865,7 @@ def test_official_a_costume_binds_to_the_rig_the_slot_draws_with(view, tmp_path,
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
     from bmpt.gameassets.discovery import cab_names
-    from bmpt.gameassets.model import BundleGraph, _key, _prefabs
+    from bmpt.gameassets.chibi import BundleGraph, _key, _prefabs
 
     files, index = view
     sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
@@ -903,7 +903,7 @@ def test_official_optimize_physics_swings_the_chains_the_source_turns(view, tmp_
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
     from bmpt.gameassets.discovery import cab_names
-    from bmpt.gameassets.model import BundleGraph, _prefabs
+    from bmpt.gameassets.chibi import BundleGraph, _prefabs
 
     files, index = view
     target, source = "aris_original", "yuzu_original"
@@ -981,7 +981,7 @@ def test_official_rule_b_takes_a_skirt_chain_off_a_thigh(view):
     skirt = result.hems.skirt
     assert skirt is not None, result.hems.summary()
     with ma.BundleGraph(index) as graph:
-        prefabs = ma._model_prefabs(
+        prefabs = ma._chibi_prefabs(
             graph, [p for p in _slot(files, "ibuki_original") if p.name.startswith("character-")]
         )
         t = ma.Skeleton.of(graph, prefabs[ma.choose_prefab(prefabs, "ibuki_original")].deref())
@@ -999,7 +999,7 @@ def test_official_another_characters_face_follows_the_slots_expressions_about_it
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
     from bmpt.gameassets.discovery import cab_names
-    from bmpt.gameassets.model import BundleGraph, _key, _prefabs
+    from bmpt.gameassets.chibi import BundleGraph, _key, _prefabs
 
     files, index = view
     same = ma.adapt(
@@ -1068,7 +1068,7 @@ def test_official_a_bag_mounted_on_an_upper_arm_hangs_from_the_shoulder(view):
     Airi lacks and that skins nothing itself. On Airi they go with the right clavicle, not with the arm, so the bag
     stays at her side when she lifts the arm."""
     from ba_modding_toolkit.bundle import Bundle
-    from bmpt.gameassets.model import _prefabs
+    from bmpt.gameassets.chibi import _prefabs
 
     files, index = view
     sources = [p for p in files if re.match(r"character-ch0251-_mxload", p.name)]
@@ -1098,7 +1098,7 @@ def test_official_a_prop_the_clips_hold_on_the_body_goes_with_the_body(view):
     her, and every clip of hers keys it to her hip. On Hina it goes with the pelvis and sits against it where Aoba's
     idle holds it against hers, so Hina's clips take it along instead of leaving it where it rests."""
     from ba_modding_toolkit.bundle import Bundle
-    from bmpt.gameassets.model import _prefabs
+    from bmpt.gameassets.chibi import _prefabs
 
     files, index = view
     sources = [p for p in files if re.match(r"character-ch0288-_mxload", p.name)]
@@ -1146,7 +1146,7 @@ def test_official_a_head_set_on_a_longer_neck_keeps_its_neck(view):
     The head goes with the neck: at the slot's rest no edge of the neck and head grows past 1.1 times, and Yuzu's head
     joint lands 1.8 cm below Aris's."""
     from ba_modding_toolkit.bundle import Bundle
-    from bmpt.gameassets.model import _prefabs
+    from bmpt.gameassets.chibi import _prefabs
 
     files, index = view
     result = ma.adapt(
@@ -1185,7 +1185,7 @@ def test_official_bones_any_clip_scales_away_are_hidden(view):
     """The probes see six clips at three frames each; the slot's other clips hide bones too (a hair ornament in the
     cafe, a weapon bone in the cafe, skewers in a public skill). They and the bones below them are hidden, so no
     costume bone maps onto them and collapses there; a clip that hides the body is no reason to hide it."""
-    from bmpt.gameassets.model import _prefabs
+    from bmpt.gameassets.chibi import _prefabs
 
     files, index = view
     with ma.BundleGraph(index) as graph:
@@ -1226,7 +1226,7 @@ def test_official_mouth_receivers_follow_the_costume(
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
     from bmpt.gameassets.discovery import cab_names
-    from bmpt.gameassets.model import BundleGraph, _prefabs
+    from bmpt.gameassets.chibi import BundleGraph, _prefabs
 
     files, index_ = view
     sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
@@ -1297,7 +1297,7 @@ def test_official_costume_takes_its_own_materials_on_a_body_drawn_from_two_mater
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.models import SaveOptions
     from bmpt.gameassets.discovery import cab_names
-    from bmpt.gameassets.model import BundleGraph, _prefabs
+    from bmpt.gameassets.chibi import BundleGraph, _prefabs
 
     files, index = view
     slot = _slot(files, "ch0058")
@@ -1350,7 +1350,7 @@ def _cross_build(view, tmp_path, source, target="azusa_original", results=None):
     from ba_modding_toolkit.naming import parse_filename
     from ba_modding_toolkit.utils import compute_crc32
     from bmpt.gameassets.discovery import cab_names
-    from bmpt.gameassets.model import BundleGraph
+    from bmpt.gameassets.chibi import BundleGraph
 
     files, index = view
     slot = _slot(files, target)
@@ -1382,7 +1382,7 @@ def _cross_build(view, tmp_path, source, target="azusa_original", results=None):
 
 
 def _fx(graph):
-    """The halo particles' reader of a model export (service.model_glb's)."""
+    """The halo particles' reader of a model export (service.chibi_glb's)."""
     from bmpt.gameassets.service_base import _FxResolver
 
     return lambda objects: _FxResolver(graph, dict(objects), {}).resolve
@@ -1413,8 +1413,8 @@ def test_official_cross_costume_carries_the_source_halo(view, tmp_path):
     files, Azusa's halo renderer in every prefab of the slot draws them where Yukino's draws her own (her extra level
     folded into its node), and the follower takes Yukino's offset. Azusa's own halo objects stay as they were; the slot
     exports, the halo with it."""
-    from bmpt.gameassets.model import _key, _prefabs, export_chibi, model_root
-    from bmpt.gameassets.model_glb import mpos, read_mesh
+    from bmpt.gameassets.chibi import _key, _prefabs, export_chibi, chibi_root
+    from bmpt.gameassets.chibi_glb import mpos, read_mesh
 
     slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "ch0171_enemy")
     new = _official_objects_kept(
@@ -1424,7 +1424,7 @@ def test_official_cross_costume_carries_the_source_halo(view, tmp_path):
     )
     o_prefabs = _prefabs(official, [p for p in slot if p.name.startswith("character-")])
     before = ma.halo_of(ma.Skeleton.of(official, o_prefabs[ma.choose_prefab(o_prefabs, "azusa_original")].deref()))
-    s = ma.Skeleton.of(official, model_root(official, sources, "ch0171_enemy")[0])
+    s = ma.Skeleton.of(official, chibi_root(official, sources, "ch0171_enemy")[0])
     source = ma.halo_of(s)
     assert before.shape == source.shape == "single"
     assert s.nodes[source.node].path == "HaloRoot/CH0171_Enemy_Halo/CH0171_Halo"  # an extra level
@@ -1658,7 +1658,7 @@ def test_official_optimize_physics_builds_a_regrouped_skirt_with_its_own_bones(v
 def test_official_cross_costume_without_a_halo_hides_the_slots(view, tmp_path):
     """Another student's costume from a model without a halo (CH9999) hides the slot's: its renderer is turned
     off and draws no mesh, so a clip that turns it on shows nothing either; its nodes and objects stay."""
-    from bmpt.gameassets.model import _key, _prefabs, export_chibi
+    from bmpt.gameassets.chibi import _key, _prefabs, export_chibi
 
     slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "ch9999")
     s_prefabs = _prefabs(official, sources)
@@ -1694,8 +1694,8 @@ def test_official_cross_costume_carries_a_skinned_halo(view, tmp_path):
     Miyu's halo renderer draws it, unskinned, where Ayame's bone draws it against the head (the follower moves the
     followed node there), moved along with the head where the bound costume's head sits off Miyu's head joint;
     Miyu's own halo mesh is gone from the export."""
-    from bmpt.gameassets.model import _key, _prefabs, export_chibi, model_root
-    from bmpt.gameassets.model_glb import read_mesh
+    from bmpt.gameassets.chibi import _key, _prefabs, export_chibi, chibi_root
+    from bmpt.gameassets.chibi_glb import read_mesh
 
     results = []
     slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, "np0229", "ch0145", results)
@@ -1705,7 +1705,7 @@ def test_official_cross_costume_carries_a_skinned_halo(view, tmp_path):
         written,
         {"SkinnedMeshRenderer", "MeshRenderer", "MeshFilter", "AssetBundle", "Transform", "MonoBehaviour"},
     )
-    s = ma.Skeleton.of(official, model_root(official, sources, "np0229")[0])
+    s = ma.Skeleton.of(official, chibi_root(official, sources, "np0229")[0])
     source = ma.halo_of(s)
     assert source.shape == "skinned" and s.nodes[source.bone].name == "bone_halo"
     s_world = s.world()
@@ -1768,13 +1768,13 @@ def test_official_cross_costume_carries_a_skinned_halo(view, tmp_path):
 def test_official_a_halo_that_cannot_be_carried_hides_the_slots(view, source, shape):
     """After a swap the halo is the source's or none, never the slot's own. A source halo that cannot be
     carried (a boss's) hides Azusa's: the change carries nothing and hides her halo's node."""
-    from bmpt.gameassets.model import BundleGraph, _prefabs, model_root
+    from bmpt.gameassets.chibi import BundleGraph, _prefabs, chibi_root
 
     files, index = view
     sources = [p for p in files if re.match(rf"character-{source}-_mxload", p.name)]
     slot = [p for p in _slot(files, "azusa_original") if p.name.startswith("character-")]
     with BundleGraph(index) as graph:
-        s = ma.Skeleton.of(graph, model_root(graph, sources, source)[0])
+        s = ma.Skeleton.of(graph, chibi_root(graph, sources, source)[0])
         prefabs = _prefabs(graph, slot)
         t = ma.Skeleton.of(graph, prefabs[ma.choose_prefab(prefabs, "azusa_original")].deref())
         assert ma.halo_of(s).shape == shape
@@ -1796,7 +1796,7 @@ def test_official_a_particle_halo_is_carried_with_its_nodes(view, tmp_path, sour
     GameObjects, Transforms, renderers and particle systems as the source has them below its own, their meshes and
     materials carried into the slot's files; the follower takes the source's offsets. Azusa's own halo draws nothing
     and the slot still exports, with the source's halo mesh."""
-    from bmpt.gameassets.model import _key, _prefabs, export_chibi, model_root
+    from bmpt.gameassets.chibi import _key, _prefabs, export_chibi, chibi_root
 
     slot, sources, written, adapted, official, graph = _cross_build(view, tmp_path, source)
     new = _official_objects_kept(
@@ -1813,7 +1813,7 @@ def test_official_a_particle_halo_is_carried_with_its_nodes(view, tmp_path, sour
             "ParticleSystemRenderer",
         },
     )
-    s = ma.Skeleton.of(official, model_root(official, sources, source)[0])
+    s = ma.Skeleton.of(official, chibi_root(official, sources, source)[0])
     halo = ma.halo_of(s)
     below = [s.nodes[i] for i in s.descendants(halo.root)]
     prefab_files = [p for p in written if p.name.startswith("character-")]
@@ -1866,7 +1866,7 @@ def test_official_a_particle_halo_is_carried_with_its_nodes(view, tmp_path, sour
 def test_official_a_particle_slot_hides_its_halo_and_takes_the_sources(view, tmp_path):
     """Tsurugi's slot <- Azusa: Tsurugi's halo mesh draws nothing and her particle system emits nothing;
     Azusa's halo comes as new nodes below Tsurugi's followed node."""
-    from bmpt.gameassets.model import _prefabs, export_chibi
+    from bmpt.gameassets.chibi import _prefabs, export_chibi
 
     slot, sources, written, adapted, official, graph = _cross_build(
         view, tmp_path, "azusa_original", "tsurugi_original"
@@ -1949,20 +1949,20 @@ def test_official_costume_build_leaves_no_bundle_locked(view, target, source, un
 def test_the_library_builds_a_costume_without_the_model_lock(monkeypatch, tmp_path):
     """A costume build reads its bundles from memory (one path lock per load): exports never wait for it, so it
     builds without the model lock, and its caller's steps reach the build."""
-    from bmpt.gameassets import model_adapt, service as gameassets_service
+    from bmpt.gameassets import chibi_adapt, service as gameassets_service
     from bmpt.library import service
 
     held, steps = [], []
 
     def adapt(**kwargs):
-        held.append(gameassets_service._MODEL_LOCK.locked())
+        held.append(gameassets_service._CHIBI_LOCK.locked())
         kwargs["step"]()
-        raise model_adapt.refuse("rest pose")
+        raise chibi_adapt.refuse("rest pose")
 
     library = object.__new__(service.ModLibrary)
     library.root = tmp_path
     library.cache_root = tmp_path / "cache"
-    monkeypatch.setattr(model_adapt, "adapt", adapt)
+    monkeypatch.setattr(chibi_adapt, "adapt", adapt)
     monkeypatch.setattr(service.ModLibrary, "_official_or_current", lambda self, path, pin: path)
     monkeypatch.setattr(service.ModLibrary, "_stage_copies", lambda self, originals, folder: {})
     monkeypatch.setattr(service.ModLibrary, "_costume_files", lambda self, other, pin: ("dev", [], []))
@@ -2003,13 +2003,13 @@ def test_official_field_models_are_found_and_exported(tmp_path):
     from ba_modding_toolkit.searching import get_search_dirs
 
     game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache", allowed=False))
-    assert {"np0009", "np0283"} <= game.field_model_cores()
+    assert {"np0009", "np0283"} <= game.field_chibi_cores()
     catalog = Catalog(game, None, server="global")
-    pajamas, delivery = catalog.variant("np0009"), catalog.variant("np0283")
-    assert (pajamas.model, pajamas.field_model) == (None, "np0009")
-    assert (delivery.model, delivery.field_model) == (None, "np0283")
-    assert catalog.variant("hina").field_model is None  # a battle model wins
-    data = game.model_glb("np0009")
+    pajamas, delivery = catalog.alt("np0009"), catalog.alt("np0283")
+    assert (pajamas.chibi, pajamas.field_chibi) == (None, "np0009")
+    assert (delivery.chibi, delivery.field_chibi) == (None, "np0283")
+    assert catalog.alt("hina").field_chibi is None  # a battle model wins
+    data = game.chibi_glb("np0009")
     doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     assert doc["extras"]["prefab"] == "Field_Player_NP0009"
     assert "OL_NP0009_Body" in {m["name"] for m in doc["meshes"]}
@@ -2043,10 +2043,10 @@ def test_official_no_slot_models_are_found_and_exported(tmp_path):
     game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache", allowed=False))
     catalog = Catalog(game, None, server="global")
     for key, prefab, kind, mesh, idle in NO_SLOT_MODELS:
-        variant = catalog.variant(key)
+        variant = catalog.alt(key)
         # a model of the variant's own bundles is its slot; a field-mode one has none
-        assert (variant.model, variant.field_model) == ((key, None) if kind == "asset" else (None, key)), key
-        data = game.model_glb(variant.model or variant.field_model)
+        assert (variant.chibi, variant.field_chibi) == ((key, None) if kind == "asset" else (None, key)), key
+        data = game.chibi_glb(variant.chibi or variant.field_chibi)
         doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
         assert (doc["extras"]["prefab"], doc["extras"]["source"]) == (prefab, kind), key
         assert mesh in {m["name"] for m in doc["meshes"]}, key
@@ -2054,7 +2054,7 @@ def test_official_no_slot_models_are_found_and_exported(tmp_path):
     # Ayame's story forms move with their own clips of the story cutscenes, as Story_1, Story_2, ..., about
     # where they rest: never in the bind pose, never placed off the view where the shot needed them
     for core, prefix in (("np0206", "NP0206_Cutin_A_"), ("np0229", "NP0229_Cutin_B_")):
-        data = game.model_glb(core)
+        data = game.chibi_glb(core)
         doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
         animations = doc["animations"]
         assert 1 < len(animations) <= 12 and all(a["name"].startswith(prefix) for a in animations), core
@@ -2077,18 +2077,18 @@ def test_official_no_slot_models_are_found_and_exported(tmp_path):
                     moved = values(animation["samplers"][channel["sampler"]]["output"]).mean(axis=0)
                     assert abs(moved[0] - rest[0]) < 1e-3 and abs(moved[2] - rest[2]) < 1e-3, (core, animation["name"])
     # Arona's idle switches the gacha faces off: her own clip, never the sack's beside it
-    arona = game.model_glb("arona")
+    arona = game.chibi_glb("arona")
     doc = json.loads(arona[20 : 20 + struct.unpack_from("<I", arona, 12)[0]])
     assert [a["name"] for a in doc["animations"]] == ["Arona_Original_AroPla_Cacha_02_Idle"]
 
 
 @official
-def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
+def test_official_costume_apply_restore_and_preview_on_clones(tmp_path, monkeypatch):
     from bmpt.catalog import Catalog
     from bmpt.host.config import Settings
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.gameassets.cabs import CabIndex
-    from bmpt.library import ModLibrary
+    from bmpt.library import ModLibrary, safety
     from bmpt.library.integrity import Inspection
     from bmpt.library.storage import atomic_clone
     from ba_modding_toolkit.searching import get_search_dirs
@@ -2110,12 +2110,14 @@ def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
     for path in wanted:
         assert atomic_clone(path, clone_dir / path.name), "The write check requires native clones"
         (clone_dir / path.name).chmod(0o644)
+    # This temporary install has no game process associated with it.
+    monkeypatch.setattr(safety, "game_processes", lambda: [])
     settings = Settings(tmp_path / "config.toml")
     settings.set("game_resource_dir", str(clone_dir))
     game = GameAssets([clone_dir], AssetCache(allowed=False, root=tmp_path / "cache"))
     catalog = Catalog(game, None, server="global")
     library = ModLibrary(tmp_path / "library", catalog, game, settings, scan_allowed=lambda: True)
-    slot = library._game_files("hina", "model")
+    slot = library._game_files("hina", "chibi")
     official_bytes = {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot}
 
     preview = library.costume_preview("hina", "np0009")
@@ -2124,54 +2126,54 @@ def test_official_costume_apply_restore_and_preview_on_clones(tmp_path):
 
     # with mods off the costume is saved, nothing is written, and the choice stays (a field-only source has no slot)
     assert not library.toggle(False, True).failed
-    result = library.apply("hina", "variant:np0009", kind="model")
+    result = library.apply("hina", "alt:np0009", resource_type="chibi")
     assert result.deferred
     library._prune_quietly()
-    assert library.configured("hina").get("model") == "variant:np0009"
+    assert library.configured("hina").get("chibi") == "alt:np0009"
     assert {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot} == official_bytes
     # mods on: the master switch writes it
     assert not library.toggle(True, False).failed
-    assert library.configured("hina").get("model") == "variant:np0009"
+    assert library.configured("hina").get("chibi") == "alt:np0009"
     switched = {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot}
     assert switched != official_bytes
     # the written costume is the library's own: never offered as an outside mod to add
     states = {e.state for e in library.scan().entries if e.core == "hina_original"}
     assert "untracked" not in states, states
-    result = library.apply("hina", "variant:np0009", kind="model")
+    result = library.apply("hina", "alt:np0009", resource_type="chibi")
     assert result.unchanged or result.files
-    data = game.model_glb("hina_original")
+    data = game.chibi_glb("hina_original")
     doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     assert "OL_NP0009_Body" in {m["name"] for m in doc["meshes"]}
-    assert library.configured("hina").get("model") == "variant:np0009"
-    library.restore("hina", kind="model")
+    assert library.configured("hina").get("chibi") == "alt:np0009"
+    library.restore("hina", resource_type="chibi")
     assert {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot} == official_bytes
     with pytest.raises(Exception, match="source_unsupported"):
-        library.apply("hina", "variant:hina", kind="model")
+        library.apply("hina", "alt:hina", resource_type="chibi")
 
     # Optimize Physics: the switch above built Rule A; the action keeps a Rule B build as a model mod, once
     assert library.optimize_costume("hina", "official", "Hina") == {"unneeded": True, "reason": "official"}
-    made = library.optimize_costume("hina", "variant:np0009", "Pajamas")
+    made = library.optimize_costume("hina", "alt:np0009", "Pajamas")
     entry = next(m for m in library.mods() if m.id == made["mod"])
-    assert (entry.kind, entry.target, entry.optimized_from, entry.label_base) == (
-        "model",
+    assert (entry.resource_type, entry.target, entry.optimized_from, entry.base_name) == (
+        "chibi",
         "hina",
-        "variant:np0009",
+        "alt:np0009",
         "Pajamas",
     )
-    assert "Pajamas" in entry.label and entry.label != "Pajamas"  # model.optimizedName
+    assert "Pajamas" in entry.name and entry.name != "Pajamas"  # chibi.optimizedName
     copy = {
         path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in library._paths(library._record(entry.id))
     }
     assert copy.keys() <= official_bytes.keys() and any(switched[name] != sha for name, sha in copy.items())
-    assert library.optimize_costume("hina", "variant:np0009", "Pajamas") == made
-    library.apply("hina", f"mod:{entry.id}", kind="model")
+    assert library.optimize_costume("hina", "alt:np0009", "Pajamas") == made
+    library.apply("hina", f"mod:{entry.id}", resource_type="chibi")
     assert {
         name: switched_now
         for name, switched_now in ((p.name, hashlib.sha1(p.read_bytes()).hexdigest()) for p in slot)
         if name in copy
     } == copy
-    data = game.model_glb("hina_original")
+    data = game.chibi_glb("hina_original")
     doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
     assert "OL_NP0009_Body" in {m["name"] for m in doc["meshes"]}
-    library.restore("hina", kind="model")
+    library.restore("hina", resource_type="chibi")
     assert {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot} == official_bytes

@@ -1,5 +1,7 @@
-"""The memorial lobby's intro timeline (gameassets/intro.py): built AnimationClips decoded, the timeline read through a
-graph, placed in a synthetic prefab by lobby.read_prefab; its player (web/js/lobby/lobby-intro.js) in Node; and a
+"""The memorial lobby's intro timeline (gameassets/memorial_lobby_intro.py): built AnimationClips decoded, the
+timeline read through a
+graph, placed in a synthetic prefab by lobby.read_prefab; its player (web/js/lobby/lobby-memorial_lobby_intro.js) in
+Node; and a
 read-only check against an official game folder."""
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bmpt.gameassets import intro, lobby
+from bmpt.gameassets import memorial_lobby_intro, memorial_lobby
 
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 NODE = shutil.which("node")
@@ -38,30 +40,33 @@ def words(frames: list[tuple[float, list[tuple[int, float, float, float, float]]
 
 # Shiroko's flash sprite alpha and flash volume weight, as the game stores them (rounded)
 SHIROKO = [
-    (-intro.FLT_MAX, [(0, 0, 0, 0, 1.0), (1, 0, 0, 0, 0.3)]),
+    (-memorial_lobby_intro.FLT_MAX, [(0, 0, 0, 0, 1.0), (1, 0, 0, 0, 0.3)]),
     (0.0, [(0, 0.25, -0.75, 0, 1.0), (1, 4.8, -3.6, 0, 0.3)]),
     (0.5, [(1, 0, 0, 0, 0.0)]),
     (2.0, [(0, 0, 0, 0, 0.0)]),
-    (intro.FLT_MAX, []),
+    (memorial_lobby_intro.FLT_MAX, []),
 ]
 
 
 def test_streamed_clip_keys_and_their_cubic_segments():
-    curves = intro.streamed(words(SHIROKO), 2)
+    curves = memorial_lobby_intro.streamed(words(SHIROKO), 2)
     assert [k[0] for k in curves[0]] == [-1e9, 0.0, 2.0]
-    glow = intro._streamed_curve(curves[0])
-    assert intro.evaluate(glow, -5) == 1.0
-    assert math.isclose(intro.evaluate(glow, 0.5), 0.84375, abs_tol=1e-6)
-    assert math.isclose(intro.evaluate(glow, 2.0), 0.0, abs_tol=1e-6) and intro.evaluate(glow, 60) == 0.0
-    weight = intro._streamed_curve(curves[1])
-    assert math.isclose(intro.evaluate(weight, 0.25), 4.8 * 0.25**3 - 3.6 * 0.25**2 + 0.3, rel_tol=1e-6)
-    assert intro.evaluate(weight, 1.0) == 0.0
+    glow = memorial_lobby_intro._streamed_curve(curves[0])
+    assert memorial_lobby_intro.evaluate(glow, -5) == 1.0
+    assert math.isclose(memorial_lobby_intro.evaluate(glow, 0.5), 0.84375, abs_tol=1e-6)
+    assert (
+        math.isclose(memorial_lobby_intro.evaluate(glow, 2.0), 0.0, abs_tol=1e-6)
+        and memorial_lobby_intro.evaluate(glow, 60) == 0.0
+    )
+    weight = memorial_lobby_intro._streamed_curve(curves[1])
+    assert math.isclose(memorial_lobby_intro.evaluate(weight, 0.25), 4.8 * 0.25**3 - 3.6 * 0.25**2 + 0.3, rel_tol=1e-6)
+    assert memorial_lobby_intro.evaluate(weight, 1.0) == 0.0
     # a curve that never changes is a constant; a stream cut short stops where it ends
-    assert intro._streamed_curve([[-1e9, 0, 0, 0, 2.5], [1.0, 0, 0, 0, 2.5]]) == {"k": 2.5}
-    assert intro.streamed(words(SHIROKO)[:-3], 2)[0][-1][0] == 0.0
+    assert memorial_lobby_intro._streamed_curve([[-1e9, 0, 0, 0, 2.5], [1.0, 0, 0, 0, 2.5]]) == {"k": 2.5}
+    assert memorial_lobby_intro.streamed(words(SHIROKO)[:-3], 2)[0][-1][0] == 0.0
     # dense frames lerp, clamped
     dense = {"d": [0.0, 10.0, [0.0, 1.0, 3.0]]}
-    assert intro.evaluate(dense, 0.05) == 0.5 and intro.evaluate(dense, 1.0) == 3.0
+    assert memorial_lobby_intro.evaluate(dense, 0.05) == 0.5 and memorial_lobby_intro.evaluate(dense, 1.0) == 3.0
 
 
 def test_clip_curves_bind_streamed_dense_and_constant_curves_in_order():
@@ -89,33 +94,51 @@ def test_clip_curves_bind_streamed_dense_and_constant_curves_in_order():
         "m_ClipBindingConstant": {
             "genericBindings": [
                 {
-                    "path": intro.crc("Glow"),
-                    "attribute": intro.crc("m_Color.a"),
+                    "path": memorial_lobby_intro.crc("Glow"),
+                    "attribute": memorial_lobby_intro.crc("m_Color.a"),
                     "typeID": 212,
                     "customType": 0,
                     "isPPtrCurve": 0,
                 },
                 {
-                    "path": intro.crc("PPV/PPV_C"),
-                    "attribute": intro.crc("weight"),
+                    "path": memorial_lobby_intro.crc("PPV/PPV_C"),
+                    "attribute": memorial_lobby_intro.crc("weight"),
                     "typeID": 114,
                     "customType": 0,
                     "isPPtrCurve": 0,
                 },
-                {"path": intro.crc("Glow"), "attribute": 0, "typeID": 212, "customType": 23, "isPPtrCurve": 1},
                 {
-                    "path": intro.crc("Quad"),
-                    "attribute": intro.crc("m_IsActive"),
+                    "path": memorial_lobby_intro.crc("Glow"),
+                    "attribute": 0,
+                    "typeID": 212,
+                    "customType": 23,
+                    "isPPtrCurve": 1,
+                },
+                {
+                    "path": memorial_lobby_intro.crc("Quad"),
+                    "attribute": memorial_lobby_intro.crc("m_IsActive"),
                     "typeID": 1,
                     "customType": 0,
                     "isPPtrCurve": 0,
                 },
-                {"path": intro.crc("Quad"), "attribute": 1, "typeID": 4, "customType": 0, "isPPtrCurve": 0},
-                {"path": intro.crc("Quad"), "attribute": 0x4DAF8B71, "typeID": 23, "customType": 22, "isPPtrCurve": 0},
+                {
+                    "path": memorial_lobby_intro.crc("Quad"),
+                    "attribute": 1,
+                    "typeID": 4,
+                    "customType": 0,
+                    "isPPtrCurve": 0,
+                },
+                {
+                    "path": memorial_lobby_intro.crc("Quad"),
+                    "attribute": 0x4DAF8B71,
+                    "typeID": 23,
+                    "customType": 22,
+                    "isPPtrCurve": 0,
+                },
             ]
         },
     }
-    out = intro.clip_curves(clip)
+    out = memorial_lobby_intro.clip_curves(clip)
     assert out["length"] == 5.3
     b = out["bindings"]
     assert "s" in b[0]["curves"][0] and "s" in b[1]["curves"][0]
@@ -124,9 +147,12 @@ def test_clip_curves_bind_streamed_dense_and_constant_curves_in_order():
     assert b[4]["curves"] == [{"k": -115.0}, {"k": 388.0}, {"k": 0.0}]
     assert b[5]["curves"] == [{"k": 0.5}]
     # a material binding: the low 28 bits of the name's CRC-32, its component in the top 4 (4 + r g b a)
-    assert intro.material_attribute(0x4DAF8B71) == ("_Color", 0)
-    assert intro.material_attribute((intro.crc("_Color0") & 0x0FFFFFFF) | (7 << 28)) == ("_Color0", 3)
-    assert intro.material_attribute(intro.crc("_Nothing")) is None
+    assert memorial_lobby_intro.material_attribute(0x4DAF8B71) == ("_Color", 0)
+    assert memorial_lobby_intro.material_attribute((memorial_lobby_intro.crc("_Color0") & 0x0FFFFFFF) | (7 << 28)) == (
+        "_Color0",
+        3,
+    )
+    assert memorial_lobby_intro.material_attribute(memorial_lobby_intro.crc("_Nothing")) is None
 
 
 class Obj:
@@ -313,7 +339,7 @@ def test_read_timeline_through_the_graph():
         Obj(602, "MonoBehaviour", {"m_Script": ref(9), "IsShowLobbyIcons": 0}),
     ]
     g = Graph(objs)
-    raw = intro.read_timeline(
+    raw = memorial_lobby_intro.read_timeline(
         g, g.objs[100], sound=lambda a, data: {"id": f"cab-tl_{a.path_id}", "volume": data["Volume"]}
     )
     tracks = {t["name"]: t for t in raw["tracks"]}
@@ -333,7 +359,7 @@ def test_read_timeline_through_the_graph():
     )
     assert (idle["asset"]["anim"], idle["asset"]["loop"], idle["asset"]["endWithClip"]) == ("Idle_01", True, False)
     # the mix a clip starts with: the timeline clip's blend or ease-in with useBlendDuration, None for the default mix
-    assert intro._custom_mix(start) is None and intro._custom_mix(idle) == 0.25
+    assert memorial_lobby_intro._custom_mix(start) is None and memorial_lobby_intro._custom_mix(idle) == 0.25
     ctrl = tracks["Ctrl"]["clips"][0]
     assert (ctrl["clipIn"], ctrl["asset"]["exposed"], ctrl["asset"]["seed"], ctrl["asset"]["post"]) == (
         0.5,
@@ -345,8 +371,8 @@ def test_read_timeline_through_the_graph():
     assert sfx["asset"]["sound"] == {"id": "cab-tl_601", "volume": 0.4} and icons["asset"]["icons"] is False
     assert tracks["Anim"]["infinite"]["length"] == 9.6
     # the duration: the last clip's end, a recorded clip counting its length
-    assert intro.duration(raw) == 9.6
-    assert intro.duration({**raw, "durationMode": 1, "fixedDuration": 4.0}) == 4.0
+    assert memorial_lobby_intro.duration(raw) == 9.6
+    assert memorial_lobby_intro.duration({**raw, "durationMode": 1, "fixedDuration": 4.0}) == 4.0
 
 
 # --- the intro placed in a prefab (lobby.read_prefab) ----------------------------------------------------------------
@@ -392,9 +418,9 @@ class Prefab:
 
 def binding(path: str, attr: str | int, type_id: int, curves: list[dict], custom: int = 0) -> dict:
     return {
-        "path": intro.crc(path),
+        "path": memorial_lobby_intro.crc(path),
         "type": type_id,
-        "attr": intro.crc(attr) if isinstance(attr, str) else attr,
+        "attr": memorial_lobby_intro.crc(attr) if isinstance(attr, str) else attr,
         "custom": custom,
         "script": {},
         "pptr": False,
@@ -484,7 +510,11 @@ def raw_timeline() -> dict:
                         binding("BG/PPV/PPV_D", "m_IsActive", 1, [OFF_ON_OFF]),
                         binding("BG/PPV/PPV_D", "weight", 114, [{"k": 1.0}]),
                         binding(
-                            "FX/Spark", (intro.crc("_Color") & 0x0FFFFFFF) | (7 << 28), 199, [{"k": 0.5}], custom=22
+                            "FX/Spark",
+                            (memorial_lobby_intro.crc("_Color") & 0x0FFFFFFF) | (7 << 28),
+                            199,
+                            [{"k": 0.5}],
+                            custom=22,
                         ),
                         binding("Missing/Thing", "m_IsActive", 1, [ON_OFF]),
                     ],
@@ -703,7 +733,7 @@ TEX = {"id": "cab-fx_9", "name": "Square", "w": 4, "h": 4, "filter": 1, "mips": 
 
 
 def read(p: Prefab, timeline: dict | None = None):
-    clips = lobby.Clips(
+    clips = memorial_lobby.Clips(
         [
             (9001, {"m_Name": "Test_home_SkeletonData", "scale": 0.01, "skeletonJSON": ref(1, 1), "defaultMix": 0.2}),
             (9002, {"m_Name": "Test_scene_SkeletonData", "scale": 0.01, "skeletonJSON": ref(1, 1), "defaultMix": 0.2}),
@@ -727,7 +757,7 @@ def read(p: Prefab, timeline: dict | None = None):
         return None
 
     kinds = {pid: kind for pid, (kind, _) in p.objects.items()}
-    prefab = lobby.read_prefab(
+    prefab = memorial_lobby.read_prefab(
         kinds,
         lambda pid: p.objects[pid][1],
         {**SCRIPTS},
@@ -737,7 +767,9 @@ def read(p: Prefab, timeline: dict | None = None):
         profile=lambda pid, ptr: PROFILES.get(ptr["m_PathID"]),
         resolve=resolve,
     )
-    return lobby.lobby_info(SKELETONS, clips, prefab, {"cab-a_1": {"name": "Other", "clips": ["cab-b_2"]}}), asked
+    return memorial_lobby.memorial_lobby_info(
+        SKELETONS, clips, prefab, {"cab-a_1": {"name": "Other", "clips": ["cab-b_2"]}}
+    ), asked
 
 
 def test_the_intro_placed_in_the_prefab():
@@ -842,39 +874,43 @@ def real_game(tmp_path_factory):
 def test_real_intros(real_game):
     # Shiroko: Start_Idle_01, then Idle_01 from 6.17 s; the flash sprite fades from white over 2 s; the flash volume and
     # the depth of field (switched on from 2.83 to 4.17 s); her timeline holds its last frame
-    shiroko = real_game.lobby_info("shiroko_home")
+    shiroko = real_game.memorial_lobby_info("shiroko_home")
     it = shiroko["intro"]
     assert (it["duration"], it["wrap"]) == (9.5, "hold")
     clips = it["spine"][0]["clips"]
     assert [c["anim"] for c in clips] == ["Start_Idle_01", "Idle_01"] and math.isclose(clips[1]["t"], 6.166667)
     glow = next(p for p in it["props"] if p["on"] == "sprite" and p["attr"] == "color" and p["k"] == 3)
-    assert intro.evaluate(glow["c"], 0) == 1.0 and math.isclose(intro.evaluate(glow["c"], 0.5), 0.84375, abs_tol=1e-4)
-    assert intro.evaluate(glow["c"], 2.0) == 0.0
+    assert memorial_lobby_intro.evaluate(glow["c"], 0) == 1.0 and math.isclose(
+        memorial_lobby_intro.evaluate(glow["c"], 0.5), 0.84375, abs_tol=1e-4
+    )
+    assert memorial_lobby_intro.evaluate(glow["c"], 2.0) == 0.0
     names = [n["path"].rsplit("/", 1)[-1] for n in it["nodes"]]
     dof = next(p for p in it["props"] if p["on"] == "node" and names[p["i"]] == "PPV_D")
-    assert [intro.evaluate(dof["c"], t) > 0.5 for t in (2.0, 3.0, 4.5)] == [False, True, False]
+    assert [memorial_lobby_intro.evaluate(dof["c"], t) > 0.5 for t in (2.0, 3.0, 4.5)] == [False, True, False]
     assert len(it["sounds"]) == 5 and all(s["id"] in shiroko["sounds"] for s in it["sounds"])
     # the bokeh it moves (their transforms below the bone), the flash sprite drawn with the sprite's own texture
     assert sum(1 for s in shiroko["fx"]["systems"] if s.get("moves")) == 3
     (sprite,) = shiroko["fx"]["sprites"]
     assert sprite["name"] == "Glow" and sprite["order"] == 6
-    assert real_game.lobby_fx_texture("shiroko_home", sprite["material"].split("~")[1])[:4] == b"\x89PNG"
+    assert real_game.memorial_lobby_fx_texture("shiroko_home", sprite["material"].split("~")[1])[:4] == b"\x89PNG"
     # Hoshino's background slides and zooms; Akari's sushi scene is loaded for the intro only
-    hoshino = real_game.lobby_info("hoshino_home")
+    hoshino = real_game.memorial_lobby_info("hoshino_home")
     bg = next(l for l in hoshino["layers"] if l["name"] == "Hoshino_home_background")
     assert bg["moves"]["of"] == "static" and hoshino["intro"]["wrap"] == "none"
-    akari = {l["name"]: l for l in real_game.lobby_info("akari_home")["layers"]}
+    akari = {l["name"]: l for l in real_game.memorial_lobby_info("akari_home")["layers"]}
     assert akari["akari_scene"]["intro"] is True and akari["akari_scene"]["active"] is False
     # Nonomi's control clips play effects that are off at rest
-    nonomi = real_game.lobby_info("nonomi_home")
+    nonomi = real_game.memorial_lobby_info("nonomi_home")
     assert len(nonomi["intro"]["control"]) == 2
     assert any(s.get("rest") == 0 and s.get("gate") for s in nonomi["fx"]["systems"])
     # Shun's glow: its clip's object curve (the sprite) sits before its colour's red, green and blue, which stay white
     # (they took the curve after theirs, red 0: a cyan glow)
     props = [
-        p for p in real_game.lobby_info("shun_home")["intro"]["props"] if p["on"] == "sprite" and p["attr"] == "color"
+        p
+        for p in real_game.memorial_lobby_info("shun_home")["intro"]["props"]
+        if p["on"] == "sprite" and p["attr"] == "color"
     ]
-    assert {p["k"]: intro.evaluate(p["c"], 0.0) for p in props if p["k"] < 3} == {0: 1.0, 1: 1.0, 2: 1.0}
+    assert {p["k"]: memorial_lobby_intro.evaluate(p["c"], 0.0) for p in props if p["k"] < 3} == {0: 1.0, 1: 1.0, 2: 1.0}
     # an intro sound decodes from memory like the clips' sounds
     clip = shiroko["sounds"][it["sounds"][0]["id"]]["clips"][0]
-    assert real_game.lobby_sound("shiroko_home", clip)[:4] == b"RIFF"
+    assert real_game.memorial_lobby_sound("shiroko_home", clip)[:4] == b"RIFF"

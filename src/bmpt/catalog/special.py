@@ -26,11 +26,11 @@ def describe(core: str, entries: dict, students: dict) -> tuple[str, dict, dict]
 
     Args:
         core: Original Spine core spelling, retained when its role tokens cannot be translated.
-        entries: Variant metadata indexed by file ID, including core aliases and student IDs.
-        students: Student metadata indexed by ID, supplying family keys and localized base names.
+        entries: alt metadata indexed by file ID, including core aliases and student IDs.
+        students: Student metadata indexed by ID, supplying student keys and localized base names.
 
     Returns:
-        Family key, localized base names, and localized full and short slot labels.
+        student key, localized base names, and localized full and short slot labels.
     """
     lower = core.lower()
     person = next((name for name in PEOPLE if lower == name or lower.startswith(name + "_")), None)
@@ -49,7 +49,7 @@ def describe(core: str, entries: dict, students: dict) -> tuple[str, dict, dict]
             prefix, entry = max(matches, key=lambda item: len(item[0]))
             person = next((name for name, key in PEOPLE.items() if entries.get(key) is entry), None)
     student = students[str(entry["student_id"])] if entry else None
-    family = student["base"] if student else PEOPLE[person] if person else "special"
+    student_key = student["base"] if student else PEOPLE[person] if person else "special"
     base = {
         lang: student["names"][lang] if student else words()[lang][person] if person else words()[lang]["title"]
         for lang in LANGUAGES
@@ -65,4 +65,4 @@ def describe(core: str, entries: dict, students: dict) -> tuple[str, dict, dict]
         for lang in LANGUAGES
     }
     names = {lang: {"full": f"{base[lang]} - {labels[lang]}", "short": labels[lang]} for lang in LANGUAGES}
-    return family, base, names
+    return student_key, base, names

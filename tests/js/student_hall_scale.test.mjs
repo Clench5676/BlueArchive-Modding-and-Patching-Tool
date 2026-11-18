@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bindScale } from "../../src/bmpt/web/js/hall/student-hall-scale.js";
-import { createDraft } from "../../src/bmpt/web/js/hall/student-hall-model.js";
+import { bindScale } from "../../src/bmpt/web/js/student-hall/student-hall-scale.js";
+import { createDraft } from "../../src/bmpt/web/js/student-hall/student-hall-chibi.js";
 import {
   PORTRAIT_TOOLBAR_HEIGHT,
   portraitScale,
   portraitRect,
-} from "../../src/bmpt/web/js/hall/student-hall-framing.js";
+} from "../../src/bmpt/web/js/student-hall/student-hall-framing.js";
 class Input {
   value = "";
   listeners = {};
@@ -102,18 +102,18 @@ test("global size drafts cancel/save without changing any actor position or rela
     memorialLobbies: [],
     active: null,
   };
-  const model = createDraft(value);
-  assert.equal(model.current().portraitScale, 1);
+  const chibi = createDraft(value);
+  assert.equal(chibi.current().portraitScale, 1);
   assert.equal(value.portraitScale, undefined);
-  model.begin("layout").portraitScale = 0.75;
-  assert.ok(model.dirty());
-  assert.deepEqual(model.current().portraits, value.portraits);
-  model.cancel();
-  assert.equal(model.current().portraitScale, 1);
-  model.begin("layout").portraitScale = 0.73;
-  model.accept({ ...structuredClone(model.current()), revision: 1 });
-  assert.equal(model.saved().portraitScale, 0.73);
-  assert.equal(model.dirty(), false);
+  chibi.begin("layout").portraitScale = 0.75;
+  assert.ok(chibi.dirty());
+  assert.deepEqual(chibi.current().portraits, value.portraits);
+  chibi.cancel();
+  assert.equal(chibi.current().portraitScale, 1);
+  chibi.begin("layout").portraitScale = 0.73;
+  chibi.accept({ ...structuredClone(chibi.current()), revision: 1 });
+  assert.equal(chibi.saved().portraitScale, 0.73);
+  assert.equal(chibi.dirty(), false);
   const entry = value.portraits[0],
     bounds = { x: -200, y: 0, width: 600, height: 1400 };
   assert.ok(Math.abs(portraitScale(entry, 0.5) - 0.72 * 0.8 * 0.5) < 1e-12);
@@ -143,7 +143,7 @@ import {
   PORTRAIT_SIZE,
   PORTRAIT_TOOLBAR_MARGIN,
   portraitToolbarLayout,
-} from "../../src/bmpt/web/js/hall/student-hall-framing.js";
+} from "../../src/bmpt/web/js/student-hall/student-hall-framing.js";
 test("individual size uses .5–2.0, hundredth steps, reset and a cancellable/saveable draft", () => {
   const saved = {
     revision: 0,
@@ -234,7 +234,7 @@ test("legacy own sizes outside the control range change only on explicit input, 
   }
 });
 
-// The top bar and the Hall's top-right controls as the editor measures them (stage units).
+// The top bar and the Student Hall's top-right controls as the editor measures them (stage units).
 const CHROME = [
   { x: -84, y: 0, width: 2088, height: 64 },
   { x: 1495, y: 108, width: 465, height: 67 },

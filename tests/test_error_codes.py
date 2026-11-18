@@ -18,7 +18,7 @@ PACKAGE = Path(__file__).parents[1] / "src" / "bmpt"
 REGISTRY = json.loads((PACKAGE / "web" / "error-codes.json").read_text(encoding="utf-8"))
 LANGUAGES = ("en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH")
 INTERNAL_CODES = {
-    "capture_not_ready",  # photography/shoot.js translates exhausted retries to thumbnail_capture_unavailable.
+    "capture_not_ready",  # thumbnail-capture/shoot.js translates exhausted retries to thumbnail_capture_unavailable.
 }
 # These assignments are permanent. Append a new name within its block; never renumber an old one.
 BLOCKS = (
@@ -61,8 +61,8 @@ BLOCKS = (
         "alias_too_long alias_too_many student_hall_conflict student_hall_duplicate_memorial "
         "student_hall_duplicate_portrait student_hall_last_memorial student_hall_last_portrait thumbnail_apply_failed "
         "thumbnail_capture_unavailable thumbnail_delete_other_alt thumbnail_in_use thumbnail_invalid "
-        "thumbnail_library_invalid thumbnail_missing thumbnail_target_unavailable lobby_camera_failed "
-        "lobby_camera_unsupported "
+        "thumbnail_library_invalid thumbnail_missing thumbnail_target_unavailable memorial_lobby_camera_failed "
+        "memorial_lobby_camera_unsupported "
     ).split(),
     (
         "update_check_failed update_checksum_mismatch update_download_failed update_restart_failed update_unavailable "

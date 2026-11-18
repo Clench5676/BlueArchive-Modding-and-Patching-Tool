@@ -12,7 +12,7 @@ import {
   TOOLBAR_CAPTION,
   otherMode,
   actionCaption,
-} from "../../src/bmpt/web/js/photography/camera.js";
+} from "../../src/bmpt/web/js/thumbnail-capture/camera.js";
 import { visualPrefab } from "./visual_prefabs.mjs";
 import { n, spr } from "./control_prefabs.mjs";
 
@@ -20,7 +20,7 @@ import { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } from "../../src/bmpt/web
 import { row } from "../../src/bmpt/web/js/ui/ui-grid.js";
 const S = 1920 / 2960,
   near = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);
-const source = readFileSync(new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/thumbnail-capture/controller.js", import.meta.url), "utf8");
 const visualSource = readFileSync(new URL("../../src/bmpt/web/js/detail/visual-mode.js", import.meta.url), "utf8");
 // Run the shared fullscreen renderer too; only asset loading and the DOM are stand-ins.
 const backCode =
@@ -150,7 +150,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
   for (const mode of ["portrait", "memorialLobby"]) {
     test(`real ${mode} camera controls retain native Back dimensions and fit composed rows at all corner margins in ${locale}`, async () => {
       const webui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url))).webui;
-      const strings = webui.photo;
+      const strings = webui.thumbnail;
       for (const platform of [null, "darwin", "win32"])
         for (const [width, height] of [
           [960, 540],
@@ -240,7 +240,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
                 value: new Proxy(dataset, {
                   set(target, key, value) {
                     target[key] = value;
-                    if (key === "photoAction") hits.set(value, hit);
+                    if (key === "thumbnailAction") hits.set(value, hit);
                     return true;
                   },
                 }),
@@ -257,7 +257,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
             // the student has both modes, so the mode button is drawn (the test of its omission is
             // photography_choices.test.mjs)
             bridge: {
-              info: () => ({ hasPortrait: true, hasLobby: true }),
+              info: () => ({ hasPortrait: true, hasMemorialLobby: true }),
               playbackTree: () => ({
                 tree: n("PhotoPlayback", [0, 0], [spr("Common_Bg_Raius5px_Shadow", 145, 141)]),
                 textures: {},
@@ -265,7 +265,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
             },
           };
           vm.runInNewContext(
-            `${code}\nglobalThis.draw = drawControls; globalThis.toolbarLayout = photographyToolbarLayout; globalThis.prepare = prepare; globalThis.exitControl = exitControl; globalThis.prepareSwitch = prepareSwitch;`,
+            `${code}\nglobalThis.draw = drawControls; globalThis.toolbarLayout = thumbnailCaptureToolbarLayout; globalThis.prepare = prepare; globalThis.exitControl = exitControl; globalThis.prepareSwitch = prepareSwitch;`,
             env,
           );
           await env.draw();
@@ -324,11 +324,15 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
           const cameraBox = bodyRect(backHit.parentElement, body);
           const portrait = await env.prepare({
             layout: layouts.UICharacterVisualMode,
-            strings: { back: webui.lobby.exit, switch: webui.row.switch.lobby, reset: webui.visual.reset },
+            strings: {
+              back: webui.memorialLobby.exit,
+              switch: webui.row.switch.memorialLobby,
+              reset: webui.visual.reset,
+            },
           });
           const exit = new Element("button");
           await env.exitControl(exit, layouts.UICharacterVisualMode);
-          const lobbySwitch = await env.prepareSwitch({
+          const memorialLobbySwitch = await env.prepareSwitch({
             layout: layouts.UICharacterVisualMode,
             label: webui.row.switch.portrait,
           });
@@ -339,7 +343,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
           ]) {
             box.forEach((value, i) => near(value, cameraBox[i]));
           }
-          for (const group of [portrait.groups.Btn_HideUI, lobbySwitch]) {
+          for (const group of [portrait.groups.Btn_HideUI, memorialLobbySwitch]) {
             near(bodyRect(group, sprite(group, "RightTop/Btn_HideUI"))[1], cameraBox[1]);
           }
           const top = env.toolbarLayout().top;
@@ -364,7 +368,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
           near(height / scale - gallery[1] - gallery[3], CORNER_MARGIN);
           near(width / scale - choices[0] - choices[2], CORNER_MARGIN);
           near(height / scale - choices[1] - choices[3], CORNER_MARGIN);
-          if (mode === "lobby") {
+          if (mode === "memorialLobby") {
             const playback = rect("Playback");
             near(choices[0] - playback[0] - playback[2], SPACE.m * S);
             near(playback[1], choices[1]);

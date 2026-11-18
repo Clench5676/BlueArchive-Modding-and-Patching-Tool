@@ -37,8 +37,8 @@ export const LIST_X = 26,
 // the caption key of each kind of Mod an entry can be
 export const KIND_KEYS = {
   portrait: "tab.portrait",
-  memorialLobby: "tab.lobby",
-  chibi: "tab.model",
+  memorialLobby: "tab.memorialLobby",
+  chibi: "tab.chibi",
   other: "import.other",
 };
 // the reasons a row can carry that have their own label (import.reason.*)
@@ -80,12 +80,12 @@ const EMPTY_BOX = [1200, 100]; // each empty-list label's box (px), its text cen
 /**
  * Make the import page's list.
  * @param {object} P The page's state.
- * @param {object} page The page's model, services and the page functions the list calls.
+ * @param {object} page The page's import state, services and the page functions the list calls.
  * @returns {object} The list's functions: layoutList, renderRows, renderPreview, prepareVisibleRows, rowCopy,
  *     paragraphCopy, representative, thumbnail, bindTexture, refreshCurrentPreviews and refreshAppliedPreviews.
  */
 export function createImportList(P, page) {
-  const { model, ui, popups, allowed, modelThumbnails, controls } = page;
+  const { importState, ui, popups, allowed, chibiThumbnails, controls } = page;
   const { identified, report, resultNote, tracked, showError, openSource, openCharacter } = page;
   const { paint, textWidget, button, checkbox, bindBar, syncBar } = controls;
   // a refused row's reason is on its badge (stateText); the note line keeps only what a badge cannot say: a
@@ -188,7 +188,7 @@ export function createImportList(P, page) {
     // Analysis previews remain valid for the immutable input session after
     // import. Changing the label/status must not reload the same picture from
     // a new library endpoint (conversion output is validated separately).
-    const result = model.state.results.find((result) => result.id === entry.id);
+    const result = importState.state.results.find((result) => result.id === entry.id);
     if (entry.preview?.kind === "import" && entry.preview.key && (!entry.libraryId || result?.libraryId))
       return entry.preview;
     const libraryId = result?.libraryId || entry.libraryId;
@@ -227,10 +227,10 @@ export function createImportList(P, page) {
     P.previewKey = null;
   }
   function refreshAppliedPreviews() {
-    for (const result of model.state.results) {
+    for (const result of importState.state.results) {
       if (!result.applied || P.refreshedResults.has(result)) continue;
       P.refreshedResults.add(result);
-      const entry = model.state.taskEntries.find((item) => item.id === result.id);
+      const entry = importState.state.taskEntries.find((item) => item.id === result.id);
       if (!entry) continue;
       const { alt } = identified(entry),
         key = liveIdentity(entry, alt);
@@ -272,11 +272,11 @@ export function createImportList(P, page) {
     ]);
     if (P.thumbnailJobs.has(identity)) return P.thumbnailJobs.get(identity);
     let work = Promise.resolve(null);
-    const modelKey = alt?.key || entry.alt;
-    if (kind === "chibi" && modelKey && P.scope) {
+    const chibiKey = alt?.key || entry.alt;
+    if (kind === "chibi" && chibiKey && P.scope) {
       const source = input;
       if (!incoming || source)
-        work = modelThumbnails(modelKey, incoming ? `${source.kind}:${source.key}` : "live", {
+        work = chibiThumbnails(chibiKey, incoming ? `${source.kind}:${source.key}` : "live", {
           signal,
           version,
         });
@@ -319,16 +319,16 @@ export function createImportList(P, page) {
   }
 
   function renderPreview() {
-    const entry = model.state.entries.find((item) => item.id === model.state.selected);
+    const entry = importState.state.entries.find((item) => item.id === importState.state.selected);
     const key = JSON.stringify([
       entry?.id,
       entry?.libraryId,
       entry?.preview,
       entry?.source,
       entry?.target,
-      model.busy(),
-      model.state.phase,
-      model.state.results,
+      importState.busy(),
+      importState.state.phase,
+      importState.state.results,
       allowed(),
     ]);
     if (key === P.previewKey) return;
@@ -394,7 +394,7 @@ export function createImportList(P, page) {
       ) {
         const assign = button(T("import.assignCharacter"), "assignCharacter", { width: 524, scale: 0.34 });
         place(assign, 0, 765, 524, 55);
-        assign.disabled = model.busy();
+        assign.disabled = importState.busy();
         assign.refresh();
         assign.addEventListener("click", () => openCharacter(entry).catch((error) => showError(report(error), error)));
         next.appendChild(assign);
@@ -425,7 +425,7 @@ export function createImportList(P, page) {
     const group = el("div", "import-source");
     const choose = button(T("import.source.choose"), "source", { width: 524, scale: 0.34 });
     place(choose, 0, 706, 524, 55);
-    choose.disabled = model.busy() || model.state.phase === "done";
+    choose.disabled = importState.busy() || importState.state.phase === "done";
     choose.refresh();
     choose.addEventListener("click", () => openSource(entry).catch((error) => showError(report(error), error)));
     group.append(choose);
@@ -466,7 +466,7 @@ export function createImportList(P, page) {
         ? [
             ...new Set(
               group.entries
-                .map((entry) => model.state.results.find((item) => item.id === entry.id))
+                .map((entry) => importState.state.results.find((item) => item.id === entry.id))
                 .map((item) => T(`import.outcome.${OUTCOMES.has(item?.outcome) ? item.outcome : "failed"}`)),
             ),
           ].join(listSeparator())
@@ -483,7 +483,7 @@ export function createImportList(P, page) {
   function paragraphCopy(group, result = false) {
     const notes = result
       ? group.entries.map((entry) => {
-          const item = model.state.results.find((item) => item.id === entry.id);
+          const item = importState.state.results.find((item) => item.id === entry.id);
           if (item?.applyUnavailable) return T("import.libraryOnly");
           return item?.reason
             ? [item.configured && T(importStatus(item)), resultNote(item, entry)].filter(Boolean).join(" - ")
@@ -495,7 +495,7 @@ export function createImportList(P, page) {
     const omitted = result
       ? group.entries.reduce(
           (count, entry) =>
-            count + (model.state.results.find((item) => item.id === entry.id)?.notTransferred?.length || 0),
+            count + (importState.state.results.find((item) => item.id === entry.id)?.notTransferred?.length || 0),
           0,
         )
       : 0;
@@ -509,7 +509,7 @@ export function createImportList(P, page) {
 
   function renderRows() {
     if (!P.visible || !P.root) return;
-    const allGroups = importGroups(model.state.entries, P.merged, identified);
+    const allGroups = importGroups(importState.state.entries, P.merged, identified);
     const groups = allGroups.filter((group) =>
       group.entries.some(
         (entry) => (P.filter === "all" || entry.state === P.filter) && identified(entry).search.includes(P.query),
@@ -540,8 +540,8 @@ export function createImportList(P, page) {
           return { element, text: label.text, px: label.fontSize * 0.5 };
         };
         P.dom.empty = {
-          title: part(T(model.state.entries.length ? "import.noMatch" : "import.empty")),
-          note: model.state.entries.length ? null : part(T("import.drop")),
+          title: part(T(importState.state.entries.length ? "import.noMatch" : "import.empty")),
+          note: importState.state.entries.length ? null : part(T("import.drop")),
         };
         placeEmpty();
         contents.push(empty);
@@ -589,7 +589,7 @@ export function createImportList(P, page) {
         );
         copy.type = "button";
         copy.setAttribute("aria-label", name);
-        copy.addEventListener("click", () => model.select(entry.id));
+        copy.addEventListener("click", () => importState.select(entry.id));
         const detailed = group.entries.filter(hasDetails),
           badgeBox = detailed.length ? badgeRect(tree) : null;
         const badgeHit = badgeBox ? place(el("button", "hit import-row-badge"), ...badgeBox) : null;
@@ -601,8 +601,8 @@ export function createImportList(P, page) {
             showDetails(detailed);
           });
         }
-        const check = checkbox("", model.state.checked.has(entry.id), (checked) =>
-          model.toggleGroup(
+        const check = checkbox("", importState.state.checked.has(entry.id), (checked) =>
+          importState.toggleGroup(
             group.entries.map((item) => item.id),
             checked,
           ),
@@ -629,7 +629,7 @@ export function createImportList(P, page) {
           choose.refresh();
           place(choose, x, y, width, height);
           choose.addEventListener("click", () => {
-            model.pick(false, false, sourceFolder(chooseEntry.paths[0]));
+            importState.pick(false, false, sourceFolder(chooseEntry.paths[0]));
           });
           row.appendChild(choose);
         }
@@ -678,16 +678,18 @@ export function createImportList(P, page) {
       const ids = row.group.entries.map((entry) => entry.id),
         selectable = row.group.entries.filter(eligible);
       // Items' selection mark is kept on the thumbnail, separate from the import checkbox.
-      row.row.dataset.selected = String(ids.includes(model.state.selected));
-      row.selection.hidden = !ids.includes(model.state.selected);
-      row.copy.setAttribute("aria-pressed", String(ids.includes(model.state.selected)));
-      row.input.checked = selectable.length > 0 && selectable.every((entry) => model.state.checked.has(entry.id));
-      row.input.indeterminate = !row.input.checked && selectable.some((entry) => model.state.checked.has(entry.id));
-      row.input.disabled = model.busy() || !model.state.valid || model.state.phase === "done" || !selectable.length;
+      row.row.dataset.selected = String(ids.includes(importState.state.selected));
+      row.selection.hidden = !ids.includes(importState.state.selected);
+      row.copy.setAttribute("aria-pressed", String(ids.includes(importState.state.selected)));
+      row.input.checked = selectable.length > 0 && selectable.every((entry) => importState.state.checked.has(entry.id));
+      row.input.indeterminate =
+        !row.input.checked && selectable.some((entry) => importState.state.checked.has(entry.id));
+      row.input.disabled =
+        importState.busy() || !importState.state.valid || importState.state.phase === "done" || !selectable.length;
       row.refresh();
       const choose = [...row.row.querySelectorAll("button")].find((b) => b.dataset.action === "chooseFiles");
       if (choose) {
-        choose.disabled = model.busy();
+        choose.disabled = importState.busy();
         choose.refresh();
       }
     }

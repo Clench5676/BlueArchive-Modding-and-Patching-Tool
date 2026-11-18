@@ -63,7 +63,7 @@ test("repeated language selection reuses tables and only refreshes retained UI",
   const loaded = [],
     refreshed = [];
   const player = { frame: 42 },
-    route = "#/student/ako/ako/lobby";
+    route = "#/student/ako/ako/memorialLobby";
   const change = languageRefresh({
     load: async (lang) => {
       loaded.push(lang);
@@ -226,7 +226,7 @@ test("the other copies of that expression use the shared errorText too", async (
     "app/nav.js",
     "mods/mod-alias.js",
     "mods/mod-export.js",
-    "hall/student-hall.js",
+    "student-hall/student-hall.js",
     "app/main.js",
   ]) {
     const source = read(name);

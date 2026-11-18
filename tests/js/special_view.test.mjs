@@ -3,8 +3,13 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
 import { isSpecial, specialFraming, specialFramingOf, specialView } from "../../src/bmpt/web/js/detail/special-view.js";
-import { artBounds, settle, validRect, worldBounds } from "../../src/bmpt/web/js/lobby/lobby-health.js";
-import { layersOf } from "../../src/bmpt/web/js/lobby/lobby.js";
+import {
+  artBounds,
+  settle,
+  validRect,
+  worldBounds,
+} from "../../src/bmpt/web/js/memorial-lobby/memorial-lobby-health.js";
+import { layersOf } from "../../src/bmpt/web/js/memorial-lobby/memorial-lobby.js";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const context = vm.createContext({
@@ -54,11 +59,11 @@ test("special NPCs use character framing and work pages, tasks and cafes use sce
     ["task", "spinelobbies", "scene"],
     ["cafe", "spinebackground", "scene"],
   ]) {
-    const v = { key: `special:${core}`, lobby: core, spineCategory: category };
+    const v = { key: `special:${core}`, memorialLobby: core, spineCategory: category };
     assert.equal(isSpecial(v), true);
     assert.equal(specialFraming(v), expected);
   }
-  assert.equal(specialFraming({ key: "ibuki", lobby: "ibuki_home" }), null);
+  assert.equal(specialFraming({ key: "ibuki", memorialLobby: "ibuki_home" }), null);
 });
 
 test("NPCs fit wholly in the left pane and fullscreen, at any scale or origin", () => {
@@ -90,8 +95,11 @@ test("scene framing fills every supported view aspect from its own bounds", () =
 });
 
 test("detail and thumbnails frame real posed vertices, ignoring stale export bounds", () => {
-  const lobby = read("../../src/bmpt/web/js/lobby/lobby-geometry.js");
-  const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("  return { measureClips"));
+  const memorialLobby = read("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-geometry.js");
+  const code = memorialLobby.slice(
+    memorialLobby.indexOf("function measureSpecial("),
+    memorialLobby.indexOf("  return { measureClips"),
+  );
   const thumbs = read("../../src/bmpt/web/js/detail/thumbs.js");
   const thumbnail = new Function(
     "spine",
@@ -112,7 +120,7 @@ test("detail and thumbnails frame real posed vertices, ignoring stale export bou
     const m = measure([layer]),
       shaped = specialFramingOf(framing, edge);
     assert.deepEqual(m.full, specialView(edge, shaped));
-    const thumb = thumbnail(p, "roster", 404 / 456, framing),
+    const thumb = thumbnail(p, "studentList", 404 / 456, framing),
       expected = specialView(artBounds(p.skeleton), shaped, 404 / 456);
     assert.deepEqual([thumb.x, thumb.y, thumb.width, thumb.height], [expected.x, expected.y, expected.w, expected.h]);
     assert.ok(m.full.w < 100, "the huge export header never sets the zoom");
@@ -127,7 +135,7 @@ test("art taller than wide is framed as a whole character, whatever the slot's n
   assert.equal(specialFramingOf("scene", tall), "character");
   assert.equal(specialFramingOf("scene", wide), "scene", "a work page or shop scene still fills the view");
   assert.equal(specialFramingOf("character", wide), "character", "a named NPC keeps its framing");
-  assert.equal(specialFramingOf(null, tall), null, "students' lobbies are not special slots");
+  assert.equal(specialFramingOf(null, tall), null, "students' memorial lobbies are not special slots");
   assert.equal(specialFramingOf("scene", null), "scene");
   assert.equal(specialFramingOf("scene", tall, 23), "scene", "a set of skeletons (ui_set) keeps its framing");
   for (const aspect of [16 / 9, 404 / 456]) {
@@ -137,8 +145,11 @@ test("art taller than wide is framed as a whole character, whatever the slot's n
 });
 
 test("the detail view keeps scene framing for a tall set of several skeletons", () => {
-  const lobby = read("../../src/bmpt/web/js/lobby/lobby-geometry.js");
-  const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("  return { measureClips"));
+  const memorialLobby = read("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-geometry.js");
+  const code = memorialLobby.slice(
+    memorialLobby.indexOf("function measureSpecial("),
+    memorialLobby.indexOf("  return { measureClips"),
+  );
   const tall = { x0: -970, y0: -1000, x1: 975, y1: 1151 },
     art = () => tall,
     world = (r) => r;
@@ -163,8 +174,11 @@ test("the detail view keeps scene framing for a tall set of several skeletons", 
 });
 
 test("the detail view and its thumbnail frame a tall scene-named NPC alike", () => {
-  const lobby = read("../../src/bmpt/web/js/lobby/lobby-geometry.js");
-  const code = lobby.slice(lobby.indexOf("function measureSpecial("), lobby.indexOf("  return { measureClips"));
+  const memorialLobby = read("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-geometry.js");
+  const code = memorialLobby.slice(
+    memorialLobby.indexOf("function measureSpecial("),
+    memorialLobby.indexOf("  return { measureClips"),
+  );
   const thumbs = read("../../src/bmpt/web/js/detail/thumbs.js");
   const tall = { x0: -418, y0: -873, x1: 667, y1: 1341 };
   const art = () => tall,

@@ -1,18 +1,19 @@
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import * as Sync from "../../src/bmpt/web/js/lobby/lobby-sync.js";
+import * as Sync from "../../src/bmpt/web/js/memorial-lobby/memorial-lobby-sync.js";
 import { readFile } from "node:fs/promises";
-import { LOBBY_MODULES, joinedModules } from "./helpers/source-text.mjs";
+import { MEMORIAL_LOBBY_MODULES, joinedModules } from "./helpers/source-text.mjs";
 import { test } from "node:test";
 import { latestLoad } from "../../src/bmpt/web/js/spine/spine-load.js";
-import * as Intro from "../../src/bmpt/web/js/lobby/lobby-intro.js";
+import * as Intro from "../../src/bmpt/web/js/memorial-lobby/memorial-lobby-intro.js";
 import { withTimeout } from "../../src/bmpt/web/js/core/async.js";
 
-const lobbyFile = (name) => readFile(new URL(`../../src/bmpt/web/js/lobby/${name}`, import.meta.url), "utf8");
-// lobby.js and every part of its instances, as one body; createContext() gives a test instance's state S and
+const memorialLobbyFile = (name) =>
+  readFile(new URL(`../../src/bmpt/web/js/memorial-lobby/${name}`, import.meta.url), "utf8");
+// memorial-lobby.js and every part of its instances, as one body; createContext() gives a test instance's state S and
 // functions L
-const [lobbyMain, ...lobbyParts] = await Promise.all(LOBBY_MODULES.map(lobbyFile));
-const source = joinedModules(lobbyMain, ...lobbyParts).replace(/^export /gm, "");
+const [memorialLobbyMain, ...memorialLobbyParts] = await Promise.all(MEMORIAL_LOBBY_MODULES.map(memorialLobbyFile));
+const source = joinedModules(memorialLobbyMain, ...memorialLobbyParts).replace(/^export /gm, "");
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((yes, no) => {
@@ -500,7 +501,7 @@ for (const blurredDuringLoad of [false, true])
     a.hide(c.host);
   });
 
-test("Now Loading over a shown lobby holds its voice, cue delays and clocks, and resumes them afterwards", async () => {
+test("Now Loading over a shown memorial lobby holds its voice, cue delays and clocks, and resumes them afterwards", async () => {
   const h = environment(),
     a = instance(h, "a"),
     { c, p } = a.seed();
@@ -525,7 +526,7 @@ test("Now Loading over a shown lobby holds its voice, cue delays and clocks, and
   assert.equal(p.trackTime, track);
   assert.equal(c.intro.t, intro);
   a.resume();
-  assert.equal(voice.paused, true, "the Hall's resume does not lift Now Loading");
+  assert.equal(voice.paused, true, "the Student Hall's resume does not lift Now Loading");
   a.loadingFreeze(false);
   assert.equal(voice.paused, false);
   assert.equal(voice.currentTime, 1.25);

@@ -14,8 +14,8 @@ let active = false;
 /**
  * Run the export journey: choose, confirm, run and report. A picker's return updates the confirmation draft;
  * only an explicit Confirm starts a job.
- * @param {{scope: "single"|"library"|"applied", target?: string, kind?: string}} request What to export, as
- *     `export.start` takes it: the scope and, for "single", its target (`mod:<id>` or `alt:<key>`) and kind. The
+ * @param {{scope: "single"|"library"|"applied", target?: string, resourceType?: string}} request What to export, as
+ *     `export.start` takes it: the scope and, for "single", its target (`mod:<id>` or `alt:<key>`) and resource type. The
  *     chosen folder, server and platform are added before the job starts.
  * @param {object} deps The steps (confirm, options, pick, reveal, run, success).
  */
@@ -156,7 +156,7 @@ function confirmation(initial) {
 
 /**
  * Open the export popup for a request.
- * @param {{scope: "single"|"library"|"applied", target?: string, kind?: string}} request What to export (see journey).
+ * @param {{scope: "single"|"library"|"applied", target?: string, resourceType?: string}} request What to export.
  * @returns {Promise<object|null>} The result; null when cancelled.
  */
 export async function open(request) {

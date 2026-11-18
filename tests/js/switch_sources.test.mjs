@@ -5,8 +5,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
-  modelSource,
-  modelUrl,
+  chibiSource,
+  chibiUrl,
   appliedKey,
   appliedOf,
   availableTab,
@@ -17,7 +17,7 @@ import {
   costumeHold,
   crossCandidates,
   crossExtras,
-  crossModels,
+  crossChibis,
   hasAsset,
   hasKind,
   overwrittenOf,
@@ -48,8 +48,8 @@ const mod = (id, target, kind) => ({
   file: `/library/mods/${id}/${id}.bundle`,
   fresh: false,
 });
-// hoshino: a portrait and a lobby; swimsuit: a portrait and a lobby of its own; np: a portrait only; shared: the same
-// lobby core as hoshino
+// hoshino: a portrait and a memorial lobby; swimsuit: a portrait and a memorial lobby of its own; np: a portrait only;
+// shared: the same memorial lobby core as hoshino
 const student = () => ({
   key: "hoshino",
   alts: [
@@ -90,7 +90,7 @@ test("stored-only character sources are previewable without an official install 
     portrait: null,
     memorialLobby: null,
     chibi: null,
-    storedKinds: ["memorialLobby"],
+    storedResourceTypes: ["memorialLobby"],
     localResourceTypes: [],
     state: { files: [] },
     configured: {},
@@ -100,18 +100,18 @@ test("stored-only character sources are previewable without an official install 
   const shownStudent = { alts: [student] };
   assert.ok(hasAsset(student));
   assert.equal(primaryKind(student), "memorialLobby");
-  assert.equal(availableTab(student, "portrait"), "lobby");
+  assert.equal(availableTab(student, "portrait"), "memorialLobby");
   assert.equal(coreOf(student, "memorialLobby"), null);
   assert.equal(previewBase(student, "memorialLobby", false), "/asset/spine/mod/future-mod/skeleton");
   const choices = candidates(shownStudent, student, "memorialLobby");
   assert.equal(choices.find((choice) => choice.key === "self").greyed, true);
   assert.equal(choices.find((choice) => choice.kind === "mod").greyed, false);
   assert.equal(configuredKey(student, "memorialLobby"), null);
-  const modelOnly = { ...student, storedKinds: ["chibi"], previewSources: { chibi: "mod:future-model" } };
-  assert.ok(hasAsset(modelOnly));
-  assert.equal(primaryKind(modelOnly), "chibi");
-  assert.equal(availableTab(modelOnly, "portrait"), "model");
-  assert.equal(modelSource(modelOnly), "mod:future-model");
+  const chibiOnly = { ...student, storedResourceTypes: ["chibi"], previewSources: { chibi: "mod:future-chibi" } };
+  assert.ok(hasAsset(chibiOnly));
+  assert.equal(primaryKind(chibiOnly), "chibi");
+  assert.equal(availableTab(chibiOnly, "portrait"), "chibi");
+  assert.equal(chibiSource(chibiOnly), "mod:future-chibi");
 });
 
 test("stored-only portraits offer their own Mods without sibling adaptation sources", () => {
@@ -119,7 +119,7 @@ test("stored-only portraits offer their own Mods without sibling adaptation sour
     key: "future",
     portrait: null,
     memorialLobby: null,
-    storedKinds: ["portrait"],
+    storedResourceTypes: ["portrait"],
     localResourceTypes: [],
     state: { files: [] },
     modList: [mod("own", "future", "portrait")],
@@ -139,7 +139,7 @@ test("stored-only portraits offer their own Mods without sibling adaptation sour
   assert.equal(choices[1].greyed, false);
 });
 
-test("special slots open their lobby tab and switch only mods for their own core", () => {
+test("special slots open their memorial lobby tab and switch only mods for their own core", () => {
   const day = {
     key: "special:arona_workpage_daytime",
     portrait: null,
@@ -154,9 +154,9 @@ test("special slots open their lobby tab and switch only mods for their own core
   const shownStudent = { alts: [day, night, ...student().alts] };
   assert.ok(hasAsset(day));
   assert.equal(primaryKind(day), "memorialLobby");
-  for (const tab of ["portrait", "model", "lobby"]) assert.equal(availableTab(day, tab), "lobby");
+  for (const tab of ["portrait", "chibi", "memorialLobby"]) assert.equal(availableTab(day, tab), "memorialLobby");
   assert.equal(availableTab(shownStudent.alts[2], "portrait"), "portrait");
-  assert.equal(availableTab(shownStudent.alts[4], "lobby"), "portrait");
+  assert.equal(availableTab(shownStudent.alts[4], "memorialLobby"), "portrait");
   assert.deepEqual(
     candidates(shownStudent, day, "memorialLobby").map((c) => c.key),
     ["self", "m:day"],
@@ -185,10 +185,11 @@ test("candidates of the portrait: own, own mods, other alts, their mods", () => 
   assert.equal(list.at(-1).origin.key, "hoshino_swimsuit");
 });
 
-test("candidates of the memorial lobby: the alt's own lobby and its lobby mods only", () => {
+test("candidates of the memorial lobby: the alt's own memorial lobby and its memorial lobby mods only", () => {
   const shownStudent = student();
   const list = candidates(shownStudent, shownStudent.alts[0], "memorialLobby");
-  // no portrait mods, and neither another alt's lobby nor its lobby mods (untested under this alt's prefab)
+  // no portrait mods, and neither another alt's memorial lobby nor its memorial lobby mods (untested under this alt's
+  // prefab)
   assert.deepEqual(
     list.map((c) => c.key),
     ["self", "m:l1"],
@@ -212,7 +213,7 @@ test("what the game shows, per kind", () => {
   assert.equal(appliedKey(hoshino, "memorialLobby"), "m:l1");
   assert.equal(appliedKey(swimsuit, "portrait"), "v:hoshino");
   assert.equal(appliedKey(swimsuit, "memorialLobby"), "self");
-  assert.equal(appliedKey(np, "memorialLobby"), "self"); // no lobby files: nothing replaced
+  assert.equal(appliedKey(np, "memorialLobby"), "self"); // no memorial lobby files: nothing replaced
 });
 
 test("parts with several sources, or changed outside the library, are unknown", () => {
@@ -246,8 +247,8 @@ test("parts and cores of a kind", () => {
 
 test("the switch card uses the asset kind of every tab", () => {
   assert.equal(switchKindOf("portrait"), "portrait");
-  assert.equal(switchKindOf("lobby"), "memorialLobby");
-  assert.equal(switchKindOf("model"), "chibi");
+  assert.equal(switchKindOf("memorialLobby"), "memorialLobby");
+  assert.equal(switchKindOf("chibi"), "chibi");
 });
 
 test("what the game shows follows the library's source rule, part by part", () => {
@@ -271,7 +272,7 @@ test("a part's official verdict wins over its applied source; without one, its a
   assert.equal(appliedOf({ state: { files: [part("portrait", "mod:a")] } }), "mod:a"); // an older server: no verdict
 });
 
-// --- overwritten kinds, alternate lobby cores and the popup while mods are off ---
+// --- overwritten kinds, alternate memorial lobby cores and the popup while mods are off ---
 
 // a part of another tool's mod with no official copy anywhere (student.get: restorable false)
 const overwrittenPart = (kind) => part(kind, "unknown", { official: false, copy: null, restorable: false });
@@ -302,7 +303,7 @@ test("candidates keep Original unavailable while mods can replace an overwritten
   // Preview selection is independent of whether the asset can currently be applied.
   assert.equal(popupMode(shownStudent, shownStudent.alts[0], "portrait", true).start, "m:p1");
   assert.equal(popupMode(shownStudent, shownStudent.alts[0], "portrait", false).start, "self");
-  // the lobby is not overwritten: its cards are not greyed
+  // the memorial lobby is not overwritten: its cards are not greyed
   assert.ok(candidates(shownStudent, shownStudent.alts[0], "memorialLobby").every((c) => !c.greyed));
 });
 
@@ -332,7 +333,7 @@ test("another alt's card is greyed on every other popup when its files of that k
   assert.equal(overwrittenOf({ state: { files: [part("portrait", "unknown")] } }, "portrait"), false);
 });
 
-test("a lobby popup lists only the lobby mods of its own core", () => {
+test("a memorial lobby popup lists only the memorial lobby mods of its own core", () => {
   const shownStudent = student();
   shownStudent.alts[0].modList.push(
     { ...mod("gl", "hoshino", "memorialLobby"), core: "hoshino_home_gl" },
@@ -361,7 +362,7 @@ test("asset selection always saves the preview independently of the Mods switch"
   v.state.files = [part("portrait", "official"), part("memorialLobby", "official")];
   assert.equal(configuredKey(v, "portrait"), "m:p1");
   assert.deepEqual(popupMode(shownStudent, v, "portrait", false), { start: "m:p1", button: "popup.save", set: "m:p1" });
-  // a configured source the popup does not offer (another alt's lobby): it starts on the own files
+  // a configured source the popup does not offer (another alt's memorial lobby): it starts on the own files
   assert.equal(configuredKey(v, "memorialLobby"), "v:hoshino_swimsuit");
   assert.equal(popupMode(shownStudent, v, "memorialLobby", false).start, "self");
   // nothing configured: the own files, and no Set chip
@@ -474,49 +475,49 @@ test("a saved or removed configuration refreshes the preview without any change 
   );
 });
 
-test("model sources stay within the alt and use the shared configured/applied rules", () => {
+test("chibi sources stay within the alt and use the shared configured/applied rules", () => {
   const shownStudent = student(),
     v = shownStudent.alts[0];
   v.chibi = "hoshino_original";
-  v.state.files.push(part("chibi", "mod:model-a", { official: false, restorable: true }));
-  v.modList.push({ ...mod("model-a", v.key, "chibi"), core: v.chibi });
+  v.state.files.push(part("chibi", "mod:chibi-a", { official: false, restorable: true }));
+  v.modList.push({ ...mod("chibi-a", v.key, "chibi"), core: v.chibi });
   shownStudent.alts[1].modList.push(mod("foreign", shownStudent.alts[1].key, "chibi"));
   v.modList.push({ ...mod("wrong-core", v.key, "chibi"), core: "alternate" });
   assert.deepEqual(
     candidates(shownStudent, v, "chibi").map((c) => c.key),
-    ["self", "m:model-a"],
+    ["self", "m:chibi-a"],
   );
   assert.equal(coreOf(v, "chibi"), "hoshino_original");
-  assert.equal(appliedKey(v, "chibi"), "m:model-a");
-  assert.equal(modelSource(v, true), "live");
+  assert.equal(appliedKey(v, "chibi"), "m:chibi-a");
+  assert.equal(chibiSource(v, true), "live");
   assert.equal(previewBase(v, "chibi", true), "/asset/chibi/hoshino.glb");
-  v.configured = { chibi: "mod:model-a" };
+  v.configured = { chibi: "mod:chibi-a" };
   v.state.files = [part("chibi", "official")];
-  assert.equal(modelSource(v, false), "mod:model-a");
-  assert.equal(previewBase(v, "chibi", false), "/asset/chibi/hoshino.glb?source=mod%3Amodel-a");
+  assert.equal(chibiSource(v, false), "mod:chibi-a");
+  assert.equal(previewBase(v, "chibi", false), "/asset/chibi/hoshino.glb?source=mod%3Achibi-a");
   assert.deepEqual(popupMode(shownStudent, v, "chibi", false), {
-    start: "m:model-a",
+    start: "m:chibi-a",
     button: "popup.save",
-    set: "m:model-a",
+    set: "m:chibi-a",
   });
   assert.equal(appliedKey(v, "chibi"), "self");
-  assert.equal(modelUrl("a/b", "official"), "/asset/chibi/a%2Fb.glb?source=official");
-  assert.equal(modelUrl("hihumi", "live", "Hihumi_Original_Exs"), "/asset/chibi/hihumi.glb?clip=Hihumi_Original_Exs");
+  assert.equal(chibiUrl("a/b", "official"), "/asset/chibi/a%2Fb.glb?source=official");
+  assert.equal(chibiUrl("hihumi", "live", "Hihumi_Original_Exs"), "/asset/chibi/hihumi.glb?clip=Hihumi_Original_Exs");
   assert.equal(
-    modelUrl("hihumi", "alt:ch0242", "CH0271_Formation Pickup"),
+    chibiUrl("hihumi", "alt:ch0242", "CH0271_Formation Pickup"),
     "/asset/chibi/hihumi.glb?source=alt%3Ach0242&clip=CH0271_Formation%20Pickup",
   );
   v.configured = {};
-  assert.equal(modelSource(v, false), "official");
+  assert.equal(chibiSource(v, false), "official");
 });
 
-test("the 3D model offers the student's other models as costumes, field-mode models included", () => {
+test("the chibi offers the student's other chibis as costumes, field-mode chibis included", () => {
   const shownStudent = student(),
     [v, swimsuit, np] = shownStudent.alts;
   v.chibi = "hoshino_original";
   swimsuit.chibi = "hoshino_swimsuit";
-  swimsuit.modList.push(mod("swim-model", swimsuit.key, "chibi")); // another alt's mod: never a costume
-  np.fieldChibi = "np0045"; // an event costume with only a field-mode model
+  swimsuit.modList.push(mod("swim-chibi", swimsuit.key, "chibi")); // another alt's mod: never a costume
+  np.fieldChibi = "np0045"; // an event costume with only a field-mode chibi
   const ok = { hoshino: "ok", hoshino_swimsuit: "ok", np0045: "ok" };
   assert.deepEqual(
     costumeCandidates(shownStudent, v).map((o) => o.key),
@@ -528,7 +529,7 @@ test("the 3D model offers the student's other models as costumes, field-mode mod
   );
   assert.deepEqual(
     candidates(shownStudent, swimsuit, "chibi", ok).map((c) => c.key),
-    ["self", "m:swim-model", "v:hoshino", "v:np0045"],
+    ["self", "m:swim-chibi", "v:hoshino", "v:np0045"],
   );
   // Every pair is listed at once; one not checked yet or refused is listed for a preview only, and a refused
   // one cannot be chosen as the preview either
@@ -570,21 +571,21 @@ test("the 3D model offers the student's other models as costumes, field-mode mod
   delete v.previewSources;
   // the field-only alt shows a 3D tab, with no slot to switch
   assert.equal(hasKind(np, "chibi"), true);
-  assert.equal(availableTab(np, "model"), "model");
+  assert.equal(availableTab(np, "chibi"), "chibi");
   assert.deepEqual(
     candidates(shownStudent, np, "chibi").map((c) => [c.key, c.greyed]),
     [["self", true]],
   );
   // a costume previews and applies as alt:<key>
   v.previewSources = { chibi: "alt:np0045" };
-  assert.equal(modelSource(v, true), "alt:np0045");
+  assert.equal(chibiSource(v, true), "alt:np0045");
   assert.equal(previewBase(v, "chibi", true), "/asset/chibi/hoshino.glb?source=alt%3Anp0045");
   assert.equal(sourceOf("v:np0045"), "alt:np0045");
-  // the portrait keeps its own rules: other alts' portrait mods, never models
+  // the portrait keeps its own rules: other alts' portrait mods, never chibis
   assert.ok(candidates(shownStudent, v, "portrait").every((c) => c.kind !== "alt" || c.alt.portrait));
 });
 
-test("other students' models stay out of the normal list and retain saved cross choices", () => {
+test("other students' chibis stay out of the normal list and retain saved cross choices", () => {
   const shownStudent = student(),
     v = shownStudent.alts[0];
   shownStudent.alts.forEach((o) => {
@@ -594,49 +595,49 @@ test("other students' models stay out of the normal list and retain saved cross 
   shownStudent.alts[1].chibi = "hoshino_swimsuit";
   const npc = { key: "ch0171", student: "yukino", chibi: "ch0171_enemy", playable: false };
   const field = { key: "field", student: "yukino", fieldChibi: "ch0171_field" };
-  const roster = [
+  const studentList = [
     shownStudent,
     { key: "yukino", alts: [npc, field, { key: "portrait", student: "yukino", portrait: "portrait" }] },
   ];
   const verdicts = { hoshino_swimsuit: "ok", ch0171: "preview" };
   assert.deepEqual(
-    candidates(shownStudent, v, "chibi", verdicts, roster),
+    candidates(shownStudent, v, "chibi", verdicts, studentList),
     candidates(shownStudent, v, "chibi", verdicts),
   );
   assert.deepEqual(
-    crossModels(roster, v).map((o) => o.key),
+    crossChibis(studentList, v).map((o) => o.key),
     ["ch0171", "field"],
   );
-  assert.deepEqual(crossModels(roster, field), [], "field-only models have no destination slot");
+  assert.deepEqual(crossChibis(studentList, field), [], "field-only chibis have no destination slot");
   for (const property of ["configured", "previewSources"]) {
     v[property] = { chibi: "alt:ch0171" };
-    const choices = candidates(shownStudent, v, "chibi", verdicts, roster);
+    const choices = candidates(shownStudent, v, "chibi", verdicts, studentList);
     assert.deepEqual(
       choices.map((c) => c.key),
       ["self", "v:hoshino_swimsuit", "v:ch0171"],
     );
     assert.equal(choices.at(-1).cross, true);
     assert.equal(choices.at(-1).previewOnly, undefined);
-    assert.equal(popupMode(shownStudent, v, "chibi", true, roster).start, "v:ch0171");
-    assert.equal(modelSource(v), "alt:ch0171");
+    assert.equal(popupMode(shownStudent, v, "chibi", true, studentList).start, "v:ch0171");
+    assert.equal(chibiSource(v), "alt:ch0171");
     assert.deepEqual(
-      candidates(shownStudent, v, "portrait", verdicts, roster),
+      candidates(shownStudent, v, "portrait", verdicts, studentList),
       candidates(shownStudent, v, "portrait", verdicts),
     );
     assert.deepEqual(
-      candidates(shownStudent, v, "memorialLobby", verdicts, roster),
+      candidates(shownStudent, v, "memorialLobby", verdicts, studentList),
       candidates(shownStudent, v, "memorialLobby", verdicts),
     );
     delete v[property];
   }
 });
 
-test("cross model hits are ordered and capped, flag pending cards, and omit hard refusals", () => {
+test("cross chibi hits are ordered and capped, flag pending cards, and omit hard refusals", () => {
   const v = { key: "slot", student: "own", chibi: "slot" };
   const alts = Array.from({ length: 70 }, (_, i) => ({ key: `npc${i}`, student: "other", fieldChibi: `ch${i}` }));
-  const roster = [{ alts }];
+  const studentList = [{ alts }];
   const hits = crossCandidates(
-    roster,
+    studentList,
     v,
     { npc0: "refused", npc1: "preview", npc2: "ok" },
     {
@@ -654,21 +655,21 @@ test("cross model hits are ordered and capped, flag pending cards, and omit hard
   assert.ok(hits.slice(0, 2).every((c) => !c.pending && !c.previewOnly));
   assert.ok(hits.slice(2).every((c) => c.pending));
   assert.deepEqual(
-    crossCandidates(roster, v, null, { match: (o) => o.key === "npc69" }).map((c) => c.key),
+    crossCandidates(studentList, v, null, { match: (o) => o.key === "npc69" }).map((c) => c.key),
     ["v:npc69"],
   );
 });
 
-test("every other student's model is listed without the 64 cap, in the same order, when asked for", () => {
+test("every other student's chibi is listed without the 64 cap, in the same order, when asked for", () => {
   const v = { key: "slot", student: "own", chibi: "slot" };
   const alts = Array.from({ length: 200 }, (_, i) => ({ key: `npc${i}`, student: "other", fieldChibi: `ch${i}` }));
-  const roster = [{ alts }],
+  const studentList = [{ alts }],
     compare = (a, b) => Number(a.key.slice(3)) - Number(b.key.slice(3));
   const verdicts = { npc0: "refused", npc5: "preview" };
-  const capped = crossCandidates(roster, v, verdicts, { compare });
+  const capped = crossCandidates(studentList, v, verdicts, { compare });
   assert.equal(capped.length, 64, "a search's hits stop at what one RPC call takes");
-  const all = crossCandidates(roster, v, verdicts, { compare, limit: Infinity });
-  assert.equal(all.length, 199, "every other model but the refused one");
+  const all = crossCandidates(studentList, v, verdicts, { compare, limit: Infinity });
+  assert.equal(all.length, 199, "every other chibi but the refused one");
   assert.deepEqual(
     all.slice(0, 64).map((c) => c.key),
     capped.map((c) => c.key),
@@ -679,7 +680,7 @@ test("every other student's model is listed without the 64 cap, in the same orde
     all.map((c) => c.key).sort((a, b) => Number(a.slice(5)) - Number(b.slice(5))),
   );
   assert.ok(all.every((c) => c.cross && !c.greyed) && all.find((c) => c.key === "v:npc5").pending === undefined);
-  // the student's own alts and models of the same student are never among them
+  // the student's own alts and chibis of the same student are never among them
   assert.deepEqual(
     crossCandidates([{ alts: [{ key: "mine", student: "own", chibi: "mine" }, ...alts.slice(0, 2)] }], v, null, {
       limit: Infinity,
@@ -705,9 +706,9 @@ test("Show other students is off at every start and is kept only in memory", asy
   }
 });
 
-test("a card of another student's model carries the caution and its ids, from a search or from the checkbox", () => {
+test("a card of another student's chibi carries the caution and its ids, from a search or from the checkbox", () => {
   const v = { key: "slot", student: "own", chibi: "slot" };
-  const roster = [
+  const studentList = [
     {
       alts: [
         { key: "a", student: "other", chibi: "ch1", fileId: "f1" },
@@ -716,8 +717,8 @@ test("a card of another student's model carries the caution and its ids, from a 
     },
   ];
   for (const cards of [
-    crossCandidates(roster, v, null, { match: (o) => o.key === "a" }),
-    crossCandidates(roster, v, null, { limit: Infinity }),
+    crossCandidates(studentList, v, null, { match: (o) => o.key === "a" }),
+    crossCandidates(studentList, v, null, { limit: Infinity }),
   ]) {
     assert.ok(cards.length > 0);
     for (const card of cards) {
@@ -752,7 +753,7 @@ test("past-limit verdicts allow Apply for every pair while hard refusals stay bl
   assert.equal(costumeHold(shownStudent, v, "m:mod", {}), null);
 });
 
-test("split model slots offer dependency mods and judge every slot part", async () => {
+test("split chibi slots offer dependency mods and judge every slot part", async () => {
   const { selectionStatus, candidateStatus } = await import("../../src/bmpt/web/js/mods/switch-sources.js");
   const dependency = { id: "dependency", resourceType: "chibi", core: "ch0258", targetAlt: "ch0258" };
   const v = {
@@ -783,7 +784,7 @@ test("split model slots offer dependency mods and judge every slot part", async 
       },
     ],
   };
-  // other cores' mods stay out; the other alt's model is listed as a costume, applicable once checked
+  // other cores' mods stay out; the other alt's chibi is listed as a costume, applicable once checked
   assert.deepEqual(
     candidates(shownStudent, v, "chibi", { hoshino: "ok" }).map((c) => [c.key, !!c.previewOnly]),
     [
@@ -834,7 +835,7 @@ test("Applied follows game intent independently of physical writes and preview s
       const error = installed ? null : { code: "game_file_locked", params: { file: "bundle" } };
       v.selection[kind] = { source: "mod:chosen", installed, error };
       const expected = "status.applied";
-      assert.equal(selectionStatus(v, kind), expected, "roster and switch card");
+      assert.equal(selectionStatus(v, kind), expected, "studentList and switch card");
       assert.equal(detailStatus(v, kind), expected, "detail Info");
       assert.equal(candidateStatus(v, kind, "m:chosen"), expected, "popup Status and chip");
       assert.equal(candidateStatus(v, kind, "m:old"), null);

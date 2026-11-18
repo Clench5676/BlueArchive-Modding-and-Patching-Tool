@@ -1,8 +1,9 @@
-"""SpineSkeletonDataConverter (wang606, PolyForm Noncommercial 1.0.0) as an optional helper of the graft.
+"""SpineSkeletonDataConverter (wang606, PolyForm Noncommercial 1.0.0) as an optional helper of the animation transfer.
 
-Where the built-in graft (``bmpt.spine.graft``) refuses an animation (it needs a bone, slot, event, constraint or skin
+Where the built-in animation transfer (``bmpt.spine.add_animations``) refuses an animation (it needs a bone, slot,
+event, constraint or skin
 the mod's rig lacks), the rigs go through the converter to JSON, the animation is added there by name with what it
-needs (:func:`graft_json`), and the result goes back to binary.
+needs (:func:`add_animations_json`), and the result goes back to binary.
 
 The project's own code (GPLv3): it starts the converter as a separate program and edits JSON; it holds none of the
 converter's code. The converter is never shipped with the App: the user fetches it after confirming its licence
@@ -294,14 +295,15 @@ def to_binary(exe: Path, document: dict) -> bytes:
     return data
 
 
-# --- the graft in JSON ---------------------------------------------------------------------------------------------
+# --- the animation transfer in JSON
+# ---------------------------------------------------------------------------------------------
 
 CONSTRAINTS = ("ik", "transform", "path", "physics")
 
 
 @dataclass
-class JsonGraft:
-    """What :func:`graft_json` carried.
+class JsonAddedAnimations:
+    """What :func:`add_animations_json` carried.
 
     The animations added, the reason for each animation left out, the bones and slots added, and the atlas regions the
     carried attachments draw.
@@ -357,7 +359,7 @@ def _needs(animation: Mapping[str, Any]) -> dict[str, set[str]]:
     return need
 
 
-def graft_json(mod: dict, official: dict) -> JsonGraft:
+def add_animations_json(mod: dict, official: dict) -> JsonAddedAnimations:
     """Add every animation of ``official`` that ``mod`` lacks to ``mod``, in place, with what it refers to.
 
     Matched by name, what the mod lacks is copied: bones with the ancestors the mod lacks (parents first, in the
@@ -374,7 +376,7 @@ def graft_json(mod: dict, official: dict) -> JsonGraft:
     Returns:
         What was carried and what was refused.
     """
-    result = JsonGraft([], {}, [], [])
+    result = JsonAddedAnimations([], {}, [], [])
     m_bones = {b.get("name"): b for b in mod.setdefault("bones", [])}
     o_bones = {b.get("name"): b for b in official.get("bones") or []}
     m_slots = _names(mod.setdefault("slots", []))

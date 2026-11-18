@@ -1,13 +1,13 @@
-// Tests for web/js/lobby/lobby-intro.js (the memorial lobby's intro timeline), the particle player's hooks it uses
-// (particles.js Effects.restart / stop, overrides, spriteGeometry) and lobby-dof.js's blur spacing. Run by
-// tests/test_intro.py with Node's test runner.
+// Tests for web/js/memorial-lobby/memorial-lobby-intro.js (the memorial lobby's intro timeline), the particle player's
+// hooks it uses (particles.js Effects.restart / stop, overrides, spriteGeometry) and memorial-lobby-dof.js's blur
+// spacing. Run by tests/test_intro.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const I = await import("../../src/bmpt/web/js/lobby/lobby-intro.js");
-const P = await import("../../src/bmpt/web/js/lobby/particles.js");
-const G = await import("../../src/bmpt/web/js/lobby/particles-geometry.js");
-const Dof = await import("../../src/bmpt/web/js/lobby/lobby-dof.js");
+const I = await import("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-intro.js");
+const P = await import("../../src/bmpt/web/js/memorial-lobby/particles.js");
+const G = await import("../../src/bmpt/web/js/memorial-lobby/particles-geometry.js");
+const Dof = await import("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-dof.js");
 
 const near = (a, b, eps = 1e-6, what = "") => assert.ok(Math.abs(a - b) <= eps, `${what} ${a} != ${b}`);
 
@@ -133,7 +133,7 @@ const volumes = () => [
   },
 ];
 
-test("the volumes blend as URP's VolumeManager does (lobby.py post_processing)", () => {
+test("the volumes blend as URP's VolumeManager does (memorial_lobby.py post_processing)", () => {
   const v = volumes();
   assert.deepEqual(I.blend(v), { chromaticAberration: 0.2 });
   v[1].weight = 0.3; // the flash: post exposure lerped from 0 by the weight
@@ -467,7 +467,7 @@ test("a tap skips the intro to its end; Hold keeps its last frame", () => {
   assert.equal(t.listeners.pointerdown, undefined);
 });
 
-test("the intro waits until the lobby is on screen, and the setting off goes straight to its end", () => {
+test("the intro waits until the memorial lobby is on screen, and the setting off goes straight to its end", () => {
   let on = false;
   const t = env({ visible: () => on }),
     ctl = I.create(intro(), t.env);

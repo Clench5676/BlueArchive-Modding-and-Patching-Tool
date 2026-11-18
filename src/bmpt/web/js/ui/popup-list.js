@@ -4,7 +4,13 @@ import * as NGUI from "./ngui.js";
 import { attachHint } from "./hover-hint.js";
 import { switchGrid, placeSwitchCards } from "../mods/switch-layout.js";
 import * as Buttons from "./game-buttons.js";
-import { searchTree, pickerItems, toolbarFit, toolbarTree, TOOLBAR_CENTRE_Y } from "../roster/roster-widgets.js";
+import {
+  searchTree,
+  pickerItems,
+  toolbarFit,
+  toolbarTree,
+  TOOLBAR_CENTRE_Y,
+} from "../student-list/student-list-widgets.js";
 import { selectedFrame, selectionArtWindow } from "./selected-frames.js";
 import { T } from "../core/i18n.js";
 import { frameGeometry, popupContent } from "./popup-frames.js";
@@ -62,7 +68,7 @@ export function listLayout(check = false, kind = null) {
     native.h +
     Math.max(native.bar, LIST_CARD_NAME.padY + LIST_CARD_NAME.lines * LIST_CARD_NAME.fs * LIST_CARD_NAME.pitch);
   const need = POPUP_FRAME.contentTop + CONTROL.buttonS.h + 5 * SPACE.m + cardHeight + POPUP_FOOTER.clearance;
-  // every list popup has one height, the Hall's editors'
+  // every list popup has one height, the Student Hall's editors'
   const frame = frameGeometry("XL", Math.max(need, POPUP_FRAME.panelH));
   const content = popupContent(frame.w, frame.h);
   const panels = grid(content);
@@ -84,7 +90,7 @@ export function listLayout(check = false, kind = null) {
   };
 }
 // the band over a list's paper: the toolbar's height, or a slimmer one (``slim``) that only holds the footer's count
-// The list popups' toolbar: the roster's, one size down ("太高了，弄矮一些，再弄小一档"), its 116-unit tools 93 high
+// The list popups' toolbar: the student list's, one size down ("太高了，弄矮一些，再弄小一档"), its 116-unit tools 93 high
 export const LIST_TOOLBAR = Object.freeze({ scale: 0.8 });
 export const LIST_BAND = Object.freeze({ tools: Math.round(116 * LIST_TOOLBAR.scale), slim: 60 });
 /**
@@ -114,8 +120,8 @@ export const LP = listLayout();
 // a segment's caption: a string key, or {text} for a caption the caller wrote (a count in it)
 const segText = (seg) => (typeof seg === "string" ? T(seg) : (seg?.text ?? ""));
 // the student list's tools at the top right of the list: order, sort, search and, with segs, the segment filter; check:
-// the roster's checkbox before them. One toolbar, the roster's, fitted by its own steps to the list's width (the
-// list popups are the L class, too narrow for the prefab's 230-wide segments and 420-wide sort button).
+// the student list's checkbox before them. One toolbar, the student list's, fitted by its own steps to the list's width
+// (the list popups are the L class, too narrow for the prefab's 230-wide segments and 420-wide sort button).
 function toolbar(
   right,
   y,
@@ -142,7 +148,7 @@ export const TOGGLE_ICON = Object.freeze({ sprite: "Common_Charlist_Icon_ViewSma
  * @param
  *     {{segs?: (string|{text: string})[], sortKey: string, sortKeys: string[], label?: string|null, left?: number, icons?: number}}
  *     options segs: the segment captions' keys; sortKey: the one shown; sortKeys: all the sort button's keys.
- * @returns {object} The toolbar's fit, as roster-widgets.js toolbarFit gives it.
+ * @returns {object} The toolbar's fit, as student-list-widgets.js toolbarFit gives it.
  */
 export function checkedToolbarFit(
   right,
@@ -159,10 +165,10 @@ export function checkedToolbarFit(
     spread: true,
   });
 }
-// The toolbar with a checkbox (Switch 3D Model's "Show other students") is the student roster's: the checkbox,
-// the three segments, search, sort and order, fitted by the roster's own steps (roster-widgets.js toolbarFit;
-// the sort button as wide as its longest key). Returns the tree, where the segments and the checkbox stand for
-// the hit areas. It is drawn at LIST_TOOLBAR.scale with its right edge at `right`, fitted to the list's width
+// The toolbar with a checkbox (Switch Chibi's "Show other students") is the student list's: the checkbox,
+// the three segments, search, sort and order, fitted by the student list's own steps (student-list-widgets.js
+// toolbarFit; the sort button as wide as its longest key). Returns the tree, where the segments and the checkbox stand
+// for the hit areas. It is drawn at LIST_TOOLBAR.scale with its right edge at `right`, fitted to the list's width
 // over that scale. toggle: {label, checked, onChange} for an icon toggle before search (TOGGLE_ICON).
 function fittedToolbar(right, y, { segs, sortKey, sortKeys, active, ascending, filtered, toggle }) {
   const k = LIST_TOOLBAR.scale,
@@ -281,7 +287,7 @@ export const tickPlace = (card) => [
 ];
 /**
  * Draw one card of a list: the game's card body, the picture clipped to its window, a name bar under it.
- * A card that cannot be chosen (dim) is darkened like the roster's not-owned cards, its picture without colour;
+ * A card that cannot be chosen (dim) is darkened like the student list's not-owned cards, its picture without colour;
  * its badge (In Use, or the caller's) stays bright.
  * @param {ListItem} it
  * @param {{w: number, h: number, bar: number}} [card] The card's size and its name bar's height.
@@ -444,7 +450,7 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
     // hit boxes and scroll pitch.
     tree.layoutChildren = [...kids];
     tree.children = kids.filter((n) => n.name !== "Select");
-    // frameCaption false: the frame alone, no Applied word in it (the Hall's chosen background)
+    // frameCaption false: the frame alone, no Applied word in it (the Student Hall's chosen background)
     const caption =
       it.frameCaption !== false && (it.applied || selected)
         ? selectionCaptions(card)?.[it.applied ? "applied" : "preview"]
@@ -485,7 +491,8 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
  * @property {boolean} [disabled] Cannot be ticked (with multi).
  * @property {boolean} [dim] The darkened look.
  * @property {boolean} [applied] Draws the selection frame; true for the applied card.
- * @property {boolean} [frameCaption] False: the frame alone, no Applied word in it (the Hall's chosen background).
+ * @property {boolean} [frameCaption] False: the frame alone, no Applied word in it (the Student Hall's chosen
+ *     background).
  * @property {{text: string, color: string, ink: string}} [badge] The badge at the card's top.
  * @property {{text: string, color: string, ink: string}} [tag] The first tag of the card's bottom row.
  * @property {object[]} [marks] The marks after the tag (Updatable).
@@ -503,8 +510,8 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
  * @property {number|string} [seg] The chosen segment.
  * @property {(seg: number|string) => void} [onSeg] A segment was chosen.
  * @property {string} [sortKey] The sort shown.
- * @property {(query: string) => ListItem[]} [more] Cards added after the matching ones (Switch 3D Model's other
- *     students' models), asked on every drawing with the search's words, which may be empty; ordered and turned like
+ * @property {(query: string) => ListItem[]} [more] Cards added after the matching ones (Switch Chibi's other
+ *     students' chibis), asked on every drawing with the search's words, which may be empty; ordered and turned like
  *     the others.
  * @property {(keys: string[]) => void} [onView] The keys of the cards in view, after every drawing and scroll (the
  *     same signal that brings their thumbnails in).
@@ -566,10 +573,11 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
  * @property {{keys: string[], onTick: (key: string, scroll: number) => void}|null} [tick] Cards ticked apart from
  *     being shown: a click on a card shows it in the details (onSelect, selected), a click on its corner's tick box
  *     ticks or unticks it (onTick).
- * @property {string|null} [empty] What an empty list says, in the middle of its paper (hall.noCandidates by default).
- *     A list with no card to show puts it there; with tools, while the chosen card (selected) is not among the cards
+ * @property {string|null} [empty] What an empty list says, in the middle of its paper (studentHall.noCandidates by
+ *     default). A list with no card to show puts it there; with tools, while the chosen card (selected) is not among
+ * the cards
  *     shown, the primary button is the game's disabled one and answers nothing.
- * @property {string} [layoutKind] The kind of cards the list lays out ("portrait", "lobby", "model", ...).
+ * @property {string} [layoutKind] The kind of cards the list lays out ("portrait", "memorialLobby", "chibi", ...).
  * @property {(it: ListItem) => string} [detailKind] The kind whose details panel a card shows when it differs from
  *     layoutKind's ("portrait": the portrait panel, an upright picture beside the stacked fields), for lists of several
  *     kinds.
@@ -701,7 +709,7 @@ export async function listPopup(options) {
         toolState.ascending = !toolState.ascending;
         redraw();
       },
-      { name: T(toolState.ascending ? "roster.asc" : "roster.desc"), action: "order" },
+      { name: T(toolState.ascending ? "studentList.asc" : "studentList.desc"), action: "order" },
     );
     hit(
       next,
@@ -712,7 +720,7 @@ export async function listPopup(options) {
         if (!toolState.searching) toolState.query = "";
         redraw();
       },
-      { name: T("roster.search"), action: "search" },
+      { name: T("studentList.search"), action: "search" },
     );
     hit(
       next,
@@ -823,7 +831,7 @@ export async function listPopup(options) {
     const r = nodeRect(sv, `${search.name}/SearchName/SearchNameArea/InputField/Label_Search`);
     if (r) {
       searchInput = document.createElement("input");
-      searchInput.className = "roster-search";
+      searchInput.className = "student-list-search";
       Object.assign(searchInput.style, {
         left: `${r[0]}px`,
         top: `${r[1]}px`,
@@ -835,9 +843,9 @@ export async function listPopup(options) {
       searchInput.type = "text";
       searchInput.autocomplete = "off";
       searchInput.spellcheck = false;
-      searchInput.placeholder = T("roster.searchHint");
+      searchInput.placeholder = T("studentList.searchHint");
       searchInput.value = toolState.query;
-      searchInput.setAttribute("aria-label", T("roster.searchHint"));
+      searchInput.setAttribute("aria-label", T("studentList.searchHint"));
       const apply = () => {
         toolState.query = searchInput.value;
         redraw();
@@ -851,7 +859,7 @@ export async function listPopup(options) {
         toolState.searching = false;
         redraw();
       };
-      // Escape closes the search first, as the roster's does, and the popup stays; not the key that ends an input
+      // Escape closes the search first, as the student list's does, and the popup stays; not the key that ends an input
       // method's conversion (keyCode 229 in WebKit)
       searchInput.addEventListener("keydown", (ev) => {
         if (ev.key !== "Escape" || ev.isComposing || ev.keyCode === 229) return;
@@ -869,9 +877,9 @@ export async function listPopup(options) {
   const [cardLeft, top] = toNode(cardBox, 0, LP.frame),
     bottom = top - cardBox.h;
   if (!items.length) {
-    // nothing to show: the list paper says so, as the Hall's pickers do
+    // nothing to show: the list paper says so, as the Student Hall's pickers do
     const room = LP.list.r - LP.list.l - 160,
-      f = fitText(empty ?? T("hall.noCandidates"), 48, 32, room, 2);
+      f = fitText(empty ?? T("studentHall.noCandidates"), 48, 32, room, 2);
     await NGUI.render(
       node(
         "Empty",

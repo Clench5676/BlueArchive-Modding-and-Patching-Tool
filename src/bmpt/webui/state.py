@@ -1,6 +1,6 @@
 """Small UI state kept between launches, in webui.json.
 
-It holds the asset consent, recently opened variants, seen mods, the user's own aliases of the variants and the web
+It holds the asset consent, recently opened alts, seen mods, the user's own aliases of the alts and the web
 UI's own preferences (voice volume, the mod library folder, scan and Spine consents, the mod switch's and the classic
 hand-off's flags, the data directory's id). It is kept apart from config.toml, which the classic GUI rewrites with only
 its own keys.
@@ -33,14 +33,15 @@ from pathlib import Path
 from typing import Any
 
 # the lock and the replace shared with the mod library (bmpt.core.filelock)
-from ..host.store_formats import managed_bytes, read_runtime, runtime_store
+from ..host.store_formats import legacy_document, managed_bytes, read_runtime, runtime_store
 from ..core.filelock import file_lock as _file_lock, replace as _replace
 from ..core.logging_utils import log_failure
 
 logger = logging.getLogger(__name__)
 
 RECENT_MAX = 50
-# the user's own aliases of a student (the roster search matches them): at most this many, each this many characters
+# the user's own aliases of a student (the student list search matches them): at most this many, each this many
+# characters
 ALIAS_MAX, ALIAS_LENGTH = 8, 24
 
 
@@ -91,20 +92,21 @@ def custom_aliases(value: Any) -> list[str]:
     return out[:ALIAS_MAX]
 
 
-# The student list's view (web/js/roster/roster-order.js keeps the same rules): merge toggle, the two segment filters,
+# The student list's view (web/js/student-list/student-list-order.js keeps the same rules): merge toggle, the two
+# segment filters,
 # the display settings' sort, order and filter groups.
 STUDENT_LIST_SORTS = ("recent", "added", "name", "mods", "default")
 STUDENT_LIST_NATURAL = {"recent": "desc", "added": "desc", "name": "asc", "mods": "desc", "default": "asc"}
 STUDENT_LIST_FILTERS = {
     "favorite": ("yes", "no"),
     "portrait": ("official", "replaced"),
-    "lobby": ("yes", "no"),
-    "model": ("yes", "no"),
+    "memorialLobby": ("yes", "no"),
+    "chibi": ("yes", "no"),
 }
 
 
 def student_list_view(value: Any) -> dict[str, Any]:
-    """Make a stored or sent roster view valid; unknown fields and options are dropped.
+    """Make a stored or sent student list view valid; unknown fields and options are dropped.
 
     Args:
         value: The view: ``merged``, ``mods``, ``recruit``, ``sort``, ``order`` and the ``filters`` per group.
@@ -128,9 +130,9 @@ def student_list_view(value: Any) -> dict[str, Any]:
         if on:
             filters[group] = on
     return {
-        "merged": src.get("merged") is True,
+        "group_alts": src.get("groupAlts", src.get("group_alts")) is True,
         "mods": pick("mods", ("all", "mods", "none"), "all"),
-        "recruit": pick("recruit", ("all", "yes", "no"), "all"),
+        "releaseStatus": pick("releaseStatus", ("all", "yes", "no"), "all"),
         "sort": sort,
         "order": pick("order", ("asc", "desc"), STUDENT_LIST_NATURAL[sort]),
         "filters": filters,
@@ -291,7 +293,11 @@ class UiState:
         try:
             with os.fdopen(fd, "wb") as out:
                 store = runtime_store(self.path)
-                raw = managed_bytes(store, data) if store else json.dumps(data, ensure_ascii=False, indent=1).encode()
+                raw = (
+                    managed_bytes(store, data)
+                    if store
+                    else json.dumps(legacy_document(self.path, data), ensure_ascii=False, indent=1).encode()
+                )
                 out.write(raw)
                 out.flush()
                 os.fsync(out.fileno())
@@ -366,27 +372,27 @@ class UiState:
         return self.get("preview_cache") is not False
 
     def recent(self) -> list[str]:
-        """Return the keys of the recently opened variants, the latest first."""
+        """Return the keys of the recently opened alts, the latest first."""
         return _recent_of(self._current())
 
-    def preview_sources(self, install: str, variant: str) -> dict[str, str]:
-        """Return the saved view choice of one variant.
+    def preview_sources(self, install: str, alt: str) -> dict[str, str]:
+        """Return the saved view choice of one alt.
 
         Args:
             install: The install's id.
-            variant: The variant key.
+            alt: The alt key.
 
         Returns:
-            Asset kind (``spr``, ``lobby`` or ``model``) mapped to the chosen source: ``official`` or ``mod:<id>``.
+            Resource type mapped to the chosen source: ``official`` or ``mod:<id>``.
         """
         data = self._current().get("asset_previews", {})
         folder = data.get(install, {}) if isinstance(data, dict) else {}
-        sources = folder.get(variant, {}) if isinstance(folder, dict) else {}
+        sources = folder.get(alt, {}) if isinstance(folder, dict) else {}
         return (
             {
-                kind: source
-                for kind, source in sources.items()
-                if kind in ("spr", "lobby", "model") and isinstance(source, str)
+                resource_type: source
+                for resource_type, source in sources.items()
+                if resource_type in ("portrait", "memorialLobby", "chibi") and isinstance(source, str)
             }
             if isinstance(sources, dict)
             else {}
@@ -399,103 +405,108 @@ class UiState:
             install: The install's id.
 
         Returns:
-            Variant key mapped to what ``preview_sources`` returns for it.
+            alt key mapped to what ``preview_sources`` returns for it.
         """
         data = self._current().get("asset_previews", {})
         folder = data.get(install, {}) if isinstance(data, dict) else {}
         return (
             {
-                variant: {
-                    kind: source
-                    for kind, source in sources.items()
-                    if kind in ("spr", "lobby", "model") and isinstance(source, str)
+                alt: {
+                    resource_type: source
+                    for resource_type, source in sources.items()
+                    if resource_type in ("portrait", "memorialLobby", "chibi") and isinstance(source, str)
                 }
-                for variant, sources in folder.items()
-                if isinstance(variant, str) and isinstance(sources, dict)
+                for alt, sources in folder.items()
+                if isinstance(alt, str) and isinstance(sources, dict)
             }
             if isinstance(folder, dict)
             else {}
         )
 
-    def set_preview_source(self, install: str, variant: str, kind: str, source: str) -> None:
+    def set_preview_source(self, install: str, alt: str, resource_type: str, source: str) -> None:
         """Remember a view choice independently of the library's game configuration.
 
         Args:
             install: The install's id.
-            variant: The variant key.
-            kind: The asset kind, ``spr``, ``lobby`` or ``model``.
+            alt: The alt key.
+            resource_type: The resource type.
             source: ``official`` or ``mod:<id>``.
         """
 
         def change(data: dict[str, Any]) -> None:
-            data.setdefault("asset_previews", {}).setdefault(install, {}).setdefault(variant, {})[kind] = source
+            data.setdefault("asset_previews", {}).setdefault(install, {}).setdefault(alt, {})[resource_type] = source
 
         self._update(change)
 
     def reconcile_deleted_source(self, source: str, fallback) -> None:
         """Clear a removed preview source everywhere; retain Student Hall placement when another source exists.
 
-        View choices that name the source take the fallback or are dropped. Hall entries that use it are moved to
-        the fallback, merged into an entry that has it already, or removed; the hall's revision grows then.
+        View choices that name the source take the fallback or are dropped. Student Hall entries that use it are moved
+        to
+        the fallback, merged into an entry that has it already, or removed; the student hall's revision grows then.
 
         Args:
             source: The removed source, ``mod:<id>``.
-            fallback: ``fallback(variant, kind)`` returns the source to use instead, or a falsy value for none.
+            fallback: ``fallback(alt, resource_type)`` returns the source to use instead, or a falsy value for none.
         """
 
         def change(data):
             for folder in data.get("asset_previews", {}).values():
-                for variant, choices in folder.items():
-                    for kind, selected in list(choices.items()):
+                for alt, choices in folder.items():
+                    for resource_type, selected in list(choices.items()):
                         if selected == source:
-                            replacement = fallback(variant, kind)
+                            replacement = fallback(alt, resource_type)
                             if replacement:
-                                choices[kind] = replacement
+                                choices[resource_type] = replacement
                             else:
-                                del choices[kind]
-            hall = data.get("prefs", {}).get("student_hall")
-            if hall:
+                                del choices[resource_type]
+            student_hall = data.get("prefs", {}).get("student_hall")
+            if student_hall:
                 changed = False
                 replacements = {}
-                for group, kind in [("portraits", "spr"), ("memorials", "lobby")]:
+                for group, resource_type in [("portraits", "portrait"), ("memorialLobbies", "memorialLobby")]:
                     kept = []
                     existing = {
-                        (entry["variant"], entry["source"]): entry["id"]
-                        for entry in hall.get(group, [])
+                        (entry["alt"], entry["source"]): entry["id"]
+                        for entry in student_hall.get(group, [])
                         if entry.get("source") != source
                     }
-                    for entry in hall.get(group, []):
+                    for entry in student_hall.get(group, []):
                         if entry.get("source") == source:
                             changed = True
-                            replacement = fallback(entry["variant"], kind)
+                            replacement = fallback(entry["alt"], resource_type)
                             if not replacement:
                                 continue
-                            identity = (entry["variant"], replacement)
+                            identity = (entry["alt"], replacement)
                             if identity in existing:
                                 replacements[entry["id"]] = existing[identity]
                                 continue
                             entry["source"] = replacement
                             existing[identity] = entry["id"]
                         kept.append(entry)
-                    hall[group] = kept
+                    student_hall[group] = kept
                 if changed:
-                    hall["active"] = replacements.get(hall.get("active"), hall.get("active"))
-                    if not any(entry["id"] == hall.get("active") for entry in hall.get("memorials", [])):
-                        hall["active"] = next((entry["id"] for entry in hall.get("memorials", [])), None)
-                    hall["revision"] = hall.get("revision", 0) + 1
+                    student_hall["active"] = replacements.get(student_hall.get("active"), student_hall.get("active"))
+                    if not any(
+                        entry["id"] == student_hall.get("active") for entry in student_hall.get("memorialLobbies", [])
+                    ):
+                        student_hall["active"] = next(
+                            (entry["id"] for entry in student_hall.get("memorialLobbies", [])), None
+                        )
+                    student_hall["revision"] = student_hall.get("revision", 0) + 1
 
         self._update(change)
 
-    def visit(self, variant_key: str) -> None:
-        """Move a variant to the front of the recent list, which keeps ``RECENT_MAX`` keys.
+    def visit(self, alt_id: str) -> None:
+        """Move an alt to the front of the recent list, which keeps ``RECENT_MAX`` keys.
 
         Args:
-            variant_key: The variant opened.
+            alt_id: The alt opened.
         """
 
         def change(data: dict[str, Any]) -> None:
-            recent = [v for v in _recent_of(data) if v != variant_key]
-            data["recent"] = [variant_key, *recent][:RECENT_MAX]
+            recent = [v for v in _recent_of(data) if v != alt_id]
+            data["recent"] = [alt_id, *recent][:RECENT_MAX]
 
         self._update(change)
 
@@ -542,19 +553,19 @@ class UiState:
 
         self._update(change)
 
-    # --- the user's own aliases, by variant key ---
+    # --- the user's own aliases, by alt key ---
 
     def aliases(self, legacy_targets: dict[str, str] | None = None) -> dict[str, list[str]]:
-        """Return every variant's own aliases, cleaned as ``custom_aliases`` does.
+        """Return every alt's own aliases, cleaned as ``custom_aliases`` does.
 
-        Ordinary family keys identify the original variant. Special-only families need a catalog-selected target;
-        their entries are moved once under the shared lock, preserving any explicitly saved variant aliases.
+        Ordinary student keys identify the original alt. Special-only students need a catalog-selected target;
+        their entries are moved once under the shared lock, preserving any explicitly saved alt aliases.
 
         Args:
-            legacy_targets: Family key mapped to the variant that takes the aliases stored under the family key.
+            legacy_targets: student key mapped to the alt that takes the aliases stored under the student key.
 
         Returns:
-            Variant key mapped to its aliases; variants without aliases are left out.
+            alt key mapped to its aliases; alts without aliases are left out.
         """
         table = self._current().get("aliases")
         if isinstance(table, dict) and legacy_targets and any(key in table for key in legacy_targets):
@@ -563,27 +574,27 @@ class UiState:
                 aliases = data.get("aliases")
                 if not isinstance(aliases, dict):
                     return
-                for family, variant in legacy_targets.items():
-                    if family in aliases:
-                        aliases.setdefault(variant, aliases.pop(family))
+                for student, alt in legacy_targets.items():
+                    if student in aliases:
+                        aliases.setdefault(alt, aliases.pop(student))
 
             self._update(migrate)
             table = self._current().get("aliases")
         if not isinstance(table, dict):
             return {}
         out = {}
-        for variant, value in table.items():
+        for alt, value in table.items():
             names = custom_aliases(value)
-            if isinstance(variant, str) and names:
-                out[variant] = names
+            if isinstance(alt, str) and names:
+                out[alt] = names
         return out
 
-    def set_aliases(self, variant: str, names: list[str]) -> list[str]:
-        """Keep a variant's own aliases; only this variant's entry of the file changes.
+    def set_aliases(self, alt: str, names: list[str]) -> list[str]:
+        """Keep an alt's own aliases; only this alt's entry of the file changes.
 
         Args:
-            variant: The variant key.
-            names: The aliases as typed; an empty result forgets the variant's entry.
+            alt: The alt key.
+            names: The aliases as typed; an empty result forgets the alt's entry.
 
         Returns:
             The aliases as kept, cleaned by ``custom_aliases``.
@@ -595,9 +606,9 @@ class UiState:
             if not isinstance(table, dict):
                 table = data["aliases"] = {}
             if kept:
-                table[variant] = kept
+                table[alt] = kept
             else:
-                table.pop(variant, None)
+                table.pop(alt, None)
 
         self._update(change)
         return kept
@@ -770,11 +781,15 @@ def _holds_id(folder: Path, data_id: str) -> bool:
     return False
 
 
-# The memorial lobby's fullscreen zoom-out limit (web/js/lobby/lobby.js zoomBounds): the game's view, the art every clip
+# The memorial lobby's fullscreen zoom-out limit (web/js/memorial-lobby/memorial-lobby.js zoomBounds): the game's
+# view, the art every clip
 # keeps painted (Full Art), the box of the scene's art over its poses (Unlocked), or a custom number of game views
 # across.
-MEMORIAL_LOBBY_ZOOM_MODES = ("game", "art", "unlocked", "custom")
-MEMORIAL_LOBBY_ZOOM_CUSTOM = (1.0, 4.0)  # the custom limit's range; lobby.js never zooms out further (ZOOM_OUT_MAX)
+MEMORIAL_LOBBY_ZOOM_MODES = ("gameView", "fullArt", "unlocked", "custom")
+MEMORIAL_LOBBY_ZOOM_CUSTOM = (
+    1.0,
+    4.0,
+)  # the custom limit's range; memorial-lobby.js never zooms out further (ZOOM_OUT_MAX)
 MEMORIAL_LOBBY_ZOOM_CUSTOM_DEFAULT = 2.0
 
 
@@ -783,26 +798,20 @@ def is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def memorial_lobby_zoom(mode: Any, custom: Any, legacy: Any = None) -> dict[str, Any]:
+def memorial_lobby_zoom(mode: Any, custom: Any) -> dict[str, Any]:
     """Make the memorial lobby's zoom-out setting valid, as it is stored.
 
     Args:
-        mode: The saved mode, one of ``LOBBY_ZOOM_MODES``; anything else is decided by ``legacy``.
+        mode: One of ``MEMORIAL_LOBBY_ZOOM_MODES``. An invalid mode uses Full Art.
         custom: The saved custom limit, in game views across; a number is rounded to 0.1 and kept within
-            ``LOBBY_ZOOM_CUSTOM``, anything else gives the default.
-        legacy: The ``lobby_zoom_out`` boolean setting, read when ``mode`` is not valid: False gives the game's
-            view, anything else Full Art.
+            ``MEMORIAL_LOBBY_ZOOM_CUSTOM``. An invalid limit uses the default.
 
     Returns:
         ``mode`` and ``custom``.
     """
     lo, hi = MEMORIAL_LOBBY_ZOOM_CUSTOM
     return {
-        "mode": mode
-        if isinstance(mode, str) and mode in MEMORIAL_LOBBY_ZOOM_MODES
-        else "game"
-        if legacy is False
-        else "art",
+        "mode": mode if isinstance(mode, str) and mode in MEMORIAL_LOBBY_ZOOM_MODES else "fullArt",
         "custom": round(min(hi, max(lo, float(custom))), 1)
         if is_number(custom)
         else MEMORIAL_LOBBY_ZOOM_CUSTOM_DEFAULT,

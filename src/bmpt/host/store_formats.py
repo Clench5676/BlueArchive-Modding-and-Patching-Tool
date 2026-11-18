@@ -193,12 +193,12 @@ def _zoom(names: _Names, prefs: Document) -> None:
         names.move(prefs, old, new)
 
 
-def _hall(names: _Names, hall: Document) -> None:
-    if "mode" in hall:
-        hall["mode"] = names.enum({"memorial": "memorialLobby"}, hall["mode"])
-    names.move(hall, "memorials", "memorialLobbies")
+def _student_hall(names: _Names, student_hall: Document) -> None:
+    if "mode" in student_hall:
+        student_hall["mode"] = names.enum({"memorial": "memorialLobby"}, student_hall["mode"])
+    names.move(student_hall, "memorials", "memorialLobbies")
     for group in ("portraits", names.key("memorials", "memorialLobbies")):
-        for entry in _objects(hall.get(group)):
+        for entry in _objects(student_hall.get(group)):
             names.move(entry, "variant", "alt")
             names.move(entry, "mirror", "flipHorizontal")
             names.sources(entry, "source")
@@ -227,7 +227,7 @@ def _ui(names: _Names, data: Document) -> None:
     filters = _member(student_list, "filters")
     names.move(filters, "lobby", "memorialLobby")
     names.move(filters, "model", "chibi")
-    _hall(names, _member(prefs, "student_hall"))
+    _student_hall(names, _member(prefs, "student_hall"))
     names.move(prefs, "hall_viewed", "student_hall_viewed")
     viewed_key = names.key("hall_viewed", "student_hall_viewed")
     if isinstance(prefs.get(viewed_key), list):
@@ -541,16 +541,114 @@ def inverse_translate(store_id: str, current: Document, shape: list[Document] | 
 
 
 def managed_document(store_id: str, path: Path) -> Document:
-    """Decode a current stored document to the library's internal representation."""
-    return _convert_owned(STORES[store_id], load_document(store_id, path), forward=False)
+    """Read the current stored document for the running App."""
+    document = load_document(store_id, path)
+    _runtime_field_names(store_id, document)
+    return document
 
 
 def managed_bytes(store_id: str, document: Document) -> bytes:
-    """Encode the library's internal representation in the current stored format."""
-    _check(store_id, document, 1)
-    translated = _convert(STORES[store_id], document, forward=True)
-    _check(store_id, translated, GENERATION)
-    return json_bytes(translated)
+    """Write the current stored format with its established field order."""
+    stored = copy.deepcopy(document)
+    _runtime_field_names(store_id, stored, writing=True)
+    _current_field_order(store_id, stored)
+    _check(store_id, stored, GENERATION)
+    return json_bytes(stored)
+
+
+def _runtime_mods(store_id: str, document: Document) -> Iterator[Document]:
+    if store_id == "S":
+        yield from _objects(document.get("mods"))
+    elif store_id == "I" and document.get("operation", "import") == "import":
+        yield _member(document, "record")
+    elif store_id == "D":
+        yield from _objects(document.get("records"))
+
+
+def _runtime_field_names(store_id: str, document: Document, *, writing: bool = False) -> None:
+    # Generation 2 stores the student list's thumbnail recipe as roster_thumbnails.
+    names = _Names(writing)
+    for record in _runtime_mods(store_id, document):
+        names.move(record, "student_list_thumbnails", "roster_thumbnails")
+        # Generation 2 records import provenance with the originals field.
+        old, new = ("officials", "originals") if writing else ("originals", "officials")
+        for provenance in _objects(record.get("import_sources")):
+            source = provenance.get("source")
+            if isinstance(source, dict) and old in source:
+                if new in source and not _equal(source[old], source[new]):
+                    raise InvalidStore(f"Conflicting fields {old!r} and {new!r}")
+                provenance["source"] = {new if key == old else key: value for key, value in source.items()}
+
+
+def _trailing_fields(record: Document, *fields: str) -> None:
+    for field in fields:
+        if field in record:
+            record[field] = record.pop(field)
+
+
+def _current_field_order(store_id: str, document: Document) -> None:
+    for record in _runtime_mods(store_id, document):
+        _trailing_fields(
+            record,
+            "target_alt",
+            "generic_target",
+            "name",
+            "assigned_alt",
+            "repair_source_id",
+            "repaired_copy_id",
+            "base_name",
+            "resource_type",
+            "memorial_lobby_camera",
+            "roster_thumbnails",
+        )
+        _trailing_fields(_member(record, "memorial_lobby_camera"), "alt", "configuration_entry")
+        for entry in _objects(_member(record, "roster_thumbnails").get("choices")):
+            _trailing_fields(entry, "alt", "thumbnail")
+    if store_id == "U":
+        for install in _objects(document.get("asset_previews")):
+            for entries in _objects(install):
+                _trailing_fields(entries, "portrait", "memorialLobby", "chibi")
+        prefs = _member(document, "prefs")
+        _trailing_fields(
+            prefs,
+            "memorial_lobby_zoom_out_mode",
+            "memorial_lobby_zoom_out_custom_limit",
+            "memorial_lobby_post_processing",
+            "memorial_lobby_intro",
+            "student_list",
+            "student_hall_viewed",
+        )
+        student_list = _member(prefs, "student_list")
+        _trailing_fields(student_list, "group_alts", "releaseStatus")
+        _trailing_fields(_member(student_list, "filters"), "memorialLobby", "chibi")
+        student_hall = _member(prefs, "student_hall")
+        _trailing_fields(student_hall, "memorialLobbies")
+        for group in ("portraits", "memorialLobbies"):
+            for entry in _objects(student_hall.get(group)):
+                _trailing_fields(entry, "alt", "flipHorizontal")
+        _trailing_fields(_member(prefs, "batch_import"), *IMPORT_OPTIONS.values())
+    elif store_id == "P":
+        for folder in _objects(document.get("folders")):
+            for group in ("configured", "built"):
+                for entry in _objects(folder.get(group)):
+                    _trailing_fields(entry, "alt", "resource_type", "thumbnail_defaults")
+        for folder in _objects(_member(document, "troubleshoot").get("folders")):
+            for entry in _objects(folder):
+                _trailing_fields(entry, "alt", "resource_type", "thumbnail_defaults")
+    elif store_id == "F":
+        _trailing_fields(document, "thumbnails", "next_by_alt")
+        for entry in _objects(document.get("thumbnails")):
+            _trailing_fields(entry, "alt")
+    elif store_id == "O":
+        _trailing_fields(document, "officials")
+    elif store_id == "I" and document.get("operation", "import") == "import":
+        _trailing_fields(document, "repair_source_id", "old_repaired_copy_id")
+    elif store_id == "D":
+        _current_field_order("P", _member(document, "profiles"))
+        _trailing_fields(document, "thumbnail")
+        snapshot = _member(document, "thumbnail")
+        _trailing_fields(snapshot, "alt")
+        _trailing_fields(_member(snapshot, "entry"), "alt")
 
 
 class StateEncoder:
@@ -562,14 +660,13 @@ class StateEncoder:
         self._applied: dict[str, tuple[Document, bytes]] = {}
 
     def encode(self, document: Document) -> bytes:
-        """Encode a complete state snapshot, converting and validating changed records."""
+        """Encode a complete state snapshot, validating changed records."""
         applied = document.get("applied", {})
         if not isinstance(applied, dict):
             raise InvalidStore("Invalid applied entries")
         static = {key: value for key, value in document.items() if key != "applied"}
         if not self._static[1] or not _equal(static, self._static[0], tokens=True):
             self._static = (copy.deepcopy(static), managed_bytes("S", static))
-        names = _Names(True)
         encoded = {}
         for key, record in applied.items():
             if not isinstance(key, str):
@@ -577,9 +674,7 @@ class StateEncoder:
             cached = self._applied.get(key)
             if cached is None or not _equal(record, cached[0], tokens=True):
                 _check_applied(record)
-                converted = dict(record)
-                names.sources(converted, "source", "applied")
-                field = json_bytes({key: converted})[1:-2]
+                field = json_bytes({key: record})[1:-2]
                 cached = (copy.deepcopy(record), field)
             encoded[key] = cached
         self._applied = encoded
@@ -606,9 +701,12 @@ def count_records(store_id: str, document: Document, *, generation: int = GENERA
             "next_by_alt": len(document.get(counters, {})),
         }
     if store_id == "U":
-        hall = _member(_member(document, "prefs"), "student_hall")
+        student_hall = _member(_member(document, "prefs"), "student_hall")
         memorials = "memorials" if generation == 1 else "memorialLobbies"
-        return {"portraits": len(hall.get("portraits", [])), "memorialLobbies": len(hall.get(memorials, []))}
+        return {
+            "portraits": len(student_hall.get("portraits", [])),
+            "memorialLobbies": len(student_hall.get(memorials, [])),
+        }
 
     return {"documents": 1}
 
@@ -652,4 +750,41 @@ def runtime_store(path: Path) -> str | None:
 def read_runtime(path: Path) -> Document:
     """Read live storage through the committed generation codec when applicable."""
     store = runtime_store(path)
-    return managed_document(store, path) if store else json.loads(path.read_text(encoding="utf-8"))
+    if store:
+        return managed_document(store, path)
+    document = json.loads(path.read_text(encoding="utf-8"))
+    legacy = _legacy_store(path)
+    if legacy and legacy != "U" and isinstance(document, dict):
+        version = document.get("version")
+        if isinstance(version, (int, float)) and version > 1:
+            raise FutureFormat(f"{legacy} version {version} exceeds 1")
+    if legacy and isinstance(document, dict) and (legacy == "U" or document.get("version") == 1):
+        document = _convert(STORES[legacy], document, forward=True)
+        _runtime_field_names(legacy, document)
+    return document
+
+
+def _legacy_store(path: Path) -> str | None:
+    if path.name == "journal.json":
+        return {"transactions": "T", "import-transactions": "I", "asset-deletions": "D"}.get(path.parent.parent.name)
+    if path.name == "index.json" and path.parent.name == "photographs":
+        return "F"
+    return {
+        "webui.json": "U",
+        "webui.json.prev": "U",
+        "state.json": "S",
+        "state.json.prev": "S",
+        "profiles.json": "P",
+        "profiles.json.prev": "P",
+        "originals.json": "O",
+    }.get(path.name)
+
+
+def legacy_document(path: Path, document: Document) -> Document:
+    """Preserve the format used by an explicitly opened standalone legacy store."""
+    store = _legacy_store(path)
+    if not store or (store != "U" and document.get("version") != GENERATION):
+        return document
+    stored = copy.deepcopy(document)
+    _runtime_field_names(store, stored, writing=True)
+    return _convert(STORES[store], stored, forward=False)

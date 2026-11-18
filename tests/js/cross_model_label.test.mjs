@@ -1,4 +1,4 @@
-// Another student's model is named after the student ("Yukino (Original)") on its card, in the 3D tab's subtitle
+// Another student's chibi is named after the student ("Yukino (Original)") on its card, in the 3D tab's subtitle
 // and in the name Optimize Physics gives its copy. detail.js's own lines run here without starting the app.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -137,9 +137,9 @@ test("the student's own cards, mods and the original keep their labels", () => {
 });
 
 for (const locale of LOCALES)
-  test(`the 3D tab's subtitle names the chosen model of another student after the student in ${locale}`, () => {
+  test(`the 3D tab's subtitle names the chosen chibi of another student after the student in ${locale}`, () => {
     const ctx = page_(locale, { candidates: () => [card(yukino)] });
-    assert.equal(ctx.sourceLabel(own, "model"), EXPECTED[locale]);
+    assert.equal(ctx.sourceLabel(own, "chibi"), EXPECTED[locale]);
   });
 
 // Optimize Physics names its copy after what the card shows; the stored name then reads "{name} - Optimized"
@@ -177,8 +177,8 @@ for (const locale of LOCALES)
     );
     assert.equal(call.options.name, EXPECTED[locale]);
     assert.equal(
-      text(locale, "model.optimizedName", { name: call.params.name }),
-      `${EXPECTED[locale]}${text(locale, "model.optimizedName", { name: "" })}`,
+      text(locale, "chibi.optimizedName", { name: call.params.name }),
+      `${EXPECTED[locale]}${text(locale, "chibi.optimizedName", { name: "" })}`,
       "the stored copy keeps the locale's own pattern",
     );
   });
@@ -217,7 +217,7 @@ for (const locale of LOCALES)
     const pick = (names) => names?.[key] ?? names?.en;
     const smallest = { playable: 99, other: 99 };
     let total = 0;
-    for (const alt of Object.values(catalog.variants)) {
+    for (const alt of Object.values(catalog.alts)) {
       const student = catalog.students[alt.student_id],
         costume = pick(alt.names)?.short;
       if (!student || !costume) continue;

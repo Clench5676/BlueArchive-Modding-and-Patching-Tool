@@ -116,21 +116,21 @@ def family_kind(name: str) -> str:
     return _FAMILIES.get(family, "other")
 
 
-def kind_of(library_kind: str, names: Iterable[str]) -> str:
+def resource_type_of(resource_type: str, names: Iterable[str]) -> str:
     """Translate a library kind to the package format's more specific kind.
 
-    A library lobby is a memorial lobby or, for a spinebackground core, a Spine scene.
+    A memorial lobby resource is a Spine scene when its bundle contains a background.
 
     Args:
-        library_kind: Library classification: spr, lobby, model, or other.
+        resource_type: App resource type: portrait, memorialLobby, chibi, or other.
         names: Bundle filenames used to distinguish scenes and generic asset families.
     """
     names = list(names)
-    if library_kind == "spr":
+    if resource_type == "portrait":
         return "portrait"
-    if library_kind == "model":
+    if resource_type == "chibi":
         return "model"
-    if library_kind == "lobby":
+    if resource_type == "memorialLobby":
         return "spine_scene" if any(family_kind(name) == "spine_scene" for name in names) else "lobby"
     kinds = {family_kind(name) for name in names}
     return kinds.pop() if len(kinds) == 1 else "other"

@@ -1,4 +1,4 @@
-"""Photography camera, snapshot and lifecycle regressions run without a browser or game assets."""
+"""Thumbnail capture camera, snapshot and lifecycle regressions run without a browser or game assets."""
 
 import shutil
 import subprocess

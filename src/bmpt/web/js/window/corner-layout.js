@@ -110,7 +110,7 @@ export function bindCorner(element, box, options) {
   Object.assign(entry, { box, options });
   place(element, entry);
 }
-/** Keep an immersive scene's control centred on the stage's top or bottom edge (the photography shutter). */
+/** Keep an immersive scene's control centred on the stage's top or bottom edge (the thumbnail capture shutter). */
 export function bindEdge(element, edge) {
   if (!element) return;
   let entry = registered.get(element);

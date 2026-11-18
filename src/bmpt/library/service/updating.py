@@ -35,7 +35,7 @@ from ..judge import (
     core_of,
     now,
 )
-from ..models import (
+from ..records import (
     AssetDifference,
     CompareResult,
     Pin,
@@ -178,8 +178,8 @@ class UpdatingMixin:
         from ...gameassets.costume_rule import COSTUME_RULE
 
         source = self._optimized_from(record)
-        variant_key = self._target_of(record)
-        signature, targets = self._costume_signature(variant_key, source[8:], pin)
+        alt_id = self._target_of(record)
+        signature, targets = self._costume_signature(alt_id, source[4:], pin)
         verdict = self._verdicts().get(signature)
         if not self._costume_allowed(verdict):
             raise ServiceError("source_unsupported", source=verdict.get("reason") or source)
@@ -188,7 +188,7 @@ class UpdatingMixin:
         report: dict[str, Any] = {}
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX + "update-") as temporary:
             replacements = self._stage_costume(
-                source[8:], targets, Path(temporary) / "model", log, pin, report=report, physics=True, fraction=fraction
+                source[4:], targets, Path(temporary) / "chibi", log, pin, report=report, physics=True, fraction=fraction
             )
             if not report.get("physics"):
                 raise ServiceError("mod_update_failed", id=record["id"])
@@ -228,7 +228,7 @@ class UpdatingMixin:
             raise ServiceError("library_io_error", file=transaction)
         new = {path.name: self._hashes.get(path).sha1 for path in generated}
         data = {
-            "version": 1,
+            "version": 2,
             "operation": "update",
             "id": mod_id,
             "phase": "copying",
@@ -322,10 +322,10 @@ class UpdatingMixin:
                     isinstance(state, dict)
                     and isinstance(state.get("version"), (int, float))
                     and not isinstance(state["version"], bool)
-                    and state["version"] > 1
+                    and state["version"] > 2
                 ):
                     raise ServiceError("library_state_unreadable", file=path)
-                if not isinstance(state, dict) or state.get("version") != 1 or not isinstance(state.get("mods"), list):
+                if not isinstance(state, dict) or state.get("version") != 2 or not isinstance(state.get("mods"), list):
                     raise ServiceError("library_io_error", file=path)
                 stored = [
                     item
@@ -374,7 +374,7 @@ class UpdatingMixin:
             not isinstance(mod_id, str)
             or re.fullmatch(r"[0-9a-f]{32}", mod_id) is None
             or journal != root / mod_id / "journal.json"
-            or data["version"] != 1
+            or data["version"] != 2
             or data["phase"] not in ("copying", "replacing")
             or not names_valid(old)
             or not names_valid(new)
@@ -447,10 +447,10 @@ class UpdatingMixin:
         """Extract game or mod assets into a child folder named after their bundle core.
 
         Args:
-            target: mod:<id> for stored bundles or variant:<key> for live game parts.
+            target: mod:<id> for stored bundles or alt:<key> for live game parts.
             out_dir: Parent directory of the core-named output folder, which the engine clears before extraction.
             log: Receives user-facing operation messages.
-            pin: Game install and server the operation is fixed to; None uses the current install for variant targets.
+            pin: Game install and server the operation is fixed to; None uses the current install for alt targets.
             progress: Receives extraction phase dictionaries; None disables reporting.
 
         Returns:
@@ -461,8 +461,8 @@ class UpdatingMixin:
         """
         if target.startswith("mod:"):
             paths = self._paths(self._record(target[4:]))
-        elif target.startswith("variant:"):
-            paths = self._game_files(target[8:], None, pin)
+        elif target.startswith("alt:"):
+            paths = self._game_files(target[4:], None, pin)
         else:
             raise ServiceError("source_unsupported", source=target)
         if not paths:

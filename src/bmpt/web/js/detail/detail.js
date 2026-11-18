@@ -1,14 +1,14 @@
-import * as Photo from "../photography/controller.js";
-import * as Camera from "../lobby/lobby-camera.js";
+import * as ThumbnailCapture from "../thumbnail-capture/controller.js";
+import * as Camera from "../memorial-lobby/memorial-lobby-camera.js";
 import { notify } from "../ui/popup.js";
 // Detail screen, built from the game's own prefab (UICharacterDetail) by ngui.js: the prefab supplies every frame,
 // sprite, tint, incline and position; this file swaps labels and textures, hides what the tool has no use for, and adds
-// what the game has no screen for (alt chips, the expression strip, the portrait and lobby switchers). A student is
-// one base character with all of its alt portraits. Each alt's game file carries one portrait and one memorial
-// lobby (its own, another alt's or an added one). Added ones belong to the alt whose game file they replace
-// (mod.targetAlt); added portraits can be worn by the other alts of the student, lobbies are not offered to them.
-// Switching writes the chosen one into the game files (switch-sources.js, actions.apply). A change inside the screen
-// prepares its parts behind the loading cover and swaps them in one frame.
+// what the game has no screen for (alt chips, the expression strip, the portrait and memorial lobby switchers). A
+// student is one base character with all of its alt portraits. Each alt's game file carries one portrait and one
+// memorial memorial lobby (its own, another alt's or an added one). Added ones belong to the alt whose game file they
+// replace (mod.targetAlt); added portraits can be worn by the other alts of the student, memorial lobbies are not
+// offered to them. Switching writes the chosen one into the game files (switch-sources.js, actions.apply). A change
+// inside the screen prepares its parts behind the loading cover and swaps them in one frame.
 import * as NGUI from "../ui/ngui.js";
 import { spineAllowed } from "../spine/spine-runtime.js";
 import { withPreviewTimeout, withTimeout, nextFrame } from "../core/async.js";
@@ -16,13 +16,13 @@ import { previewError } from "./preview-error.js";
 import * as Loading from "../app/loading.js";
 import * as ModAlias from "../mods/mod-alias.js";
 import * as ActionList from "../ui/action-list.js";
-import * as Lobby from "../lobby/lobby.js";
+import * as MemorialLobby from "../memorial-lobby/memorial-lobby.js";
 import * as Visual from "./visual-mode.js";
 import { anyOpen as popupOpen } from "../ui/popup.js";
 import { rpc, spineBase, waitJob } from "../core/api.js";
 import { L, T, language } from "../core/i18n.js";
 import { thumbnailScope } from "./thumbs.js";
-import { modelThumbnail, modelStillVersion } from "../model/model-still.js";
+import { chibiThumbnail, chibiStillVersion } from "../chibi/chibi-still.js";
 import { shownUnseen } from "./unseen-assets.js";
 import { crossName, customAliases as aliasesOf, modName, studentName } from "../core/names.js";
 import { setTitle } from "../app/nav.js";
@@ -38,7 +38,7 @@ import {
   costumeHold,
   crossCandidates,
   crossCard,
-  crossModels,
+  crossChibis,
   hasAsset,
   hasKind,
   primaryKind,
@@ -51,7 +51,7 @@ import {
   switchKindOf,
   tabOfKind,
 } from "../mods/switch-sources.js";
-import { pickerItems } from "../roster/roster-widgets.js";
+import { pickerItems } from "../student-list/student-list-widgets.js";
 import { $, S } from "../core/util.js";
 import { blinkTimer, spineToken, loadSpine, disposePortrait, setSpineToken } from "./detail-portrait.js";
 import {
@@ -72,10 +72,10 @@ import { renderScreen } from "./detail-screen.js";
 import { renderChips } from "./detail-chips.js";
 import { stopActionLoad, renderExpressions } from "./detail-strip.js";
 import { aliasToken, setAliasToken } from "./detail-aliases.js";
-import { showLobby, refreshLobbyLines } from "./detail-lobby-tab.js";
-import { showModel, hideModel } from "./detail-model-tab.js";
+import { showMemorialLobby, refreshMemorialLobbyLines } from "./detail-memorial-lobby-tab.js";
+import { showChibi, hideChibi } from "./detail-chibi-tab.js";
 import { setFullscreen, visualToken, setVisualToken } from "./detail-fullscreen.js";
-import { photoSession, photoFaces } from "./detail-photo.js";
+import { thumbnailSession, thumbnailFaces } from "./detail-thumbnail.js";
 import { setHeldChange } from "./detail-changes.js";
 // The parts of the screen split into the modules below stay reachable through this module.
 export { want, takeWanted } from "./detail-actions.js";
@@ -111,7 +111,7 @@ NGUI.onResourceChange?.(() => {
   shownStudent = null;
   resetOthers();
   costumeState.clear();
-  photoFaces.clear();
+  thumbnailFaces.clear();
 });
 export let previewEnabled = true;
 export let tab = "portrait",
@@ -121,23 +121,23 @@ export let tab = "portrait",
   exprScroll = 0;
 export let mainPlayer = null,
   pending = null,
-  lobbySeq = null,
-  lobbyShot = null;
-export let modelShot = null,
-  modelActions = [],
-  modelAction = null,
-  modelGeneration = 0;
+  memorialLobbySeq = null,
+  memorialLobbyShot = null;
+export let chibiShot = null,
+  chibiActions = [],
+  chibiAction = null,
+  chibiGeneration = 0;
 // every action of the chibi (clip-names.js actionsOf: its own clips by group), which the action bar shows; null: the
-// model has none of its own (a story or an NPC model), and row 4 lists today's actions (modelActions)
-export let modelMenu = null;
-// three.js and the model viewer load with the first 3D model
-export let modelLib = null;
-export const ModelLib = () => (modelLib ||= import("../model/model.js"));
+// chibi has none of its own (a story or an NPC chibi), and row 4 lists today's actions (chibiActions)
+export let chibiMenu = null;
+// three.js and the chibi viewer load with the first 3D chibi
+export let chibiLib = null;
+export const ChibiLib = () => (chibiLib ||= import("../chibi/chibi.js"));
 export let leftToken = 0;
 
 // --- readiness ---
 export const HARD_CAP = 15000; // individual failed assets settle with an error before the screen is revealed
-export const LINES_CAP = 1500; // the lobby's lines from Kivo (a network call) likewise
+export const LINES_CAP = 1500; // the memorial lobby's lines from Kivo (a network call) likewise
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export const frames = async (n) => {
   while (n-- > 0) await nextFrame();
@@ -153,8 +153,8 @@ export function renderFailed(err, source = null) {
 export let batch = null;
 export const commit = (fn) => (batch ? batch.push(fn) : fn());
 // A render of a part is shown when it is the newest one, or, while a change is prepared, when it is newer than the
-// one on screen and belongs to that change: a re-render still running at the commit (late lobby lines) then follows
-// it instead of keeping the old part in the commit.
+// one on screen and belongs to that change: a re-render still running at the commit (late memorial lobby lines) then
+// follows it instead of keeping the old part in the commit.
 export const applied = { screen: 0, chips: 0, expr: 0 };
 export const showable = (part, my, latest, gen) =>
   open && (my === latest || (!!batch && gen === showGen && my > applied[part]));
@@ -172,14 +172,14 @@ export const thumb = (
   base,
   frame = "bust",
   expr = null,
-  lobby = false,
+  memorialLobby = false,
   framing = null,
   background = alt()?.background,
   work = thumbnailWork,
 ) => {
   if (!base) return null;
   if (!spineAllowed()) return collectionPortrait(base);
-  return work.thumb(base, frame, expr, lobby, framing, frame === "face" ? null : background);
+  return work.thumb(base, frame, expr, memorialLobby, framing, frame === "face" ? null : background);
 };
 function collectionPortrait(base) {
   for (const v of shownStudent?.alts || []) {
@@ -188,17 +188,17 @@ function collectionPortrait(base) {
   }
   return null;
 }
-// a model card's still: another alt's costume shows that alt's own model
-export const modelPicture = (c, v = alt(), work = thumbnailWork) =>
+// a chibi card's still: another alt's costume shows that alt's own chibi
+export const chibiPicture = (c, v = alt(), work = thumbnailWork) =>
   c.kind === "alt"
-    ? modelThumbnail(c.alt.key, "official", {
-        version: modelStillVersion(shownStudent, c.alt, modelGeneration),
+    ? chibiThumbnail(c.alt.key, "official", {
+        version: chibiStillVersion(shownStudent, c.alt, chibiGeneration),
         signal: work.signal,
       })
     : c.kind !== "mod" && !coreOf(v, "chibi") && !v.fieldChibi
       ? null
-      : modelThumbnail(v.key, c.kind === "mod" ? `mod:${c.id}` : "official", {
-          version: modelStillVersion(shownStudent, v, modelGeneration),
+      : chibiThumbnail(v.key, c.kind === "mod" ? `mod:${c.id}` : "official", {
+          version: chibiStillVersion(shownStudent, v, chibiGeneration),
           signal: work.signal,
         });
 function begin() {
@@ -277,7 +277,7 @@ export async function settleImages() {
 export const originalName = (v) => L(v.names)?.full ?? v.key;
 export const fullName = (v) => studentName(v, originalName(v));
 export const shortName = (v) => studentName(v, L(v.names)?.short ?? v.key);
-// the current alt's own aliases (webui/state.py keeps the same limits): the roster search
+// the current alt's own aliases (webui/state.py keeps the same limits): the student list search
 // finds this skin by all of them; the first one is the nameplate's main name
 export const ALIAS_MAX = ALIAS.max,
   ALIAS_LENGTH = 24;
@@ -286,14 +286,14 @@ export const aliasList = () => customAliases().join(/^(zh|ja)/.test(language()) 
 export const alt = () => shownStudent.alts.find((v) => v.key === altId) || shownStudent.alts[0];
 export const studentMods = () => shownStudent.alts.flatMap((v) => v.modList || []);
 export const isFav = (v) => !!v.favorite;
-export const hasLobby = (v) => hasKind(v, "memorialLobby");
-export const hasModel = (v) => hasKind(v, "chibi");
+export const hasMemorialLobby = (v) => hasKind(v, "memorialLobby");
+export const hasChibi = (v) => hasKind(v, "chibi");
 export const modLabel = (m) => modName(m, studentMods(), T);
 export const repairedId = (c) =>
   c?.mod?.repairedCopyId && studentMods().some((m) => m.id === c.mod.repairedCopyId) ? c.mod.repairedCopyId : null;
 export const repairAction = (c) => (repairedId(c) ? "remap.go" : "act.update");
-// Optimize Physics runs on the official model (which needs none: its own clips move its skirt) and on another
-// alt's costume; the copy it made from a costume, a model mod of the alt, takes its place afterwards
+// Optimize Physics runs on the official chibi (which needs none: its own clips move its skirt) and on another
+// alt's costume; the copy it made from a costume, a chibi mod of the alt, takes its place afterwards
 export const optimizeSource = (c) => (c.kind === "self" ? "official" : c.kind === "alt" ? `alt:${c.alt.key}` : null);
 export const optimizedCopy = (c, v = alt()) =>
   c.kind !== "alt"
@@ -301,7 +301,8 @@ export const optimizedCopy = (c, v = alt()) =>
     : studentMods().find(
         (m) => m.resourceType === "chibi" && m.targetAlt === v.key && m.optimized_from === `alt:${c.alt.key}`,
       ) || null;
-// a candidate's skeleton: a mod's preview (its parts over the official ones), else the alt's own portrait or lobby
+// a candidate's skeleton: a mod's preview (its parts over the official ones), else the alt's own portrait or
+// memorialLobby
 export const baseOf = (c, kind = "portrait") =>
   c.kind === "mod" ? spineBase("mod", c.id) : c.core ? spineBase(`official-${kind}`, c.core) : null;
 // The installed portrait comes from the current game files; with mods off, preview the configured source.
@@ -312,20 +313,20 @@ export const currentBase = () => altBase(alt());
 export const readStudent = (key) => rpc("student.get", { key });
 
 // what the switch card of a kind offers (switch-sources.js), with the names and marks the cards show: the alt's
-// own portrait or lobby and its added ones, then for the portrait the other alts' ones and their added ones
+// own portrait or memorial lobby and its added ones, then for the portrait the other alts' ones and their added ones
 export function candidates(v = alt(), kind = "portrait") {
   return listSources(shownStudent, v, kind, costumeState.get(v.key), otherStudents).map(named);
 }
-// a lobby camera framed on the official art takes the name of the alt's own card, as the cards show it
+// a memorial lobby camera framed on the official art takes the name of the alt's own card, as the cards show it
 const cameraLabel = (c) =>
   c.mod.camera && !c.mod.alias && !c.mod.camera.source?.startsWith("mod:") && c.origin
-    ? `${shortName(c.origin)} - ${T("lobby.cameraName", { n: c.mod.camera.number })}`
+    ? `${shortName(c.origin)} - ${T("memorialLobby.cameraName", { n: c.mod.camera.number })}`
     : modLabel(c.mod);
 const named = (c) =>
   c.kind === "mod"
     ? { ...c, label: cameraLabel(c) }
     : { ...c, label: shortName(c.alt), recruit: c.alt.releasedOnServer, fav: isFav(c.alt) };
-// Switch 3D Model takes any student's model, offered through its search only: students.list's students, read
+// Switch Chibi takes any student's chibi, offered through its search only: students.list's students, read
 // with the 3D tab or the popup (the one already chosen keeps its card), for the life of the screen
 export let otherStudents = null,
   othersLoad = null,
@@ -339,30 +340,30 @@ function resetOthers() {
   crossShown = [];
 }
 export function readOthers() {
-  if (otherStudents || !ctx?.roster) return Promise.resolve(otherStudents);
+  if (otherStudents || !ctx?.studentList) return Promise.resolve(otherStudents);
   const epoch = othersEpoch;
   return (othersLoad ||= Promise.resolve()
-    .then(() => ctx.roster({ stale: true }))
+    .then(() => ctx.studentList({ stale: true }))
     .then((data) => (epoch === othersEpoch ? (otherStudents = data?.students || null) : null))
     .catch((err) => {
-      console.error("Roster read failed", err);
+      console.error("StudentList read failed", err);
       return null;
     })
     .finally(() => {
       if (epoch === othersEpoch) othersLoad = null;
     }));
 }
-// a 3D candidate key as a card, another student's model found by the search included
+// a 3D candidate key as a card, another student's chibi found by the search included
 export function popupCandidate(v, kind, key) {
   const c = candidates(v, kind).find((x) => x.key === key);
   if (c || kind !== "chibi" || typeof key !== "string" || !key.startsWith("v:")) return c;
-  const o = crossModels(otherStudents, v).find((x) => x.key === key.slice(2));
+  const o = crossChibis(otherStudents, v).find((x) => x.key === key.slice(2));
   return o ? named(crossCard(o, costumeState.get(v.key))) : undefined;
 }
-// The other students' models after the popup's own cards: the search's hits, or with "Show other students" all
-// of them (and the search narrows them). By the popup's own matching (their names, keys and model ids) and segment, in
-// the roster's name order (favourites first); a search's hits at most CROSS_LIMIT, all of them without. A search's hits
-// are judged at once; all the students' models only as they come into view (viewCross).
+// The other students' chibis after the popup's own cards: the search's hits, or with "Show other students" all
+// of them (and the search narrows them). By the popup's own matching (their names, keys and chibi ids) and segment, in
+// the student list's name order (favourites first); a search's hits at most CROSS_LIMIT, all of them without. A
+// search's hits are judged at once; all the students' chibis only as they come into view (viewCross).
 export function crossItems(v, query, own, item) {
   const all = showOthers();
   if (!otherStudents || (!all && !query.trim())) {
@@ -408,7 +409,7 @@ export function crossItems(v, query, own, item) {
   judgeCross(v, all ? keys.filter((key) => inView.has(key)) : keys);
   return hits.map((c) => item(named(c)));
 }
-// the list's cards in view (popup.js onView): with "Show other students" the models of other students among them
+// the list's cards in view (popup.js onView): with "Show other students" the chibis of other students among them
 // are the ones to judge, the others dropped from the queue; a scroll brings the next ones in
 let crossShown = [];
 export function viewCross(v, keys) {
@@ -420,9 +421,9 @@ export function viewCross(v, keys) {
   crossShown = shown;
   if (showOthers() && popupKind === "chibi" && alt() === v) judgeCross(v, shown);
 }
-// Switch 3D Model lists every costume of the student at once and lets one be applied only once that pair was built
-// and exported for these files (model.costumes): the verdicts by alt, read when the 3D tab shows
-// and checked to their end (model.checkCostumes) in the background, one pair at a time; each card turns applicable
+// Switch Chibi lists every costume of the student at once and lets one be applied only once that pair was built
+// and exported for these files (chibi.costumes): the verdicts by alt, read when the 3D tab shows
+// and checked to their end (chibi.checkCostumes) in the background, one pair at a time; each card turns applicable
 // as its check ends.
 export const costumeState = new Map(),
   costumeChecks = new Map();
@@ -430,12 +431,12 @@ export function costumesReady(v) {
   const run = costumeRun;
   void readOthers().then((students) => {
     if (!costumesWanted(v, run)) return;
-    // a roster that cannot be read leaves another student's model unjudged: its loading ring stops
+    // a student list that cannot be read leaves another student's chibi unjudged: its loading ring stops
     if (!students) {
       costumesChecked(v);
       return;
     }
-    // Loading the roster must not replace the popup's current hits with just the saved choices.
+    // Loading the student list must not replace the popup's current hits with just the saved choices.
     if (switchPopupPage !== pageToken || $("popup").hidden) judgeCross(v);
     costumesChecked(v);
   });
@@ -474,8 +475,8 @@ export function costumesReady(v) {
   }
   return check;
 }
-// Another student's model is judged only once it shows: the chosen one, and the search's hits while they are
-// hits. Their saved verdicts are read at once (model.costumes), the rest checked in the background one pair at a time;
+// Another student's chibi is judged only once it shows: the chosen one, and the search's hits while they are
+// hits. Their saved verdicts are read at once (chibi.costumes), the rest checked in the background one pair at a time;
 // a pair no longer wanted (a new query, another alt) is not checked. Each card waits until its verdict lands.
 let crossWanted = { alt: null, keys: [] },
   crossRunning = null;
@@ -534,13 +535,13 @@ function runCross() {
     });
 }
 // Costume checks run only while the screen is open on the same alt with its 3D tab shown (the Switch 3D
-// Model popup opens from that tab). Leaving it (another tab, another alt, the screen closed) stops them
+// Chibi popup opens from that tab). Leaving it (another tab, another alt, the screen closed) stops them
 // (stopCostumeChecks): no further pair is submitted, the submitted checks are cancelled (jobs.cancel: a queued
 // one never runs, a running one stops between its steps and saves no verdict) and the loading ring stops. Coming
 // back restarts the pairs still without a verdict.
 export let costumeRun = 0;
 const costumeJobs = new Set();
-export const costumesWanted = (v, run) => run === costumeRun && open && !!v && alt().key === v.key && tab === "model";
+export const costumesWanted = (v, run) => run === costumeRun && open && !!v && alt().key === v.key && tab === "chibi";
 function stopCostumeChecks() {
   costumeRun += 1;
   // an action's clips being fetched for the 3D tab are given up the same way (the request is aborted)
@@ -550,7 +551,7 @@ function stopCostumeChecks() {
   for (const id of costumeJobs) rpc("jobs.cancel", { id }).catch(() => {});
   costumeJobs.clear();
 }
-// one pair checked to its end (model.checkCostumes): its verdicts, or null when it was cancelled because the 3D tab
+// one pair checked to its end (chibi.checkCostumes): its verdicts, or null when it was cancelled because the 3D tab
 // was left meanwhile
 async function checkPair(v, other, run) {
   const id = await rpc("chibi.checkCostumes", { alt: v.key, others: [other] });
@@ -572,7 +573,8 @@ async function checkPair(v, other, run) {
 const unjudged = (v, others) => others.some((o) => (costumeState.get(v.key) || {})[o] == null);
 // A 3D candidate whose costume check is still under way (no verdict yet, its check running or queued): its Apply and
 // Optimize Physics wait for it and show the game's loading ring in their caption's place instead of only greying.
-// ``key``: the candidate's key ("v:<alt>"); another student's model also waits for the roster read that queues it.
+// ``key``: the candidate's key ("v:<alt>"); another student's chibi also waits for the student list read that queues
+// it.
 export function costumeChecking(v, kind, key) {
   if (kind !== "chibi" || typeof key !== "string" || !key.startsWith("v:")) return false;
   const other = key.slice(2);
@@ -582,7 +584,7 @@ export function costumeChecking(v, kind, key) {
   if (!otherStudents) return !!othersLoad;
   return !!crossRunning && crossWanted.alt === v && crossWanted.keys.includes(other);
 }
-// the 3D tab's Apply card while the shown costume (another student's model) waits for its check
+// the 3D tab's Apply card while the shown costume (another student's chibi) waits for its check
 export const applyChecking = (v, kind) =>
   !!kind &&
   !!coreOf(v, kind) &&
@@ -605,13 +607,13 @@ async function readCautions(v, others) {
   costumesChecked(v);
 }
 // what keeps a 3D source from being applied by its check (switch-sources.js costumeHold): a refused costume
-// ("unfit": shown, never applied), another student's model before its verdict ("pending")
+// ("unfit": shown, never applied), another student's chibi before its verdict ("pending")
 export const costumeBlock = (v, kind, key) =>
   kind === "chibi" ? costumeHold(shownStudent, v, key, costumeState.get(v.key)) : null;
 export const unfitCostume = (v, kind, key) => !!costumeBlock(v, kind, key);
-// After a background check: the open Switch 3D Model popup lists what it found, where it was scrolled to.
+// After a background check: the open Switch Chibi popup lists what it found, where it was scrolled to.
 function costumesChecked(v) {
-  if (open && alt() === v && tab === "model") void renderScreen();
+  if (open && alt() === v && tab === "chibi") void renderScreen();
   if (open && alt() === v && popupKind === "chibi" && switchPopupPage === pageToken && !$("popup").hidden)
     void renderPopup($("popup").querySelector(".popup-cards")?.scrollTop || 0);
 }
@@ -634,22 +636,23 @@ export function crcOf(v, kind = "portrait") {
 }
 export const appliedKey = (v = alt(), kind = primaryKind(v)) => keyOf(v, kind);
 export const shownSource = (v = alt(), kind = primaryKind(v)) => previewKey(v, kind, modsOn());
-// the left side draws a kind it can preview: an alt's own files, a field or NPC model without a slot (//
+// the left side draws a kind it can preview: an alt's own files, a field or NPC chibi without a slot (//
 // Shown, never switched), or an added mod
 export const previewAvailable = (v, kind) =>
   !!coreOf(v, kind) || (kind === "chibi" && !!v?.fieldChibi) || shownSource(v, kind).startsWith("m:");
 export const altBase = (v, kind = "portrait") =>
   previewAvailable(v, kind) ? previewBase(v, kind, modsOn(), shownStudent.alts) : null;
-// The configured portrait or lobby while mods are off; otherwise what the game files carry.
+// The configured portrait or memorial lobby while mods are off; otherwise what the game files carry.
 export const current = (kind = "portrait") =>
   candidates(alt(), kind).find((c) => c.key === shownSource(alt(), kind)) || candidates(alt(), kind)[0];
-// another student's costume, named after the student: "Yukino (Original)" (the student's base name from the roster read)
+// another student's costume, named after the student: "Yukino (Original)" (the student's base name from the student
+// list read)
 const crossLabel = (o) => {
   const base = L(otherStudents?.find((f) => f.key === o.student)?.studentNames);
   // no student read: the alt's full name
   return base ? crossName(o, base, L(o.names)?.short ?? o.key, T) : fullName(o);
 };
-// a candidate's name on the cards: another alt's mod with that alt's name first, another student's model with
+// a candidate's name on the cards: another alt's mod with that alt's name first, another student's chibi with
 // the student's name first
 export const candidateLabel = (c, v = alt()) =>
   c.cross
@@ -720,15 +723,15 @@ export const clipped = (name, pos, url, win, img, opts = {}) =>
       imgEdge: opts.edge,
     },
   ]);
-// a dialogue started (a card, play all, a tap on the character in fullscreen), ended or stopped. A lobby that is
-// hidden stops without telling (and off the lobby tab nothing is followed): the tab change, the alt change and
-// hide() reset what is followed here, so the next start redraws the cards and the play-all button.
-let lobbyAll = false;
-Lobby.onTalk((anim, all) => {
-  if (tab !== "lobby" || (lobbySeq === anim && lobbyAll === all)) return;
-  const button = lobbyAll !== all;
-  lobbySeq = anim;
-  lobbyAll = all;
+// a dialogue started (a card, play all, a tap on the character in fullscreen), ended or stopped. A memorial lobby that
+// is hidden stops without telling (and off the memorial lobby tab nothing is followed): the tab change, the alt change
+// and hide() reset what is followed here, so the next start redraws the cards and the play-all button.
+let memorialLobbyAll = false;
+MemorialLobby.onTalk((anim, all) => {
+  if (tab !== "memorialLobby" || (memorialLobbySeq === anim && memorialLobbyAll === all)) return;
+  const button = memorialLobbyAll !== all;
+  memorialLobbySeq = anim;
+  memorialLobbyAll = all;
   renderExpressions();
   if (button) renderScreen();
 });
@@ -758,50 +761,52 @@ export function changeInPlace(work) {
   });
 }
 
-// tabs: the left side shows the portrait, the memorial lobby or the 3D model
+// tabs: the left side shows the portrait, the memorial lobby or the 3D chibi
 export function showTab(id) {
   if (busy || Loading.held()) return;
-  if (id !== "model") stopCostumeChecks();
+  if (id !== "chibi") stopCostumeChecks();
   tab = id;
-  if (id === "model") {
+  if (id === "chibi") {
     const v = alt();
     void costumesReady(v).catch((err) => console.error("Costume check failed", err));
   }
   expanded = false;
   exprScroll = 0;
-  lobbySeq = null;
-  lobbyAll = false;
+  memorialLobbySeq = null;
+  memorialLobbyAll = false;
   return changeInPlace(() => Promise.all([renderAll(), renderLeft()]));
 }
 
 // renderLeft() resolves once the preview has drawn its first frame or failed. It loads laid out but
 // transparent (.pending: a hidden canvas has no size) and is
-// committed with the rest of the screen; the part it replaces fades out and is freed. The lobby and the model are
-// single players: when the shown one is replaced by another alt's, a still of it holds the place meanwhile.
-const LEFT = ["portrait", "lobby", "model"];
+// committed with the rest of the screen; the part it replaces fades out and is freed. The memorial lobby and the chibi
+// are single players: when the shown one is replaced by another alt's, a still of it holds the place meanwhile.
+const LEFT = ["portrait", "memorialLobby", "chibi"];
+// the element that shows a part: its id is the part in kebab case
+const partHost = (part) => $(part === "memorialLobby" ? "memorial-lobby" : part);
 let shownLeft = null,
   shownKey = null;
-// what the lobby or the model shows: the same alt of another install (game folder, file source) is another one
+// what the memorial lobby or the chibi shows: the same alt of another install (game folder, file source) is another one
 export const leftKey = (part, v) =>
-  part === "lobby"
+  part === "memorialLobby"
     ? `${v.memorialLobby}:${shownSource(v, "memorialLobby")}@${shownStudent.version}`
-    : part === "model"
+    : part === "chibi"
       ? `${v.key}:${shownSource(v, "chibi")}@${shownStudent.version}`
       : null;
-export let lobbyFrom = null; // the install of the lobby in lobby.js, which keeps a lobby shown again by its core
-export let lobbyStale = false; // its game files were switched: lobby.js reads them again
+export let memorialLobbyFrom = null; // the install of the memorial lobby in memorial-lobby.js, which keeps a memorial lobby shown again by its core
+export let memorialLobbyStale = false; // its game files were switched: memorial-lobby.js reads them again
 export function renderLeft() {
   if (!open) return Promise.resolve();
   const v = alt(),
     my = ++leftToken,
     want = tab,
-    el = $(want),
+    el = partHost(want),
     key = leftKey(want, v);
   const available = previewAvailable(v, switchKindOf(want));
   if (!available) {
     if (want === "portrait") disposePortrait();
-    else if (want === "lobby") Lobby.hide(el);
-    else hideModel();
+    else if (want === "memorialLobby") MemorialLobby.hide(el);
+    else hideChibi();
   }
   const same = want === shownLeft;
   if (!same) {
@@ -821,18 +826,18 @@ export function renderLeft() {
           ? mainPlayer
             ? null
             : loadSpine(currentBase())
-          : want === "lobby"
-            ? showLobby(v, my, () => !expired)
-            : showModel(v, my, () => !expired),
+          : want === "memorialLobby"
+            ? showMemorialLobby(v, my, () => !expired)
+            : showChibi(v, my, () => !expired),
     ),
-    want === "lobby" ? HARD_CAP + 3000 : HARD_CAP,
+    want === "memorialLobby" ? HARD_CAP + 3000 : HARD_CAP,
     `Detail ${want}`,
   ).catch((err) => {
     expired = true;
     if (my !== leftToken || !open) return;
-    if (want === "lobby") Lobby.unavailable(err, el, spineBase("memorialLobby", v.memorialLobby));
+    if (want === "memorialLobby") MemorialLobby.unavailable(err, el, spineBase("memorialLobby", v.memorialLobby));
     else if (want === "portrait") disposePortrait();
-    else hideModel();
+    else hideChibi();
     renderFailed(err);
   });
   const shown = ready.then(() =>
@@ -843,7 +848,7 @@ export function renderLeft() {
       shownLeft = want;
       shownKey = key;
       unfreezeLeft();
-      if (want === "lobby") Lobby.reveal(); // on screen: its intro starts
+      if (want === "memorialLobby") MemorialLobby.reveal(); // on screen: its intro starts
       for (const part of LEFT) if (part !== want) retireLeft(part, my);
     }),
   );
@@ -851,13 +856,13 @@ export function renderLeft() {
 }
 // a part no longer shown: faded out, then freed (unless a newer change wants it again)
 function retireLeft(part, my) {
-  const el = $(part);
+  const el = partHost(part);
   const free = () => {
     el.hidden = true;
     el.classList.remove("pending", "leaving");
     if (part === "portrait") disposePortrait();
-    else if (part === "lobby") Lobby.hide(el);
-    else hideModel();
+    else if (part === "memorialLobby") MemorialLobby.hide(el);
+    else hideChibi();
   };
   if (batch || Loading.covering() || el.hidden || el.classList.contains("pending")) {
     free();
@@ -868,17 +873,19 @@ function retireLeft(part, my) {
     if (my === leftToken && el.classList.contains("leaving")) free();
   }, 360);
 }
-// a still of the shown lobby or model over the left side, until its replacement is committed. The model's canvas
-// keeps no drawing buffer: it is copied in an animation frame, after the model's own loop has drawn into it.
+// a still of the shown memorial lobby or chibi over the left side, until its replacement is committed. The chibi's
+// canvas keeps no drawing buffer: it is copied in an animation frame, after the chibi's own loop has drawn into it.
 async function freezeLeft(part) {
-  const host = $(part);
+  const host = partHost(part);
   const sources = [
     ...host.querySelectorAll(
-      part === "lobby" ? ".lobby-view .lobby-layer:not(.lobby-off) canvas" : "canvas.model-view",
+      part === "memorialLobby"
+        ? ".memorial-lobby-view .memorial-lobby-layer:not(.memorial-lobby-off) canvas"
+        : "canvas.chibi-view",
     ),
   ];
   if (!sources.length) return;
-  if (part === "model") await nextFrame();
+  if (part === "chibi") await nextFrame();
   const box = document.createElement("div");
   box.className = `left-freeze ${part}`;
   Object.assign(box.style, {
@@ -893,13 +900,13 @@ async function freezeLeft(part) {
   const g = c.getContext("2d");
   for (const src of sources) if (src.width && src.height) g.drawImage(src, 0, 0, c.width, c.height);
   box.appendChild(c);
-  if (part === "lobby") {
+  if (part === "memorialLobby") {
     const frost = document.createElement("div");
-    frost.className = "lobby-frost";
+    frost.className = "memorial-lobby-frost";
     box.appendChild(frost);
   }
   unfreezeLeft(true);
-  $("lobby").after(box);
+  $("memorial-lobby").after(box);
 }
 function unfreezeLeft(now = false) {
   for (const box of document.querySelectorAll(".left-freeze:not(.leaving)")) {
@@ -929,15 +936,15 @@ export async function reload(refresh = []) {
 // A source changed or was rebuilt: discard the cached player or still, also when only a saved configuration changed.
 export function resetPreview(kind) {
   if (kind === "memorialLobby") {
-    lobbyStale = true;
-    lobbyShot = null;
-    lobbySeq = null;
-    lobbyAll = false;
-    if (shownLeft === "lobby") shownKey = null;
+    memorialLobbyStale = true;
+    memorialLobbyShot = null;
+    memorialLobbySeq = null;
+    memorialLobbyAll = false;
+    if (shownLeft === "memorialLobby") shownKey = null;
   } else if (kind === "chibi") {
-    modelShot = null;
-    modelGeneration++;
-    if (shownLeft === "model") shownKey = null;
+    chibiShot = null;
+    chibiGeneration++;
+    if (shownLeft === "chibi") shownKey = null;
   } else {
     expression = "00";
     clearTimeout(blinkTimer);
@@ -959,17 +966,17 @@ async function ensureLayouts() {
 }
 
 /**
- * Apply the settings the lobby and the voices take: the voice volume and mute (development runs started with
+ * Apply the settings the memorial lobby and the voices take: the voice volume and mute (development runs started with
  * --mute stay silent), the zoom-out limit and the post-processing.
  * @param {object|undefined} prefs
  */
 export function applyPrefs(prefs) {
-  Lobby.setVolume((prefs?.voiceVolume ?? 80) / 100, ctx?.info?.mute || prefs?.voiceMuted);
-  Lobby.setZoomLimit(prefs?.memorialLobbyZoomOut);
-  Lobby.setPostProcessing(prefs?.memorialLobbyPostProcessing !== false);
-  Lobby.setIntro(prefs?.memorialLobbyIntro !== false);
-  // started with --debug: the fullscreen lobby's pointer, wheel and gesture events go to the app's log
-  Lobby.setTrace(ctx?.info?.debug ? (events) => rpc("debug.trace", { events }).catch(() => {}) : null);
+  MemorialLobby.setVolume((prefs?.voiceVolume ?? 80) / 100, ctx?.info?.mute || prefs?.voiceMuted);
+  MemorialLobby.setZoomLimit(prefs?.memorialLobbyZoomOut);
+  MemorialLobby.setPostProcessing(prefs?.memorialLobbyPostProcessing !== false);
+  MemorialLobby.setIntro(prefs?.memorialLobbyIntro !== false);
+  // started with --debug: the fullscreen memorial lobby's pointer, wheel and gesture events go to the app's log
+  MemorialLobby.setTrace(ctx?.info?.debug ? (events) => rpc("debug.trace", { events }).catch(() => {}) : null);
 }
 
 /**
@@ -980,9 +987,9 @@ export function applyPrefs(prefs) {
 export async function relabel() {
   if (!open || !shownStudent || !layouts) return;
   const work = [renderScreen(), renderChips(), renderExpressions()];
-  if (tab === "lobby" && Lobby.meta()) {
+  if (tab === "memorialLobby" && MemorialLobby.meta()) {
     // Network-backed dialogue is optional; it must not delay language selection.
-    refreshLobbyLines(alt(), Lobby.meta());
+    refreshMemorialLobbyLines(alt(), MemorialLobby.meta());
   }
   if (
     switchThumbnails &&
@@ -999,7 +1006,7 @@ export async function relabel() {
 }
 
 // --- the previous and next student from the keyboard: the PC client's keys for the arrows (step-keys.js) --- A
-// key steps exactly like its arrow (ctx.step: the roster's cards in its order), one step at a time: the next one
+// key steps exactly like its arrow (ctx.step: the student list's cards in its order), one step at a time: the next one
 // waits until the screen shows the student the last one went to (arrived), so a held key goes at the pace the
 // screen follows. The keys are the screen's own: not while a text field or an input method has them, under a
 // popup, in a fullscreen view, during a job or another change of the screen, or behind the loading screen.
@@ -1064,7 +1071,7 @@ addEventListener("keydown", (ev) => {
     open &&
     fullscreen &&
     !Visual.isOpen() &&
-    !photoSession
+    !thumbnailSession
   ) {
     ev.preventDefault();
     void setFullscreen(false);
@@ -1086,12 +1093,12 @@ addEventListener("blur", () => keySteps.release());
  * @param {object} studentData The student, as student.get gives it.
  * @param {object} [options]
  * @param {boolean} [options.inPlace] Swap the parts in place of the shown screen.
- * @param {string|null} [options.kind] The tab to open on: "portrait", "lobby" or "model".
+ * @param {string|null} [options.kind] The tab to open on: "portrait", "memorialLobby" or "chibi".
  * @returns {Promise<void>} Settles once the screen is ready (the panels, primary preview and decoded UI
  *     images).
  */
 export async function show(context, studentData, key, { inPlace = false, kind = null } = {}) {
-  Photo.destroy();
+  ThumbnailCapture.destroy();
   Camera.close(false);
   document.getElementById("camera-launcher")?.remove();
   ModAlias.close();
@@ -1122,15 +1129,15 @@ export async function show(context, studentData, key, { inPlace = false, kind = 
   if (!sameAlt) {
     expression = "00";
     expanded = false;
-    lobbyShot = null;
-    lobbySeq = null;
-    lobbyAll = false;
-    modelShot = null;
-    modelActions = [];
-    modelMenu = null;
+    memorialLobbyShot = null;
+    memorialLobbySeq = null;
+    memorialLobbyAll = false;
+    chibiShot = null;
+    chibiActions = [];
+    chibiMenu = null;
     exprScroll = 0;
     ActionList.close();
-    modelAction = null;
+    chibiAction = null;
     // a new portrait is loaded; the shown one stays until it is committed
     clearTimeout(blinkTimer);
     mainPlayer = null;
@@ -1138,10 +1145,14 @@ export async function show(context, studentData, key, { inPlace = false, kind = 
   // the tabs the alt has, on every show: another install may lack a part under the same alt
   tab = availableTab(
     alt(),
-    { portrait: "portrait", memorialLobby: "lobby", chibi: "model", lobby: "lobby", model: "model" }[kind] || tab,
+    {
+      portrait: "portrait",
+      memorialLobby: "memorialLobby",
+      chibi: "chibi",
+    }[kind] || tab,
   );
   // the costume checks of another alt, or of a 3D tab no longer shown, stop; the same 3D tab's go on
-  if (!sameAlt || tab !== "model") stopCostumeChecks();
+  if (!sameAlt || tab !== "chibi") stopCostumeChecks();
   previewEnabled = modsOn();
   rpc("ui.visit", { alt: altId }).catch(() => {});
   // The portrait uses its own assets and default framing while the UI layout is still loading or unavailable.
@@ -1151,7 +1162,7 @@ export async function show(context, studentData, key, { inPlace = false, kind = 
         T("top.students"),
         ctx.back ||
           (() => {
-            location.hash = "#/roster";
+            location.hash = "#/student-list";
           }),
       ),
     );
@@ -1169,11 +1180,11 @@ export async function show(context, studentData, key, { inPlace = false, kind = 
   if (ready && open) void takeWanted().catch(renderFailed);
   // a 3D tab entered directly (a link, a reload) reads and checks the costume verdicts as a click on the tab does,
   // once the screen is drawn (their arrival redraws it)
-  if (ready && open && tab === "model")
+  if (ready && open && tab === "chibi")
     void costumesReady(alt()).catch((err) => console.error("Costume check failed", err));
-  // the server's index of the lobbies' prefabs takes seconds to build the first time: built in the background once
-  // the screen is in, so the lobby tab does not wait for it
-  if (open && hasLobby(alt())) rpc("memorialLobby.warm").catch(() => {});
+  // the server's index of the memorial lobbies' prefabs takes seconds to build the first time: built in the background
+  // once the screen is in, so the memorial lobby tab does not wait for it
+  if (open && hasMemorialLobby(alt())) rpc("memorialLobby.warm").catch(() => {});
 }
 
 /** Tell the screen a route to a student failed: a key step waiting for that screen goes on at once. */
@@ -1192,7 +1203,7 @@ export const currentAlt = () => ((open || suspended) && shownStudent ? alt().key
  * destination can replace it.
  */
 export function suspend() {
-  Photo.destroy();
+  ThumbnailCapture.destroy();
   Camera.close(false);
   document.getElementById("camera-launcher")?.remove();
   switchThumbnails?.cancel();
@@ -1210,7 +1221,7 @@ export function suspend() {
 
 /** Leave the screen: stop the players and drop any change being prepared. */
 export function hide() {
-  Photo.destroy();
+  ThumbnailCapture.destroy();
   Camera.close(false);
   document.getElementById("camera-launcher")?.remove();
   switchThumbnails?.cancel();
@@ -1231,15 +1242,15 @@ export function hide() {
   Visual.close({ instant: true });
   if (fullscreen) setFullscreen(false);
   disposePortrait();
-  Lobby.hide($("lobby"));
-  lobbySeq = null;
-  lobbyAll = false;
-  hideModel();
+  MemorialLobby.hide($("memorial-lobby"));
+  memorialLobbySeq = null;
+  memorialLobbyAll = false;
+  hideChibi();
   unfreezeLeft(true);
   shownLeft = shownKey = null;
   for (const part of LEFT) {
-    $(part).hidden = true;
-    $(part).classList.remove("pending", "leaving");
+    partHost(part).hidden = true;
+    partHost(part).classList.remove("pending", "leaving");
   }
   for (const id of ["popup", "picker"]) {
     $(id).hidden = true;
@@ -1265,8 +1276,8 @@ export function setFam(value) {
 export function setChipPics(value) {
   chipPics = value;
 }
-export function setModelAction(value) {
-  modelAction = value;
+export function setChibiAction(value) {
+  chibiAction = value;
 }
 export function setExpressionState(value) {
   expression = value;
@@ -1289,23 +1300,23 @@ export function setCrossShown(value) {
 export function setStartLoose(value) {
   startLoose = value;
 }
-export function setLobbyFrom(value) {
-  lobbyFrom = value;
+export function setMemorialLobbyFrom(value) {
+  memorialLobbyFrom = value;
 }
-export function setLobbyStale(value) {
-  lobbyStale = value;
+export function setMemorialLobbyStale(value) {
+  memorialLobbyStale = value;
 }
-export function setLobbyShot(value) {
-  lobbyShot = value;
+export function setMemorialLobbyShot(value) {
+  memorialLobbyShot = value;
 }
-export function setModelActions(value) {
-  modelActions = value;
+export function setChibiActions(value) {
+  chibiActions = value;
 }
-export function setModelMenu(value) {
-  modelMenu = value;
+export function setChibiMenu(value) {
+  chibiMenu = value;
 }
-export function setModelShot(value) {
-  modelShot = value;
+export function setChibiShot(value) {
+  chibiShot = value;
 }
 export function setFullscreenState(value) {
   fullscreen = value;

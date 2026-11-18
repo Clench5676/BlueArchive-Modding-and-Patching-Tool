@@ -94,7 +94,7 @@ LOBBIES = {
 @pytest.mark.parametrize("core", sorted(LOBBIES))
 def test_real_lobbies_whose_skeletons_interleave(real_game, core):
     layers, systems = LOBBIES[core]
-    info = real_game.lobby_info(core)
+    info = real_game.memorial_lobby_info(core)
     active = [layer for layer in info["layers"] if layer["active"]]
     assert [(layer["name"], layer["order"], layer["pages"]) for layer in active] == layers
     # the systems on at rest (the others play during the intro only)

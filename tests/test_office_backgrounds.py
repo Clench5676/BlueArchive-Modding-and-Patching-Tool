@@ -15,7 +15,7 @@ from bmpt.core.errors import ServiceError
 from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
 from bmpt.gameassets.cache import PreviewCache
 from bmpt.gameassets import office
-from bmpt.webui.student_hall import empty_hall, validate_hall
+from bmpt.webui.student_hall import empty_student_hall, validate_student_hall
 
 from test_webui import app, services, call, rpc
 
@@ -214,12 +214,12 @@ def test_office_texture_is_lossless_and_honors_preview_cache_optout(tmp_path, mo
 
 @pytest.mark.parametrize("name", ["office-day", "office-night"])
 def test_hall_accepts_explicit_office_ids_only(name):
-    hall = empty_hall()
-    hall["background"] = name
-    assert validate_hall(hall)["background"] == name
-    hall["background"] = "office-unknown"
+    student_hall = empty_student_hall()
+    student_hall["background"] = name
+    assert validate_student_hall(student_hall)["background"] == name
+    student_hall["background"] = "office-unknown"
     with pytest.raises(ServiceError, match="bad_params"):
-        validate_hall(hall)
+        validate_student_hall(student_hall)
 
 
 def test_office_routes_keep_existing_ui_consent_and_read_only_endpoints(app, services, monkeypatch):
@@ -239,7 +239,9 @@ def test_office_routes_keep_existing_ui_consent_and_read_only_endpoints(app, ser
 
 def test_hall_options_include_office_choices_and_retain_collection_fallback(app, services, installed, monkeypatch):
     monkeypatch.setattr(services.library, "mods", lambda: [])
-    monkeypatch.setattr(services.game, "collection_names", lambda: {"bg": ["BG_Test_Collection"]}, raising=False)
+    monkeypatch.setattr(
+        services.game, "collection_names", lambda: {"background": ["BG_Test_Collection"]}, raising=False
+    )
     monkeypatch.setattr(services.game, "office_backgrounds", lambda: office.choices(installed.game), raising=False)
     result = rpc(app, "studentHall.options")
     assert "error" not in result, result
@@ -296,7 +298,7 @@ def test_material_dependencies_invalidate_geometry_without_scanning_shader_as_te
 
 
 def test_ui_texture_uses_material_shader_override_instead_of_default_shader(installed, monkeypatch):
-    from bmpt.gameassets import model
+    from bmpt.gameassets import chibi
 
     def obj(pid, kind, data):
         return SimpleNamespace(path_id=pid, type=SimpleNamespace(name=kind), data=data)
@@ -343,7 +345,7 @@ def test_ui_texture_uses_material_shader_override_instead_of_default_shader(inst
         def deref(self, owner, pointer):
             return pointers.get((pointer or {}).get("m_PathID"))
 
-    monkeypatch.setattr(model, "BundleGraph", Graph)
+    monkeypatch.setattr(chibi, "BundleGraph", Graph)
     tree = node("Root", [node("Light", widgets=[{"texture": "Light"}])])
     assert office._add_materials(installed.game, path, tree) == {installed.paths[-1]}
     assert tree["children"][0]["widgets"][0]["material"]["dst"] == 1

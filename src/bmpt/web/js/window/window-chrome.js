@@ -105,7 +105,7 @@ function fitRow(header, scale, nativeLeft = 0) {
     modsWidth: fixedMods + captionWidth,
     captionWidth,
     compact,
-    hall: header.classList.contains("hall-home"),
+    studentHall: header.classList.contains("student-hall-home"),
     modsVisible: !!mods && !mods.hidden,
   });
   compact = row.compact;
@@ -182,7 +182,7 @@ async function layout() {
     transform: `scale(${g.scale})`,
   });
   header.classList.toggle("chrome-waiting", !snapshot.valid);
-  // Hall/detail hold their own inert/focus state. Only add a temporary measurement guard.
+  // StudentHall/detail hold their own inert/focus state. Only add a temporary measurement guard.
   if (!topHidden) header.inert = !snapshot.valid;
   fitStage();
   reflowTopActions();

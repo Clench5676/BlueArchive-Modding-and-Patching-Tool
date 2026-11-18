@@ -66,7 +66,7 @@ service errors once with compact JSON parameters.
 `BAMT-report-<version>-<YYYYMMDD-HHMM>.zip` (Desktop, Downloads, the data directory, then the temporary directory;
 no upload). The archive contains `report.txt`, `report.json` and the rotated logs, each bounded. Home paths, user
 names, hostnames, credentials and asset filenames are redacted; the game's own bundle names, CAB ids and the App's
-model URLs stay. Reports include app/build and OS details, locale, web view version, front-end page/phase/errors,
+chibi URLs stay. Reports include app/build and OS details, locale, web view version, front-end page/phase/errors,
 consent states, game metadata, library counts, boot timings and the last failed job; report generation never
 initializes game assets or takes the library lock, and optional reads share a one-second deadline. With the Check
 Game Files consent, `gameFiles` compares each install against Steam's file list by name and size (`sizeChanged`,

@@ -1,4 +1,4 @@
-import { portraitMinimum } from "../photography/camera.js";
+import { portraitMinimum } from "../thumbnail-capture/camera.js";
 // The portrait's fullscreen view: the game's visual mode (UICharacterVisualMode), which UICharacterDetail opens from its
 // ZoomButton. It is drawn from the prefab's PC group: the student's collection background under two pulsing light
 // patterns, the portrait's own player (detail.js; framed by visual-view.js: the whole art, the body in the middle), the
@@ -10,7 +10,7 @@ import * as NGUI from "../ui/ngui.js";
 import { anyOpen as popupOpen } from "../ui/popup.js";
 import { bindCorner } from "../window/corner-layout.js";
 import { ensureSpine } from "../spine/spine-runtime.js";
-import { wheelKind, wheelStep } from "../lobby/lobby-touch.js";
+import { wheelKind, wheelStep } from "../memorial-lobby/memorial-lobby-touch.js";
 import { S, clone, hitButton } from "../core/util.js";
 import { FULLSCREEN_BUTTON } from "../ui/ui-tokens.js";
 import {
@@ -33,11 +33,11 @@ import {
 const CENTRE = [960, 540]; // the screen's centre on the stage
 const GLIDE_MS = 450; // in and out, in step with the UI slide (app.css .45s)
 const RESET_MS = 300; // Btn_RefreshPos: back to the whole art
-const ZOOM_TAU = 0.08; // s: a wheel zoom eases to its target, as in the lobby
+const ZOOM_TAU = 0.08; // s: a wheel zoom eases to its target, as in the memorialLobby
 const WHEEL = 0.0015,
   LINE = 40,
   PINCH = 0.01,
-  SCROLL_MS = 120; // as lobby-touch.js
+  SCROLL_MS = 120; // as memorial-lobby-touch.js
 // the buttons' BoxColliders [width, height, centre y] in NGUI units around their node; the greyed reset has none. They
 // grow with the bodies' fullscreen height (fullscreenBody): the prefab's bodies are 116 high.
 const HIT = {
@@ -113,7 +113,7 @@ export async function prepareBack({ layout, label, onBack }) {
 }
 
 /**
- * Draw the same complete Back widget for memorial lobby and model fullscreen.
+ * Draw the same complete Back widget for memorial lobby and chibi fullscreen.
  * @param {HTMLElement} host The element to draw into.
  * @param {NguiNode} layout The UICharacterVisualMode layout.
  */
@@ -246,7 +246,7 @@ function finish(s, restore = true) {
   }
 }
 
-// Every fullscreen view of the detail screen (this one, the memorial lobby's, the 3D model's) slides the
+// Every fullscreen view of the detail screen (this one, the memorial lobby's, the chibi's) slides the
 // screen's UI out (app.css .stage.fullscreen); uiOut and uiBack handle the screen's parts meanwhile.
 let asideFocus = null;
 /**
@@ -523,7 +523,8 @@ function up(e) {
   s.pinch = pinchOf(s);
   if (!s.ptrs.size) s.touch.classList.remove("grabbing");
 }
-// A mouse wheel zooms, a trackpad swipe pans, a pinch zooms; one scroll keeps its kind (lobby-touch.js wheelKind)
+// A mouse wheel zooms, a trackpad swipe pans, a pinch zooms; one scroll keeps its kind (memorial-lobby-touch.js
+// wheelKind)
 function wheel(e) {
   const s = st;
   e.preventDefault();
@@ -616,15 +617,15 @@ export const state = () =>
     : null;
 
 /**
- * Photography constrains only the framing guide while the native portrait player stays.
- * @param {boolean} on Whether photography is on.
+ * Thumbnail capture constrains only the framing guide while the native portrait player stays.
+ * @param {boolean} on Whether thumbnail capture is on.
  */
-export function photography(on, frame) {
+export function thumbnailCapture(on, frame) {
   if (!st) return;
-  st.lim.photoFrame = on ? frame : null;
+  st.lim.thumbnailFrame = on ? frame : null;
   st.lim.kMin = on ? portraitMinimum(st.lim.box, st.home.k, frame) : st.home.k;
   const full = viewport(st.home);
-  st.lim.photoBounds = [
+  st.lim.thumbnailBounds = [
     Math.min(full.x, st.lim.box[0]),
     Math.min(full.y, st.lim.box[1]),
     Math.max(full.x + full.width, st.lim.box[2]),

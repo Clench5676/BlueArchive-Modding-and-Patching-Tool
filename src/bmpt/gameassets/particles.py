@@ -1,8 +1,10 @@
 """Unity ParticleSystem effects of a memorial lobby prefab, as plain data for the web UI's particle player.
 
-Almost every lobby prefab carries particle systems: bokeh and dust over the scene, stars, petals, Michiru's sparkler.
+Almost every memorial lobby prefab carries particle systems: bokeh and dust over the scene, stars, petals, Michiru's
+sparkler.
 This module turns their typetrees (ParticleSystem, ParticleSystemRenderer, the material, its shader and textures)
-into compact JSON that web/js/lobby/particles.js simulates and draws. It works on plain typetrees, so it runs without
+into compact JSON that web/js/memorial-lobby/particles.js simulates and draws. It works on plain typetrees, so it runs
+without
 game files; the service resolves the materials, textures and meshes, which live in other bundles.
 
 Values keep Unity's units and conventions: lengths in the system's own space (scaled as its scaling mode says),
@@ -22,13 +24,13 @@ import math
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-# DSFX shaders the player ports (web/js/lobby/particles.js PROGRAMS), by the shader name the material points at
+# DSFX shaders the player ports (web/js/memorial-lobby/particles.js PROGRAMS), by the shader name the material points at
 PROGRAMS = {
     "DSFX/FX_SHADER_Additive_0": "additive",
     "DSFX/FX_SHADER_AlphaBlend_0": "alphaBlend",
     "DSFX/FX_SHADER_AlphaBlend_Add": "alphaBlendAdd",
     "DSFX/FX_SHADER_AlphaBlend_Add_Mask_0": "mask",
-    "DSFX/FX_SHADER_AlphaBlend_Add_Mask_0_MXChar": "mask",  # the character variant (Mika's halo rings)
+    "DSFX/FX_SHADER_AlphaBlend_Add_Mask_0_MXChar": "mask",  # the character alt (Mika's halo rings)
     "DSFX/FX_SHADER_AlphaBlend_Add_Distort_0": "distort",
     "DSFX/FX_SHADER_AlphaBlend_Add_Distort_1a": "distort1a",
     "DSFX/FX_SHADER_AlphaBlend_Add_Double_Distort_1a": "doubleDistort",
@@ -39,7 +41,7 @@ PROGRAMS = {
     "DSFX/FX_SHADER_AlwaysView_Add": "alwaysViewAdd",
     "DSFX/FX_SHADER_Matcap_0": "matcap",
     "FX/General Unlit VertexColor": "vertexColor",
-    "FX/FX_SHADER_Lobby_Order": "lobbyOrder",  # the lens-dirt and light quads (meshfx.py)
+    "FX/FX_SHADER_Lobby_Order": "memorialLobbyOrder",  # the lens-dirt and light quads (meshfx.py)
     # Unity's built-in sprite and mobile particle shaders: the intro's flash and fade sprites (intro.sprite)
     "Sprites/Default": "sprite",
     "Mobile/Particles/Additive": "particleAdd",
@@ -365,7 +367,8 @@ def _modules(ps: Mapping[str, Any]) -> dict:
         out["custom"] = custom
     m = ps.get("TrailModule") or {}
     if m.get("enabled") and m.get("mode", 0) == 0:
-        # a trail behind each particle (Particles mode; Ribbon mode is used by no lobby): the points it leaves every
+        # a trail behind each particle (Particles mode; Ribbon mode is used by no memorial lobby): the points it
+        # leaves every
         # minVertexDistance, each living lifetime x its particle's lifetime, drawn with the renderer's second material
         out["trail"] = {
             "ratio": _r(m.get("ratio", 1.0)),
@@ -450,7 +453,8 @@ def _renderer(r: Mapping[str, Any]) -> dict:
         "streams": _streams(r),
         "rotateWithStretch": 1 if r.get("m_RotateWithStretchDirection", True) else 0,
         # Apply Active Color Space: in the game's linear colour space Unity converts the particle colours from gamma
-        # to linear before they reach the vertex stream; with it off (116 systems in 30 lobbies: Michiru's, Nodoka's)
+        # to linear before they reach the vertex stream; with it off (116 systems in 30 memorial lobbies: Michiru's,
+        # Nodoka's)
         # the shader gets them as stored
         "colorSpace": 1 if r.get("m_ApplyActiveColorSpace", True) else 0,
     }
@@ -631,7 +635,7 @@ def anchor_of(
     """Find a prefab node's Follow-bone anchor and intervening transform chain.
 
     Args:
-        n: lobby.read_prefab node whose effect placement is being exported.
+        n: memorial_lobby.read_prefab node whose effect placement is being exported.
         by_go: Prefab walk nodes indexed by GameObject path ID for ancestor traversal.
         skeleton_of_go: Maps a skeleton GameObject path ID to its skeleton name, or None.
         data_scale: Returns Unity units per skeleton unit for each skeleton name.
@@ -662,7 +666,8 @@ def anchor_of(
     return anchor, chain[::-1]
 
 
-# the lobby script that switches GameObjects on and off by Spine events (ch0217's fish and bubbles; the player reads
+# the memorial lobby script that switches GameObjects on and off by Spine events (ch0217's fish and bubbles; the
+# player reads
 # the events, particles.js spineEvent)
 TOGGLE_SCRIPT = "SpineEventToggleObjects"
 
@@ -679,7 +684,7 @@ def toggle_groups(
     its list.
 
     Args:
-        nodes: lobby.read_prefab walk carrying component lists and each object's own activity.
+        nodes: memorial_lobby.read_prefab walk carrying component lists and each object's own activity.
         skeleton_of_go: Maps a skeleton GameObject path ID to its skeleton name, or None.
 
     Returns:
@@ -723,10 +728,10 @@ def build(
     (toggle_groups) are kept even while it is off, with the [group, index] pairs above them ("toggle"): they play
     while every one is on. Intro-gated systems off at rest are kept
     when only gates and toggles keep them off ("rest" 0). Each system has its GameObject as "_go" (for the intro, which
-    lobby.read_prefab removes).
+    memorial_lobby.read_prefab removes).
 
     Args:
-        nodes: lobby.read_prefab walk in hierarchy order, with transforms, component trees, and path IDs.
+        nodes: memorial_lobby.read_prefab walk in hierarchy order, with transforms, component trees, and path IDs.
         skeleton_of_go: Maps a skeleton GameObject path ID to its skeleton name, or None.
         data_scale: Returns Unity units per skeleton unit for each skeleton name.
         resolve: Reads material or mesh pointers by owner path ID; None leaves systems without materials.

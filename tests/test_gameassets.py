@@ -998,7 +998,7 @@ def test_collection_backgrounds_without_the_collection_suffix(tmp_path, monkeypa
     cache = AssetCache(root=tmp_path / "cache", allowed=True)
     game = GameAssets([tmp_path], cache)
     assert game.collection_names() == {
-        "bg": ["BG_Abydos_Collection", "BG_NewYearFestival2"],
+        "background": ["BG_Abydos_Collection", "BG_NewYearFestival2"],
         "portrait": ["Student_Portrait_CH0192_Collection"],
     }
     data, mime = game.collection_bg("BG_NewYearFestival2")
@@ -1151,7 +1151,7 @@ def test_unknown_names_raise_asset_not_found(tmp_path):
         lambda: game.layout("missing"),
         lambda: game.collection_bg("missing"),
         lambda: game.collection_portrait("missing"),
-        lambda: game.spine_files("spr", "missing"),
+        lambda: game.spine_files("portrait", "missing"),
         lambda: game.spine_cores("invalid"),
         lambda: game.spine_files_from([]),
     ):
@@ -1396,7 +1396,7 @@ def test_real_collection_art_stays_in_memory(real_game):
     before = {p: p.stat().st_mtime_ns for p in real_game.cache.root.rglob("*") if p.is_file()}
     names = real_game.collection_names()
     assert "Student_Portrait_Hoshino_Collection" in names["portrait"]
-    assert "BG_Abydos_Collection" in names["bg"]
+    assert "BG_Abydos_Collection" in names["background"]
     portrait = real_game.collection_portrait("Student_Portrait_Hoshino_Collection")
     background, mime = real_game.collection_bg("BG_Abydos_Collection")
     assert mime == "image/png"
@@ -1414,9 +1414,13 @@ def test_real_catalog_backgrounds_resolve(real_game):
     from bmpt.catalog import DEFAULT_DATA
 
     names = real_game.collection_names()
-    portraits, backgrounds = set(names["portrait"]), set(names["bg"])
-    variants = json.loads(DEFAULT_DATA.read_text(encoding="utf-8"))["variants"]
-    expected = {entry["bg"] for entry in variants.values() if entry.get("bg") and entry.get("portrait") in portraits}
+    portraits, backgrounds = set(names["portrait"]), set(names["background"])
+    variants = json.loads(DEFAULT_DATA.read_text(encoding="utf-8"))["alts"]
+    expected = {
+        entry["background"]
+        for entry in variants.values()
+        if entry.get("background") and entry.get("official_thumbnail") in portraits
+    }
     assert {"BG_NewYearFestival2", "BG_WaterFall"} <= expected
     assert sorted(expected - backgrounds) == []
     background, mime = real_game.collection_bg("BG_NewYearFestival2")
@@ -1424,7 +1428,7 @@ def test_real_catalog_backgrounds_resolve(real_game):
 
 
 @real_install
-@pytest.mark.parametrize("kind,core", [("spr", "hoshino_spr"), ("lobby", "hoshino_home")])
+@pytest.mark.parametrize("kind,core", [("portrait", "hoshino_spr"), ("memorialLobby", "hoshino_home")])
 def test_real_spine_files_and_pages_stay_in_memory(real_game, kind, core):
     before = set(real_game.cache.root.rglob("*.cache"))
     groups = real_game.spine_cores(kind)

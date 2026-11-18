@@ -31,7 +31,7 @@ export const ROW = { pitch: 120, radioX: 30, labelX: 61.5, end: 20, maxLabelW: 5
  * box would make the list scroll sideways, and its scroll fade would wash out the title bars' right ends).
  */
 export const keyLabelWidth = (cw) => Math.min(ROW.maxLabelW, cw - ROW.radioX - ROW.labelX);
-export const KEY_TYPE = POPUP_TYPE.card.option; // 42 down to 30, as the roster's sort keys
+export const KEY_TYPE = POPUP_TYPE.card.option; // 42 down to 30, as the student list's sort keys
 // A group card's texts (detail.js stripCard: 242 wide, the visible body 196 high): the names are siblings with
 // one size for every card, wrapped onto two lines before they shrink; the playing group's card shows the playing
 // action's name alone instead, at the names' size, never larger (down to 20, three lines, only when it does not

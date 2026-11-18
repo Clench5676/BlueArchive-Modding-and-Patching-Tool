@@ -2,7 +2,7 @@
 // several cards ticked, the start sequence), web/js/app/update.js and detail.js's preview actions, on a small stand-in
 // DOM. Run by tests/test_popup.py with Node's test runner: node --test tests/js/popup.test.mjs
 import assert from "node:assert/strict";
-import { DETAIL_MODULES, flat, LOBBY_MODULES, POPUP_MODULES } from "./helpers/source-text.mjs";
+import { DETAIL_MODULES, flat, MEMORIAL_LOBBY_MODULES, POPUP_MODULES } from "./helpers/source-text.mjs";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { afterEach, test } from "node:test";
@@ -676,7 +676,7 @@ test("scrollable findings wrap long paths and unbroken names inside the frame, k
   assert.deepEqual(await pending, { button: "ok", checked: null });
 });
 
-test("photo deletion warnings fit the UIPopup_Sort frame in all six locales", async () => {
+test("thumbnail deletion warnings fit the UIPopup_Sort frame in all six locales", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   const bounds = (el) => {
     const [left, top, width, height] = NGUI.rect(el);
@@ -690,9 +690,9 @@ test("photo deletion warnings fit the UIPopup_Sort frame in all six locales", as
       setStrings(locale, Object.fromEntries(strings(ui)));
       for (const warning of [ui.error.asset_delete_confirm, ui.error.thumbnail_delete_other_alt]) {
         const pending = Popup.message({
-          title: ui.photo.delete,
+          title: ui.thumbnail.delete,
           lines: [warning],
-          ok: ui.photo.delete,
+          ok: ui.thumbnail.delete,
           cancel: ui.popup.cancel,
         });
         const ok = await drawn(dialog, "ok");
@@ -738,7 +738,10 @@ test("the untested game version confirmation fits the UIPopup_Sort frame in all 
       ).webui;
       setStrings(locale, Object.fromEntries(strings(ui)));
       // mod-switch.js untestedLines: the count, then six entries at most and the rest counted
-      const names = Array.from({ length: 6 }, (_, i) => `Hoshino (First Year, School Swimsuit) ${i} - ${ui.tab.lobby}`);
+      const names = Array.from(
+        { length: 6 },
+        (_, i) => `Hoshino (First Year, School Swimsuit) ${i} - ${ui.tab.memorialLobby}`,
+      );
       const lines = [
         { text: ui.mods.untested.affected.replace("{n}", "8") },
         ...[...names, "+2"].map((text) => ({ text, ...item })),
@@ -1908,7 +1911,7 @@ test("new card dots hide for in-use and selected mods independently", async () =
     assert.equal(hasDot("pending"), selected !== "pending");
     assert.equal(hasDot("other"), selected !== "other");
     assert.equal(hasDot("seen"), false);
-    assert.ok(items[0].isNew, "rendering must not consume the tab or roster mark");
+    assert.ok(items[0].isNew, "rendering must not consume the tab or student list mark");
   }
   prompt.hidden = true;
 });
@@ -1948,16 +1951,16 @@ import { setupScreenTest } from "./detail-screen.js";
 import { setupChipsTest } from "./detail-chips.js";
 import { setupStripTest } from "./detail-strip.js";
 export function setupPreviewTest(data, kind, onLeft = async () => {}) {
-  shownStudent = data; altId = data.alts[0].key; ctx = { invalidateRoster() {} };
-  open = true; setupActionsTest(); tab = kind === "memorialLobby" ? "lobby" : "portrait";
+  shownStudent = data; altId = data.alts[0].key; ctx = { invalidateStudentList() {} };
+  open = true; setupActionsTest(); tab = kind === "memorialLobby" ? "memorialLobby" : "portrait";
   setupSwitchersTest(kind, () => { pending = shownSource(alt(), kind); }, pageToken);
   previewEnabled = modsOn();
-  expression = "03"; mainPlayer = { cached: true }; lobbyShot = "cached";
-  lobbySeq = "talk"; lobbyAll = true; lobbyStale = false; shownLeft = tab; shownKey = "cached";
+  expression = "03"; mainPlayer = { cached: true }; memorialLobbyShot = "cached";
+  memorialLobbySeq = "talk"; memorialLobbyAll = true; memorialLobbyStale = false; shownLeft = tab; shownKey = "cached";
   setupScreenTest(); setupChipsTest(); setupStripTest();
   renderLeft = onLeft;
 }
-export const previewTestState = () => ({ expression, mainPlayer, lobbyShot, lobbySeq, lobbyAll, lobbyStale, shownKey, pending });
+export const previewTestState = () => ({ expression, mainPlayer, memorialLobbyShot, memorialLobbySeq, memorialLobbyAll, memorialLobbyStale, shownKey, pending });
 `,
   [detailUrl("detail-actions.js")]: "\nexport function setupActionsTest() { busy = false; }\n",
   [detailUrl("detail-switchers.js")]: `
@@ -2022,7 +2025,7 @@ const previewStudent = () => ({
       },
       modList: [
         { id: "p", targetAlt: "a", resourceType: "portrait", name: "Portrait mod" },
-        { id: "l", targetAlt: "a", resourceType: "memorialLobby", name: "Lobby mod" },
+        { id: "l", targetAlt: "a", resourceType: "memorialLobby", name: "MemorialLobby mod" },
       ],
     },
     {
@@ -2051,7 +2054,7 @@ test("detail alt candidates preview official assets independently of the source'
   );
 });
 
-test("Update reloads a configured portrait or lobby rebuilt under the same mod id while mods are off", async () => {
+test("Update reloads a configured portrait or memorial lobby rebuilt under the same mod id while mods are off", async () => {
   await modsEnabled(false);
   const inputs = { skeletons: {}, atlases: {}, textures: {} };
   handlers.set("actions.compatibility", () => ({ result: "compatibility" }));
@@ -2082,12 +2085,12 @@ test("Update reloads a configured portrait or lobby rebuilt under the same mod i
     if (kind === "portrait") {
       assert.equal(draws[0].mainPlayer, null);
       assert.equal(draws[0].expression, "00");
-      assert.equal(draws[0].lobbyShot, "cached", "the other preview stays cached");
+      assert.equal(draws[0].memorialLobbyShot, "cached", "the other preview stays cached");
     } else {
-      assert.equal(draws[0].lobbyStale, true);
-      assert.equal(draws[0].lobbyShot, null);
-      assert.equal(draws[0].lobbySeq, null);
-      assert.equal(draws[0].lobbyAll, false);
+      assert.equal(draws[0].memorialLobbyStale, true);
+      assert.equal(draws[0].memorialLobbyShot, null);
+      assert.equal(draws[0].memorialLobbySeq, null);
+      assert.equal(draws[0].memorialLobbyAll, false);
       assert.equal(draws[0].shownKey, null);
       assert.deepEqual(draws[0].mainPlayer, { cached: true }, "the portrait stays cached");
     }
@@ -2101,7 +2104,7 @@ test("Update reloads a configured portrait or lobby rebuilt under the same mod i
     for (const layer of [...dialog.children].reverse()) (await drawn(layer, "close")).click();
     assert.deepEqual(Thumbs.forgotten, []);
     assert.deepEqual(Detail.previewTestState().mainPlayer, { cached: true });
-    assert.equal(Detail.previewTestState().lobbyShot, "cached");
+    assert.equal(Detail.previewTestState().memorialLobbyShot, "cached");
   }
 });
 
@@ -2287,7 +2290,7 @@ test("a saved source's detail chip keeps its caption independently of In Use", a
   prompt.hidden = true;
 });
 
-test("switch popup fields fit a long file independently in portrait and lobby details", async () => {
+test("switch popup fields fit a long file independently in portrait and memorial lobby details", async () => {
   const field = (prefix, i) => walk(prompt).find((el) => el.dataset.path === `Details/${prefix}_${i}`);
   try {
     for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
@@ -3141,8 +3144,8 @@ test("every kind left-aligns outer corners, with compact portrait gaps and balan
             Math.abs(left - 40 * S) <= 1,
             `${kind}, ${count} cards, row ${start}: fixed left inset, no centring offset`,
           );
-          // a full row of two or more spreads edge to edge; a single column stays at the left (the lobby in the L
-          // class)
+          // a full row of two or more spreads edge to edge; a single column stays at the left (the memorial lobby in
+          // the L class)
           if (kind !== "portrait" && row.length === columns && columns > 1)
             assert.ok(Math.abs(left - right) <= 1, `${kind}: equal insets for a full row`);
           if (kind !== "portrait" || count <= columns)
@@ -3541,8 +3544,8 @@ test("a loading action in the details panel shows the ring in its caption's plac
     ["Optimize Physics", () => {}, true, "secondary", null, loading],
     ["Show in Finder", () => {}],
   ];
-  const idle = Popup.detailsTree(items[0], "Chibi Info", [["File", "a.bundle"]], actions(false), null, "model");
-  const busy = Popup.detailsTree(items[0], "Chibi Info", [["File", "a.bundle"]], actions(true), null, "model");
+  const idle = Popup.detailsTree(items[0], "Chibi Info", [["File", "a.bundle"]], actions(false), null, "chibi");
+  const busy = Popup.detailsTree(items[0], "Chibi Info", [["File", "a.bundle"]], actions(true), null, "chibi");
   for (const i of [0, 1]) {
     const label = NGUI.find(busy, `Act_${i}/Label`).widgets[0],
       before = NGUI.find(idle, `Act_${i}/Label`).widgets[0];
@@ -3661,7 +3664,7 @@ test("a still being made shows the game's loading ring, the placeholder text onl
   }
 });
 
-for (const kind of ["portrait", "model"])
+for (const kind of ["portrait", "chibi"])
   test(`${kind} card and info panel remove placeholders after their shared still succeeds`, async () => {
     let finish;
     const picture = Object.assign(
@@ -3750,10 +3753,10 @@ test("portrait search uses the prefab header without reducing the row height or 
     const area = () => walk(prompt).find((e) => e.className === "popup-cards");
     const before = { ...area().style };
     action(prompt, "search").click();
-    await until(() => walk(prompt).some((e) => e.className === "roster-search"));
+    await until(() => walk(prompt).some((e) => e.className === "student-list-search"));
     assert.deepEqual(area().style, before, "search keeps the complete portrait viewport");
     assert.equal(action(prompt, "search"), undefined, "the search field occupies the toolbar's header slot");
-    const input = walk(prompt).find((e) => e.className === "roster-search");
+    const input = walk(prompt).find((e) => e.className === "student-list-search");
     assert.ok(
       NGUI.rect(input)[1] + NGUI.rect(input)[3] <= parseFloat(area().style.top),
       "search stays above the paper",
@@ -3803,7 +3806,7 @@ test("standard message choices expose all three actions within one native footer
   assert.equal((await pending).button, "discard");
 });
 
-test("Hall's opt-in failure caption stays hidden until a lazy still actually fails", async () => {
+test("StudentHall's opt-in failure caption stays hidden until a lazy still actually fails", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   for (const outcome of ["null", "reject", "success"]) {
     let resolve, reject;
@@ -3827,7 +3830,7 @@ test("Hall's opt-in failure caption stays hidden until a lazy still actually fai
     assert.equal(note().hidden, true);
     assert.equal(note().style.display, "none");
     if (outcome === "reject") reject(new Error("capture failed"));
-    else resolve(outcome === "null" ? null : "blob:hall-success");
+    else resolve(outcome === "null" ? null : "blob:student-hall-success");
     await Promise.all(view.thumbnails);
     if (outcome === "success") assert.equal(note(), undefined);
     else {
@@ -4113,12 +4116,12 @@ test("empty and unavailable notes offer the exact release page in every locale",
 const Tours = await import("../../src/bmpt/web/js/app/tours.js");
 const tourPages = [
   {
-    id: "photos",
+    id: "thumbnails",
     version: "0.6.0",
-    title: "Your Student Photos",
-    body: "Frame a portrait, save a photo, make it yours.",
+    title: "Your Student Thumbnails",
+    body: "Frame a portrait, save a thumbnail, make it yours.",
   },
-  { id: "hall", version: "0.6.0", title: "Your Student Hall", body: "Keep your favorite students close." },
+  { id: "studentHall", version: "0.6.0", title: "Your Student Hall", body: "Keep your favorite students close." },
 ];
 function tourKey(layer, key, extra = {}) {
   const event = {
@@ -4190,7 +4193,7 @@ test("empty content and closing a pre-render consume no presentation; missing im
   assert.equal(await interrupted, false);
   await tick();
   assert.equal(calls.slice(start).includes("app.tourPresented"), false);
-  const imagePage = { ...tourPages[0], image: "/tours/missing-ui.png", caption: "Photo controls" };
+  const imagePage = { ...tourPages[0], image: "/tours/missing-ui.png", caption: "Thumbnail controls" };
   const visible = Tours.show([imagePage], ["0.6.0"]);
   await drawn(dialog, "next");
   await until(() => calls.slice(start).includes("app.tourPresented"));
@@ -4206,7 +4209,7 @@ test("tour pages and sibling controls fit all six locales inside the notice pref
   const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   await Popup.ready();
   const examples = {
-    "en-US": ["Your Student Photos", "Frame a portrait, save a photo, make it yours."],
+    "en-US": ["Your Student Thumbnails", "Frame a portrait, save a thumbnail, make it yours."],
     "zh-CN": ["学生照片，随心定格", "调整构图，拍下喜欢的瞬间，设为学生照片。"],
     "zh-TW": ["學生照片，自由定格", "調整構圖，拍下喜歡的瞬間，設為學生照片。"],
     "ja-JP": ["お気に入りの一枚を", "構図を整えて撮影。学生の写真に設定。"],
@@ -4439,7 +4442,7 @@ test("automatic tours wait for consents, update dialogs and jobs without checkin
 test("source frame replacement preserves card envelopes, list placement and hit targets", async () => {
   const { cardInkBounds, switchGrid, placeSwitchCards } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
   await Popup.selectionReady();
-  for (const kind of ["portrait", "lobby", "model", null]) {
+  for (const kind of ["portrait", "memorialLobby", "chibi", null]) {
     const grid = switchGrid(kind),
       base = { key: "choice", label: "Source", full: "Source" };
     for (const selected of [false, true])
@@ -4498,7 +4501,7 @@ test("source cards use the state badge and fitted locale caption in every picker
       assert.equal(captions.applied.text, ui.status.applied);
       assert.equal(captions.preview.text, ui.status.selected);
       assert.equal(captions.applied.fontSize, captions.preview.fontSize);
-      for (const kind of ["portrait", "lobby", "model", null]) {
+      for (const kind of ["portrait", "memorialLobby", "chibi", null]) {
         const captions = Popup.selectionCaptions(switchGrid(kind).card);
         for (const applied of [false, true])
           for (const previewed of [false, true]) {
@@ -4574,12 +4577,12 @@ test("shipped text-only tours use one fitted message frame in every locale, wind
       const pages = Object.entries(ui.tours.v0_6_0).map(([id, copy]) => ({ id, version: "0.6.0", ...copy }));
       assert.deepEqual(
         pages.map(({ id }) => id),
-        ["student-thumbnails", "hall-viewing-zoom"],
+        ["student-thumbnails", "student-hall-viewing-zoom"],
       );
       const size = Tours.pageSize(pages);
       const confirmation = Popup.messageLayout({
         lines: [ui.error.asset_delete_confirm],
-        ok: ui.photo.delete,
+        ok: ui.thumbnail.delete,
         cancel: ui.popup.cancel,
       });
       assert.ok([1300, 1540, 2098].includes(size.width));
@@ -5585,7 +5588,7 @@ test("the repair preview is a layer of its own: a message over it, Escape on the
 
 // a search or segment with no match says so in the list paper, and confirming a hidden choice is blocked
 const noMatch = () =>
-  walk(prompt).filter((e) => e.textContent === english.hall.noCandidates && e.dataset.path === "Empty");
+  walk(prompt).filter((e) => e.textContent === english.studentHall.noCandidates && e.dataset.path === "Empty");
 test("a list whose segment shows nothing says so in the paper, and its primary button answers nothing", async () => {
   const everything = [
     { key: "a", label: "Alpha", full: "Alpha", recruit: true },
@@ -5628,7 +5631,7 @@ test("a list whose segment shows nothing says so in the paper, and its primary b
     // nothing shown at all
     await Popup.listPopup(options([], "a"));
     const [empty] = noMatch();
-    assert.ok(empty, "hall.noCandidates is in the list paper");
+    assert.ok(empty, "studentHall.noCandidates is in the list paper");
     assert.equal(action(prompt, "ok").disabled, true);
     const paper = walk(prompt).find((e) => e.dataset.path === "Center/Popup/ListPaper");
     assert.ok(paper, "the list paper is drawn");
@@ -5637,7 +5640,7 @@ test("a list whose segment shows nothing says so in the paper, and its primary b
     assert.ok(el >= pl && el + ew <= pl + pw && et >= pt && et + eh <= pt + ph, "the message lies inside the paper");
     assert.ok(Math.abs(el + ew / 2 - (pl + pw / 2)) < 1, "centred across the paper");
     // the paper's own text is the app's string
-    assert.equal(empty.textContent, english.hall.noCandidates);
+    assert.equal(empty.textContent, english.studentHall.noCandidates);
     // the segment is cleared by the caller: the card is back and Apply works again
     asked.length = 0;
     await Popup.listPopup(options(everything, "a"));
@@ -5664,7 +5667,7 @@ test("a list whose segment shows nothing says so in the paper, and its primary b
 });
 const NGUI_rect = (el) => ["left", "top", "width", "height"].map((k) => parseFloat(el.style[k]));
 
-// Escape in a list popup's search box closes the search and the popup stays, as the roster's does
+// Escape in a list popup's search box closes the search and the popup stays, as the student list's does
 test("Escape in a list popup's search closes the search first; the next one closes the popup", async (t) => {
   const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   const collection = n("UICharacterCollection", [0, 0]);
@@ -5702,8 +5705,8 @@ test("Escape in a list popup's search closes the search first; the next one clos
   try {
     await Fresh.listPopup(options);
     action(prompt, "search").click();
-    await until(() => walk(prompt).some((e) => e.className === "roster-search"));
-    const input = () => walk(prompt).find((e) => e.className === "roster-search");
+    await until(() => walk(prompt).some((e) => e.className === "student-list-search"));
+    const input = () => walk(prompt).find((e) => e.className === "student-list-search");
     input().value = "Owner 1";
     for (const fn of input().listeners.input || []) fn({ isComposing: false });
     await until(() => input()?.value === "Owner 1");
@@ -5794,18 +5797,18 @@ test("a search that matches nothing blocks the primary button until the match is
       onOk: () => asked.push("ok"),
     });
     action(prompt, "search").click();
-    await until(() => walk(prompt).some((e) => e.className === "roster-search"));
+    await until(() => walk(prompt).some((e) => e.className === "student-list-search"));
     const type = async (value) => {
-      const input = walk(prompt).find((e) => e.className === "roster-search");
+      const input = walk(prompt).find((e) => e.className === "student-list-search");
       input.value = value;
       for (const fn of input.listeners.input || []) fn({ isComposing: false });
-      await until(() => walk(prompt).find((e) => e.className === "roster-search")?.value === value);
+      await until(() => walk(prompt).find((e) => e.className === "student-list-search")?.value === value);
       await tick();
     };
     await type("zzz");
     await until(() => walk(prompt).some((e) => e.dataset.path === "Empty"));
     const empty = walk(prompt).find((e) => e.dataset.path === "Empty");
-    assert.equal(empty.textContent, english.hall.noCandidates);
+    assert.equal(empty.textContent, english.studentHall.noCandidates);
     assert.equal(action(prompt, "ok").disabled, true);
     action(prompt, "ok").click();
     assert.deepEqual(asked, []);
@@ -6240,10 +6243,10 @@ for (const lang of ["en-US", "zh-CN"])
     );
   });
 
-// A 3D model's details fit the list popup's panel without scrolling: the picture beside the name and chips,
+// A chibi's details fit the list popup's panel without scrolling: the picture beside the name and chips,
 // inside its column with its incline, one size for every candidate, big enough to read with a long file name and six
 // actions, and the actions on the panel's bottom
-test("a 3D model's details fit the panel without scrolling", async () => {
+test("a chibi's details fit the panel without scrolling", async () => {
   const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   await Popup.ready();
   const panel = Popup.listLayout().left,
@@ -6316,8 +6319,8 @@ for (const lang of ["en-US", "zh-CN", "th-TH"])
       };
       for (const [kind, tex] of [
         ["portrait", texture],
-        ["lobby", null],
-        ["model", null],
+        ["memorialLobby", null],
+        ["chibi", null],
       ])
         for (const file of ["short.bundle", long]) {
           const fields = [
@@ -6352,14 +6355,14 @@ for (const lang of ["en-US", "zh-CN", "th-TH"])
             assert.equal(value.fontSize, 34);
             assert.equal(more.widgets.find((w) => "sprite" in w).tier, "button");
           }
-          // the chips on one row; a 3D model's under its name, a lobby's beside a short one
+          // the chips on one row; a chibi's under its name, a memorial lobby's beside a short one
           const chipY = it.chips.map((_, i) => NGUI.find(tree, `Chip_${i}`).pos[1]);
           assert.ok(
             chipY.every((y) => Math.abs(y - chipY[0]) < 1e-6),
             `${what}: the chips on one row`,
           );
           if (kind === "chibi")
-            assert.ok(NGUI.find(tree, "Name").pos[1] > chipY[0] + 1, `${what}: the model's chips under its name`);
+            assert.ok(NGUI.find(tree, "Name").pos[1] > chipY[0] + 1, `${what}: the chibi's chips under its name`);
           // the chips are the S chip and the actions are tagged as buttons
           // XS where S would not fit
           assert.ok([Tokens.CHIP_TIERS.S.h, Tokens.CHIP_TIERS.XS.h].includes(NGUI.find(tree, "Chip_0").widgets[0].h_));
@@ -7037,10 +7040,10 @@ test("the startup Spine notice wraps inside UIPopup_Sort at message sizes in eve
 // Every preview entry stays quiet while the startup acknowledgement is pending.
 test("preview, comparison and compatibility modules contain no licence notice or confirmation button", () => {
   for (const name of [
-    ...LOBBY_MODULES.map((file) => `lobby/${file.replace(/\.js$/, "")}`),
+    ...MEMORIAL_LOBBY_MODULES.map((file) => `memorial-lobby/${file.replace(/\.js$/, "")}`),
     ...DETAIL_MODULES.map((file) => `detail/${file.replace(/\.js$/, "")}`),
-    "hall/student-hall",
-    "hall/student-hall-portrait-toolbar",
+    "student-hall/student-hall",
+    "student-hall/student-hall-portrait-toolbar",
     "mods/mod-compare",
     "mods/mod-compatibility",
   ]) {
@@ -7053,7 +7056,7 @@ test("preview, comparison and compatibility modules contain no licence notice or
   assert.equal(Popup.noticeFrame, undefined);
   assert.doesNotMatch(
     readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8"),
-    /\.lobby-notice/,
+    /\.memorial-lobby-notice/,
   );
 });
 
@@ -7372,17 +7375,17 @@ test("scrolling text viewer and picker heights retain their pre-fit viewports", 
   // the XL prefab's content box (885) over the XS footer: the frames lose the footer's padding (94)
   assert.equal(Frames.TEXT_VIEWER.h, 1259);
   assert.equal(Frames.TEXT_VIEWER.box.height, 885);
-  // every list popup as high as the Hall's editors (POPUP_FRAME.panelH)
+  // every list popup as high as the Student Hall's editors (POPUP_FRAME.panelH)
   for (const [kind, height] of [
     [null, 1450],
     ["portrait", 1450],
-    ["lobby", 1450],
-    ["model", 1450],
+    ["memorialLobby", 1450],
+    ["chibi", 1450],
   ])
     for (const check of [false, true]) assert.equal(Popup.listLayout(check, kind).frame.h, height, String(kind));
 });
 
-test("model search appends cross cards, drawn like any card, through the shared picker tools", async (t) => {
+test("chibi search appends cross cards, drawn like any card, through the shared picker tools", async (t) => {
   const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   const collection = n("UICharacterCollection", [0, 0]);
   const base = "Inventory_ListControl/RightCanvas/ListBG";
@@ -7400,16 +7403,16 @@ test("model search appends cross cards, drawn like any card, through the shared 
   t.mock.method(globalThis, "fetch", async (url, options) =>
     url === "/asset/ui/layout/UICharacterCollection.json" ? reply(collection) : fetch(url, options),
   );
-  const Fresh = await import("../../src/bmpt/web/js/ui/popup.js?cross-model-search");
+  const Fresh = await import("../../src/bmpt/web/js/ui/popup.js?cross-chibi-search");
   const own = [
     { key: "self", label: "Original", full: "Original" },
-    { key: "mod", label: "Model mod", full: "Model mod" },
-    { key: "sibling", label: "Model sibling", full: "Model sibling", hint: english.model.beyondFit },
+    { key: "mod", label: "Chibi mod", full: "Chibi mod" },
+    { key: "sibling", label: "Chibi sibling", full: "Chibi sibling", hint: english.chibi.beyondFit },
   ];
   const extras = [
-    { key: "cross-z", label: "Model Zebra", full: "Model Zebra" },
-    { key: "cross-a", label: "Model Alpha", full: "Model Alpha" },
-  ].map((it) => ({ ...it, hint: english.model.crossCharacter, thumb: "model.png", terms: ["ch0171_enemy"] }));
+    { key: "cross-z", label: "Chibi Zebra", full: "Chibi Zebra" },
+    { key: "cross-a", label: "Chibi Alpha", full: "Chibi Alpha" },
+  ].map((it) => ({ ...it, hint: english.chibi.crossCharacter, thumb: "model.png", terms: ["ch0171_enemy"] }));
   const queries = [],
     chosen = [];
   const keys = () =>
@@ -7420,7 +7423,7 @@ test("model search appends cross cards, drawn like any card, through the shared 
     await Fresh.listPopup({
       host: prompt,
       layoutKind: "chibi",
-      title: "Models",
+      title: "Chibis",
       items: own,
       selected: "self",
       okText: "Save",
@@ -7435,22 +7438,22 @@ test("model search appends cross cards, drawn like any card, through the shared 
     assert.deepEqual(keys(), ["self", "mod", "sibling"], "empty query keeps exactly the original cards");
     const sibling = walk(prompt).find((e) => e.dataset.key === "sibling");
     assert.equal(sibling.disabled ?? false, false);
-    assert.equal(sibling.getAttribute("aria-description"), english.model.beyondFit);
+    assert.equal(sibling.getAttribute("aria-description"), english.chibi.beyondFit);
     action(prompt, "search").click();
-    const input = () => walk(prompt).find((e) => e.className === "roster-search");
+    const input = () => walk(prompt).find((e) => e.className === "student-list-search");
     await until(() => !!input());
-    assert.equal(input().placeholder, english.roster.searchHint);
-    input().value = "Model";
+    assert.equal(input().placeholder, english.studentList.searchHint);
+    input().value = "Chibi";
     for (const fn of input().listeners.input || []) fn({ isComposing: true });
     await tick();
     assert.deepEqual(keys(), ["self", "mod", "sibling"], "IME composition does not run a new search");
     for (const fn of input().listeners.compositionend || []) fn({});
     await until(() => keys().length === 4 && keys()[0] === "mod");
     assert.deepEqual(keys(), ["mod", "sibling", "cross-z", "cross-a"]);
-    assert.equal(queries.at(-1), "Model");
+    assert.equal(queries.at(-1), "Chibi");
     const cross = walk(prompt).find((e) => e.dataset.key === "cross-z");
     assert.equal(cross.disabled ?? false, false);
-    assert.equal(cross.getAttribute("aria-description"), english.model.crossCharacter);
+    assert.equal(cross.getAttribute("aria-description"), english.chibi.crossCharacter);
     cross.click();
     assert.deepEqual(chosen, ["cross-z"]);
     const thumb = walk(prompt).find((e) => e.dataset.path === "Card_cross-z/Thumb");
@@ -7467,7 +7470,7 @@ test("model search appends cross cards, drawn like any card, through the shared 
     assert.deepEqual(
       [thumb.style.width, thumb.style.height],
       [ownThumb.style.width, ownThumb.style.height],
-      "cross cards keep the model card geometry",
+      "cross cards keep the chibi card geometry",
     );
     action(prompt, "order").click();
     await until(() => keys()[0] === "sibling");
@@ -7475,7 +7478,7 @@ test("model search appends cross cards, drawn like any card, through the shared 
     input().value = "CH0171_ENEMY";
     for (const fn of input().listeners.input || []) fn({ isComposing: false });
     await until(() => keys().length === 2);
-    assert.deepEqual(keys(), ["cross-a", "cross-z"], "the shared matcher searches model dev ids");
+    assert.deepEqual(keys(), ["cross-a", "cross-z"], "the shared matcher searches chibi dev ids");
     action(prompt, "search-close").click();
     await until(() => !input());
     assert.deepEqual(
@@ -7489,8 +7492,8 @@ test("model search appends cross cards, drawn like any card, through the shared 
   }
 });
 
-// --- the list popup's toolbar: with Switch 3D Model's checkbox and without ---
-// A collection stand-in whose TopMenu also carries the segment filter and Menubar the roster's toolbar clones.
+// --- the list popup's toolbar: with Switch Chibi's checkbox and without ---
+// A collection stand-in whose TopMenu also carries the segment filter and Menubar the student list's toolbar clones.
 function toolbarCollection(NGUI) {
   const collection = n("UICharacterCollection", [0, 0]);
   const base = "Inventory_ListControl/RightCanvas/ListBG";
@@ -7542,7 +7545,7 @@ async function toolbarOf(Fresh, tools, items) {
   await Fresh.listPopup({
     host: prompt,
     layoutKind: "chibi",
-    title: "Models",
+    title: "Chibis",
     items,
     selected: "a",
     okText: "Save",
@@ -7562,7 +7565,7 @@ async function toolbarOf(Fresh, tools, items) {
   };
 }
 
-test("a list popup's toolbar is the roster's, fitted inside the L class's list panel", async (t) => {
+test("a list popup's toolbar is the student list's, fitted inside the L class's list panel", async (t) => {
   const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
   serveToolbarCollection(t, NGUI);
   const Fresh = await import("../../src/bmpt/web/js/ui/popup.js?toolbar-plain");
@@ -7570,7 +7573,7 @@ test("a list popup's toolbar is the roster's, fitted inside the L class's list p
   try {
     const plain = await toolbarOf(Fresh, { segs: SEGMENTS, seg: 1, onSeg() {}, sortKey: "sort.default" }, items);
     // segments, search, sort, order left to right, inside the list panel, the order button at its right padding
-    const list = Fresh.listLayout(false, "model").list,
+    const list = Fresh.listLayout(false, "chibi").list,
       left = 960 + list.l * S,
       right = 960 + list.r * S;
     const [seg0, , seg2] = plain.segments;
@@ -7593,12 +7596,12 @@ test("Show Other Students is an icon toggle before search in the list's toolbar,
   const Fresh = await import("../../src/bmpt/web/js/ui/popup.js?toolbar-toggle");
   const items = [{ key: "a", label: "Alpha", full: "Alpha", thumb: "a.png" }];
   const changes = [],
-    toggle = { label: english.model.showOthers, checked: false, onChange: (on) => changes.push(on) };
+    toggle = { label: english.chibi.showOthers, checked: false, onChange: (on) => changes.push(on) };
   try {
     await toolbarOf(Fresh, { segs: SEGMENTS, seg: 0, onSeg() {}, sortKey: "sort.default", toggle }, items);
     const box = action(prompt, "toggle");
     assert.ok(box, "the toggle's hit area");
-    assert.equal(box.getAttribute("aria-label"), english.model.showOthers);
+    assert.equal(box.getAttribute("aria-label"), english.chibi.showOthers);
     assert.equal(box.getAttribute("aria-pressed"), "false");
     const search = rectOf(action(prompt, "search")),
       own = rectOf(box);
@@ -7631,7 +7634,7 @@ test("the list reports the cards in view, and those a scroll brings in", async (
     await Fresh.listPopup({
       host: prompt,
       layoutKind: "chibi",
-      title: "Models",
+      title: "Chibis",
       items,
       selected: "k0",
       okText: "Save",

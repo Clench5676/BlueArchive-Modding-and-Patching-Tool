@@ -8,7 +8,7 @@ globalThis.document = { documentElement: {} };
 const locales = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const catalog = JSON.parse(readFileSync(new URL("../../src/bmpt/catalog/data/catalog.json", import.meta.url)));
 function catalogAlt(key) {
-  const entry = catalog.variants[key],
+  const entry = catalog.alts[key],
     student = catalog.students[entry.student_id];
   return { key, names: entry.names, student: { key: student.base, studentNames: student.names } };
 }
@@ -27,7 +27,7 @@ for (const locale of locales)
     );
     const names = { full: "Yoshimi (Band)", short: "Band" },
       alt = { key: "ch0220", names: { en: names }, student: { key: "yoshimi", studentNames: { en: "Yoshimi" } } },
-      kind = T("tab.lobby");
+      kind = T("tab.memorialLobby");
     const name = progressName(alt, kind);
     assert.equal(name, T("progress.subject", { name: "Yoshimi", parts: ["Band", kind].join(T("progress.comma")) }));
     assert.equal([...name.matchAll(/[（(]/g)].length, 1);
@@ -81,7 +81,7 @@ for (const locale of locales) {
         student = alt.student,
         base = student.studentNames[NAME_LANG[locale]];
       assert.equal(alt.key, student.key);
-      for (const kind of [T("tab.portrait"), T("tab.lobby"), T("tab.model")]) {
+      for (const kind of [T("tab.portrait"), T("tab.memorialLobby"), T("tab.chibi")]) {
         const expected = T("progress.subject", { name: base, parts: kind });
         assert.equal(
           progressName({ ...alt, student: { key: student.key, names: student.studentNames } }, kind),
@@ -103,7 +103,7 @@ for (const locale of locales) {
     for (const key of ["ch0220", "ch0263", "np0168", "np0169", "np0170"]) {
       const alt = catalogAlt(key),
         lang = NAME_LANG[locale],
-        kind = T("tab.lobby");
+        kind = T("tab.memorialLobby");
       assert.notEqual(alt.key, alt.student.key);
       assert.equal(
         progressName(alt, kind),
@@ -142,7 +142,7 @@ for (const locale of locales)
     assert.equal(
       line.text,
       `${T("progress.modCount", { action: T("progress.modsProcess"), current: 3, total: 13 })}Hoshino (Swimsuit)` +
-        `${sep}${T("tab.model")}${sep}My Swim Edit${sep}${T("import.step.save")}${sep}${T("progress.percent", { percent: 42 })}`,
+        `${sep}${T("tab.chibi")}${sep}My Swim Edit${sep}${T("import.step.save")}${sep}${T("progress.percent", { percent: 42 })}`,
     );
     assert.equal(line.parts.map(([text]) => text).join(""), line.text);
     // the count is of the item at hand: the first of 13 reads 1/13, never 0/13
@@ -164,7 +164,7 @@ for (const locale of locales)
     );
     assert.equal(
       swap.text,
-      `${T("progress.modHead", { action: T("progress.modsApply") })}Hoshino (Swimsuit)${sep}${T("tab.model")}` +
+      `${T("progress.modHead", { action: T("progress.modsApply") })}Hoshino (Swimsuit)${sep}${T("tab.chibi")}` +
         `${sep}${T("progress.from", { name: "Hina" })}${sep}${T("import.step.write")}${sep}${T("progress.percent", { percent: 0 })}`,
     );
     // a name that only repeats who it is is left out
@@ -175,10 +175,10 @@ for (const locale of locales)
     for (const kind of ["portrait", "memorialLobby", "chibi"])
       assert.ok(
         modLine({ alt: "ch0063", resourceType: kind }, { nameOf }).text.endsWith(
-          `${T(`tab.${{ portrait: "portrait", memorialLobby: "lobby", chibi: "model" }[kind]}`)}${sep}${T("progress.percent", { percent: 0 })}`,
+          `${T(`tab.${{ portrait: "portrait", memorialLobby: "memorialLobby", chibi: "chibi" }[kind]}`)}${sep}${T("progress.percent", { percent: 0 })}`,
         ),
       );
-    for (const key of ["readModel", "fitCostume", "buildModel", "write", "restore", "save", "check"]) {
+    for (const key of ["readChibi", "fitCostume", "buildChibi", "write", "restore", "save", "check"]) {
       assert.notEqual(T(`import.step.${key}`), `import.step.${key}`, `${locale} ${key}`);
     }
     for (const key of ["modsProcess", "modsApply", "modsRestore", "modsCheck", "modCount", "modHead", "sep", "from"]) {
@@ -242,7 +242,7 @@ test("a one-mod job keeps who it is, shows no count and keeps its step through a
   // a student thumbnail is its own kind
   assert.ok(
     modJob({ alt: "ch0063", resourceType: "thumbnail" }, { nameOf, action: "progress.actionApply" })().text.endsWith(
-      `${sep}${T("photo.modName")}${sep}0%`,
+      `${sep}${T("thumbnail.modName")}${sep}0%`,
     ),
   );
 });

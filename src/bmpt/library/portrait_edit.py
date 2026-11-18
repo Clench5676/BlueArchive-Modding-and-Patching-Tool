@@ -1,4 +1,4 @@
-"""Compose one roster portrait into a shared Collection bundle without changing its neighbors."""
+"""Compose one student list portrait into a shared Collection bundle without changing its neighbors."""
 
 from __future__ import annotations
 
@@ -18,13 +18,13 @@ from ..core.openfiles import temporary_directory
 from ..unity.texture_guard import texture_image
 from . import profiles
 from .judge import core_of, date_of, other_target
-from .models import PhotographApplyResult
+from .records import ThumbnailApplyResult, stored_target
 
 if TYPE_CHECKING:
-    from .models import ApplyResult, Pin
+    from .records import ApplyResult, Pin
     from .service import ModLibrary
 
-TAG = "roster_photography"
+TAG = "student_list_thumbnails"
 
 
 def _objects(bundle: Bundle) -> dict:
@@ -189,7 +189,7 @@ def _configuration(library: ModLibrary, descriptor: dict, pin: Pin) -> tuple[str
     for slot, entry in configured.items():
         source = entry.get("source", "")
         record = library._records.get(source[4:]) if source.startswith("mod:") else None
-        if descriptor["name"] not in entry.get("photo_defaults", []) and (
+        if descriptor["name"] not in entry.get("thumbnail_defaults", []) and (
             descriptor["name"] in ((record or {}).get(TAG) or {}).get("choices", {})
         ):
             matches.append((slot, entry, record))
@@ -197,7 +197,7 @@ def _configuration(library: ModLibrary, descriptor: dict, pin: Pin) -> tuple[str
 
 
 def choice(library: ModLibrary, descriptor: dict, pin: Pin) -> dict:
-    """Describe the desired photo choice, including configuration deferred by the master switch.
+    """Describe the desired thumbnail choice, including configuration deferred by the master switch.
 
     Args:
         library: Library supplying managed recipes, configuration, and current game-file state.
@@ -205,13 +205,13 @@ def choice(library: ModLibrary, descriptor: dict, pin: Pin) -> dict:
         pin: Game install and server the operation is fixed to.
 
     Returns:
-        Photo ID, whether the choice is known, switch intent, and any pending state or error.
+        Thumbnail ID, whether the choice is known, switch intent, and any pending state or error.
     """
     target = target_file(library, descriptor, pin)
     config = library.profiles.read()
     slot, entry, record = _configuration(library, descriptor, pin)
     enabled = profiles.enabled(config)
-    part = library._view([pin], "family", config).part(target, pin, "other")
+    part = library._view([pin], "student", config).part(target, pin, "other")
     source = entry.get("source")
     if not source:
         return {"id": None, "known": not enabled or part.official, "enabled": enabled}
@@ -219,7 +219,7 @@ def choice(library: ModLibrary, descriptor: dict, pin: Pin) -> dict:
     item = (meta.get("choices") or {}).get(descriptor["name"])
     if isinstance(item, dict):
         return {
-            "id": item.get("photo"),
+            "id": item.get("thumbnail"),
             "known": True,
             "enabled": enabled,
             "pending": enabled and part.carried != source,
@@ -251,10 +251,10 @@ def _referenced_sources(library: ModLibrary) -> set:
 
 
 def _uses(library: ModLibrary) -> list[tuple[Any, set[str]]]:
-    """Every source a configured entry or an existing applied file names, with the photo choices it resets."""
+    """Every source a configured entry or an existing applied file names, with the thumbnail choices it resets."""
     config = library.profiles.read() or {}
     uses = [
-        (entry.get("source"), set(entry.get("photo_defaults", [])))
+        (entry.get("source"), set(entry.get("thumbnail_defaults", [])))
         for folder in config.get("folders", {}).values()
         for entry in folder.get("configured", {}).values()
     ]
@@ -269,7 +269,7 @@ def _uses(library: ModLibrary) -> list[tuple[Any, set[str]]]:
 def _record(library: ModLibrary, mod_id: str) -> dict:
     """Look up a recipe's record by id.
 
-    A record state.json holds while its files are missing counts too: its choices still own their photos and the
+    A record state.json holds while its files are missing counts too: its choices still own their thumbnails and the
     file may return.
     """
     record = library._records.get(mod_id)
@@ -279,7 +279,7 @@ def _record(library: ModLibrary, mod_id: str) -> dict:
 
 
 def _owned(library: ModLibrary, source: Any, defaults: set[str]) -> dict[str, dict]:
-    """The photo choices of a ``mod:`` source's recipe, by texture name, minus those reset to the default."""
+    """The thumbnail choices of a ``mod:`` source's recipe, by texture name, minus those reset to the default."""
     if not isinstance(source, str) or not source.startswith("mod:"):
         return {}
     meta = _record(library, source[4:]).get(TAG)
@@ -289,25 +289,25 @@ def _owned(library: ModLibrary, source: Any, defaults: set[str]) -> dict[str, di
     return {
         name: item
         for name, item in choices.items()
-        if name not in defaults and isinstance(item, dict) and isinstance(item.get("photo"), str)
+        if name not in defaults and isinstance(item, dict) and isinstance(item.get("thumbnail"), str)
     }
 
 
 def usage_targets(library: ModLibrary) -> dict[str, set[str]]:
-    """Map a library's referenced photo IDs to target skins, independently of capture skin."""
+    """Map a library's referenced thumbnail IDs to target skins, independently of capture skin."""
     targets = {}
     for source, defaults in _uses(library):
         for item in _owned(library, source, defaults).values():
-            variants = targets.setdefault(item["photo"], set())
-            if isinstance(item.get("variant"), str):
-                variants.add(item["variant"])
+            alts = targets.setdefault(item["thumbnail"], set())
+            if isinstance(item.get("alt"), str):
+                alts.add(item["alt"])
     return targets
 
 
 def _held_use(library: ModLibrary, key: str) -> bool:
-    """Whether a held record (not in the library's records) owns the photo in a configured entry or an applied file."""
+    """Whether a held record (not in the library's records) owns the thumbnail of a configured entry or applied file."""
     return any(
-        key == item["photo"]
+        key == item["thumbnail"]
         for source, defaults in _uses(library)
         if isinstance(source, str) and source[4:] not in library._records
         for item in _owned(library, source, defaults).values()
@@ -315,24 +315,24 @@ def _held_use(library: ModLibrary, key: str) -> bool:
 
 
 def in_use(library: ModLibrary) -> set[str]:
-    """Find photo IDs owned by a library's configured recipes or existing managed game files."""
+    """Find thumbnail IDs owned by a library's configured recipes or existing managed game files."""
     return set(usage_targets(library))
 
 
-def remove_photo(library: ModLibrary, key: str, log) -> None:
+def remove_thumbnail(library: ModLibrary, key: str, log) -> None:
     """Reset every affected texture, retaining other choices in each shared Collection recipe.
 
     Args:
-        library: Library whose applied and configured recipes must release the photograph.
-        key: Photograph ID to remove from all active recipe choices.
+        library: Library whose applied and configured recipes must release the thumbnail.
+        key: thumbnail ID to remove from all active recipe choices.
         log: Receives user-facing operation messages.
 
     Raises:
-        ServiceError: A held recipe owns the photo, an install or texture is unavailable,
+        ServiceError: A held recipe owns the thumbnail, an install or texture is unavailable,
             or a protected write cannot finish.
     """
     if _held_use(library, key):
-        # a held record's recipe cannot be rebuilt while its files are missing: the photo stays until they return
+        # a held record's recipe cannot be rebuilt while its files are missing: the thumbnail stays until they return
         raise ServiceError("thumbnail_in_use")
     config = library.profiles.read() or {}
     enabled = profiles.enabled(config)
@@ -342,7 +342,7 @@ def remove_photo(library: ModLibrary, key: str, log) -> None:
         source = applied.get("source", "")
         record = library._records.get(source[4:], {}) if source.startswith("mod:") else {}
         if applied.get("removed") or not any(
-            value.get("photo") == key for value in (record.get(TAG) or {}).get("choices", {}).values()
+            value.get("thumbnail") == key for value in (record.get(TAG) or {}).get("choices", {}).values()
         ):
             continue
         target = Path(path)
@@ -369,7 +369,7 @@ def remove_photo(library: ModLibrary, key: str, log) -> None:
             matches = [
                 (name, value)
                 for name, value in (record.get(TAG) or {}).get("choices", {}).items()
-                if value.get("photo") == key and name not in entry.get("photo_defaults", [])
+                if value.get("thumbnail") == key and name not in entry.get("thumbnail_defaults", [])
             ]
             if not matches:
                 continue
@@ -379,9 +379,9 @@ def remove_photo(library: ModLibrary, key: str, log) -> None:
             paths = library._index(pin).get(core, [])
             if len(paths) != 1:
                 raise ServiceError("thumbnail_target_unavailable")
-            tasks.extend((pin, {"bundle": paths[0].name, "name": name}, value["variant"]) for name, value in matches)
-    for pin, descriptor, variant in tasks:
-        apply(library, variant, None, None, descriptor, pin, log, None)
+            tasks.extend((pin, {"bundle": paths[0].name, "name": name}, value["alt"]) for name, value in matches)
+    for pin, descriptor, alt in tasks:
+        apply(library, alt, None, None, descriptor, pin, log, None)
     library._save()
     if key in in_use(library):
         raise ServiceError("thumbnail_in_use")
@@ -394,7 +394,7 @@ def _prune_composites(library: ModLibrary) -> None:
 
 
 def _drop_migrated_choices(library: ModLibrary, pin: Pin) -> None:
-    """Retire a vanished batch only once all of its photo choices have newer live-batch choices."""
+    """Retire a vanished batch only once all of its thumbnail choices have newer live-batch choices."""
     live = set(library._index(pin))
 
     def update(data):
@@ -416,7 +416,7 @@ def _drop_migrated_choices(library: ModLibrary, pin: Pin) -> None:
             required = [
                 name
                 for name, value in meta.get("choices", {}).items()
-                if value.get("photo") and name not in entry.get("photo_defaults", [])
+                if value.get("thumbnail") and name not in entry.get("thumbnail_defaults", [])
             ]
             if all(name in covered and covered[name] >= entry.get("since", "") for name in required):
                 del configured[slot]
@@ -437,22 +437,22 @@ def _drop_migrated_choices(library: ModLibrary, pin: Pin) -> None:
 def _default_missing(library: ModLibrary, pin: Pin, slot: str, name: str) -> None:
     def update(data):
         entry = data.get("folders", {}).get(pin.key, {}).get("configured", {}).get(slot)
-        if entry is None or name in entry.get("photo_defaults", []):
+        if entry is None or name in entry.get("thumbnail_defaults", []):
             return False
-        entry.setdefault("photo_defaults", []).append(name)
+        entry.setdefault("thumbnail_defaults", []).append(name)
         return True
 
     library.profiles.update(update)
 
 
-def _result(result: ApplyResult, variant: str, core: str) -> PhotographApplyResult:
-    return PhotographApplyResult(variant, result.source, result.files, result.unchanged, result.deferred, cores=[core])
+def _result(result: ApplyResult, alt: str, core: str) -> ThumbnailApplyResult:
+    return ThumbnailApplyResult(alt, result.source, result.files, result.unchanged, result.deferred, cores=[core])
 
 
 def apply(
     library: ModLibrary,
-    variant: str,
-    photo: str | None,
+    alt: str,
+    thumbnail: str | None,
     png: bytes | None,
     descriptor: dict,
     pin: Pin,
@@ -465,9 +465,9 @@ def apply(
 
     Args:
         library: Library storing the recipe and composing it with other choices in the bundle.
-        variant: Variant key owning the target skin's photo choice.
-        photo: Saved photograph ID, or None to restore the official texture.
-        png: Verified photograph bytes, or None for the official texture.
+        alt: alt key owning the target skin's thumbnail choice.
+        thumbnail: Saved thumbnail ID, or None to restore the official texture.
+        png: Verified thumbnail bytes, or None for the official texture.
         descriptor: Collection target metadata containing bundle filename and exact texture name.
         pin: Game install and server the operation is fixed to.
         log: Receives user-facing operation messages.
@@ -490,12 +490,12 @@ def apply(
     configured_source = configured.get("source", "official")
     meta = copy.deepcopy((record or {}).get(TAG) or {})
     if (
-        photo is None
+        thumbnail is None
         and configured_source == "official"
         and (library._hashes.get(target).sha1 == library._hashes.get(official).sha1)
     ):
         return _result(
-            library.apply(core, "official", kind="other", pin=pin, log=log, progress=progress), variant, core
+            library.apply(core, "official", resource_type="other", pin=pin, log=log, progress=progress), alt, core
         )
     if not configure_only and profiles.enabled(config):
         library._check_stopping(pin)  # refused for the moment: nothing built, the choice as it was
@@ -511,8 +511,8 @@ def apply(
             names = {obj.peek_name() for obj in loaded.env.objects if obj.type.name == "Texture2D"}
             choices = {name: value for name, value in meta.get("choices", {}).items() if name in names}
             for name, value in choices.items():
-                if name != descriptor["name"] and value.get("photo"):
-                    edits[name] = library.photographs.image(value["variant"], value["photo"])
+                if name != descriptor["name"] and value.get("thumbnail"):
+                    edits[name] = library.thumbnails.image(value["alt"], value["thumbnail"])
             meta["choices"] = choices
             base = official
         elif record is not None:
@@ -527,14 +527,18 @@ def apply(
         if "base_official" not in meta:
             meta["base_official"] = library._hashes.get(base).sha1 == library._hashes.get(official).sha1
         choices = meta.setdefault("choices", {})
-        choices[descriptor["name"]] = {"variant": variant, "photo": photo}
-        if photo is None and meta["base_official"] and all(item.get("photo") is None for item in choices.values()):
-            result = library.apply(core, "official", kind="other", pin=pin, log=log, progress=progress)
+        choices[descriptor["name"]] = {"alt": alt, "thumbnail": thumbnail}
+        if (
+            thumbnail is None
+            and meta["base_official"]
+            and all(item.get("thumbnail") is None for item in choices.values())
+        ):
+            result = library.apply(core, "official", resource_type="other", pin=pin, log=log, progress=progress)
             if slot != core:
                 _default_missing(library, pin, slot, descriptor["name"])
                 _drop_migrated_choices(library, pin)
             _prune_composites(library)
-            return _result(result, variant, core)
+            return _result(result, alt, core)
         directory = work / "composite"
         directory.mkdir()
         output = directory / target.name
@@ -543,12 +547,12 @@ def apply(
         saved = library._store(files, "Student thumbnail", other_target(files), "other", metadata={TAG: meta})
         source = f"mod:{saved['id']}"
         if configure_only or not profiles.enabled(config):
-            library._defer(pin, saved["target"], {core: core}, source)
-            result = PhotographApplyResult(variant, source, [], unchanged=True, deferred=True, cores=[core])
+            library._defer(pin, stored_target(saved), {core: core}, source)
+            result = ThumbnailApplyResult(alt, source, [], unchanged=True, deferred=True, cores=[core])
         else:
             from .service.base import _ChoiceChange
 
-            change = _ChoiceChange(library, pin, saved["target"], source)
+            change = _ChoiceChange(library, pin, stored_target(saved), source)
             try:
                 change.configure({core: core})
                 files = library._commit(
@@ -562,7 +566,7 @@ def apply(
                 )
                 library._selection_error(pin, [core], None)
                 library._clear_marker(pin, core)
-                result = PhotographApplyResult(variant, source, files, unchanged=not files, cores=[core])
+                result = ThumbnailApplyResult(alt, source, files, unchanged=not files, cores=[core])
             except Exception as error:
                 if not change.refused(error):
                     library._selection_error(
@@ -582,10 +586,10 @@ def apply(
 
 
 def refresh_missing(library: ModLibrary, pins: list[Pin], log) -> None:
-    """Rebuild photograph-only recipes on changed Collection batches before a master-switch plan.
+    """Rebuild thumbnail-only recipes on changed Collection batches before a master-switch plan.
 
     Args:
-        library: Library retaining old photo recipes and resolving their live Collection textures.
+        library: Library retaining old thumbnail recipes and resolving their live Collection textures.
         pins: Game installs and servers the operation is fixed to.
         log: Receives user-facing operation messages.
     """
@@ -616,7 +620,7 @@ def refresh_missing(library: ModLibrary, pins: list[Pin], log) -> None:
         with library._transaction_lock(), file_lock(library.root / "mods.lock"):
             for slot, old_entry, meta in missing:
                 for name, value in meta.get("choices", {}).items():
-                    if not value.get("photo") or name in old_entry.get("photo_defaults", []):
+                    if not value.get("thumbnail") or name in old_entry.get("thumbnail_defaults", []):
                         continue
                     try:
                         descriptor = game.collection_target(name)
@@ -630,13 +634,13 @@ def refresh_missing(library: ModLibrary, pins: list[Pin], log) -> None:
                             if current_choice and present.get("since", "") >= old_entry.get("since", ""):
                                 continue
                             if not current.get(TAG):
-                                # An explicit shared-bundle Mod is not replaced by an old photo recipe.
+                                # An explicit shared-bundle Mod is not replaced by an old thumbnail recipe.
                                 continue
-                        png = library.photographs.image(value["variant"], value["photo"])
+                        png = library.thumbnails.image(value["alt"], value["thumbnail"])
                         apply(
                             library,
-                            value["variant"],
-                            value["photo"],
+                            value["alt"],
+                            value["thumbnail"],
                             png,
                             descriptor,
                             pin,
@@ -646,6 +650,6 @@ def refresh_missing(library: ModLibrary, pins: list[Pin], log) -> None:
                         )
                     except ServiceError as error:
                         library._selection_error(pin, [slot], error.to_json())
-                        log(f"Photograph configuration retained for unavailable texture {name}")
+                        log(f"Thumbnail configuration retained for unavailable texture {name}")
             _drop_migrated_choices(library, pin)
             _prune_composites(library)

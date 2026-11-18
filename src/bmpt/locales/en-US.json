@@ -37,8 +37,8 @@
 		"info": {
 			"title": {
 				"portrait": "Portrait Info",
-				"lobby": "Memorial Lobby Info",
-				"model": "Chibi Info"
+				"memorialLobby": "Memorial Lobby Info",
+				"chibi": "Chibi Info"
 			},
 			"details": "Details",
 			"current": "Current",
@@ -49,30 +49,30 @@
 		"row": {
 			"box": {
 				"portrait": "Portrait",
-				"lobby": "Memorial Lobby",
-				"model": "Chibi"
+				"memorialLobby": "Memorial Lobby",
+				"chibi": "Chibi"
 			},
 			"switch": {
 				"portrait": "Switch Portrait",
-				"lobby": "Switch Memorial Lobby",
-				"model": "Switch Chibi"
+				"memorialLobby": "Switch Memorial Lobby",
+				"chibi": "Switch Chibi"
 			},
 			"add": {
 				"portrait": "Add Portrait",
-				"lobby": "Add Memorial Lobby",
-				"model": "Add Chibi"
+				"memorialLobby": "Add Memorial Lobby",
+				"chibi": "Add Chibi"
 			},
 			"four": {
 				"portrait": "Expressions",
-				"lobby": "Dialogue",
-				"model": "Motion"
+				"memorialLobby": "Dialogue",
+				"chibi": "Motion"
 			}
 		},
 		"detail": {
 			"copyFailed": "Could not copy the name.",
 			"failed": "Preview unavailable"
 		},
-		"lobby": {
+		"memorialLobby": {
 			"original": "Official",
 			"fullscreen": "Fullscreen",
 			"playAll": "Play All Dialogue",
@@ -84,7 +84,7 @@
 			"cameraAlbum": "Album",
 			"cameraName": "Camera {n}"
 		},
-		"model": {
+		"chibi": {
 			"original": "Official",
 			"has": "Yes",
 			"none": "None",
@@ -185,7 +185,7 @@
 			"classic": "{label} - Classic UI",
 			"import": "Import Mods"
 		},
-		"roster": {
+		"studentList": {
 			"title": "Student List",
 			"merge": "Group Alts",
 			"search": "Search",
@@ -224,9 +224,9 @@
 			}
 		},
 		"band": {
-			"modCounts": "Portraits: {portraits}, Memorial lobbies: {lobbies}",
+			"modCounts": "Portraits: {portraits}, Memorial lobbies: {memorialLobbies}",
 			"portrait": "Portrait",
-			"lobby": "Lobby",
+			"memorialLobby": "Lobby",
 			"replaced": "Replaced"
 		},
 		"bar": {
@@ -234,8 +234,8 @@
 		},
 		"tab": {
 			"portrait": "Portrait",
-			"lobby": "Memorial Lobby",
-			"model": "Chibi"
+			"memorialLobby": "Memorial Lobby",
+			"chibi": "Chibi"
 		},
 		"status": {
 			"original": "Official",
@@ -621,8 +621,8 @@
 			"thumbnail_in_use": "Thumbnail in use",
 			"thumbnail_library_invalid": "Thumbnail library unreadable",
 			"thumbnail_target_unavailable": "Roster portrait unavailable",
-			"lobby_camera_unsupported": "Memorial Lobby camera unavailable",
-			"lobby_camera_failed": "Camera could not be saved",
+			"memorial_lobby_camera_unsupported": "Memorial Lobby camera unavailable",
+			"memorial_lobby_camera_failed": "Camera could not be saved",
 			"thumbnail_apply_failed": "Thumbnail not applied",
 			"student_hall_last_portrait": "Keep at least one portrait",
 			"native_only": "Available in the desktop application"
@@ -843,18 +843,18 @@
 			"changes": "Changes:",
 			"autoUpdate": "Auto update:",
 			"remapUpdate": "Repack the Mod's textures onto the current .atlas file",
-			"graft": "Keep the Mod's .skel file, add the official new expressions",
-			"graftOldRig": "Keep the .skel and .atlas files the Mod was drawn for, add the official new expressions",
-			"graftAction": "Add Expressions",
+			"addExpressions": "Keep the Mod's .skel file, add the official new expressions",
+			"addExpressionsOldRig": "Keep the .skel and .atlas files the Mod was drawn for, add the official new expressions",
+			"addExpressionsAction": "Add Expressions",
 			"converterAction": "Add with Converter",
 			"converterTitle": "Download SpineSkeletonDataConverter",
 			"converterLicence": "Third-party tool, PolyForm Noncommercial 1.0.0, noncommercial use only",
 			"converterMac": "macOS build: compile it yourself",
 			"converterDownload": "Download",
 			"converterPage": "Project page",
-			"graftAnimations": "Keep the Mod's .skel file, add the official new animations",
-			"graftAnimationsAction": "Add Animations",
-			"graftRefused": "{name}, animations that cannot be added: {names}",
+			"addAnimations": "Keep the Mod's .skel file, add the official new animations",
+			"addAnimationsAction": "Add Animations",
+			"addAnimationsRefused": "{name}, animations that cannot be added: {names}",
 			"refusedAnimation": "{name} ({why})",
 			"why": {
 				"bone": "bone {name} missing",
@@ -893,23 +893,23 @@
 			"zoomOut": "Zoom out",
 			"marks": "Mark changes",
 			"oldRig": "Old .skel and .atlas files kept: {names}",
-			"grafted": "Expressions added: {n}",
-			"graftCorrected": "Corrected automatically: {n}",
-			"graftUnfixed": "Manual repair needed: {n}",
-			"graftRefused": "Animations not added: {n}",
-			"graftGrown": "Texture extended by {n} px",
-			"graftUnanchored": "New expressions at the official position",
+			"addedExpressions": "Expressions added: {n}",
+			"addAnimationsCorrected": "Corrected automatically: {n}",
+			"addAnimationsUnfixed": "Manual repair needed: {n}",
+			"addAnimationsRefused": "Animations not added: {n}",
+			"addAnimationsGrown": "Texture extended by {n} px",
+			"addExpressionsUnanchored": "New expressions at the official position",
 			"expression": "Expression {name} ({n}/{total})",
 			"previousExpression": "Previous Expression",
 			"nextExpression": "Next Expression",
-			"graftDone": "Expressions added",
-			"graftPartial": "Expressions added, some to check",
-			"graftedAnimations": "Animations added: {n}",
+			"addExpressionsDone": "Expressions added",
+			"addExpressionsPartial": "Expressions added, some to check",
+			"addedAnimations": "Animations added: {n}",
 			"animation": "Animation {name} ({n}/{total})",
 			"previousAnimation": "Previous Animation",
 			"nextAnimation": "Next Animation",
-			"graftAnimationsDone": "Animations added",
-			"graftAnimationsPartial": "Animations added, some not added"
+			"addAnimationsDone": "Animations added",
+			"addAnimationsPartial": "Animations added, some not added"
 		},
 		"spine": {
 			"license": {
@@ -1055,9 +1055,9 @@
 				"add": "Adding to Library",
 				"apply": "Applying Mod",
 				"export": "Exporting Files",
-				"readModel": "Reading Model",
+				"readChibi": "Reading Model",
 				"fitCostume": "Fitting Costume",
-				"buildModel": "Building Model",
+				"buildChibi": "Building Model",
 				"write": "Writing Game Files",
 				"restore": "Restoring Official Files"
 			},
@@ -1127,7 +1127,7 @@
 			"success": "Export successful. Open folder?",
 			"openFolder": "Open Folder"
 		},
-		"hall": {
+		"studentHall": {
 			"title": "Student Hall",
 			"portraits": "Portraits",
 			"memorial": "Memorial Lobby",
@@ -1181,12 +1181,12 @@
 			"layerBack": "Send to Back",
 			"flipHorizontal": "Flip Horizontally"
 		},
-		"photo": {
+		"thumbnail": {
 			"open": "Take Thumbnail",
-			"title": "Thumbnail Photography",
+			"title": "Take Thumbnail",
 			"back": "Back",
 			"portrait": "Portrait",
-			"lobby": "Memorial Lobby",
+			"memorialLobby": "Memorial Lobby",
 			"gridOn": "Hide Grid",
 			"gridOff": "Show Grid",
 			"capture": "Capture",
@@ -1210,7 +1210,7 @@
 			"captureFailed": "Capture Failed",
 			"noAssets": "Source Unavailable",
 			"natural": "Natural",
-			"photoLabel": "Thumbnail",
+			"thumbnailLabel": "Thumbnail",
 			"next": "Next",
 			"previous": "Previous",
 			"applied": "Applied",
@@ -1238,7 +1238,7 @@
 					"title": "Student Thumbnails",
 					"body": "Take thumbnail photos from the full-screen student details."
 				},
-				"hall-viewing-zoom": {
+				"student-hall-viewing-zoom": {
 					"title": "Zoom Student Hall",
 					"body": "Use the wheel or pinch to zoom the portrait scene, then pan to explore."
 				}

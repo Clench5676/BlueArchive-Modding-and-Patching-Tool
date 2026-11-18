@@ -20,7 +20,7 @@ const shortList = (items) =>
   items.length > 3 ? T("compatibility.more", { names: joined(items.slice(0, 3)), n: items.length - 3 }) : joined(items);
 const reports = new Map(),
   stamps = new Map();
-// Why the graft cannot carry an animation (spine/graft.py SkeletonGraft.refused, "kind:name"), as a reason each.
+// Why the animation transfer cannot carry an animation (spine/add_animations.py AddedAnimations.refused, "kind:name"), as a reason each.
 const reason = (entry) => {
   const at = entry.indexOf(":"),
     kind = at < 0 ? entry : entry.slice(0, at),
@@ -30,7 +30,7 @@ const reason = (entry) => {
     : entry;
 };
 /**
- * The animations a graft cannot carry, each with its reasons: "Hat_01 (bone hat missing)".
+ * The animations an animation transfer cannot carry, each with its reasons: "Hat_01 (bone hat missing)".
  * @param {Object<string, string[]|string>} refused The refused animations by name: a reason list, or one text
  *     (the converter's).
  */
@@ -61,7 +61,7 @@ function progressTask(action, subject, run) {
     });
   return Loading.task((update) => run((p) => update({ label: text(p) })), { label: text() });
 }
-/** Whether a mod can be repaired: not a 3D model and not itself a repaired copy. */
+/** Whether a mod can be repaired: not a Chibi and not itself a repaired copy. */
 export const eligible = (mod) => mod?.resourceType !== "chibi" && !mod?.repairSourceId && !mod?.repairedCopyId;
 /**
  * Whether the mod is a portrait whose textures were drawn on a rig the App no longer has: nothing repairs it,
@@ -70,8 +70,8 @@ export const eligible = (mod) => mod?.resourceType !== "chibi" && !mod?.repairSo
 export const rigUnknown = (id) => reports.get(id)?.assessment?.issues?.some(({ key }) => key === "rigUnknown") === true;
 /**
  * Whether a mod can be updated by a remap, from its report. The remap, the old rig kept as a whole for a
- * portrait the game drew anew (assessment.oldRig) and the graft of the official rig's new animations into the
- * mod's own rig (assessment.graft) are all Update.
+ * portrait the game drew anew (assessment.oldRig) and the animation transfer of the official rig's new animations into the
+ * mod's own rig (assessment.addAnimations) are all Update.
  * @param {object|null} [mod] The mod, when known.
  */
 export const canRemap = (id, mod = null) =>
@@ -79,7 +79,7 @@ export const canRemap = (id, mod = null) =>
   eligible(reports.get(id)) &&
   ((reports.get(id)?.remappable === true &&
     (reports.get(id)?.assessment?.remap === true || reports.get(id)?.assessment?.oldRig === true)) ||
-    reports.get(id)?.assessment?.graft === true);
+    reports.get(id)?.assessment?.addAnimations === true);
 
 /**
  * Read a skeleton file with the Spine runtime.
@@ -230,20 +230,22 @@ export function compare(report, runtime = globalThis.spine, summarize = false) {
   // Such a portrait can keep the rig its textures were drawn for, as a whole (actions.useRecordedRig), unless the official
   // skeleton has animations the old one lacks: the game calls them by name.
   const gained = redrawn ? [...new Set(Object.values(report.oldRig?.animations || {}).flat())] : [];
-  // The graft (actions.addAnimations) keeps the mod's own rig, or that old rig, and adds what the official one gained.
-  const graftable =
+  // The animation transfer (actions.addAnimations) keeps the mod's own rig, or that old rig, and adds what the official one gained.
+  const canAddAnimations =
     eligible(report) &&
-    report.graft?.available === true &&
-    (report.graft.kind === "own" || (report.graft.kind === "oldRig" && redrawn && gained.length > 0));
-  if (gained.length && graftable) {
+    report.addAnimations?.available === true &&
+    (report.addAnimations.resourceType === "own" ||
+      (report.addAnimations.resourceType === "oldRig" && redrawn && gained.length > 0));
+  if (gained.length && canAddAnimations) {
     for (const [name, names] of Object.entries(report.oldRig.animations))
       add("missingAnimations", { name, names: list(names) }, summarize ? { name, names: joined(names) } : null);
   } else if (gained.length)
     add("oldRigAnimations", { names: list(gained) }, summarize ? { names: joined(gained) } : null);
-  // What the graft cannot carry into the mod's own rig, and why (the reasons behind Details)
-  for (const [name, refused] of Object.entries(report.graft?.refused || {})) {
+  // What the animation transfer cannot carry into the mod's own rig, and why (the reasons behind Details)
+  for (const [name, refused] of Object.entries(report.addAnimations?.refused || {})) {
     const names = Object.keys(refused);
-    if (names.length) add("graftRefused", { name, names: list(names) }, { name, names: joined(refusedNames(refused)) });
+    if (names.length)
+      add("addAnimationsRefused", { name, names: list(names) }, { name, names: joined(refusedNames(refused)) });
   }
   const available = !issues.some(({ key }) => key === "unavailable");
   return {
@@ -263,10 +265,10 @@ export function compare(report, runtime = globalThis.spine, summarize = false) {
       redrawn &&
       !gained.length &&
       report.oldRig?.available === true,
-    graft: available && graftable,
-    graftOldRig: report.graft?.kind === "oldRig",
+    addAnimations: available && canAddAnimations,
+    addAnimationsOldRig: report.addAnimations?.resourceType === "oldRig",
     // a memorial lobby or Spine background takes new animations, not expressions
-    graftAnimations: report.resourceType === "memorialLobby",
+    addsAnimations: report.resourceType === "memorialLobby",
   };
 }
 
@@ -322,23 +324,23 @@ export function resultLines(result, repair) {
 }
 
 /**
- * The repairs Update can do for a comparison, the default first: the graft keeps the mod's own rig, the remap
+ * The repairs Update can do for a comparison, the default first: the animation transfer keeps the mod's own rig, the remap
  * puts the mod's pixels on the official rig, the old rig keeps a redrawn portrait's whole rig.
- * @returns {string[]} "graft", "remap" or "oldRig".
+ * @returns {string[]} "addAnimations", "remap" or "oldRig".
  */
 export function repairs(result) {
   const out = [];
-  if (result.graft)
+  if (result.addAnimations)
     out.push({
-      kind: "graft",
+      kind: "addAnimations",
       text: T(
-        result.graftOldRig
-          ? "compatibility.graftOldRig"
-          : result.graftAnimations
-            ? "compatibility.graftAnimations"
-            : "compatibility.graft",
+        result.addAnimationsOldRig
+          ? "compatibility.addExpressionsOldRig"
+          : result.addsAnimations
+            ? "compatibility.addAnimations"
+            : "compatibility.addExpressions",
       ),
-      label: T(result.graftAnimations ? "compatibility.graftAnimationsAction" : "compatibility.graftAction"),
+      label: T(result.addsAnimations ? "compatibility.addAnimationsAction" : "compatibility.addExpressionsAction"),
     });
   if (result.remap)
     out.push({ kind: "remap", text: T("compatibility.remapUpdate"), label: T("compatibility.remapAction") });
@@ -394,7 +396,7 @@ export async function show(report, { onRemap } = {}) {
  * are named "<atlas> - <region>"; the atlas is left out when every region of the report is in the same one.
  * @param {object} report The repair's report.
  * @param {object} [options]
- * @param {boolean} [options.convert] Offer the converter for what a graft refused.
+ * @param {boolean} [options.convert] Offer the converter for what an animation transfer refused.
  */
 export function reviewLines(report, { convert = false } = {}) {
   // an old rig set up as a whole (actions.useRecordedRig) moves nothing: its line names the atlases kept
@@ -403,8 +405,8 @@ export function reviewLines(report, { convert = false } = {}) {
       T("remap.oldRig", { names: joined(report.rigs) }),
       ...report.warnings.map(({ key, name }) => T(`remap.${key}`, { name })),
     ];
-  // a graft (actions.addAnimations) counts the expressions it added, corrected and could not match, the names behind Details
-  if (report.grafted) {
+  // an animation transfer (actions.addAnimations) counts the expressions it added, corrected and could not match, the names behind Details
+  if (report.addedAnimations) {
     const named = (key, names, shown = names) =>
       !names.length
         ? []
@@ -418,16 +420,16 @@ export function reviewLines(report, { convert = false } = {}) {
               },
             },
           ];
-    // a memorial lobby's graft (report.animations) adds animations, a portrait's expressions
+    // a memorial lobby's animation transfer (report.animations) adds animations, a portrait's expressions
     return [
-      ...named(report.animations ? "graftedAnimations" : "grafted", report.grafted),
-      ...named("graftCorrected", report.corrected || []),
-      ...named("graftUnfixed", report.unfixed || []),
-      ...named("graftRefused", Object.keys(report.refused || {}), refusedNames(report.refused)),
-      ...(report.grown ? [T("remap.graftGrown", { n: report.grown })] : []),
-      ...(report.unanchored ? [T("remap.graftUnanchored")] : []),
-      // what the graft refused, through the optional converter (converterRemap): ends this review to take it; a
-      // portrait's only (a memorial lobby's graft has no setup poses for it)
+      ...named(report.animations ? "addedAnimations" : "addedExpressions", report.addedAnimations),
+      ...named("addAnimationsCorrected", report.corrected || []),
+      ...named("addAnimationsUnfixed", report.unfixed || []),
+      ...named("addAnimationsRefused", Object.keys(report.refused || {}), refusedNames(report.refused)),
+      ...(report.grown ? [T("remap.addAnimationsGrown", { n: report.grown })] : []),
+      ...(report.unanchored ? [T("remap.addExpressionsUnanchored")] : []),
+      // what the animation transfer refused, through the optional converter (converterRemap): ends this review to take it; a
+      // portrait's only (a memorial lobby's animation transfer has no setup poses for it)
       ...(convert && !report.converter && !report.animations && Object.keys(report.refused || {}).length
         ? [{ text: CONVERTER_NAME, button: { label: T("compatibility.converterAction"), close: "convert" } }]
         : []),
@@ -552,10 +554,10 @@ export async function ensureConverter() {
   return true;
 }
 
-// The graft (actions.addAnimations, addAnimationsBuild, addAnimationsCheck): the page poses the rigs the library names, the library splices and
+// The animation transfer (actions.addAnimations, addAnimationsBuild, addAnimationsCheck): the page poses the rigs the library names, the library splices and
 // packs and hands back a test rig with every candidate correction, the page poses that, and the library checks and
-// prepares the review. A graft left between its steps is dropped.
-async function grafted(id, subject) {
+// prepares the review. An animation transfer left between its steps is dropped.
+async function addAnimationsRepair(id, subject) {
   if (!(await ensureSpine())) return null;
   const S = globalThis.spine;
   let token = null;
@@ -623,7 +625,7 @@ async function grafted(id, subject) {
  * given; "default": the first of repairs(), no question; null: asked when there are more), its job under the
  * loading screen. The caller accepts (accept) or discards it.
  * @param {string} [subject] What the dialogs call the mod.
- * @param {"default"|"graft"|"remap"|"oldRig"|null} [choice] The repair.
+ * @param {"default"|"addAnimations"|"remap"|"oldRig"|null} [choice] The repair.
  * @returns {Promise<object|null>} The job's result ({preview, report, compare, pages, drawings}, or
  *     {unchanged}); null when nothing was made (no repair chosen).
  */
@@ -652,8 +654,8 @@ export async function prepare(id, label = "", subject = label, kind = "", choice
   if (choice === "default") choice = null;
   // A portrait the game drew anew keeps its old rig as a whole (actions.useRecordedRig): no geometry to post.
   const old = choice === "oldRig" || (!choice && checked?.assessment?.oldRig === true);
-  return choice === "graft"
-    ? grafted(id, subject)
+  return choice === "addAnimations"
+    ? addAnimationsRepair(id, subject)
     : (async () => {
         const geometry =
           !old && checked?.resourceType === "portrait" && (await ensureSpine())
@@ -713,7 +715,7 @@ export const discard = (result) =>
  * @param {string} [options.label] The review's title.
  * @param {string} [options.accept] The Accept button's label.
  * @param {string} [options.discard] The Discard button's label.
- * @param {boolean} [options.convert] A graft's review may end with "convert" (the converter route for what it
+ * @param {boolean} [options.convert] An animation transfer's review may end with "convert" (the converter route for what it
  *     refused).
  */
 export function review(
@@ -737,25 +739,25 @@ export function review(
       partial: report.partial,
       accept: acceptLabel,
       discard: discardLabel,
-      kind: kind || reports.get(id)?.kind || "portrait",
-      // the regions whose pixels are not the mod's own, or a graft's parts that match no candidate: what the
+      kind: kind || reports.get(id)?.resourceType || "portrait",
+      // the regions whose pixels are not the mod's own, or an animation transfer's parts that match no candidate: what the
       // pictures can ring
-      marks: report.grafted
+      marks: report.addedAnimations
         ? report.marks || []
         : [...new Set((report.official || []).map((name) => name.slice(name.indexOf(" - ") + 3)))],
-      // a graft's review steps through the expressions it added (a memorial lobby's: the animations, playing), under
+      // an animation transfer's review steps through the expressions it added (a memorial lobby's: the animations, playing), under
       // a verdict of its own
-      expressions: report.grafted || [],
+      expressions: report.addedAnimations || [],
       steps: report.animations ? "animation" : "expression",
-      verdict: !report.grafted
+      verdict: !report.addedAnimations
         ? null
         : report.animations
           ? report.partial
-            ? "remap.graftAnimationsPartial"
-            : "remap.graftAnimationsDone"
+            ? "remap.addAnimationsPartial"
+            : "remap.addAnimationsDone"
           : report.partial
-            ? "remap.graftPartial"
-            : "remap.graftDone",
+            ? "remap.addExpressionsPartial"
+            : "remap.addExpressionsDone",
     },
   );
 }
@@ -782,7 +784,7 @@ export async function remap(id, onRemapped = () => {}, label = "", subject = lab
   return verdict === "convert" ? converterRemap(id, onRemapped, label, subject, kind) : null;
 }
 
-// The graft again through the converter, once it is in place, and its review.
+// The animation transfer again through the converter, once it is in place, and its review.
 async function converterRemap(id, onRemapped, label, subject, kind) {
   if (!(await ensureConverter())) return null;
   const result = await converted(id, subject);

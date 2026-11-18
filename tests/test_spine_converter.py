@@ -64,7 +64,7 @@ def _mod():
 
 def test_an_animation_the_built_in_graft_refuses_is_added_in_json_with_what_it_needs():
     mod = _mod()
-    result = sc.graft_json(mod, _official())
+    result = sc.add_animations_json(mod, _official())
     assert result.added == ["09"]
     assert result.bones == ["tear", "tear_tip"] and result.slots == ["tear"]
     assert [b["name"] for b in mod["bones"]] == ["root", "face", "tear", "tear_tip"]

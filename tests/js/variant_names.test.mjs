@@ -41,7 +41,7 @@ test("main's shared resolver supplies alt aliases to global prompts and Mod Swit
       flatten(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"))),
     );
     for (const cached of [false, true]) {
-      const resolver = new Function("roster", "rosterData", "L", "studentName", `${code}; return altNames;`)(
+      const resolver = new Function("studentList", "studentListData", "L", "studentName", `${code}; return altNames;`)(
         cached
           ? async () => {
               throw new Error("offline");
@@ -111,8 +111,8 @@ test("an Optimize Physics copy is named after its costume in every language, its
       JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8")),
     );
     setStrings(lang, table);
-    assert.ok(table["webui.model.optimizedName"].includes("{name}"), lang);
-    assert.equal(modName(copy, [copy], T), table["webui.model.optimizedName"].replace("{name}", "Hina (Pajamas)"));
+    assert.ok(table["webui.chibi.optimizedName"].includes("{name}"), lang);
+    assert.equal(modName(copy, [copy], T), table["webui.chibi.optimizedName"].replace("{name}", "Hina (Pajamas)"));
     assert.equal(modName({ ...copy, alias: "Mine" }, [copy], T), "Mine");
   }
 });

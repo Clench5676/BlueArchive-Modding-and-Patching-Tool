@@ -168,16 +168,15 @@ def test_entries_under_the_library_lock_never_pause(monkeypatch):
 def test_model_asset_gate_covers_each_source_and_releases_on_failure(source, fails):
     def export(core, target, selected, path, clip=None):
         assert preview_gate._count == 1
-        expected_source = "variant:other" if source == "alt:other" else source
-        assert (core, target, selected) == ("hero", "hero", expected_source)
+        assert (core, target, selected) == ("hero", "hero", source)
         if fails:
             raise ValueError("export failed")
         return b"glTF"
 
     services = SimpleNamespace(
         safe_mode=False,
-        catalog=SimpleNamespace(variant=lambda key: SimpleNamespace(model="hero", key=key)),
-        _model_asset=export,
+        catalog=SimpleNamespace(alt=lambda key: SimpleNamespace(chibi="hero", key=key)),
+        _chibi_asset=export,
     )
     services._asset = lambda path, query: Services._asset(services, path, query)
     if fails:
@@ -235,9 +234,9 @@ def test_a_preview_waiting_for_the_model_lock_a_job_holds_is_told(told, holder_f
     """The model lock held by a job (the costume check's export): a preview's wait for it is not its own time."""
     from contextlib import nullcontext
 
-    from bmpt.gameassets.service_base import _ModelLock
+    from bmpt.gameassets.service_base import _ChibiLock
 
-    lock, held, release = _ModelLock(), threading.Event(), threading.Event()
+    lock, held, release = _ChibiLock(), threading.Event(), threading.Event()
 
     def hold():
         with preview_gate.foreground() if holder_foreground else nullcontext(), lock:

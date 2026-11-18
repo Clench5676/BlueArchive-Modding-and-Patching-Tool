@@ -1,4 +1,4 @@
-import { wheelStep } from "../lobby/lobby-touch.js";
+import { wheelStep } from "../memorial-lobby/memorial-lobby-touch.js";
 
 /**
  * Horizontal UIScrollView input for the popup's list paper: wheel, drag and keys scroll the area. Native
@@ -62,7 +62,7 @@ export function horizontalScroll(area, width, contentWidth) {
   area.addEventListener("dragstart", (event) => event.preventDefault());
 }
 
-// Wheel notches need explicit easing in the virtual roster and WebView2's native overflow lists.
+// Wheel notches need explicit easing in the virtual student list and WebView2's native overflow lists.
 // Touchpad pixels, touch gestures and macOS keep their existing scrolling and momentum.
 const DURATION = 180;
 const moving = new Set();
@@ -83,7 +83,7 @@ export function easeScroll(from, to, elapsed, duration = DURATION) {
 
 /**
  * Whether a wheel event is a plain vertical mouse-wheel notch on Windows (no modifier, no horizontal part,
- * nothing took it yet): wheel notches need explicit easing in the virtual roster and WebView2's native overflow
+ * nothing took it yet): wheel notches need explicit easing in the virtual student list and WebView2's native overflow
  * lists, while touchpad pixels, touch gestures and macOS keep their own scrolling and momentum.
  * @param {string} platform navigator.platform.
  */

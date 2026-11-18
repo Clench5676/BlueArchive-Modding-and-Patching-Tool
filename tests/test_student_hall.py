@@ -7,76 +7,82 @@ import pytest
 
 from bmpt.core.errors import ServiceError
 from bmpt.webui.state import UiState
-from bmpt.webui.student_hall import empty_hall, normalize_hall, portrait_lines, save_hall, validate_hall
+from bmpt.webui.student_hall import (
+    empty_student_hall,
+    normalize_student_hall,
+    portrait_lines,
+    save_student_hall,
+    validate_student_hall,
+)
 
 
 def entry(**extra):
-    return {"id": str(uuid4()), "variant": "hoshino", "source": "mod:example", **extra}
+    return {"id": str(uuid4()), "alt": "hoshino", "source": "mod:example", **extra}
 
 
 def test_same_character_different_resources_keep_independent_positions(tmp_path):
     state = UiState(tmp_path / "ui.json")
-    value = empty_hall()
+    value = empty_student_hall()
     value["portraits"] = [entry(source="mod:first", x=400), entry(source="mod:second", x=1200)]
-    value["memorials"] = [entry(source="mod:first"), entry(source="mod:second")]
-    value["active"] = value["memorials"][1]["id"]
-    saved = save_hall(state, value, 0)
+    value["memorialLobbies"] = [entry(source="mod:first"), entry(source="mod:second")]
+    value["active"] = value["memorialLobbies"][1]["id"]
+    saved = save_student_hall(state, value, 0)
     assert saved["portraits"][0]["x"] == 400
     assert saved["portraits"][1]["x"] == 1200
-    assert len(saved["memorials"]) == 2
+    assert len(saved["memorialLobbies"]) == 2
     assert saved["active"] == value["active"]
     assert UiState(state.path).get("student_hall") == saved
 
 
 def test_more_than_game_slot_count_is_preserved():
-    value = empty_hall()
+    value = empty_student_hall()
     value["portraits"] = [entry(source=f"mod:source-{i}") for i in range(100)]
-    value["memorials"] = [entry(source=f"mod:source-{i}") for i in range(100)]
-    assert len(validate_hall(value)["portraits"]) == 100
-    assert len(validate_hall(value)["memorials"]) == 100
+    value["memorialLobbies"] = [entry(source=f"mod:source-{i}") for i in range(100)]
+    assert len(validate_student_hall(value)["portraits"]) == 100
+    assert len(validate_student_hall(value)["memorialLobbies"]) == 100
 
 
 def test_removing_active_uses_remaining_order():
-    value = empty_hall()
-    value["memorials"] = [entry(source="mod:first"), entry(source="mod:second")]
+    value = empty_student_hall()
+    value["memorialLobbies"] = [entry(source="mod:first"), entry(source="mod:second")]
     value["active"] = str(uuid4())
-    assert validate_hall(value)["active"] == value["memorials"][0]["id"]
-    value["memorials"].clear()
-    assert validate_hall(value)["active"] is None
+    assert validate_student_hall(value)["active"] == value["memorialLobbies"][0]["id"]
+    value["memorialLobbies"].clear()
+    assert validate_student_hall(value)["active"] is None
 
 
 @pytest.mark.parametrize(
     "patch", [{"x": float("nan")}, {"scale": 0}, {"y": True}, {"source": "../outside"}, {"id": "bad"}]
 )
 def test_invalid_entry_is_rejected_without_silent_data_loss(patch):
-    value = empty_hall()
+    value = empty_student_hall()
     value["portraits"] = [entry(**patch)]
     with pytest.raises(ServiceError):
-        validate_hall(value)
+        validate_student_hall(value)
 
 
 def test_duplicate_uuid_is_rejected_across_modes():
-    value = empty_hall()
+    value = empty_student_hall()
     value["portraits"] = [entry()]
-    value["memorials"] = deepcopy(value["portraits"])
+    value["memorialLobbies"] = deepcopy(value["portraits"])
     with pytest.raises(ServiceError):
-        validate_hall(value)
+        validate_student_hall(value)
 
 
 def test_cas_retains_other_settings_and_prevents_lost_updates(tmp_path):
     first = UiState(tmp_path / "ui.json")
     second = UiState(first.path)
     first.set("voice_volume", 35)
-    save_hall(first, empty_hall(), 0)
+    save_student_hall(first, empty_student_hall(), 0)
     with pytest.raises(ServiceError, match="student_hall_conflict"):
-        save_hall(second, empty_hall(), 0)
+        save_student_hall(second, empty_student_hall(), 0)
     assert second.get("voice_volume") == 35
     assert second.get("student_hall")["revision"] == 1
 
 
 def test_failed_publication_preserves_complete_previous_snapshot(tmp_path, monkeypatch):
     state = UiState(tmp_path / "ui.json")
-    previous = save_hall(state, empty_hall(), 0)
+    previous = save_student_hall(state, empty_student_hall(), 0)
     value = deepcopy(previous)
     value["portraits"] = [entry()]
 
@@ -85,7 +91,7 @@ def test_failed_publication_preserves_complete_previous_snapshot(tmp_path, monke
 
     monkeypatch.setattr("bmpt.webui.state._replace", fail)
     with pytest.raises(OSError):
-        save_hall(state, value, 1)
+        save_student_hall(state, value, 1)
     assert UiState(state.path).get("student_hall") == previous
 
 
@@ -144,16 +150,22 @@ def test_library_only_cross_server_entries_are_available_without_local_core(tmp_
     from bmpt.webui.rpc import RpcRegistry
     from bmpt.webui.student_hall import register_api
 
-    variant = SimpleNamespace(
-        key="unreleased", names={"en": {"full": "Unreleased"}}, spr=None, lobby=None, portrait=None
+    alt = SimpleNamespace(
+        key="unreleased",
+        names={"en": {"full": "Unreleased"}},
+        portrait=None,
+        memorial_lobby=None,
+        official_thumbnail=None,
     )
-    mod = SimpleNamespace(id="future-mod", target="unreleased", kind="lobby", alias="", label="Future lobby")
+    mod = SimpleNamespace(
+        id="future-mod", target="unreleased", resource_type="memorialLobby", alias="", name="Future lobby"
+    )
     service = SimpleNamespace(
         game_found=lambda: True,
         state=UiState(tmp_path / "ui.json"),
-        catalog=SimpleNamespace(families=lambda: []),
-        library=SimpleNamespace(mods=lambda: [mod], variant_metadata=lambda key: variant),
-        game=SimpleNamespace(collection_names=lambda: {"bg": ["BG_School_Collection"]}),
+        catalog=SimpleNamespace(students=lambda: []),
+        library=SimpleNamespace(mods=lambda: [mod], alt_metadata=lambda key: alt),
+        game=SimpleNamespace(collection_names=lambda: {"background": ["BG_School_Collection"]}),
     )
     registry = RpcRegistry(current=True)
     register_api(registry, service)
@@ -166,7 +178,7 @@ def test_library_only_cross_server_entries_are_available_without_local_core(tmp_
         "source": "mod:future-mod",
         "resourceType": "memorialLobby",
         "core": None,
-        "names": variant.names,
+        "names": alt.names,
         "name": "Future lobby",
         "officialThumbnail": None,
     }
@@ -175,88 +187,88 @@ def test_library_only_cross_server_entries_are_available_without_local_core(tmp_
 
 
 def test_global_portrait_scale_defaults_read_and_persistence_leave_entries_unchanged(tmp_path):
-    from bmpt.webui.student_hall import normalize_hall
+    from bmpt.webui.student_hall import normalize_student_hall
 
     state = UiState(tmp_path / "ui.json")
-    legacy = empty_hall()
+    legacy = empty_student_hall()
     legacy.pop("portraitScale")
     legacy["portraits"] = [entry(x=500, y=950, scale=0.6)]
-    assert normalize_hall(legacy)["portraitScale"] == 1
+    assert normalize_student_hall(legacy)["portraitScale"] == 1
     assert "portraitScale" not in legacy
-    previous = save_hall(state, legacy, 0)
+    previous = save_student_hall(state, legacy, 0)
     changed = deepcopy(previous)
     changed["portraitScale"] = 0.73
-    saved = save_hall(state, changed, previous["revision"])
+    saved = save_student_hall(state, changed, previous["revision"])
     assert saved["portraitScale"] == 0.73
     assert saved["portraits"] == previous["portraits"]
     assert saved["background"] == previous["background"]
     assert UiState(state.path).get("student_hall")["portraitScale"] == 0.73
     for size in (0.25, 1, 1.5):
         changed["portraitScale"] = size
-        assert validate_hall(changed)["portraitScale"] == size
+        assert validate_student_hall(changed)["portraitScale"] == size
 
 
 @pytest.mark.parametrize("scale", [0, 0.249, 1.501, float("nan"), float("inf"), True, "75", None])
 def test_invalid_global_portrait_scale_cannot_replace_saved_layout(tmp_path, scale):
     state = UiState(tmp_path / "ui.json")
-    previous = save_hall(state, empty_hall(), 0)
+    previous = save_student_hall(state, empty_student_hall(), 0)
     bad = deepcopy(previous)
     bad["portraitScale"] = scale
     with pytest.raises(ServiceError):
-        save_hall(state, bad, previous["revision"])
+        save_student_hall(state, bad, previous["revision"])
     assert UiState(state.path).get("student_hall") == previous
 
 
 @pytest.mark.parametrize("mirror", [0, 1, "true", None, []])
 def test_portrait_mirror_requires_a_boolean(mirror):
-    value = empty_hall()
-    value["portraits"] = [entry(mirror=mirror)]
+    value = empty_student_hall()
+    value["portraits"] = [entry(flipHorizontal=mirror)]
     with pytest.raises(ServiceError):
-        validate_hall(value)
+        validate_student_hall(value)
 
 
 def test_portrait_mirror_and_layer_order_round_trip(tmp_path):
     state = UiState(tmp_path / "ui.json")
-    value = empty_hall()
-    value["portraits"] = [entry(source="mod:front", mirror=True), entry(source="mod:back")]
-    saved = save_hall(state, value, 0)
+    value = empty_student_hall()
+    value["portraits"] = [entry(source="mod:front", flipHorizontal=True), entry(source="mod:back")]
+    saved = save_student_hall(state, value, 0)
     assert [row["source"] for row in saved["portraits"]] == ["mod:front", "mod:back"]
-    assert [row["mirror"] for row in saved["portraits"]] == [True, False]
+    assert [row["flipHorizontal"] for row in saved["portraits"]] == [True, False]
     assert UiState(state.path).get("student_hall")["portraits"] == saved["portraits"]
 
 
 def test_duplicate_memorial_resource_is_rejected_without_replacing_saved_state(tmp_path):
     state = UiState(tmp_path / "ui.json")
-    value = empty_hall()
-    value["memorials"] = [entry(source="official"), entry(source="mod:alternate")]
-    saved = save_hall(state, value, 0)
+    value = empty_student_hall()
+    value["memorialLobbies"] = [entry(source="official"), entry(source="mod:alternate")]
+    saved = save_student_hall(state, value, 0)
     duplicated = deepcopy(saved)
-    duplicated["memorials"].append(entry(source="official"))
+    duplicated["memorialLobbies"].append(entry(source="official"))
     with pytest.raises(ServiceError, match="student_hall_duplicate_memorial"):
-        save_hall(state, duplicated, saved["revision"])
+        save_student_hall(state, duplicated, saved["revision"])
     assert UiState(state.path).get("student_hall") == saved
 
 
 def test_legacy_memorial_normalization_retains_first_order_and_active_uuid_without_writing(tmp_path):
     state = UiState(tmp_path / "ui.json")
-    value = empty_hall()
+    value = empty_student_hall()
     value["revision"] = 12
     value["portraits"] = [entry(source="official")]
     first, other, active = entry(source="official"), entry(source="mod:other"), entry(source="official")
-    value["memorials"] = [first, other, active]
+    value["memorialLobbies"] = [first, other, active]
     value["active"] = active["id"]
     state.set("student_hall", value)
     before = state.path.read_bytes()
-    normalized = normalize_hall(state.get("student_hall"))
-    assert [item["source"] for item in normalized["memorials"]] == ["official", "mod:other"]
-    assert normalized["memorials"][0]["id"] == normalized["active"] == active["id"]
+    normalized = normalize_student_hall(state.get("student_hall"))
+    assert [item["source"] for item in normalized["memorialLobbies"]] == ["official", "mod:other"]
+    assert normalized["memorialLobbies"][0]["id"] == normalized["active"] == active["id"]
     assert normalized["revision"] == 12
-    ids = [item["id"] for group in ("portraits", "memorials") for item in normalized[group]]
+    ids = [item["id"] for group in ("portraits", "memorialLobbies") for item in normalized[group]]
     assert len(ids) == len(set(ids))
-    validate_hall(normalized)
+    validate_student_hall(normalized)
     assert state.path.read_bytes() == before
-    assert value["memorials"][0]["id"] == first["id"]
+    assert value["memorialLobbies"][0]["id"] == first["id"]
     collision = deepcopy(normalized)
     collision["portraits"][0]["id"] = active["id"]
     with pytest.raises(ServiceError):
-        validate_hall(collision)
+        validate_student_hall(collision)

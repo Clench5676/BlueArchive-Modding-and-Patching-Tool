@@ -25,7 +25,7 @@ from bmpt.webui.services import LIBRARY_ITEMS
 from test_library import FakeCatalog as LibraryCatalog
 from test_library import game_bundle, header_bundle, make_mod
 from test_library_profiles import OFFICIAL, World, expect_error, world  # noqa: F401 - the world fixture
-from test_webui import FakeFamily, FakeGame, FakeVariant
+from test_webui import FakeStudent, FakeGame, FakeAlt
 from test_webui_mods import Env, rpc
 from module_patches import patch_everywhere
 
@@ -59,7 +59,7 @@ def record_of(world: World, mod_id: str) -> dict:
 
 def two_mods(world: World):
     """Two mods of two cores, the first one applied (so state.json holds an applied record too)."""
-    first = world.add(world.spr)
+    first = world.add(world.portrait)
     second = world.add(game_bundle(world.game, "other_spr"))
     world.library.apply("test", f"mod:{first.id}")
     return first, second
@@ -143,7 +143,7 @@ BAD_RECORDS = [
 
 @pytest.mark.parametrize("bad", BAD_RECORDS, ids=lambda bad: json.dumps(bad)[:40])
 def test_every_kind_of_bad_record_is_held_and_written_back_unchanged(world, bad, caplog):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     edit_state(world, lambda data: data["mods"].insert(0, copy.deepcopy(bad)))
     with caplog.at_level(logging.WARNING, logger="bmpt.library.service"):
         library = world.reload()
@@ -172,7 +172,7 @@ def test_two_instances_sharing_a_library_with_a_held_record_keep_it_and_each_oth
 
 
 def test_an_invalid_applied_entry_may_stay_dropped_and_the_rest_stays(world):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     world.library.apply("test", f"mod:{mod.id}")
     kept = read_state(world)["applied"]
     edit_state(world, lambda data: data["applied"].update({"/x": "text", "/y": {"source": 3, "sha1": "a"}}))
@@ -185,7 +185,7 @@ def test_an_invalid_applied_entry_may_stay_dropped_and_the_rest_stays(world):
 
 
 def test_the_last_good_file_is_kept_as_prev_before_every_write(world):
-    world.add(world.spr)
+    world.add(world.portrait)
     for number in range(3):
         before = state_file(world).read_bytes()
         world.library.set_favorite("test", number % 2 == 0)
@@ -193,7 +193,7 @@ def test_the_last_good_file_is_kept_as_prev_before_every_write(world):
 
 
 def test_an_unreadable_file_reads_its_prev_and_is_kept_as_bad_at_the_next_write(world, caplog):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     world.library.set_favorite("test", True)
     world.library.set_favorite("other", True)
     good = state_file(world).read_bytes()
@@ -217,7 +217,7 @@ def test_an_unreadable_file_reads_its_prev_and_is_kept_as_bad_at_the_next_write(
 
 
 def test_both_files_unreadable_blocks_every_write_and_changes_nothing(world):
-    world.add(world.spr)
+    world.add(world.portrait)
     world.library.set_favorite("test", True)
     mods_before = sorted(p.name for p in (world.root / "mods").iterdir())
     garbage, junk = b"{broken", b"[]"
@@ -236,7 +236,7 @@ def test_both_files_unreadable_blocks_every_write_and_changes_nothing(world):
 
 
 def test_an_unreadable_file_without_prev_is_blocked_and_unblocks_when_fixed_or_removed(world):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     good = state_file(world).read_bytes()
     (world.root / "state.json.prev").unlink(missing_ok=True)
     state_file(world).write_bytes(b"{broken")
@@ -258,7 +258,7 @@ def test_an_unreadable_file_without_prev_is_blocked_and_unblocks_when_fixed_or_r
 
 
 def test_a_state_of_a_newer_version_is_blocked_without_prev_or_bad(world):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     world.library.set_favorite("test", True)
     prev = (world.root / "state.json.prev").read_bytes()
     newer = json.dumps({"version": 2, "mods": [], "future": {"kept": 1}}).encode()
@@ -266,7 +266,7 @@ def test_a_state_of_a_newer_version_is_blocked_without_prev_or_bad(world):
     library = world.reload()
     assert library.mods() == [] and library.favorites() == set()  # the previous copy was not read
     expect_error("library_state_unreadable", lambda: library.set_favorite("test", True))
-    expect_error("library_state_unreadable", lambda: library.add([world.spr]))
+    expect_error("library_state_unreadable", lambda: library.add([world.portrait]))
     assert state_file(world).read_bytes() == newer
     assert (world.root / "state.json.prev").read_bytes() == prev
     assert not (world.root / "state.json.bad").exists()
@@ -275,7 +275,7 @@ def test_a_state_of_a_newer_version_is_blocked_without_prev_or_bad(world):
 
 
 def test_a_file_turning_newer_under_a_running_instance_is_not_overwritten(world):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     library = world.library
     good = state_file(world).read_bytes()
     newer = json.dumps({"version": 3, "mods": [], "applied": {}}).encode()
@@ -292,7 +292,7 @@ def test_a_file_turning_newer_under_a_running_instance_is_not_overwritten(world)
 
 
 def test_a_file_that_cannot_be_opened_is_not_corruption_at_load(world, monkeypatch):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     before = state_file(world).read_bytes()
     locked = NoRead(monkeypatch, "state.json", PermissionError(errno.EACCES, "locked", "state.json"))
     library = world.reload()
@@ -307,7 +307,7 @@ def test_a_file_that_cannot_be_opened_is_not_corruption_at_load(world, monkeypat
 
 
 def test_a_file_that_cannot_be_opened_at_save_raises_and_writes_nothing(world, monkeypatch):
-    world.add(world.spr)
+    world.add(world.portrait)
     world.library.set_favorite("other", True)
     before, prev = state_file(world).read_bytes(), (world.root / "state.json.prev").read_bytes()
     locked = NoRead(monkeypatch, "state.json", PermissionError(errno.EACCES, "locked", "state.json"))
@@ -320,7 +320,7 @@ def test_a_file_that_cannot_be_opened_at_save_raises_and_writes_nothing(world, m
 
 
 def test_an_instance_holding_good_state_replaces_an_unreadable_file_and_keeps_it_as_bad(world):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     world.library.set_favorite("test", True)
     library = world.library
     (world.root / "state.json.prev").unlink()
@@ -334,7 +334,7 @@ def test_an_instance_holding_good_state_replaces_an_unreadable_file_and_keeps_it
 
 
 def test_an_instance_holding_good_state_keeps_its_last_write_when_the_file_breaks_under_it(world):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     library = world.library
     library.set_favorite("test", True)
     last = world.add(incoming(world, "other_spr"))  # the last write: the previous copy does not hold it yet
@@ -352,7 +352,7 @@ def test_an_instance_holding_good_state_keeps_its_last_write_when_the_file_break
 
 def test_the_same_failure_through_the_real_rpc_registry(rpc_env):
     env = rpc_env
-    env.add(env.spr)
+    env.add(env.portrait)
     assert "error" not in rpc(env.app, "favorites.set", alt="test", on=True)
     folder = env.s.library_dir()
     (folder / "state.json.prev").unlink(missing_ok=True)
@@ -420,7 +420,7 @@ def test_the_error_has_its_text_in_every_locale():
 
 
 def test_a_rollback_with_a_raw_held_record_in_the_file_still_retires_the_import(world, monkeypatch):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     edit_state(world, lambda data: data["mods"].extend(["junk", 5, {"id": "c" * 32}]))
     library = world.reload()
     held = [r for r in read_state(world)["mods"] if r != record_of(world, mod.id)]
@@ -446,17 +446,17 @@ class RosterCatalog(LibraryCatalog):
 
     def __init__(self, *ignored):
         names = {"en-US": {"full": "Test", "short": "Test"}}
-        self.v = FakeVariant("test", "test", "test", names, spr="test_spr", lobby="test_home")
-        self.o = FakeVariant("other", "other", "other", names, spr="other_spr")
-        self.f = FakeFamily("test", {"en-US": "Test"}, "Abydos", [self.v])
-        self.g = FakeFamily("other", {"en-US": "Other"}, "Abydos", [self.o])
+        self.v = FakeAlt("test", "test", "test", names, portrait="test_spr", memorial_lobby="test_home")
+        self.o = FakeAlt("other", "other", "other", names, portrait="other_spr")
+        self.f = FakeStudent("test", {"en-US": "Test"}, "Abydos", [self.v])
+        self.g = FakeStudent("other", {"en-US": "Other"}, "Abydos", [self.o])
         super().__init__(self.v, self.o)
 
-    def families(self):
+    def students(self):
         return [self.f, self.g]
 
-    def family(self, key):
-        return next(family for family in self.families() if family.key == key)
+    def student(self, key):
+        return next(family for family in self.students() if family.key == key)
 
 
 @pytest.fixture
@@ -526,7 +526,7 @@ def test_a_missing_file_holds_its_record_and_the_mod_returns_when_the_file_does(
 
 
 def test_the_report_reproduction_a_file_that_comes_back_finds_its_mod(world):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     parked = hide(world, mod)
     library = world.reload()
     assert library.mods() == []
@@ -586,7 +586,7 @@ def test_alias_assignment_import_source_configuration_and_applied_record_survive
 
 def test_a_held_source_is_not_a_source_the_library_lost(world):
     world.consent = True
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     world.library.apply("test", f"mod:{mod.id}")
     parked = hide(world, mod)
     library = world.reload()
@@ -600,9 +600,9 @@ def test_a_held_source_is_not_a_source_the_library_lost(world):
 
 
 def test_replacing_the_bytes_of_a_held_source_keeps_them_as_a_mod(world):
-    held = world.add(world.spr, payload=b"held mod bytes")
+    held = world.add(world.portrait, payload=b"held mod bytes")
     world.library.apply("test", f"mod:{held.id}")
-    other = world.add(world.spr, payload=b"another mod!")
+    other = world.add(world.portrait, payload=b"another mod!")
     parked = hide(world, held)
     library = world.reload()
     library.apply("test", f"mod:{other.id}")  # replaces the only copy of the held mod's bytes
@@ -612,7 +612,7 @@ def test_replacing_the_bytes_of_a_held_source_keeps_them_as_a_mod(world):
 
 
 def test_removing_a_mod_saves_before_it_deletes_the_folder(world, monkeypatch):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     seen = []
     real = shutil.rmtree
 
@@ -649,7 +649,7 @@ def test_the_merge_rule_for_held_records():
 
 
 def test_a_rolled_back_import_does_not_leave_a_held_record_behind(world):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     record = record_of(world, mod.id)
     new_id = "d" * 32
     ghost = {**record, "id": new_id, "files": [next(iter(record["files"]))]}
@@ -678,7 +678,7 @@ def test_a_rolled_back_import_does_not_leave_a_held_record_behind(world):
 
 
 def test_a_failed_save_after_a_rollback_keeps_the_folders_of_records_it_could_not_drop(world, monkeypatch):
-    kept = world.add(world.spr)
+    kept = world.add(world.portrait)
     library = world.library
 
     def fail(self):
@@ -694,7 +694,7 @@ def test_a_failed_save_after_a_rollback_keeps_the_folders_of_records_it_could_no
 
 
 def test_a_held_record_that_returns_during_an_asset_deletion_is_not_rolled_back_as_new(world, monkeypatch):
-    victim = world.add(world.spr)
+    victim = world.add(world.portrait)
     held = world.add(game_bundle(world.game, "other_spr"))
     parked = hide(world, held)
     library = world.reload()
@@ -737,7 +737,7 @@ def test_two_instances_sharing_a_library_with_a_held_record_see_it_return(world)
 
 def test_switching_a_held_source_reports_it_and_drops_nothing(world):
     world.consent = True
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     world.library.apply("test", f"mod:{mod.id}")
     world.toggle(False)  # keeps a built copy that names the mod's own file
     before = {key: choice["source"] for key, choice in chosen(world).items()}
@@ -751,16 +751,16 @@ def test_switching_a_held_source_reports_it_and_drops_nothing(world):
     library = world.reload()
     result = library.toggle(True, True)  # retry once the file is back
     assert not result.failed and not result.dropped
-    assert world.spr.read_bytes() == next(m for m in library.mods() if m.id == mod.id).file.read_bytes()
+    assert world.portrait.read_bytes() == next(m for m in library.mods() if m.id == mod.id).file.read_bytes()
 
 
 def test_importing_the_same_files_while_a_record_is_held_leaves_it_alone(world):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     raw = record_of(world, mod.id)
     parked = hide(world, mod)
     library = world.reload()
     assert library._known() == {}  # the identity of a held record is not known: its files are not there
-    (again,) = library.add([make_mod(world.spr, world.tmp / "again")])
+    (again,) = library.add([make_mod(world.portrait, world.tmp / "again")])
     assert again.id != mod.id and record_of(world, mod.id) == raw
     unhide(world, mod, parked)
     library = world.reload()
@@ -778,7 +778,7 @@ def journals_of(world: World, folder: str = "transactions") -> list[Path]:
     return sorted((world.root / folder).glob("*/journal.json"))
 
 
-def crash_during(world: World, source: str, kind: str = "spr", core: str = "test") -> Path:
+def crash_during(world: World, source: str, resource_type: str = "portrait", core: str = "test") -> Path:
     """Apply a source and die right after its game files were written: the write journal stays pending."""
 
     def log(message):
@@ -786,7 +786,7 @@ def crash_during(world: World, source: str, kind: str = "spr", core: str = "test
             raise Crash()
 
     with pytest.raises(Crash):
-        world.library.apply(core, source, log=log, kind=kind)
+        world.library.apply(core, source, log=log, resource_type=resource_type)
     (journal,) = journals_of(world)
     assert json.loads(journal.read_text())["phase"] == "writing"
     return journal
@@ -794,8 +794,8 @@ def crash_during(world: World, source: str, kind: str = "spr", core: str = "test
 
 def two_sources(world: World):
     """Two mods of one core, the first applied: the second one's switch is the write that dies."""
-    first = world.add(world.spr, payload=b"modded!!")
-    second = world.add(world.spr, payload=b"modded2!")
+    first = world.add(world.portrait, payload=b"modded!!")
+    second = world.add(world.portrait, payload=b"modded2!")
     world.library.apply("test", f"mod:{first.id}")
     return first, second
 
@@ -831,25 +831,25 @@ WRITES = {
 def test_the_report_reproduction_a_steam_repair_after_a_crash_no_longer_blocks_the_library(world):
     first, second = two_sources(world)
     crash_during(world, f"mod:{second.id}")
-    world.spr.write_bytes(OFFICIAL)  # Steam's verify: the bytes match neither the before nor the after
+    world.portrait.write_bytes(OFFICIAL)  # Steam's verify: the bytes match neither the before nor the after
     library = world.reload()
     # reads and writes alike: nothing answers entry_changed
     assert [m.id for m in library.mods()] == [first.id, second.id]
     library.set_favorite("test", True)
-    assert world.spr.read_bytes() == OFFICIAL  # the outside change is left as it is
+    assert world.portrait.read_bytes() == OFFICIAL  # the outside change is left as it is
     assert not journals_of(world)  # the rollback finished and retired its journal
     assert library._recovery_error is None
 
 
 def test_a_left_file_keeps_its_old_record_without_a_new_date_so_it_reads_as_changed(world):
     first, second = two_sources(world)
-    key = str(world.spr.resolve())
+    key = str(world.portrait.resolve())
     old = copy.deepcopy(read_state(world)["applied"][key])
     crash_during(world, f"mod:{second.id}")
-    world.spr.write_bytes(header_bundle(b"outside!"))  # the same size as the recorded bytes, other content
+    world.portrait.write_bytes(header_bundle(b"outside!"))  # the same size as the recorded bytes, other content
     library = world.reload()
     record = library._applied[key]
-    assert record["mtime"] == old["mtime"] != world.spr.stat().st_mtime_ns  # no new date stamped from the file
+    assert record["mtime"] == old["mtime"] != world.portrait.stat().st_mtime_ns  # no new date stamped from the file
     assert record["sha1"] == old["sha1"] and record["source"] == f"mod:{first.id}"
     assert library.state("test").applied != f"mod:{first.id}"  # the outside bytes are not the recorded ones
     assert not journals_of(world)
@@ -857,12 +857,12 @@ def test_a_left_file_keeps_its_old_record_without_a_new_date_so_it_reads_as_chan
 
 def test_a_file_that_is_back_to_its_before_or_after_is_restored_as_before(world):
     first, second = two_sources(world)
-    before = world.spr.read_bytes()
+    before = world.portrait.read_bytes()
     crash_during(world, f"mod:{second.id}")
-    assert world.spr.read_bytes() != before
+    assert world.portrait.read_bytes() != before
     library = world.reload()
-    assert world.spr.read_bytes() == before and not journals_of(world)
-    assert library._applied[str(world.spr.resolve())]["source"] == f"mod:{first.id}"
+    assert world.portrait.read_bytes() == before and not journals_of(world)
+    assert library._applied[str(world.portrait.resolve())]["source"] == f"mod:{first.id}"
 
 
 def forget_configuration(world: World) -> None:
@@ -876,32 +876,32 @@ def forget_configuration(world: World) -> None:
 def test_a_restored_write_releases_the_original_it_kept_but_a_left_file_keeps_it(world):
     """The trap of _release_failed: the original kept by a failed write is released once the file is back, but it is
     the only official copy of a file left as it is."""
-    mod = world.add(world.spr, payload=b"modded!!")
-    original = world.original(world.spr)
+    mod = world.add(world.portrait, payload=b"modded!!")
+    original = world.original(world.portrait)
     crash_during(world, f"mod:{mod.id}")  # the first write over an official file kept it in originals/
     assert original.read_bytes() == OFFICIAL and any(
         item["kept_now"] for item in json.loads(journals_of(world)[0].read_text())["files"]
     )
     forget_configuration(world)
     world.reload()  # nothing changed outside: the file is back as it was, the copy is not needed
-    assert world.spr.read_bytes() == OFFICIAL and not original.exists()
+    assert world.portrait.read_bytes() == OFFICIAL and not original.exists()
 
 
 def test_the_only_official_original_of_a_left_file_is_not_released(world):
-    mod = world.add(world.spr, payload=b"modded!!")
-    original = world.original(world.spr)
+    mod = world.add(world.portrait, payload=b"modded!!")
+    original = world.original(world.portrait)
     crash_during(world, f"mod:{mod.id}")
     forget_configuration(world)
-    world.spr.write_bytes(header_bundle(b"outside!"))
+    world.portrait.write_bytes(header_bundle(b"outside!"))
     world.reload()
     assert original.read_bytes() == OFFICIAL  # the only official copy stays
-    assert world.spr.read_bytes() == header_bundle(b"outside!") and not journals_of(world)
+    assert world.portrait.read_bytes() == header_bundle(b"outside!") and not journals_of(world)
 
 
 def test_a_failed_write_whose_file_changed_meanwhile_leaves_it_and_keeps_the_original(world, monkeypatch):
     """The same rule on the write's own failure path (not a recovery)."""
-    mod = world.add(world.spr, payload=b"modded!!")
-    original = world.original(world.spr)
+    mod = world.add(world.portrait, payload=b"modded!!")
+    original = world.original(world.portrait)
     library = world.library
     real, calls = library._save, []
 
@@ -909,7 +909,7 @@ def test_a_failed_write_whose_file_changed_meanwhile_leaves_it_and_keeps_the_ori
         calls.append(1)
         if len(calls) == 1:
             forget_configuration(world)
-            world.spr.write_bytes(header_bundle(b"outside!"))  # an outside change while the state is saved
+            world.portrait.write_bytes(header_bundle(b"outside!"))  # an outside change while the state is saved
             raise OSError(errno.ENOSPC, "Synthetic full disk")
         return real()
 
@@ -917,17 +917,17 @@ def test_a_failed_write_whose_file_changed_meanwhile_leaves_it_and_keeps_the_ori
     with pytest.raises(ServiceError, match="library_io_error"):
         library.apply("test", f"mod:{mod.id}")
     monkeypatch.undo()
-    assert world.spr.read_bytes() == header_bundle(b"outside!") and not journals_of(world)
+    assert world.portrait.read_bytes() == header_bundle(b"outside!") and not journals_of(world)
     assert original.read_bytes() == OFFICIAL
 
 
 def kept_write(world: World):
     """A write that dies after it kept an outside mod's bytes as a library mod: (the kept mod's id, those bytes)."""
-    first = world.add(world.spr, payload=b"modded!!")
-    second = world.add(world.spr, payload=b"modded2!")
+    first = world.add(world.portrait, payload=b"modded!!")
+    second = world.add(world.portrait, payload=b"modded2!")
     world.library.apply("test", f"mod:{first.id}")
     unknown = header_bundle(b"someone's mod")
-    world.spr.write_bytes(unknown)  # an outside mod over the library's: nothing in the library holds its bytes
+    world.portrait.write_bytes(unknown)  # an outside mod over the library's: nothing in the library holds its bytes
     journal = crash_during(world, f"mod:{second.id}")
     data = json.loads(journal.read_text())
     assert len(data["kept"]) == 1  # the outside bytes were kept as a mod before the write
@@ -936,17 +936,17 @@ def kept_write(world: World):
 
 def test_a_mod_kept_from_a_left_file_is_not_forgotten(world):
     kept_id, unknown = kept_write(world)
-    world.spr.write_bytes(header_bundle(b"outside!"))  # changed again behind the crash: the file is left as it is
+    world.portrait.write_bytes(header_bundle(b"outside!"))  # changed again behind the crash: the file is left as it is
     library = world.reload()
     kept = next(m for m in library.mods() if m.id == kept_id)  # its bytes are in no game file: it stays
     assert kept.file.read_bytes() == unknown
-    assert world.spr.read_bytes() == header_bundle(b"outside!") and not journals_of(world)
+    assert world.portrait.read_bytes() == header_bundle(b"outside!") and not journals_of(world)
 
 
 def test_a_restored_write_forgets_the_mods_it_kept(world):
     kept_id, unknown = kept_write(world)
     library = world.reload()  # nothing changed outside: the file is back as it was, the kept mod is not needed
-    assert world.spr.read_bytes() == unknown
+    assert world.portrait.read_bytes() == unknown
     assert kept_id not in [m.id for m in library.mods()] and not journals_of(world)
     assert not (world.root / "mods" / kept_id).exists()
 
@@ -995,7 +995,7 @@ def test_reads_work_while_a_journal_cannot_roll_back(world):
     before = snapshot_of(world)
     assert [m.id for m in library.mods()] == [m.id for m in mods]
     assert library.favorites() == set() and library.state("test") and library.selection("test") is not None
-    assert library.configured("test") and library.roster_snapshot(["test"])["mods"]
+    assert library.configured("test") and library.student_list_snapshot(["test"])["mods"]
     assert library.status()["current"] and library.modified() is not None and library.intent()["enabled"]
     assert library.scan().entries is not None and library.entries() is not None
     assert library.judge_unfinished() == 0 and library.take_pruned_cores() == set()
@@ -1095,12 +1095,12 @@ def edit_journal(journal: Path, change) -> None:
 
 def test_a_new_resource_folder_alone_is_no_folder_change(world):
     first, second = two_sources(world)
-    before = world.spr.read_bytes()
+    before = world.portrait.read_bytes()
     journal = crash_during(world, f"mod:{second.id}")
     edit_journal(journal, lambda data: data["pin"]["dirs"].append(str(world.tmp / "a-new-resource-folder")))
     library = world.reload()  # same install, same key, other dirs: every target is still in a resource folder
     assert library._recovery_error is None and not journals_of(world)
-    assert world.spr.read_bytes() == before
+    assert world.portrait.read_bytes() == before
 
 
 def test_changed_folders_stay_folder_changed_when_a_target_is_outside_the_resource_folders(world):
@@ -1124,10 +1124,10 @@ def test_changed_folders_stay_folder_changed_when_a_target_is_outside_the_resour
 def test_a_journal_of_an_install_that_is_not_known_waits_while_other_installs_are_written(world, monkeypatch):
     folder = japan(world)
     other = pin_of(world, folder)
-    mod = world.add(world.spr, payload=b"modded!!")
+    mod = world.add(world.portrait, payload=b"modded!!")
     world.library.apply("test", f"mod:{mod.id}", pin=other)
-    second = world.add(world.spr, payload=b"modded2!")
-    japan_file = folder / world.spr.name
+    second = world.add(world.portrait, payload=b"modded2!")
+    japan_file = folder / world.portrait.name
     before = japan_file.read_bytes()
 
     def log(message):
@@ -1144,7 +1144,7 @@ def test_a_journal_of_an_install_that_is_not_known_waits_while_other_installs_ar
     assert journal.exists() and (journal.parent / "0.bundle").exists()  # with its files
     library.set_favorite("test", True)
     library.apply("test", f"mod:{mod.id}")  # a write to the other install goes on
-    assert world.spr.read_bytes() == mod.file.read_bytes()
+    assert world.portrait.read_bytes() == mod.file.read_bytes()
     assert journal.exists()
     attempts = []
     real = library._recover_transactions
@@ -1158,17 +1158,17 @@ def test_a_journal_of_an_install_that_is_not_known_waits_while_other_installs_ar
     moved.rename(folder)  # the install is back: the next write rolls its journal back, restoring only its own keys
     library.set_favorite("test", False)
     assert not journals_of(world) and japan_file.read_bytes() == before
-    assert world.spr.read_bytes() == mod.file.read_bytes()  # the other install was not touched
+    assert world.portrait.read_bytes() == mod.file.read_bytes()  # the other install was not touched
 
 
 def test_a_journal_whose_install_key_differs_waits_too(world):
     first, second = two_sources(world)
     journal = crash_during(world, f"mod:{second.id}")
-    written = world.spr.read_bytes()
+    written = world.portrait.read_bytes()
     edit_journal(journal, lambda data: data["pin"].update(key="/not/this/install"))
     library = world.reload()
     assert library._recovery_error is None and journal.exists()
-    assert world.spr.read_bytes() == written  # untouched
+    assert world.portrait.read_bytes() == written  # untouched
     assert [m.id for m in library.mods()] == [first.id, second.id]
 
 
@@ -1209,36 +1209,36 @@ def crash_during_removal(world: World, mod, monkeypatch) -> Path:
 
 def test_an_asset_deletion_whose_target_is_gone_rolls_back_without_recreating_it(world, monkeypatch):
     world.consent = True
-    mod = world.add(world.spr, payload=b"modded!!")
+    mod = world.add(world.portrait, payload=b"modded!!")
     world.library.apply("test", f"mod:{mod.id}")
     crash_during_removal(world, mod, monkeypatch)
-    world.spr.unlink()  # a game update renamed the bundle: the missing target does not raise library_io_error
+    world.portrait.unlink()  # a game update renamed the bundle: the missing target does not raise library_io_error
     library = world.reload()
     assert library._recovery_error is None and not journals_of(world, "asset-deletions")
-    assert not world.spr.exists()  # not recreated
+    assert not world.portrait.exists()  # not recreated
     assert [m.id for m in library.mods()] == [mod.id]  # the records are back
     library.set_favorite("test", True)
 
 
 def test_an_asset_deletion_target_changed_outside_is_left_and_its_record_has_no_new_date(world, monkeypatch):
-    mod = world.add(world.spr, payload=b"modded!!")
+    mod = world.add(world.portrait, payload=b"modded!!")
     world.library.apply("test", f"mod:{mod.id}")
-    key = str(world.spr.resolve())
+    key = str(world.portrait.resolve())
     recorded = copy.deepcopy(read_state(world)["applied"][key])
     crash_during_removal(world, mod, monkeypatch)
     outside = header_bundle(b"outside!")  # the same size as the recorded bytes
-    world.spr.write_bytes(outside)
+    world.portrait.write_bytes(outside)
     library = world.reload()
     assert library._recovery_error is None and not journals_of(world, "asset-deletions")
-    assert world.spr.read_bytes() == outside
-    assert library._applied[key]["mtime"] == recorded["mtime"] != world.spr.stat().st_mtime_ns
+    assert world.portrait.read_bytes() == outside
+    assert library._applied[key]["mtime"] == recorded["mtime"] != world.portrait.stat().st_mtime_ns
     assert library.state("test").applied != f"mod:{mod.id}"
     assert [m.id for m in library.mods()] == [mod.id]
 
 
 @pytest.mark.parametrize("how", ["folder gone", "key differs"])
 def test_an_asset_deletion_of_an_unknown_install_stays_a_remembered_failure(world, monkeypatch, how):
-    mod = world.add(world.spr, payload=b"modded!!")
+    mod = world.add(world.portrait, payload=b"modded!!")
     world.library.apply("test", f"mod:{mod.id}")
     journal = crash_during_removal(world, mod, monkeypatch)
     if how == "key differs":
@@ -1262,8 +1262,8 @@ def crash_in_services(env, write_check=None) -> tuple:
     of the services holds a pending write journal. ``write_check`` is installed before the crash: a scan thread may
     recover the journal the moment the switch dies, so a check set afterwards can come too late."""
     library = env.s.library
-    first = env.add(env.spr, payload=b"modded!!")
-    second = env.add(env.spr, payload=b"modded2!")
+    first = env.add(env.portrait, payload=b"modded!!")
+    second = env.add(env.portrait, payload=b"modded2!")
     library.apply("test", f"mod:{first.id}")
 
     def log(message):
@@ -1284,13 +1284,13 @@ ANSWERS = (("students.list", {}), ("student.get", {"key": "test"}), ("mods.state
 def test_after_a_steam_repair_every_call_answers_through_the_rpc_registry(rpc_env):
     env = rpc_env
     first, second = crash_in_services(env)
-    env.spr.write_bytes(OFFICIAL)  # the bytes match neither the before nor the after
+    env.portrait.write_bytes(OFFICIAL)  # the bytes match neither the before nor the after
     env.reload_library()  # a restart: the library recovers at its build
     for method, params in ANSWERS:
         assert "error" not in rpc(env.app, method, **params), method
     job = env.job("mods.toggle", enabled=False, expect=True)  # this answered entry_changed
     assert job.state == "done", job.error
-    assert env.spr.read_bytes() == OFFICIAL
+    assert env.portrait.read_bytes() == OFFICIAL
     assert not list((env.s.library.root / "transactions").glob("*/journal.json"))
 
 
@@ -1340,7 +1340,7 @@ def blocked_state(world: World, how: str, monkeypatch=None):
 def test_a_blocked_library_never_settles_the_configuration_away(world, monkeypatch, how):
     """Every source is gone from an empty library: the scan keeps each configured choice."""
     world.consent = True
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     world.library.apply("test", f"mod:{mod.id}")
     profiles = (world.root / "profiles.json").read_bytes()
     before = chosen(world)
@@ -1369,7 +1369,7 @@ def test_a_blocked_library_never_settles_the_configuration_away(world, monkeypat
 
 def test_a_running_instance_whose_file_turns_newer_settles_nothing_either(world):
     world.consent = True
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     world.library.apply("test", f"mod:{mod.id}")
     profiles = (world.root / "profiles.json").read_bytes()
     state_file(world).write_text(json.dumps({"version": 2, "mods": []}))
@@ -1443,7 +1443,7 @@ SWEPT = [
 @pytest.mark.parametrize("how", ["newer", "broken"])
 def test_every_read_of_the_rpc_registry_answers_and_changes_nothing_while_the_library_is_blocked(rpc_env, how):
     env = rpc_env
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     env.s.library.apply("test", f"mod:{mod.id}")
     folder = env.s.library_dir()
     if how == "newer":
@@ -1477,7 +1477,7 @@ def test_every_read_of_the_rpc_registry_answers_and_changes_nothing_while_a_reco
 
 def test_the_seen_baseline_is_not_taken_from_a_blocked_library(rpc_env):
     env = rpc_env
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     folder = env.s.library_dir()
     good = (folder / "state.json").read_bytes()
     ui = env.data / "webui.json"
@@ -1495,7 +1495,7 @@ def test_the_seen_baseline_is_not_taken_from_a_blocked_library(rpc_env):
 
 
 def test_a_missing_state_with_a_prev_reads_the_prev_on_a_fresh_load(world):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     world.library.set_favorite("test", True)
     state_file(world).unlink()  # a partial restore
     library = world.reload()
@@ -1520,7 +1520,7 @@ def test_a_missing_state_with_a_prev_keeps_the_records_of_a_running_instance(wor
 
 
 def test_a_missing_state_without_a_prev_is_a_fresh_library_and_a_junk_prev_blocks(world):
-    world.add(world.spr)
+    world.add(world.portrait)
     state_file(world).unlink()
     (world.root / "state.json.prev").unlink(missing_ok=True)
     assert world.reload().mods() == []
@@ -1555,7 +1555,7 @@ def test_a_read_survives_any_exception_of_a_recovery(world, monkeypatch):
 
 
 def test_a_read_survives_an_oserror_of_the_migration_save(world, monkeypatch):
-    mod = world.add(world.spr)
+    mod = world.add(world.portrait)
     library = world.library
     library._migrations.discard(LEGACY_REMAP)
     library._migration_pending = True

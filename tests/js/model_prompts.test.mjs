@@ -26,12 +26,12 @@ setStrings(
   flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))),
 );
 
-test("model entries retain their kind in untracked and drift prompts without requesting a Spine preview", () => {
-  const model = { resourceType: "chibi", core: "hoshino_original", install: "game", state: "untracked" };
-  assert.equal(kindLabel(model), "Chibi");
-  assert.equal(entryBase(model, { current: "game" }), null);
-  assert.deepEqual(promptEntries([model], "untracked").listed, [model]);
-  const reset = { ...model, state: "reset" };
+test("chibi entries retain their kind in untracked and drift prompts without requesting a Spine preview", () => {
+  const chibi = { resourceType: "chibi", core: "hoshino_original", install: "game", state: "untracked" };
+  assert.equal(kindLabel(chibi), "Chibi");
+  assert.equal(entryBase(chibi, { current: "game" }), null);
+  assert.deepEqual(promptEntries([chibi], "untracked").listed, [chibi]);
+  const reset = { ...chibi, state: "reset" };
   assert.deepEqual(promptEntries([reset], "drift").listed, [reset]);
 });
 
