@@ -243,13 +243,15 @@ function open(mode, opaque = false, writer = false) {
     detail.style.visibility = "hidden";
     o.el.appendChild(detail);
     o.progress = detail;
+    // The newest hold that has a line to show: a hold without one (a screen reloading beneath a job) never
+    // replaces an older job's line with the generic text.
     o.relabelProgress = () => {
       setProgress(
         o,
         [...holds]
           .reverse()
-          .find((hold) => hold.progress)
-          ?.progress() ||
+          .map((hold) => hold.progress?.())
+          .find(Boolean) ||
           o.waitLabel ||
           T("app.loading"),
       );
@@ -756,7 +758,7 @@ export const held = () => holds.size > 0;
 export async function hold(work, { until = null, all = false, progress = null } = {}) {
   let latest = null;
   const el = stage(),
-    key = { all, progress: () => (latest === null ? progress?.() || T("app.loading") : progressLine(latest)) };
+    key = { all, progress: () => (latest === null ? progress?.() || null : progressLine(latest)) };
   const update = (value) => {
     latest = value;
     refresh();
@@ -796,6 +798,8 @@ export function page(fn, options = {}) {
  */
 export const locked = () => held() || active() || (!!writerOverlay && !writerOverlay.closing);
 const strict = () => [...holds].some((hold) => hold.all);
+/** Whether a write the user watches is under way: a strict hold, or a writer's progress. */
+export const writing = () => strict() || (!!writerOverlay && !writerOverlay.closing);
 const exempt = (ev) => !strict() && Popup.allowsInput(ev);
 // WebKit's trackpad pinch comes as gesture events, not as wheel events.
 export const LOCKED_EVENTS = [

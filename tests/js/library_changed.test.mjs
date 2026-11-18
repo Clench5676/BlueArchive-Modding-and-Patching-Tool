@@ -7,16 +7,28 @@ import { visit } from "../../src/bmpt/web/js/roster/roster-order.js";
 // Run the event coalescing and refresh with a detail page already on screen.
 const source = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
 const code = source.slice(source.indexOf("let heldChange,"), source.indexOf("// A completed toggle"));
-function harness() {
+function harness({ shown = "screen-detail", writing = () => false } = {}) {
   const refreshed = [],
     forgotten = [],
-    timers = [];
+    timers = [],
+    routes = [];
   let invalidated = 0;
   const env = {
     ctx: { invalidateRoster: () => invalidated++ },
     BatchImport: { invalidate() {} },
     Detail: { filesChanged: (change) => refreshed.push(change) },
-    $: (id) => ({ hidden: id === "screen-hall" }),
+    $: (id) => ({ hidden: id !== shown }),
+    Popup: {
+      whenIdle: (_every, blocked = () => false) =>
+        new Promise((resolve) => {
+          const check = () => (blocked() ? setImmediate(check) : resolve());
+          check();
+        }),
+    },
+    Loading: { writing },
+    route: async () => {
+      routes.push(env.routeToken);
+    },
     forget: (base) => forgotten.push(base),
     spinePrefix: (kind, core) => `${kind}/${core}`,
     clearTimeout() {},
@@ -32,7 +44,7 @@ function harness() {
     ${code}
     return { libraryChanged, applyChange };`,
   )(env);
-  return { ...api, refreshed, forgotten, invalidated: () => invalidated };
+  return { ...api, refreshed, forgotten, routes, invalidated: () => invalidated };
 }
 
 test("a library-only add refreshes the open detail page with no game thumbnail eviction", async () => {
@@ -89,4 +101,25 @@ test("a visit records the selected background alongside a portrait in its studen
   visited(shownStudent, "special:arona_workpage");
   assert.equal(shownStudent.alts[1].recent, 0);
   assert.equal(shownStudent.alts[0].recent, undefined);
+});
+
+test("the Hall and the list wait for a watched write to end before they are drawn again; its own end draws at once", async () => {
+  for (const shown of ["screen-hall", "screen-roster"]) {
+    let busy = true;
+    const h = harness({ shown, writing: () => busy });
+    // Enable Mods flips midway through its job: the shown screen stays under Now Loading
+    h.libraryChanged(null);
+    const waiting = h.applyChange();
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(h.routes, [], shown);
+    busy = false;
+    await waiting;
+    assert.equal(h.routes.length, 1, shown);
+    // the write's own end (refreshAfterToggle) is drawn while its hold is still up
+    busy = true;
+    h.libraryChanged(null);
+    await h.applyChange({ now: true });
+    assert.equal(h.routes.length, 2, shown);
+  }
 });
