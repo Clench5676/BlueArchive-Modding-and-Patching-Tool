@@ -62,15 +62,18 @@ def atomic_json(path: Path, data: dict[str, Any]) -> None:
         path: Destination file, whose parent directories are created if needed.
         data: JSON document to serialize with ASCII escapes and two-space indentation.
     """
+    store = runtime_store(path)
+    raw = managed_bytes(store, data) if store else (json.dumps(data, ensure_ascii=True, indent=2) + "\n").encode()
+    atomic_bytes(path, raw)
+
+
+def atomic_bytes(path: Path, raw: bytes) -> None:
+    """Replace a document only after flushing its complete contents."""
     _make_parents(path)
     fd, name = tempfile.mkstemp(prefix=".state-", dir=path.parent)
     temporary = Path(name)
     try:
         with os.fdopen(fd, "wb") as stream:
-            store = runtime_store(path)
-            raw = (
-                managed_bytes(store, data) if store else (json.dumps(data, ensure_ascii=True, indent=2) + "\n").encode()
-            )
             stream.write(raw)
             stream.flush()
             os.fsync(stream.fileno())
@@ -267,6 +270,12 @@ class Fingerprint:
     crc: int
     trailing: int | None
     size: int
+    sha256: str | None = None
+
+
+def file_revision(stat: os.stat_result) -> tuple[int, int, int, int, int]:
+    """Identify a file revision, including replacements and changes through hard links."""
+    return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
 
 
 class Fingerprints:
@@ -278,33 +287,48 @@ class Fingerprints:
 
     def __init__(self) -> None:
         """Create an empty, thread-safe fingerprint cache."""
-        self._values: dict[Path, tuple[tuple[int, int, int], Fingerprint]] = {}
+        self._values: dict[Path, tuple[tuple[int, int, int, int, int], Fingerprint]] = {}
         self._lock = threading.Lock()
 
-    def get(self, path: Path, *, fresh: bool = False) -> Fingerprint:
+    def get(self, path: Path, *, fresh: bool = False, include_sha256: bool = False) -> Fingerprint:
         """Read a header and hashes once for each observed file version.
 
         Args:
             path: Bundle whose resolved path, file times, and size identify the cache entry.
             fresh: Hash the file even when its cached stat signature matches.
+            include_sha256: Compute SHA-256 alongside SHA-1 and CRC when a kept original needs it.
 
         Returns:
             The file's SHA-1, CRC, trailing-byte count, and byte size.
         """
         path = path.resolve()
         stat = path.stat()
-        signature = (stat.st_mtime_ns, stat.st_size, stat.st_ctime_ns)
+        signature = file_revision(stat)
         with self._lock:
             cached = self._values.get(path)
-        if not fresh and cached and cached[0] == signature:
+        # Windows reports creation time as ctime, so a restored mtime can hide an in-place edit.
+        reusable = not (include_sha256 and os.name == "nt")
+        if reusable and not fresh and cached and cached[0] == signature and (not include_sha256 or cached[1].sha256):
             return cached[1]
         sha1, crc = hashlib.sha1(), 0
+        sha256 = hashlib.sha256() if include_sha256 else None
         with path.open("rb") as stream:
+            if file_revision(os.fstat(stream.fileno())) != signature:
+                raise OSError(errno.EIO, "File changed before verification", str(path))
             while block := stream.read(1024 * 1024):
                 sha1.update(block)
+                if sha256 is not None:
+                    sha256.update(block)
                 crc = zlib.crc32(block, crc)
-        value = Fingerprint(sha1.hexdigest(), crc, Bundle.get_trailing_bytes(path), stat.st_size)
+        value = Fingerprint(
+            sha1.hexdigest(), crc, Bundle.get_trailing_bytes(path), stat.st_size, sha256.hexdigest() if sha256 else None
+        )
+        if file_revision(path.stat()) != signature:
+            raise OSError(errno.EIO, "File changed during verification", str(path))
         with self._lock:
+            cached = self._values.get(path)
+            if sha256 is None and cached and cached[0] == signature and cached[1].sha256 is not None:
+                return cached[1]
             self._values[path] = (signature, value)
         return value
 

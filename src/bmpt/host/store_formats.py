@@ -95,12 +95,18 @@ def json_bytes(document: Document) -> bytes:
     return ("".join(_encode(document)) + "\n").encode("ascii")
 
 
-def _equal(left: Any, right: Any) -> bool:
+def _equal(left: Any, right: Any, *, tokens: bool = False) -> bool:
+    if left is right:
+        return True
     if isinstance(left, dict) and isinstance(right, dict):
-        return left.keys() == right.keys() and all(_equal(value, right[key]) for key, value in left.items())
+        return left.keys() == right.keys() and all(
+            _equal(value, right[key], tokens=tokens) for key, value in left.items()
+        )
     if isinstance(left, list) and isinstance(right, list):
-        return len(left) == len(right) and all(_equal(a, b) for a, b in zip(left, right))
+        return len(left) == len(right) and all(_equal(a, b, tokens=tokens) for a, b in zip(left, right))
     if isinstance(left, _Number) or isinstance(right, _Number):
+        if tokens:
+            return isinstance(left, _Number) and isinstance(right, _Number) and left.token == right.token
         if type(left) not in (int, float, _Number) or type(right) not in (int, float, _Number):
             return False
         return Decimal(getattr(left, "token", str(left))) == Decimal(getattr(right, "token", str(right)))
@@ -391,13 +397,8 @@ def _check(store_id: str, data: Document, generation: int) -> None:
     elif store_id == "S":
         for field, expected in (("mods", list), ("favorites", list), ("applied", dict), ("migrations", list)):
             _require(data, field, expected, optional=True)
-        if any(
-            not isinstance(record, dict)
-            or not isinstance(record.get("source"), str)
-            or not isinstance(record.get("sha1"), str)
-            for record in data.get("applied", {}).values()
-        ):
-            raise InvalidStore("Invalid applied entry")
+        for record in data.get("applied", {}).values():
+            _check_applied(record)
     elif store_id == "P":
         _require(data, "enabled", bool, optional=True)
         _require(data, "folders", dict, optional=True)
@@ -477,13 +478,25 @@ def load_document(store_id: str, path: Path, generation: int = GENERATION) -> Do
     return data
 
 
-def _convert(store: Store, data: Document, *, forward: bool) -> Document:
-    result = copy.deepcopy(data)
+def _check_applied(record: Any) -> None:
+    if (
+        not isinstance(record, dict)
+        or not isinstance(record.get("source"), str)
+        or not isinstance(record.get("sha1"), str)
+    ):
+        raise InvalidStore("Invalid applied entry")
+
+
+def _convert_owned(store: Store, result: Document, *, forward: bool) -> Document:
     if store.convert is not None:
         store.convert(_Names(forward), result)
     if store.version == GENERATION:
         result["version"] = GENERATION if forward else 1
     return result
+
+
+def _convert(store: Store, data: Document, *, forward: bool) -> Document:
+    return _convert_owned(store, copy.deepcopy(data), forward=forward)
 
 
 def _difference(current: Any, original: Any, path: tuple[str | int, ...] = ()) -> Iterator[Document]:
@@ -529,13 +542,48 @@ def inverse_translate(store_id: str, current: Document, shape: list[Document] | 
 
 def managed_document(store_id: str, path: Path) -> Document:
     """Decode a current stored document to the library's internal representation."""
-    return inverse_translate(store_id, load_document(store_id, path))
+    return _convert_owned(STORES[store_id], load_document(store_id, path), forward=False)
 
 
 def managed_bytes(store_id: str, document: Document) -> bytes:
     """Encode the library's internal representation in the current stored format."""
-    translated, _ = translate(store_id, document)
+    _check(store_id, document, 1)
+    translated = _convert(STORES[store_id], document, forward=True)
+    _check(store_id, translated, GENERATION)
     return json_bytes(translated)
+
+
+class StateEncoder:
+    """Reuse validated JSON for unchanged parts of the managed library state."""
+
+    def __init__(self) -> None:
+        """Start without any validated records."""
+        self._static: tuple[Document, bytes] = ({}, b"")
+        self._applied: dict[str, tuple[Document, bytes]] = {}
+
+    def encode(self, document: Document) -> bytes:
+        """Encode a complete state snapshot, converting and validating changed records."""
+        applied = document.get("applied", {})
+        if not isinstance(applied, dict):
+            raise InvalidStore("Invalid applied entries")
+        static = {key: value for key, value in document.items() if key != "applied"}
+        if not self._static[1] or not _equal(static, self._static[0], tokens=True):
+            self._static = (copy.deepcopy(static), managed_bytes("S", static))
+        names = _Names(True)
+        encoded = {}
+        for key, record in applied.items():
+            if not isinstance(key, str):
+                raise InvalidStore("Invalid applied path")
+            cached = self._applied.get(key)
+            if cached is None or not _equal(record, cached[0], tokens=True):
+                _check_applied(record)
+                converted = dict(record)
+                names.sources(converted, "source", "applied")
+                field = json_bytes({key: converted})[1:-2]
+                cached = (copy.deepcopy(record), field)
+            encoded[key] = cached
+        self._applied = encoded
+        return self._static[1][:-2] + b',"applied":{' + b",".join(field for _, field in encoded.values()) + b"}}\n"
 
 
 def count_records(store_id: str, document: Document, *, generation: int = GENERATION) -> dict[str, int]:

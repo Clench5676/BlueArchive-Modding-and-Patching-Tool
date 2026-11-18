@@ -10,6 +10,7 @@ import pytest
 
 from bmpt.core.errors import ServiceError
 from bmpt.host import upgrade_files
+from bmpt.host import store_formats
 from bmpt.host.data_upgrade import DataUpgrade
 from bmpt.host.store_formats import (
     FutureFormat,
@@ -244,6 +245,34 @@ def test_strict_documents(tmp_path):
         translate("S", {"version": 1, "mods": [{"label": "a", "name": "b"}]})
     with pytest.raises(FutureFormat):
         load_document("S", _write(tmp_path / "state.json", {"version": 3}))
+
+
+def test_runtime_state_reuses_validated_records_and_preserves_opaque_numbers(monkeypatch):
+    encoder = store_formats.StateEncoder()
+    document = parse_json(
+        '{"version":1,"mods":[{"kind":"spr","label":"one","opaque":0.1234567890123456789}],'
+        '"applied":{"a":{"source":"variant:a","sha1":"old"},"b":{"source":"official","sha1":"kept"}}}'
+    )
+    assert parse_json(encoder.encode(document)) == parse_json(store_formats.managed_bytes("S", document))
+    checked = []
+    original = store_formats._check_applied
+
+    def check(record):
+        checked.append(record)
+        return original(record)
+
+    monkeypatch.setattr(store_formats, "_check_applied", check)
+    document["applied"]["a"]["sha1"] = "new"
+    encoded = encoder.encode(document)
+    assert checked == [document["applied"]["a"]]
+    assert parse_json(encoded)["applied"] == {
+        "a": {"source": "alt:a", "sha1": "new"},
+        "b": {"source": "official", "sha1": "kept"},
+    }
+    assert b"0.1234567890123456789" in encoded
+    document["applied"]["a"].pop("sha1")
+    with pytest.raises(InvalidStore, match="Invalid applied entry"):
+        encoder.encode(document)
 
 
 def test_publication_and_retained_sources(tmp_path, monkeypatch):
@@ -611,6 +640,7 @@ def test_import_journal_still_rejects_malformed_repair_source(tmp_path):
 
 @pytest.mark.parametrize("updated", [False, True])
 def test_upgrade_hard_links_but_refuses_changed_official(tmp_path, monkeypatch, updated):
+    from bmpt.library import storage
     from bmpt.library.original_checks import OriginalChecks
     from bmpt.library.service.originals import OriginalsMixin
     from bmpt.library.storage import Fingerprints
@@ -638,12 +668,25 @@ def test_upgrade_hard_links_but_refuses_changed_official(tmp_path, monkeypatch, 
 
         reader = Reader()
         reader.root = root
-        reader._original_checks = OriginalChecks(root)
         reader._hashes = Fingerprints()
+        reader._original_checks = OriginalChecks(root, reader._hashes)
         reader._steam_official = lambda *_args, **_kwargs: None
         reader._crc_official = lambda *_: True
         pin = SimpleNamespace(dirs=[game])
+        checked = []
+        read_header = storage.Bundle.get_trailing_bytes
+
+        def read(path):
+            checked.append(path)
+            return read_header(path)
+
+        monkeypatch.setattr(storage.Bundle, "get_trailing_bytes", staticmethod(read))
         assert reader._official_for(live, pin, full=False) == original
+        staged = tmp_path / "verified-input"
+        reader._copy_verified_official(original, staged)
+        assert reader._hashes.get(staged).sha1 == reader._hashes.get(original).sha1
+        if os.name != "nt":  # creation time cannot attest unchanged bytes on Windows
+            assert checked == [original, staged]
         original_stat = original.stat()
         source.write_bytes(b"modified")
         os.utime(source, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
@@ -655,6 +698,8 @@ def test_upgrade_hard_links_but_refuses_changed_official(tmp_path, monkeypatch, 
         destination = tmp_path / "build-input"
         with pytest.raises(ServiceError, match="official_invalid"):
             reader._copy_verified_official(original, destination)
+        if os.name != "nt":
+            assert checked == [original, staged, original]
         assert not destination.exists()
         assert live.read_bytes() == b"existing"
     finally:

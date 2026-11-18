@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from . import toggle_timing
+
 ProgressCallback = Callable[..., None]
 
 STEP_CHECK = "import.step.check"
@@ -191,7 +193,10 @@ class ItemProgress:
     def _emit(self) -> None:
         if self._progress is None or not self._item:
             return
-        self._progress({**self._item, "total": self.total, "step": self._step, "fraction": round(self._fraction, 3)})
+        with toggle_timing.stage("progress"):
+            self._progress(
+                {**self._item, "total": self.total, "step": self._step, "fraction": round(self._fraction, 3)}
+            )
 
 
 def single(progress: ProgressCallback | None, current: int = 1, total: int = 1, build: float = 0.9) -> Part | None:

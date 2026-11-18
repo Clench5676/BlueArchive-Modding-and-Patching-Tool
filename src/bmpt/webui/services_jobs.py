@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..core.errors import ServiceError
+from ..library import toggle_timing
 from bmpt.engine import parse_filename
 from .jobs import MAINTENANCE, USER
 
@@ -268,7 +269,10 @@ class JobsMixin:
                 cores = None  # a preceding scan may become stale while this job writes
             # Without a complete snapshot a full scan still establishes the initial state.
             self.request_scan(cores=cores if cores and self.snapshot.scanned() else None)
-        logger.info("Writer %s follow-up and scan request: %.3f s", kind, time.perf_counter() - started)
+        elapsed = time.perf_counter() - started
+        if kind == "mods.toggle":
+            self.timings.record("mods.toggle.follow_up", elapsed, quiet=True)
+        logger.info("Writer %s follow-up and scan request: %.3f s", kind, elapsed)
 
     def _job_finished(self, job: Any) -> None:
         # the end of a writer job: mods.state again, with the job no longer busy (a toggle's end)
@@ -296,7 +300,8 @@ class JobsMixin:
             now = time.monotonic()
             if done >= total or now - self._progress_at >= PROGRESS_PUBLISH:
                 self._progress_at = now
-                self.publish_state()
+                with toggle_timing.stage("state_publish"):
+                    self.publish_state()
 
         return report
 
@@ -333,6 +338,7 @@ class JobsMixin:
         pins = library.installs()
 
         def run(log: Any, progress: Any) -> Any:
+            self.timings.record("mods.toggle.queue_wait", time.perf_counter() - queued_at, quiet=True)
             self.check_classic()
             return library.toggle(enabled, expect, pins, log=log, progress=self._progress(progress))
 
@@ -340,6 +346,7 @@ class JobsMixin:
             if self.jobs.active("mods.toggle"):
                 raise ServiceError("busy")
             self.check_classic()
+            queued_at = time.perf_counter()
             job = self.submit("mods.toggle", run, writes="game", library=library)
         self.publish_state()
         return job

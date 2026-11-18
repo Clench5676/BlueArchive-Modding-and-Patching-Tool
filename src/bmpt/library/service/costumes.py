@@ -24,6 +24,7 @@ from ...core.errors import ServiceError
 from ...gameassets.discovery import cab_names, may_hold_model_root, own_bundle
 from ...core.logging_utils import log_failure
 from ...core.openfiles import remove_tree, temporary_directory
+from .. import toggle_timing
 from ..rebuild import rebuild
 from ..bundle_saves import save_bundles
 from ..judge import (
@@ -61,9 +62,10 @@ class CostumesMixin:
         staged = self._stage_official(targets, directory / "targets", pin, current_fallback=True)
         output = directory / "output"
         output.mkdir(parents=True)
-        adapted = adapt_variant_sources(
-            sources, list(staged.values()), directory / "sources", self.settings.asset_types(), log
-        )
+        with toggle_timing.stage("build_crc"):
+            adapted = adapt_variant_sources(
+                sources, list(staged.values()), directory / "sources", self.settings.asset_types(), log
+            )
         result = rebuild(
             adapted,
             list(staged.values()),
@@ -151,6 +153,7 @@ class CostumesMixin:
             revisions=revisions,
         )
 
+    @toggle_timing.stage("stage")
     def _stage_copies(self, originals: dict[Path, Path], directory: Path) -> dict[Path, Path]:
         """Copy the bytes chosen for each game file (``originals``) into ``directory`` under the game file's name."""
         staged: dict[Path, Path] = {}
@@ -163,6 +166,7 @@ class CostumesMixin:
             staged[path] = target
         return staged
 
+    @toggle_timing.stage("costume_build")
     def _stage_costume(
         self,
         other: str,
@@ -272,7 +276,10 @@ class CostumesMixin:
         ]
         # in threads, at most half the cores: step() still runs before each save starts; a game-bound costume's LZMA
         # in the fast mode (``bundle_saves``: the same format, about three times faster, some 3 % larger)
-        save_bundles(jobs, step=step, progress=lambda done, count: meter.phase("save", done, count), fast=not preview)
+        with toggle_timing.stage("build_crc"):
+            save_bundles(
+                jobs, step=step, progress=lambda done, count: meter.phase("save", done, count), fast=not preview
+            )
         for target, _, path, _ in jobs:
             replacements[target] = path
         return replacements

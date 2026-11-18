@@ -716,7 +716,10 @@ class _View:
         """
         name = part.path.name
         # a kept original a Steam list rejected is no official copy: the other candidates are looked at
-        if name in self.originals and not self.library._original_failed(self.library.root / "originals" / name, False):
+        if (
+            name in self.originals
+            and self.library._original_checks.of_file(self.library.root / "originals" / name) != "failed"
+        ):
             return "kept"
         if part.official:
             return "game"

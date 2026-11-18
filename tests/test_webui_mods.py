@@ -509,6 +509,10 @@ def test_without_a_current_install_the_switch_toggles_the_known_ones(env):
     assert (state["current"], state["reason"], [i["key"] for i in state["installs"]]) == (None, None, [env.key()])
     job = rpc(app, "mods.toggle", enabled=False, expect=True)["result"]
     assert s.jobs.wait(job, 10) and s.jobs.get(job).state == "done", s.jobs.get(job).error
+    timings = s.timings.snapshot()
+    assert timings["mods.toggle.queue_wait"]["count"] == timings["mods.toggle.follow_up"]["count"] == 1
+    assert timings["mods.toggle.off.progress"]["count"] == 3
+    assert timings["mods.toggle.off.state_publish"]["count"] >= 1
     assert env.spr.read_bytes() == OFFICIAL
     assert rpc(app, "actions.apply", alt="test", source=f"mod:{mod.id}")["error"]["code"] == "game_not_found"
 

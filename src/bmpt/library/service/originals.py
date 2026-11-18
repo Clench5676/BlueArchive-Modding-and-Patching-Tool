@@ -20,7 +20,7 @@ from bmpt.engine import parse_filename
 from ...core.errors import ServiceError
 from ...core.logging_utils import log_failure
 from ...core.openfiles import remove_tree
-from .. import fingerprint, integrity, rig_archive
+from .. import fingerprint, integrity, rig_archive, toggle_timing
 from ..original_checks import Verdict
 from ..judge import (
     core_of,
@@ -132,7 +132,7 @@ class OriginalsMixin:
         """
         if steam is not None:
             verdict: Verdict = "steam" if (fingerprint.size, fingerprint.sha1) == (steam.size, steam.sha1) else "failed"
-            self._original_checks.save(original, verdict, fingerprint, set(self._originals()))
+            self._original_checks.save(original, verdict, fingerprint, self._originals())
             return verdict
         recorded = self._original_checks.of_bytes(original.name, fingerprint)
         if recorded in ("failed", "steam"):
@@ -140,27 +140,8 @@ class OriginalsMixin:
         if not self._crc_official(fingerprint, original.name):
             return None
         if recorded is None:
-            self._original_checks.save(original, "crc", fingerprint, set(self._originals()))
+            self._original_checks.save(original, "crc", fingerprint, self._originals())
         return "crc"
-
-    def _original_failed(self, original: Path, full: bool) -> bool:
-        """Tell whether a kept original is one a Steam list rejected.
-
-        At write strength that is decided by its bytes (hashed), else by its record while the file is unchanged since.
-        """
-        try:
-            if full:
-                if not self._original_checks.matches_digest(original):
-                    return False
-                return (
-                    self._judge_original(
-                        original, self._hashes.get(original), self._steam_official(original.name, original)
-                    )
-                    == "failed"
-                )
-            return self._original_checks.of_file(original) == "failed"
-        except OSError:
-            return False
 
     def original_check(self, name: str, copy: str | None, roots: Sequence[Path] | None = None) -> str | None:
         """Describe an official copy's verification strength without reading its content.
@@ -210,7 +191,7 @@ class OriginalsMixin:
                 continue
             preview_gate.yield_to_previews(cancel)
             try:
-                fingerprint = self._hashes.get(original, fresh=self._managed)
+                fingerprint = self._hashes.get(original, include_sha256=self._managed)
                 verdict = self._judge_original(original, fingerprint, steam)
             except OSError:
                 continue  # released meanwhile
@@ -251,6 +232,7 @@ class OriginalsMixin:
                 out.append(path)
         return out
 
+    @toggle_timing.stage("official_lookup")
     def _official_for(self, game_file: Path, pin: Pin, full: bool = True, *, game_first: bool = False) -> Path:
         """Find an official copy of a game file.
 
@@ -276,11 +258,20 @@ class OriginalsMixin:
         if game_first and official(game_file):
             return game_file
         original = self._original_path(game_file)
-        # a kept original a Steam list rejected is a mod's bytes: never an official copy, skipped
-        if original.exists() and not self._original_failed(original, full):
-            if not self._original_checks.matches_digest(original) or (full and not self._is_official(original)):
+        if original.exists():
+            if not self._original_checks.matches_digest(original):
                 raise ServiceError("official_invalid", file=original)
-            return original
+            if full:
+                verdict = self._judge_original(
+                    original, self._hashes.get(original), self._steam_official(original.name, original)
+                )
+                if verdict is None:
+                    raise ServiceError("official_invalid", file=original)
+            else:
+                verdict = self._original_checks.of_file(original, verified=True)
+            # A kept file rejected by Steam can be bypassed in favor of an independently verified copy.
+            if verdict != "failed":
+                return original
         if official(game_file):
             return game_file
         backup = game_file.with_name(game_file.name + ".backup")
@@ -306,14 +297,17 @@ class OriginalsMixin:
                     verified_move(official, original, sha1)
                 else:
                     atomic_copy(official, original)
-            verify_file(original, sha1)
-            self._original_checks.remember_digest(original, sha1)
+            if self._original_checks.managed:
+                self._original_checks.remember_digest(original, sha1)
+            else:
+                verify_file(original, sha1)
             if not self._is_official(original):
                 if official.exists():
                     original.unlink()
                 raise ServiceError("official_invalid", file=game_file)
         return official
 
+    @toggle_timing.stage("official_stage")
     def _copy_verified_official(self, source: Path, output: Path) -> None:
         """Detach a kept official input and verify the staged bytes before they can be used."""
         if not self._original_checks.matches_digest(source):

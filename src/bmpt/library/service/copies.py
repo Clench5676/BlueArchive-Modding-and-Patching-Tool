@@ -21,7 +21,7 @@ from bmpt.engine import (
 from ...core.errors import ServiceError
 from ...core.openfiles import remove_tree
 from .. import profiles as profiles_mod
-from .. import mod_progress, safety
+from .. import mod_progress, safety, toggle_timing
 from ..judge import (
     LIBRARY_SOURCES,
     core_of,
@@ -36,6 +36,7 @@ from ..models import (
     ScanResult,
 )
 from ..storage import (
+    Fingerprint,
     atomic_copy,
     read_tail,
 )
@@ -59,6 +60,7 @@ logger = logging.getLogger(__package__)
 class CopiesMixin:
     """Built copies, the configuration, entries and the scan, and adopting mods already in use."""
 
+    @toggle_timing.stage("build_signature")
     def _build_signature(self, sources: list[Path], targets: list[Path], pin: Pin, version: str | None = None) -> str:
         """Give what a build is made from.
 
@@ -87,14 +89,21 @@ class CopiesMixin:
 
         Prepared files otherwise live solely in the caller's temporary staging directory.
         """
-        if len({path.name for path in targets}) != len(targets):
-            return build()  # built keys identify parts by file name
+
+        def prepare() -> dict[Path, Path]:
+            toggle_timing.prepared("rebuilt")
+            with toggle_timing.stage("build_prepare"):
+                return build()
+
+        target_names = {path.name for path in targets}
+        if len(target_names) != len(targets):
+            return prepare()  # built keys identify parts by file name
         try:
             signature = self._build_signature(sources, targets, pin)
         except ServiceError as error:
             if error.code != "official_unavailable":
                 raise
-            return build()  # No official baseline to sign; never cache a live fallback as official.
+            return prepare()  # No official baseline to sign; never cache a live fallback as official.
         build_keys.update((target, signature) for target in targets)
         for folder in ((self.profiles.read() or {}).get("folders") or {}).values():
             for core_name, key in (folder.get("built") or {}).items():
@@ -102,7 +111,7 @@ class CopiesMixin:
                 if key.get("build") != signature or key.get("source") != configured.get("source"):
                     continue
                 parts = key.get("parts") or {}
-                if not parts or not set(parts) <= {target.name for target in targets}:
+                if not parts or not set(parts) <= target_names:
                     continue
                 try:
                     replacements = {}
@@ -114,22 +123,25 @@ class CopiesMixin:
                         kept = self.root / "built" / f"{part['sha1']}.bundle"
                         if part.get("mod_file") and key["source"].startswith("mod:"):
                             kept = self.root / "mods" / key["source"][4:] / part["mod_file"]
-                        if self._hashes.get(kept).sha1 != part["sha1"]:
+                        fingerprint = self._hashes.get(kept)
+                        if fingerprint.sha1 != part["sha1"]:
                             raise ValueError("Changed built copy")
-                        if not self._kept_crc_fits(kept, target):
+                        if not self._kept_crc_fits(fingerprint, target):
                             raise ValueError("Built copy without the part's CRC")
                         replacements[target] = kept
                     if self._stale_build(replacements, pin):
                         continue
                     logger.debug("Reused configured build %s", signature)
+                    toggle_timing.prepared("reused")
                     return replacements
                 except (OSError, ValueError, KeyError, TypeError):
                     continue
         start = time.perf_counter()
-        replacements = build()
+        replacements = prepare()
         logger.debug("Built %s in %.3f s", signature, time.perf_counter() - start)
         return replacements
 
+    @toggle_timing.stage("built_lookup")
     def _built_replacements(
         self, pin: Pin, core: str, source: str, targets: list[Path], build_keys: dict[Path, str] | None = None
     ) -> dict[Path, Path] | None:
@@ -143,7 +155,7 @@ class CopiesMixin:
         key = (folder.get("built") or {}).get(core)
         if not key:
             return None
-        names = {path.name for paths in self._index(pin).values() for path in paths}
+        names = self._names(pin)
         parts = key.get("parts") or {}
         fits = (
             key.get("source") == source
@@ -164,7 +176,8 @@ class CopiesMixin:
                     else self.root / "built" / f"{part.get('sha1')}.bundle"
                 )
                 try:
-                    if self._hashes.get(kept).sha1 != part.get("sha1") or not self._kept_crc_fits(kept, target):
+                    fingerprint = self._hashes.get(kept)
+                    if fingerprint.sha1 != part.get("sha1") or not self._kept_crc_fits(fingerprint, target):
                         raise ValueError(kept)
                 except (OSError, ValueError):
                     logger.info("The built copy of %s no longer fits, rebuilding", target.name)
@@ -176,17 +189,17 @@ class CopiesMixin:
         if fits:
             if build_keys is not None and key.get("build"):
                 build_keys.update((target, key["build"]) for target in targets)
+            toggle_timing.prepared("reused")
             return replacements
         self._drop_built(pin, [core])
         return None
 
-    def _kept_crc_fits(self, kept: Path, target: Path) -> bool:
+    def _kept_crc_fits(self, fingerprint: Fingerprint, target: Path) -> bool:
         """Tell whether a built copy's part may go over ``target`` as it is.
 
         It may when its bytes carry the CRC of the target's name, or the target needs no CRC. An older build kept the
         bytes of a mod file written whole over a part whose name carries another CRC; such a copy is built again.
         """
-        fingerprint = self._hashes.get(kept)
         if crc_state(fingerprint.crc, fingerprint.trailing, target.name) != "needs_fix":
             return True
         return not self.settings.crc_needed(target)
@@ -238,6 +251,7 @@ class CopiesMixin:
         signatures.discard(None)
         return signatures
 
+    @toggle_timing.stage("keep_built")
     def _make_built(self, pin: Pin, entry: _Entry) -> None:
         """Keep the exact bytes of an entry's modded parts before an Off replaces them, whole.
 

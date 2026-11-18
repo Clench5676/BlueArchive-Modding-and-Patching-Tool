@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import tempfile
 import logging
 import shutil
@@ -23,7 +24,7 @@ from ...host.store_formats import read_runtime
 from ...core.errors import ServiceError
 from ...core.filelock import file_lock
 from ...core.logging_utils import log_failure
-from .. import integrity, pointers, safety
+from .. import integrity, pointers, safety, toggle_timing
 from ..install import Action, PlannedFile, PlannedGroup, backup_file
 from ..judge import (
     core_of,
@@ -50,6 +51,7 @@ logger = logging.getLogger(__package__)
 class SwitchPlanMixin:
     """Planning and writing a switch: staging, the transaction journals, recovery and the checks of a write."""
 
+    @toggle_timing.stage("entry_plan")
     def _plan(
         self,
         record: dict[str, Any],
@@ -127,6 +129,7 @@ class SwitchPlanMixin:
             }
         )
 
+    @toggle_timing.stage("stage")
     def _stage_official(
         self, paths: list[Path], directory: Path, pin: Pin, *, current_fallback: bool = False
     ) -> dict[Path, Path]:
@@ -144,6 +147,7 @@ class SwitchPlanMixin:
             staged[path] = target
         return staged
 
+    @toggle_timing.stage("stage")
     def _stage_direct(
         self, targets: list[Path], sources: dict[str, Path], directory: Path, pin: Pin, updating: set[Path]
     ) -> dict[Path, Path]:
@@ -197,7 +201,7 @@ class SwitchPlanMixin:
         if deletion:
             deletion.remember_game(replacements, pin)
         try:
-            with self._transaction_lock():
+            with toggle_timing.stage("restore" if source == "official" else "write"), self._transaction_lock():
                 return self._write(
                     replacements,
                     source,
@@ -229,7 +233,12 @@ class SwitchPlanMixin:
             if self._game_write_gate
             else contextlib.nullcontext()
         )
-        with safety.writable_game_files(paths, list(pin.dirs), allow_missing=recovering), legacy_gate:
+        with (
+            toggle_timing.enter(
+                "game_file_preflight", safety.writable_game_files(paths, list(pin.dirs), allow_missing=recovering)
+            ),
+            toggle_timing.enter("legacy_write_gate", legacy_gate),
+        ):
             yield
 
     @contextlib.contextmanager
@@ -244,7 +253,7 @@ class SwitchPlanMixin:
         if self._transacting:
             yield
             return
-        with file_lock(self.root / "transactions.lock", timeout=10):
+        with toggle_timing.enter("transaction_wait", file_lock(self.root / "transactions.lock", timeout=10)):
             self._transacting = True
             try:
                 self._refresh_state(migrate=False)  # nothing is saved before the journals are settled
@@ -367,6 +376,7 @@ class SwitchPlanMixin:
                 self._refresh_state()
             return not self._state_good
 
+    @toggle_timing.stage("journal_recovery")
     def _recover_transactions(self) -> None:
         """Settle every pending journal under the transaction lock: imports, then write journals, then asset deletions.
 
@@ -495,7 +505,9 @@ class SwitchPlanMixin:
                 left.add(item["target"])
                 continue
             backup = self.root / item["rollback"]
-            verify_file(backup, item["before"])
+            kept_backup = self._managed and self._is_kept(backup)
+            if not kept_backup:
+                verify_file(backup, item["before"])
             if (
                 not self._managed
                 and item["official"]
@@ -503,11 +515,12 @@ class SwitchPlanMixin:
                 and not self._needed_elsewhere(target.name, {str(target.resolve())}, self._all_pins())
             ):
                 verified_move(backup, target, item["before"])
-            elif self._managed and self._is_kept(backup):
+            elif kept_backup:
                 with tempfile.TemporaryDirectory(prefix="verified-official-", dir=self.root) as folder:
                     staged = Path(folder) / backup.name
                     self._copy_verified_official(backup, staged)
-                    verify_file(staged, item["before"])
+                    if self._hashes.get(staged).sha1 != item["before"]:
+                        raise OSError(errno.EIO, "File verification failed", str(staged))
                     atomic_copy(staged, target)
             elif not atomic_clone(backup, target):
                 atomic_copy(backup, target)
@@ -572,6 +585,7 @@ class SwitchPlanMixin:
         self._layout_cache.move_to_end(key)
         return layouts
 
+    @toggle_timing.stage("pointer_check")
     def _broken_references(
         self, replacements: Mapping[Path, Path], pin: Pin, *, targets: Collection[Path] = ()
     ) -> dict[Path, set[pointers.Pointer]]:
@@ -703,6 +717,7 @@ class SwitchPlanMixin:
             )
             raise ServiceError("mod_release_mismatch", file=changed[target].name)
 
+    @toggle_timing.stage("crc_check")
     def _check_target_crc(self, changed: dict[Path, Path]) -> None:
         """Make the last CRC check of a write.
 
