@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import tempfile
 import logging
 import shutil
@@ -504,7 +505,9 @@ class SwitchPlanMixin:
                 left.add(item["target"])
                 continue
             backup = self.root / item["rollback"]
-            verify_file(backup, item["before"])
+            kept_backup = self._managed and self._is_kept(backup)
+            if not kept_backup:
+                verify_file(backup, item["before"])
             if (
                 not self._managed
                 and item["official"]
@@ -512,11 +515,12 @@ class SwitchPlanMixin:
                 and not self._needed_elsewhere(target.name, {str(target.resolve())}, self._all_pins())
             ):
                 verified_move(backup, target, item["before"])
-            elif self._managed and self._is_kept(backup):
+            elif kept_backup:
                 with tempfile.TemporaryDirectory(prefix="verified-official-", dir=self.root) as folder:
                     staged = Path(folder) / backup.name
                     self._copy_verified_official(backup, staged)
-                    verify_file(staged, item["before"])
+                    if self._hashes.get(staged).sha1 != item["before"]:
+                        raise OSError(errno.EIO, "File verification failed", str(staged))
                     atomic_copy(staged, target)
             elif not atomic_clone(backup, target):
                 atomic_copy(backup, target)

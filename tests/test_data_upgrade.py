@@ -611,6 +611,7 @@ def test_import_journal_still_rejects_malformed_repair_source(tmp_path):
 
 @pytest.mark.parametrize("updated", [False, True])
 def test_upgrade_hard_links_but_refuses_changed_official(tmp_path, monkeypatch, updated):
+    from bmpt.library import storage
     from bmpt.library.original_checks import OriginalChecks
     from bmpt.library.service.originals import OriginalsMixin
     from bmpt.library.storage import Fingerprints
@@ -638,12 +639,25 @@ def test_upgrade_hard_links_but_refuses_changed_official(tmp_path, monkeypatch, 
 
         reader = Reader()
         reader.root = root
-        reader._original_checks = OriginalChecks(root)
         reader._hashes = Fingerprints()
+        reader._original_checks = OriginalChecks(root, reader._hashes)
         reader._steam_official = lambda *_args, **_kwargs: None
         reader._crc_official = lambda *_: True
         pin = SimpleNamespace(dirs=[game])
+        checked = []
+        read_header = storage.Bundle.get_trailing_bytes
+
+        def read(path):
+            checked.append(path)
+            return read_header(path)
+
+        monkeypatch.setattr(storage.Bundle, "get_trailing_bytes", staticmethod(read))
         assert reader._official_for(live, pin, full=False) == original
+        staged = tmp_path / "verified-input"
+        reader._copy_verified_official(original, staged)
+        assert reader._hashes.get(staged).sha1 == reader._hashes.get(original).sha1
+        if os.name != "nt":  # creation time cannot attest unchanged bytes on Windows
+            assert checked == [original, staged]
         original_stat = original.stat()
         source.write_bytes(b"modified")
         os.utime(source, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
@@ -655,6 +669,8 @@ def test_upgrade_hard_links_but_refuses_changed_official(tmp_path, monkeypatch, 
         destination = tmp_path / "build-input"
         with pytest.raises(ServiceError, match="official_invalid"):
             reader._copy_verified_official(original, destination)
+        if os.name != "nt":
+            assert checked == [original, staged, original]
         assert not destination.exists()
         assert live.read_bytes() == b"existing"
     finally:

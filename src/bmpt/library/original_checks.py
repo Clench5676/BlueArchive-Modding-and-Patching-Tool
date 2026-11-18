@@ -10,21 +10,21 @@ after the list is gone again: it is never used as an official copy, never writte
     {"version": 1, "originals": {"<bundle name>": {"by": "steam" | "crc" | "failed", "sha1": "...", "size": 1,
                                                    "mtime": 1}}}
 
-A record speaks for the bytes it names (``sha1``). Write strength compares the SHA-1; the cheap judgement of the
-screens trusts a record whose size and modification time still match the file.
+A record speaks for the bytes it names (``sha1``). Managed originals also carry a recorded SHA-256 baseline. The
+screen verdict checks its recorded size and modification time and verifies the baseline when managed.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Collection
 from pathlib import Path
 from typing import Literal
 
 from ..host.store_formats import read_runtime, runtime_store
-from ..host.upgrade_files import digest
 from . import toggle_timing
-from .storage import Fingerprint, atomic_json
+from .storage import Fingerprint, Fingerprints, atomic_json, file_revision
 
 logger = logging.getLogger(__name__)
 
@@ -38,22 +38,23 @@ VERDICTS = ("steam", "crc", "failed")
 class OriginalChecks:
     """The verdicts of the kept originals, read and written under a lock of their own (thread-safe)."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, hashes: Fingerprints | None = None) -> None:
         """Locate the verification record file without creating it.
 
         Args:
             root: Library folder containing originals.json and the kept originals.
+            hashes: The library's shared bundle fingerprints, or a private cache.
         """
         self.path = root / FILE
         self._lock = threading.Lock()
         self._extra: dict = {}
-        self._cache: tuple[tuple[int, int, int] | None, dict[str, dict]] | None = None
+        self._cache: tuple[tuple[int, int, int, int, int] | None, dict[str, dict]] | None = None
+        self._hashes = hashes if hashes is not None else Fingerprints()
         self.managed = runtime_store(self.path) is not None
 
     def _read(self) -> dict[str, dict]:
         try:
-            stat = self.path.stat()
-            signature: tuple[int, int, int] | None = (stat.st_size, stat.st_mtime_ns, stat.st_ino)
+            signature = file_revision(self.path.stat())
         except OSError:
             signature = None
         if self._cache is not None and self._cache[0] == signature:
@@ -87,7 +88,7 @@ class OriginalChecks:
 
     @toggle_timing.stage("original_digest")
     def matches_digest(self, original: Path, *, name: str | None = None) -> bool:
-        """Check a kept file against its recorded baseline with a fresh full-file read."""
+        """Compare both hashes with the baseline for the file's current revision."""
         if not self.managed:
             return True
         with self._lock:
@@ -98,9 +99,8 @@ class OriginalChecks:
         if not isinstance(expected, str):
             return False
         try:
-            if digest(original) != expected:
-                return False
-            return verdict is None or digest(original, "sha1") == verdict["sha1"]
+            fingerprint = self._hashes.get(original, include_sha256=True)
+            return fingerprint.sha256 == expected and (verdict is None or fingerprint.sha1 == verdict["sha1"])
         except (OSError, ValueError):
             return False
 
@@ -109,12 +109,12 @@ class OriginalChecks:
         """Record the SHA-256 of bytes that match an independently verified SHA-1."""
         if not self.managed:
             return
-        expected = digest(original)
-        if digest(original, "sha1") != verified_sha1:
+        fingerprint = self._hashes.get(original, include_sha256=True)
+        if fingerprint.sha1 != verified_sha1:
             raise OSError(f"Kept official bytes changed: {original}")
         with self._lock:
             records = self._read()
-            digests = {**self._extra.get("digests", {}), original.name: expected}
+            digests = {**self._extra.get("digests", {}), original.name: fingerprint.sha256}
             self._write(records, {**self._extra, "digests": digests})
 
     def _write(self, records: dict, extra: dict) -> None:
@@ -136,17 +136,18 @@ class OriginalChecks:
             return None
         return record["by"]
 
-    def of_file(self, original: Path) -> Verdict | None:
-        """Read a kept original's verdict by size and mtime without hashing its content.
+    def of_file(self, original: Path, *, verified: bool = False) -> Verdict | None:
+        """Read a kept original's verdict for its recorded size, mtime and digest.
 
         Args:
             original: Kept bundle whose filename indexes the record shown on library screens.
+            verified: Whether the caller already compared the kept file to its recorded baseline.
 
         Returns:
             The verdict, or None if the file or matching record is unavailable.
         """
         record = self.record(original.name)
-        if record is None or not self.matches_digest(original):
+        if record is None or (not verified and not self.matches_digest(original)):
             return None
         try:
             stat = original.stat()
@@ -157,7 +158,7 @@ class OriginalChecks:
         return record["by"]
 
     @toggle_timing.stage("original_verdict_save")
-    def save(self, original: Path, by: Verdict, fingerprint: Fingerprint, keep: set[str] | None = None) -> None:
+    def save(self, original: Path, by: Verdict, fingerprint: Fingerprint, keep: Collection[str] | None = None) -> None:
         """Record a kept original's verdict, tolerating filesystem failures for later rechecking.
 
         Args:
@@ -170,20 +171,21 @@ class OriginalChecks:
             mtime = original.stat().st_mtime_ns
             confirmed_digest = None
             if self.managed and by == "steam":
-                confirmed_digest = digest(original)
-                if digest(original, "sha1") != fingerprint.sha1:
+                verified = self._hashes.get(original, include_sha256=True)
+                if verified.sha1 != fingerprint.sha1:
                     return
+                confirmed_digest = verified.sha256
         except (OSError, ValueError):
             return
         entry = {"by": by, "sha1": fingerprint.sha1, "size": fingerprint.size, "mtime": mtime}
         with self._lock:
-            records = dict(self._read())
+            records = self._read()
             extra = self._extra
-            if confirmed_digest is not None:
+            if confirmed_digest is not None and extra.get("digests", {}).get(original.name) != confirmed_digest:
                 extra = {**extra, "digests": {**extra.get("digests", {}), original.name: confirmed_digest}}
-            if records.get(original.name) == entry and extra == self._extra:
+            if records.get(original.name) == entry and extra is self._extra:
                 return
-            records[original.name] = entry
+            records = {**records, original.name: entry}
             if keep is not None:
                 records = {name: value for name, value in records.items() if name in keep or name == original.name}
             try:
