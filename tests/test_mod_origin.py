@@ -36,7 +36,7 @@ def unity_bundle(
     types = list(dict.fromkeys(kind for _, kind, _ in objects))
     metadata = b"2021.3.0f1\0" + struct.pack("<i?I", platform, False, len(types))
     for kind in types:
-        metadata += struct.pack("<i?h", kind, False, -1) + bytes(16)
+        metadata += struct.pack("<i?h", kind, False, -1) + bytes(32 if kind == 114 else 16)
     metadata += struct.pack("<I", len(objects))
     obj = b""
     for path_id, kind, data in objects:

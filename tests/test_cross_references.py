@@ -3,11 +3,13 @@
 import logging
 
 import pytest
+from UnityPy.helpers.Tpk import get_typetree_node
 
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.core.errors import ServiceError
 from bmpt.library import integrity, pointers
 from bmpt.library.integrity import inspect as inspect_bundle
+from test_atlas_remap import _tree_default
 from test_batch_direct import rename_crc, restore_metadata
 from test_batch_import import batch_model_env, env  # noqa: F401 - fixtures
 from test_library import game_bundle, setup_library  # noqa: F401 - fixture
@@ -227,6 +229,118 @@ def test_apply_checks_references_after_restoring_omitted_official_parts(
         if "points at objects the game no longer holds, updating it as a file of an older release" in record.message
     ]
     assert len(demotions) == 1 and mod.file.name in demotions[0]
+
+
+def lobby_clip(name, reference, sample_rate):
+    node = get_typetree_node(74, (2021, 3, 0, 1))
+    clip = _tree_default(node)
+    events = next(child for child in node.m_Children if child.m_Name == "m_Events")
+    event = _tree_default(events.m_Children[0].m_Children[1])
+    event["objectReferenceParameter"] = {"m_FileID": 1, "m_PathID": reference}
+    clip.update(m_Name=name, m_SampleRate=sample_rate, m_Events=[event])
+    return clip
+
+
+@pytest.mark.parametrize("entry_point", ["apply", "toggle", "toggle_retry", "startup_retry"])
+@pytest.mark.parametrize("needs_crc_fix", [False, True])
+def test_lobby_update_preserves_official_animation_event_references(
+    env, monkeypatch, caplog, entry_point, needs_crc_fix
+):
+    restore_metadata(monkeypatch)
+    monkeypatch.setattr(integrity, "inspect", inspect_bundle)
+    core = "test_home_gl"
+    parts = [game_bundle(env.game_dir, core, part=f"{index:03}") for index in range(5)]
+    parts[0] = rename_crc(shared(parts[0], [(5, 114), (6, 114)]))
+    for index in range(1, 4):
+        parts[index] = rename_crc(
+            unity_bundle(parts[index], cab=f"CAB-part-{index}", name=f"Note{index}", payload=b"official" * 8)
+        )
+
+    def clips(path, reference, sample_rate, payload):
+        return unity_bundle(
+            path,
+            cab="CAB-clips",
+            references=[SHARED],
+            objects=[
+                (1, 74, lobby_clip("Intro", reference, sample_rate)),
+                (2, 74, lobby_clip("Idle", 6, sample_rate)),
+                (3, 49, {"m_Name": "Note4", "m_Script": payload}),
+            ],
+        )
+
+    parts[4] = rename_crc(clips(parts[4], 6, 30, "official"))
+    source_dir = env.tmp / "input"
+    sources = [
+        unity_bundle(
+            source_dir / parts[index].name, cab=f"CAB-part-{index}", name=f"Note{index}", payload=b"modded" * 8
+        )
+        for index in (2, 3)
+    ]
+    sources.append(rename_crc(clips(source_dir / parts[4].name, 5, 60, "modded")))
+    assert integrity.replacement_key(sources[2].name) == integrity.replacement_key(parts[4].name)
+    assert sources[2].name != parts[4].name
+    assert integrity.Inspection().structure(sources[2]) == integrity.Inspection().structure(parts[4])
+    (mod,) = env.library.add_files("lobby", sources, direct=True)
+    if entry_point != "apply":
+        assert not env.library.toggle(False, True).failed
+        assert env.library.apply(mod.target, f"mod:{mod.id}", kind="lobby").deferred
+    parts[0].unlink()
+    parts[0] = rename_crc(shared(parts[0], [(6, 114)]))
+    pin = env.library.current_pin()
+    env.library._commit({path: path for path in parts}, "official", lambda message: None, pin=pin)
+    assert all(env.library._applied[str(path.resolve())]["source"] == "official" for path in parts)
+    target = parts[4]
+    if entry_point != "apply":
+        env.library._selection_error(pin, [core], ServiceError("mod_release_mismatch", file=target.name).to_json())
+        assert not env.library.profiles.read()["folders"][pin.key].get("built")
+        if entry_point in ("toggle_retry", "startup_retry"):
+            result = env.library.toggle(True, False, cancel=lambda: True)
+            assert not result.done and not result.failed
+
+    env.settings.set("enable_crc_correction", "auto")
+    monkeypatch.setattr(env.settings, "crc_needed", lambda path: needs_crc_fix)
+    assert env.library._needs_crc_fix(sources[2], target) is needs_crc_fix
+    with caplog.at_level(logging.INFO, logger="bmpt.library.service"):
+        if entry_point == "apply":
+            assert target in env.library.apply(mod.target, f"mod:{mod.id}", kind="lobby").files
+        else:
+            result = (
+                env.library.retry_failed()
+                if entry_point == "startup_retry"
+                else env.library.toggle(True, entry_point == "toggle_retry")
+            )
+            assert result is not None and not result.failed and result.done, result
+            assert "error" not in env.library.profiles.read()["folders"][pin.key]["configured"][core]
+
+    intro, idle, text = Bundle.load(target).env.objects
+    assert intro.read_typetree()["m_Events"][0]["objectReferenceParameter"] == {"m_FileID": 1, "m_PathID": 6}
+    assert intro.read_typetree()["m_SampleRate"] == 30
+    assert idle.read_typetree()["m_SampleRate"] == 60
+    assert text.read().m_Script == "modded"
+    demotions = [
+        record.message
+        for record in caplog.records
+        if "points at objects the game no longer holds, updating it as a file of an older release" in record.message
+    ]
+    assert len(demotions) == 1 and sources[2].name in demotions[0]
+
+
+def test_plan_logs_an_uncheckable_whole_file(env, monkeypatch, caplog):
+    _, mod = mod_with_pointers(env, monkeypatch, "lobby", same_name=True)
+    omitted = rename_crc(unity_bundle(game_bundle(env.game_dir, "test_home_gl", part="001"), payload=b"omitted" * 8))
+    record = env.library._record(mod.id)
+    original = env.library._official_for
+
+    def unreadable(path, pin):
+        if path == omitted:
+            raise OSError("Verification interrupted")
+        return original(path, pin)
+
+    monkeypatch.setattr(env.library, "_official_for", unreadable)
+    with caplog.at_level(logging.INFO, logger="bmpt.library.service"):
+        env.library._plan(record, lambda message: None, env.library.current_pin())
+    assert mod.file.name in caplog.text
+    assert "Verification interrupted" in caplog.text
 
 
 @pytest.mark.parametrize("entry_point", ["cached_build", "built_replacements"])

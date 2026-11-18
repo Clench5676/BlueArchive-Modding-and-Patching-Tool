@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Callable, Iterable, Iterator
+from typing import TYPE_CHECKING, Callable, Iterable, Iterator
 
 import UnityPy.classes as unity_classes
+
+if TYPE_CHECKING:
+    from UnityPy.files.ObjectReader import ObjectReader
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +73,31 @@ def _walk(node, value, seen: dict[int, bool]) -> Iterator[tuple[str, dict]]:
             yield from _walk(children[1], value[1], seen)
 
 
+def _object_pointers(obj, externals: list[str], seen: dict[int, bool]) -> Iterator[Pointer]:
+    try:
+        node = obj._get_typetree_node()
+        if not _has_pointer(node, seen):
+            return
+        tree = obj.read_typetree(node, check_read=False)
+    except Exception:  # noqa: BLE001 - an unreadable object gives no evidence
+        logger.debug("No type tree read for object %s", obj.path_id, exc_info=True)
+        return
+    for declared, pointer in _walk(node, tree, seen):
+        file_id, path_id = pointer.get("m_FileID"), pointer.get("m_PathID")
+        if isinstance(file_id, int) and isinstance(path_id, int) and path_id and 0 < file_id <= len(externals):
+            yield Pointer(externals[file_id - 1], path_id, declared)
+
+
+def object_pointers(obj: ObjectReader) -> set[Pointer]:
+    """Read the cross-bundle PPtrs of one Unity object using its serialized file's external table.
+
+    Args:
+        obj: Object to inspect without resolving its references.
+    """
+    externals = [_basename(ref.path) for ref in obj.assets_file.externals]
+    return set(_object_pointers(obj, externals, {})) if externals else set()
+
+
 def external_pointers(env) -> set[Pointer]:
     """Read cross-bundle pointers from objects whose type trees contain them.
 
@@ -88,23 +116,7 @@ def external_pointers(env) -> set[Pointer]:
                 return
             seen: dict[int, bool] = {}
             for obj in file.objects.values():
-                try:
-                    node = obj._get_typetree_node()
-                    if not _has_pointer(node, seen):
-                        continue
-                    tree = obj.read_typetree(node, check_read=False)
-                except Exception:  # noqa: BLE001 - an unreadable object gives no evidence
-                    logger.debug("No type tree read for object %s", obj.path_id, exc_info=True)
-                    continue
-                for declared, pointer in _walk(node, tree, seen):
-                    file_id, path_id = pointer.get("m_FileID"), pointer.get("m_PathID")
-                    if (
-                        isinstance(file_id, int)
-                        and isinstance(path_id, int)
-                        and path_id
-                        and 0 < file_id <= len(externals)
-                    ):
-                        found.add(Pointer(externals[file_id - 1], path_id, declared))
+                found.update(_object_pointers(obj, externals, seen))
             return
         for child in getattr(file, "files", {}).values():
             visit(child)

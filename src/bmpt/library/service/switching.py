@@ -53,7 +53,7 @@ class SwitchingMixin:
     ) -> dict[Path, Path]:
         sources = {path.name: path for path in self._paths(record)}
         by_name = {path.name: path for path in targets}
-        stale: set[Path] = set()
+        stale = {}
         if (
             len(sources) == len(record["files"])
             and len(by_name) == len(targets)
@@ -75,7 +75,8 @@ class SwitchingMixin:
             resolution = self._resolve(sources, targets, pin, older=stale)
             more_stale = self._stale_sources(resolution.current, pin, targets=targets)
             if more_stale:
-                resolution = self._resolve(sources, targets, pin, older=stale | more_stale)
+                stale.update(more_stale)
+                resolution = self._resolve(sources, targets, pin, older=stale)
             current = resolution.current
             staged = self._stage_direct(targets, sources, work / "targets", pin, set(targets) - current.keys())
             output = work / "output"
@@ -120,6 +121,7 @@ class SwitchingMixin:
                     skip_unchanged=True,
                     anim_check=self.settings.anim_check_options(),
                     log=log,
+                    stale_pointers=stale,
                 )
                 if result.no_match:  # the part takes nothing from the mod: it stays the official copy
                     log(f"  ⏭️ {t('log.mod_update.target_unchanged', name=target.name, count=0)}")
@@ -130,7 +132,7 @@ class SwitchingMixin:
                     atomic_copy(pair.output, original)
             return staged
         started = time.perf_counter()
-        groups = self._plan(record, log, pin, older=stale)
+        groups = self._plan(record, log, pin, stale=stale)
         allowed = set(targets)
         planned = self._plan_targets(groups)
         if any(path not in allowed for path in planned):

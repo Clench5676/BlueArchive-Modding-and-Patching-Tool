@@ -56,13 +56,13 @@ class SwitchPlanMixin:
         log: LogFunc,
         pin: Pin,
         *,
-        older: Collection[Path] = (),
+        stale: Mapping[Path, set[pointers.Pointer]] | None = None,
         check_references: bool = True,
     ) -> list[PlannedGroup]:
         """Plan install groups, demoting stale whole files before a build.
 
-        Comparisons only ask for targets, without reference reads; ``older`` carries any files the whole-file shortcut
-        already found stale.
+        Comparisons only ask for targets, without reference reads; ``stale`` carries the references the whole-file
+        shortcut already found dangling.
         """
         paths = self._paths(record)
         files = {path.name: path for path in paths}
@@ -71,10 +71,12 @@ class SwitchPlanMixin:
             if record["kind"] == "other"
             else self._spine_parts(core_of(paths[0].name), pin)
         )
-        resolution = self._resolve(files, targets, pin, older=older)
-        stale = self._stale_sources(resolution.current, pin, targets=targets) if check_references else set()
-        if stale:
-            resolution = self._resolve(files, targets, pin, older=set(older) | stale)
+        stale = dict(stale or {})
+        resolution = self._resolve(files, targets, pin, older=stale)
+        more_stale = self._stale_sources(resolution.current, pin, targets=targets) if check_references else {}
+        if more_stale:
+            stale.update(more_stale)
+            resolution = self._resolve(files, targets, pin, older=stale)
         current = resolution.current
         groups = {}
         inspection = integrity.Inspection()
@@ -102,6 +104,11 @@ class SwitchPlanMixin:
                 )
             else:
                 planned.extend(self._groups_of(resolution))
+        if stale:
+            for group in planned:
+                for file in group.files:
+                    if file.mod_path in stale:
+                        file.stale_pointers = stale[file.mod_path]
         if not planned or any(
             file.action not in (Action.DIRECT_REPLACE, Action.UPDATE) for group in planned for file in group.files
         ):
@@ -524,7 +531,7 @@ class SwitchPlanMixin:
             self._save()
         return left
 
-    def _pointers_of(self, path: Path) -> frozenset[pointers.Pointer]:
+    def _pointers_of(self, path: Path, *, log_level: int = logging.DEBUG) -> frozenset[pointers.Pointer]:
         """Give the cross-bundle pointers of a file (``pointers.external_pointers``), kept by its SHA-1.
 
         A file that is no readable bundle has none: it gives no evidence here, and the bundle checks judge it.
@@ -535,9 +542,11 @@ class SwitchPlanMixin:
             devmode.check_read(path)
             try:
                 bundle = Bundle.load(path)
-                found = frozenset(pointers.external_pointers(bundle.env)) if bundle is not None else frozenset()
+                if bundle is None:
+                    raise ServiceError("bundle_invalid", file=path.name)
+                found = frozenset(pointers.external_pointers(bundle.env))
             except Exception as error:  # noqa: BLE001 - an unreadable file gives no evidence
-                log_failure(logger, logging.DEBUG, "Could not read the pointers of a file", error)
+                log_failure(logger, log_level, f"Could not read the pointers of {path.name}", error)
                 return frozenset()  # not kept: the read may succeed later
             self._pointer_cache[sha1] = found
             while len(self._pointer_cache) > POINTER_CACHE:
@@ -592,13 +601,20 @@ class SwitchPlanMixin:
         if not written:
             return {}
         index = self._cab_index(pin)
+        log_level = logging.INFO if targets else logging.DEBUG
+
+        def layouts(path: Path) -> dict[str, dict[int, int]]:
+            try:
+                return self._layouts_of(path)
+            except (ServiceError, OSError, ValueError) as error:
+                log_failure(logger, log_level, f"Could not read the object layout of {path.name}", error)
+                return {}
 
         def world(files: Mapping[Path, Path | None]) -> Callable[[Path], Callable[[str], dict[int, int] | None]]:
             own: dict[str, Path] = {}
             for path in files.values():
                 if path is not None:
-                    with contextlib.suppress(ServiceError, OSError, ValueError):
-                        own.update(dict.fromkeys(self._layouts_of(path), path))
+                    own.update(dict.fromkeys(layouts(path), path))
 
             def layout_for(hint: Path) -> Callable[[str], dict[int, int] | None]:
                 def layout(cab: str) -> dict[int, int] | None:
@@ -606,12 +622,7 @@ class SwitchPlanMixin:
                     if path is None:
                         found = index.resolve({cab}, hint, exclude=official.keys())
                         path = Path(found[cab]) if cab in found else None
-                    if path is None:
-                        return None
-                    try:
-                        return self._layouts_of(path).get(cab)
-                    except (ServiceError, OSError, ValueError):
-                        return None
+                    return layouts(path).get(cab) if path is not None else None
 
                 return layout
 
@@ -624,9 +635,9 @@ class SwitchPlanMixin:
         current, baseline = world(resulting), world(official)
         broken: dict[Path, set[pointers.Pointer]] = {}
         for target in written:
-            found = pointers.dangling(self._pointers_of(replacements[target]), current(target))
+            found = pointers.dangling(self._pointers_of(replacements[target], log_level=log_level), current(target))
             if found and official[target] is not None:
-                found -= pointers.dangling(self._pointers_of(official[target]), baseline(target))
+                found -= pointers.dangling(self._pointers_of(official[target], log_level=log_level), baseline(target))
             if found:
                 broken[target] = found
         return broken
@@ -650,8 +661,10 @@ class SwitchPlanMixin:
             )
         return bool(broken)
 
-    def _stale_sources(self, current: Mapping[Path, Path], pin: Pin, *, targets: Collection[Path]) -> set[Path]:
-        """Find the files of ``current`` that point at objects the game does not hold (``_broken_references``).
+    def _stale_sources(
+        self, current: Mapping[Path, Path], pin: Pin, *, targets: Collection[Path]
+    ) -> dict[Path, set[pointers.Pointer]]:
+        """Find dangling references by source file among whole replacements (``_broken_references``).
 
         ``current`` is {target: source}, the files a resolution writes whole. A game update rebuilt a bundle they point
         into, under the same CAB, and left the part's name, or its structure, as it was. The entry's full ``targets``
@@ -660,18 +673,19 @@ class SwitchPlanMixin:
         be read stays as it is (that check reads it again).
         """
         if not current:
-            return set()
+            return {}
         try:
             broken = self._broken_references(current, pin, targets=targets)
         except (ServiceError, OSError, ValueError) as error:
-            log_failure(logger, logging.DEBUG, "Could not read the references of a mod file", error)
-            return set()
+            names = ", ".join(sorted(path.name for path in current.values()))
+            log_failure(logger, logging.WARNING, f"Could not check mod references for {names}", error)
+            return {}
         if broken:
             logger.info(
                 "%s points at objects the game no longer holds, updating it as a file of an older release",
                 ", ".join(sorted(current[target].name for target in broken)),
             )
-        return {current[target] for target in broken}
+        return {current[target]: found for target, found in broken.items()}
 
     def _check_references(self, changed: Mapping[Path, Path], pin: Pin) -> None:
         """Make the last reference check of a write.

@@ -28,6 +28,7 @@ from bmpt.engine import (
 )
 from ..core import devmode
 from ..core.openfiles import temporary_directory
+from .pointers import Pointer
 from .rebuild import rebuild
 
 
@@ -48,6 +49,7 @@ class PlannedFile:
     action: Action
     existing_path: Path | None = None
     need_crc_fix: bool = False
+    stale_pointers: set[Pointer] = field(default_factory=set)
 
 
 @dataclass
@@ -152,6 +154,7 @@ def _build_group(
             match_strategy="cont_name_type",
             anim_check=anim_check,
             log=log,
+            stale_pointers={file.mod_path: file.stale_pointers for file in update if file.stale_pointers},
         )
         if result.no_match:
             # A target taking no mod assets must retain its staged official bytes.
