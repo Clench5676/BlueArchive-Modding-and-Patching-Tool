@@ -1268,7 +1268,7 @@
 			"backup": "현재 데이터 백업",
 			"affected": "영향받는 데이터 폴더",
 			"relocate": "다른 모드 라이브러리 선택",
-			"upgradedWarning": "데이터 형식이 업그레이드되었습니다. 이전 버전을 열지 마세요",
+			"upgradedWarning": "데이터 형식이 업그레이드되었습니다. 이전 버전의 모드 관리자를 열지 마세요",
 			"count": " ({done}/{total})",
 			"step": {
 				"check": "이전 데이터 확인",

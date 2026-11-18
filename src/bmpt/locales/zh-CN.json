@@ -1268,7 +1268,7 @@
 			"backup": "当前数据备份",
 			"affected": "受影响的数据目录",
 			"relocate": "选择其他 Mod 仓库",
-			"upgradedWarning": "数据格式已升级，请勿再打开旧版本",
+			"upgradedWarning": "数据格式已升级，请勿打开旧版本的管理器",
 			"count": "（{done}/{total}）",
 			"step": {
 				"check": "检查旧数据",

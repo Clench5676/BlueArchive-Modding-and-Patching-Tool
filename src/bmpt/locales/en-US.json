@@ -1268,7 +1268,7 @@
 			"backup": "Current Data Backup",
 			"affected": "Affected Data Folders",
 			"relocate": "Choose Another Mod Library",
-			"upgradedWarning": "Data format upgraded. Do not open older versions",
+			"upgradedWarning": "Data format upgraded. Do not open older versions of the mod manager",
 			"count": " ({done}/{total})",
 			"step": {
 				"check": "Check Old Data",

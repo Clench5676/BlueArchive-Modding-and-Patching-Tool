@@ -1268,7 +1268,7 @@
 			"backup": "目前資料備份",
 			"affected": "受影響的資料目錄",
 			"relocate": "選擇其他 Mod 倉庫",
-			"upgradedWarning": "資料格式已升級，請勿再開啟舊版本",
+			"upgradedWarning": "資料格式已升級，請勿開啟舊版本的管理器",
 			"count": "（{done}/{total}）",
 			"step": {
 				"check": "檢查舊資料",

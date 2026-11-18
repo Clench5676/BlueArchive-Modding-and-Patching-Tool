@@ -133,8 +133,8 @@ test("all six locales supply the upgrade captions and no consent text", () => {
   }
   const zh = localeStrings("zh-CN"),
     en = localeStrings("en-US");
-  assert.equal(zh["upgrade.upgradedWarning"], "数据格式已升级，请勿再打开旧版本");
-  assert.equal(en["upgrade.upgradedWarning"], "Data format upgraded. Do not open older versions");
+  assert.equal(zh["upgrade.upgradedWarning"], "数据格式已升级，请勿打开旧版本的管理器");
+  assert.equal(en["upgrade.upgradedWarning"], "Data format upgraded. Do not open older versions of the mod manager");
   assert.equal(zh["upgrade.subject"], "升级内容：Mod 仓库、设置、缩略图、学生大厅");
   assert.equal(en["upgrade.subject"], "Upgrading: Mod Library, Settings, Thumbnails, Student Hall");
   assert.deepEqual(
@@ -469,7 +469,7 @@ test("the upgraded notice shows once for notice upgraded: title, the line in the
   assert.equal(h.shown.length, 1);
   assert.deepEqual(h.shown[0], {
     title: "Data Upgrade",
-    lines: [{ text: "Data format upgraded. Do not open older versions", color: "#f14f00" }],
+    lines: [{ text: "Data format upgraded. Do not open older versions of the mod manager", color: "#f14f00" }],
     ok: "picker.ok",
   });
   assert.equal(h.shown[0].cancel, undefined);
