@@ -84,7 +84,7 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
     };
     const previews = part("repair-previews"),
       notes = part("repair-notes");
-    previews.dataset.kind = review.kind === "lobby" ? "wide" : "tall";
+    previews.dataset.kind = review.kind === "memorialLobby" ? "wide" : "tall";
     const drawings = result.drawings || {};
     const drawn = !!(drawings.original?.length || drawings.repaired?.length);
     // Both sides are looked at through one view: the wheel zooms at the pointer, a drag moves the picture, a double
@@ -94,7 +94,7 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
     let expression = null; // the graft's expression the pictures show
     let view = { ...PanZoom.REST },
       rest = view,
-      framed = review.kind !== "lobby",
+      framed = review.kind !== "memorialLobby",
       marking = false;
     const show = (value) => {
       view = value;

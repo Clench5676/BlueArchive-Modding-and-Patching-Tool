@@ -193,7 +193,7 @@ for (const [kind, top, height] of [
           assert.equal(url, `blob:${kind}`);
           return image;
         },
-        { kind: "lobby", background: "/portrait-background.png" },
+        { kind: "memorialLobby", background: "/portrait-background.png" },
       );
       await Promise.resolve();
       assert.equal(loads, 0, "the still may arrive asynchronously");
@@ -245,7 +245,7 @@ test("abandoned cards do not change their artwork or text", async () => {
     picture = { style: {} },
     text = { style: {} };
   controller.abort();
-  for (const kind of ["portrait", "lobby"])
+  for (const kind of ["portrait", "memorialLobby"])
     await colourSwitchCard(
       picture,
       text,
@@ -297,7 +297,7 @@ test("model switch cards use the same edge palette as lobby cards", async () => 
       text,
       { clipImage: "model.png", imgTop: "0", imgHeight: "200", imgLeft: "0", imgWidth: "450" },
       async () => ({ naturalWidth: 450, naturalHeight: 253 }),
-      { kind: "model" },
+      { kind: "chibi" },
     );
     assert.ok(picture.style.backgroundImage.includes("rgb(40.000, 80.000, 120.000)"));
     assert.ok(text.style.color);

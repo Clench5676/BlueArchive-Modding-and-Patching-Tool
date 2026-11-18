@@ -71,7 +71,7 @@ function setup({
     P,
     call: async (method, params) => {
       requests.push([method, params]);
-      return method === "removalInfo" ? { used, used_here, used_elsewhere, official } : { photos: [] };
+      return method === "removalInfo" ? { used, used_here, used_elsewhere, official } : { thumbnails: [] };
     },
     Popup: {
       message: async (options) => {
@@ -91,11 +91,11 @@ function setup({
   };
   const api = new Function(
     "env",
-    `const {${Object.keys(env)}}=env;let selected='capture',generation=1,repository={photos:[{id:'capture'}]};const DEFAULT='generated';${code};return {deletePhoto,selected:()=>selected,repository:()=>repository};`,
+    `const {${Object.keys(env)}}=env;let selected='capture',generation=1,repository={thumbnails:[{id:'capture'}]};const DEFAULT='generated';${code};return {deletePhoto,selected:()=>selected,repository:()=>repository};`,
   )(env);
   return { ...api, requests, prompts, changed: () => changed };
 }
-const otherVariantWarnings = {
+const otherAltWarnings = {
   "en-US": "In use by another alt",
   "zh-CN": "正在被另一换皮使用",
   "zh-TW": "正在被另一換皮使用",
@@ -103,7 +103,7 @@ const otherVariantWarnings = {
   "ko-KR": "다른 바리에이션에서 사용 중",
   "th-TH": "กำลังใช้กับชุดอื่น",
 };
-for (const [locale, otherWarning] of Object.entries(otherVariantWarnings)) {
+for (const [locale, otherWarning] of Object.entries(otherAltWarnings)) {
   for (const [state, used_here, used_elsewhere] of [
     ["shown skin", true, false],
     ["other skin", false, true],
@@ -155,7 +155,7 @@ test("a failed deletion cannot change selection or publish thumbnail success", a
   await assert.rejects(() => h.deletePhoto(), /Storage failed/);
   assert.equal(h.selected(), "capture");
   assert.equal(h.changed(), 0);
-  assert.equal(h.repository().photos[0].id, "capture");
+  assert.equal(h.repository().thumbnails[0].id, "capture");
 });
 test("official and runtime gallery entries omit Delete; persisted generated photos remain managed", () => {
   assert.match(dense, /provenance:"official",managed:false/);
@@ -170,17 +170,17 @@ test("the gallery reuses the stored default card and retains separate skin defau
   const code = source.slice(start, start + source.slice(start).search(/const photo ?=/));
   const cards = new Function(
     "repository",
-    "sessionVariant",
+    "sessionAlt",
     `const DEFAULT='generated',OFFICIAL='official',P=k=>k,generatedThumbnail='runtime',defaultThumbnail='official';${code};return galleryPhotos();`,
   );
-  const own = { id: "stored", variant: "a", builtin: "generated", url: "stored.png", applied: true };
-  const other = { id: "skin", variant: "b", builtin: "generated", url: "skin.png" };
+  const own = { id: "stored", alt: "a", builtin: "generated", url: "stored.png", applied: true };
+  const other = { id: "skin", alt: "b", builtin: "generated", url: "skin.png" };
   assert.deepEqual(
-    cards({ photos: [own, other] }, "a").map((p) => p.id),
+    cards({ thumbnails: [own, other] }, "a").map((p) => p.id),
     ["official", "stored", "skin"],
   );
   assert.deepEqual(
-    cards({ photos: [other] }, "a").map((p) => p.id),
+    cards({ thumbnails: [other] }, "a").map((p) => p.id),
     ["generated", "official", "skin"],
   );
 });

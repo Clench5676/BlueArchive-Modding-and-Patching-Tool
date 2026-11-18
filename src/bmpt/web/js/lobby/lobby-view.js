@@ -220,13 +220,13 @@ export function viewPart(S, L) {
    *     the view may be.
    */
   function setZoomLimit(zoom) {
-    S.zoomMode = ZOOM_MODES.includes(zoom?.mode) ? zoom.mode : "art";
+    S.zoomMode = ZOOM_MODES.includes(zoom?.mode) ? zoom.mode : "fullArt";
     S.zoomCustom = clamp(Number(zoom?.custom) || ZOOM_CUSTOM, 1, ZOOM_OUT_MAX);
     if (measuresClips()) L.measureClips();
     openEdge();
     reclamp();
   }
-  const measuresClips = () => !S.current?.framing && (S.zoomMode === "art" || S.zoomMode === "unlocked");
+  const measuresClips = () => !S.current?.framing && (S.zoomMode === "fullArt" || S.zoomMode === "unlocked");
   // past the painted art (Unlocked, Custom) the lobby shows what the game's lobby camera clears to, black
   // (Persistent/Camera: solid colour clear), graded with PP on: the bottom layer draws it (linear.js setClear), the page
   // shows black behind it without WebGL2; sparse art keeps the edge extension

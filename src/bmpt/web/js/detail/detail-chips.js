@@ -1,4 +1,4 @@
-// The variant chips in the nameplate's white panel, in the style of the game's type chips.
+// The alt chips in the nameplate's white panel, in the style of the game's type chips.
 import * as NGUI from "../ui/ngui.js";
 import { T } from "../core/i18n.js";
 import { hasUnseen as hasFresh } from "./unseen-assets.js";
@@ -11,8 +11,8 @@ import {
   node,
   rect,
   ORIGIN,
-  fam,
-  variantKey,
+  shownStudent,
+  altId,
   layouts,
   ctx,
   renderFailed,
@@ -23,7 +23,7 @@ import {
   picturesReady,
   fillPictures,
   shortName,
-  variant,
+  alt,
   isFav,
   appliedKey,
   shownSource,
@@ -34,19 +34,19 @@ import { openPicker } from "./detail-switchers.js";
 
 let chipToken = 0;
 
-// --- variant chips in the nameplate's white panel (style of the game's type chips) ---
-// 3 columns x 2 rows; a long name takes two columns; with more variants than fit, the last cell opens the picker.
+// --- alt chips in the nameplate's white panel (style of the game's type chips) ---
+// 3 columns x 2 rows; a long name takes two columns; with more alts than fit, the last cell opens the picker.
 const CHIP_FS = CHIP.fs,
   CHIP_W = CHIP.w,
   CHIP_PITCH = CHIP.pitch; // the prefab chip (Char_Target/Type/MainType/BG): 272 x 72, 40 down to 28
 const chipSpan = (item) => {
   const need =
     glyphsOf(shortName(item), 32) +
-    (item.recruitable ? (32 * 1.35) / RECRUIT.ratio + 6 : 0) +
+    (item.releasedOnServer ? (32 * 1.35) / RECRUIT.ratio + 6 : 0) +
     (appliedKey(item) !== "self" ? 34 : 0);
   return need > CHIP_W - CHIP.inset ? 2 : 1;
 };
-export const byRank = (a, b) => isFav(b) - isFav(a) || b.recruitable - a.recruitable || a.order - b.order;
+export const byRank = (a, b) => isFav(b) - isFav(a) || b.releasedOnServer - a.releasedOnServer || a.order - b.order;
 function placeChips(items) {
   const cells = [];
   let row = 0,
@@ -64,11 +64,11 @@ function placeChips(items) {
   return cells;
 }
 function chipLayout() {
-  // favourites first, then recruitable variants, then the others in release order
-  const list = fam.variants.filter(hasAsset).sort(byRank);
+  // favourites first, then releasedOnServer alts, then the others in release order
+  const list = shownStudent.alts.filter(hasAsset).sort(byRank);
   const all = placeChips(list);
   if (all) return all;
-  // six cells, the last one is "more": take variants in order, skipping ones too wide for the space left in a row
+  // six cells, the last one is "more": take alts in order, skipping ones too wide for the space left in a row
   const caps = [3, 2],
     fill = [0, 0],
     picked = [];
@@ -86,12 +86,12 @@ function chipLayout() {
     tryPlace(v);
     if (fill[0] === caps[0] && fill[1] === caps[1]) break;
   }
-  // the current variant is always shown
-  if (!picked.some((p) => p.v.key === variantKey)) {
+  // the current alt is always shown
+  if (!picked.some((p) => p.v.key === altId)) {
     const last = [...picked]
       .reverse()
-      .find((p) => p.span === chipSpan(variant()) || (p.span === 2 && chipSpan(variant()) === 1));
-    if (last) Object.assign(last, { v: variant(), span: chipSpan(variant()) });
+      .find((p) => p.span === chipSpan(alt()) || (p.span === 2 && chipSpan(alt()) === 1));
+    if (last) Object.assign(last, { v: alt(), span: chipSpan(alt()) });
   }
   return [...picked, { more: list.length - picked.length, row: 1, col: 2, span: 1 }];
 }
@@ -119,7 +119,7 @@ function chipNode(name, pos, w, caption, active, swapped, mark, fresh = false) {
         [sprite("Common_Line_Raius10px", w, CHIP.h, { incline: 10, depth: 6, color: "#c0c9d4/1.00" })],
       ),
     );
-  // the variant wears another portrait: the game's swap icon at the right end
+  // the alt wears another portrait: the game's swap icon at the right end
   if (swapped)
     kids.push(
       node(
@@ -198,9 +198,9 @@ async function drawChips() {
             pos,
             w,
             shortName(v),
-            v.key === variantKey,
+            v.key === altId,
             shownSource(v) !== "self",
-            v.recruitable,
+            v.releasedOnServer,
             hasFresh(v),
           )
         : chipNode("Chip_more", pos, w, T("chips.more", { n: more }), false, false, false);
@@ -217,15 +217,15 @@ async function drawChips() {
   for (const [path, entry] of view.nodes) {
     const m = /\/Chip_([^/]*)$/.exec(path);
     if (!m || !entry.els[0]) continue;
-    // the chip's caption names it; the shown variant's chip is the pressed one
+    // the chip's caption names it; the shown alt's chip is the pressed one
     const chip = m[1] === "more" ? chips.find((c) => !c.v) : chips.find((c) => c.v?.key === m[1]);
     const button = hitButton(
       next,
       rect(entry.els[0]),
-      () => (m[1] === "more" ? openPicker() : ctx.go(fam.key, m[1])),
+      () => (m[1] === "more" ? openPicker() : ctx.go(shownStudent.key, m[1])),
       chip?.v ? shortName(chip.v) : T("chips.more", { n: chip?.more ?? 0 }),
     );
-    if (chip?.v) button.setAttribute("aria-pressed", String(chip.v.key === variantKey));
+    if (chip?.v) button.setAttribute("aria-pressed", String(chip.v.key === altId));
   }
   commit(() => {
     if (!ok()) return;

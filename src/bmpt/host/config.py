@@ -35,6 +35,9 @@ from bmpt.engine import (
     parse_hex_bytes,
     utils,
 )
+from ..core.filelock import file_lock
+from .store_formats import epoch_root
+from .upgrade_files import write_bytes
 from .data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME, default_cache_dir, migrate_cache_dir
 from ..core.logging_utils import log_failure
 
@@ -208,20 +211,23 @@ class Settings:
     In dev mode (devmode) the file must lie inside the dev roots, and a game folder outside them is not used.
     """
 
-    def __init__(self, path: Path = CONFIG_FILE):
+    def __init__(self, path: Path = CONFIG_FILE, *, artifacts: Path | None = None):
         """Read the settings file.
 
         Args:
             path: The settings file; ``config.toml`` in the data folder by default.
+            artifacts: Private root for default mutable outputs.
 
         Raises:
             ServiceError: ``dev_path_outside`` in dev mode, for a file outside the dev roots.
         """
         devmode.check_read(path)
         self.path = Path(path)
+        self.artifacts = artifacts
         self.bad = self.path.with_name(f"{self.path.name}.bad")
         self._lock = threading.RLock()
         self._values: dict[str, Any] = {}
+        self._pending: dict[str, Any] = {}
         self._extra: dict[str, dict] = {}  # groups and keys this schema does not know, kept on save
         self._mtime: tuple[int, int] | None = None  # the file's (mtime, size) when it was last applied or saved
         self._failed: tuple[int, int] | None = None  # the (mtime, size) of the file the last read of failed on
@@ -305,6 +311,11 @@ class Settings:
                     )
                 elif key in ("game_resource_dir", "game_resource_dir_japan"):
                     values[key] = detect("japan" if key.endswith("japan") else "global")
+                elif self.artifacts is not None and key == "adb_cache_dir":
+                    values[key] = str(self.artifacts / "Addons" / "adb_cache")
+                elif self.artifacts is not None and key in ("output_dir", "mod_backup_path"):
+                    output = self.artifacts / "output"
+                    values[key] = str(output / "backup" if key == "mod_backup_path" else output)
                 else:
                     values[key] = _default(key)
                 known.add((f.group, key))
@@ -313,6 +324,8 @@ class Settings:
                 for k, v in entries.items():
                     if (group, k) not in known:
                         extra.setdefault(group, {})[k] = v
+            if self.artifacts is not None:
+                values.update(self._pending)
             self._values, self._extra = values, extra
             self._applied = True
             self._mtime = signature if error is None else None
@@ -323,16 +336,26 @@ class Settings:
 
         A file on disk that cannot be parsed is first copied to ``config.toml.bad``.
         """
-        with self._lock:
+        managed = epoch_root(self.path, "data") is not None
+        lock = file_lock(self.path.with_suffix(".toml.lock"), timeout=2) if managed else contextlib.nullcontext()
+        with self._lock, lock:
+            if managed and self._stat() != self._mtime:
+                self.load()
+                self._values.update(self._pending)
             data: dict[str, dict] = {g: dict(v) for g, v in self._extra.items()}
             for key, f in FIELDS.items():
                 data.setdefault(f.group, {})[key] = self._values[key]
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self._keep_unreadable()
-            tmp = self.path.with_suffix(".toml.tmp")
-            tmp.write_text(toml.dumps(data), encoding="utf-8")
-            os.replace(tmp, self.path)
+            raw = toml.dumps(data)
+            if managed:
+                write_bytes(self.path, raw.encode("utf-8"))
+            else:
+                tmp = self.path.with_suffix(".toml.tmp")
+                tmp.write_text(raw, encoding="utf-8")
+                os.replace(tmp, self.path)
             self._mtime, self._failed = self._stat(), None
+            self._pending.clear()
 
     def _keep_unreadable(self) -> None:
         """Copy a config.toml that cannot be parsed as a whole to config.toml.bad before a save replaces it.
@@ -403,7 +426,7 @@ class Settings:
         if key not in FIELDS:
             raise KeyError(key)
         with self._lock:
-            self._values[key] = _coerce(key, value)
+            self._values[key] = self._pending[key] = _coerce(key, value)
 
     def as_dict(self) -> dict[str, Any]:
         """Return a copy of all settings by key."""

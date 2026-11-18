@@ -38,11 +38,11 @@ export const refusedNames = (refused) =>
   Object.entries(refused || {}).map(([name, reasons]) =>
     T("compatibility.refusedAnimation", { name, why: joined([].concat(reasons || []).map(reason)) }),
   );
-// subject: who the mod is ({variant, kind, core, name}: the line of a job over mods, job-progress.js modJob), or a
+// subject: who the mod is ({alt, kind, core, name}: the line of a job over mods, job-progress.js modJob), or a
 // name (the converter's)
 function progressTask(action, subject, run) {
   if (isIdentity(subject)) {
-    const line = modJob(subject, { nameOf: Loading.variantName, action: `progress.action${action}` });
+    const line = modJob(subject, { nameOf: Loading.altName, action: `progress.action${action}` });
     return Loading.task(
       (update) => {
         update(line());
@@ -62,7 +62,7 @@ function progressTask(action, subject, run) {
   return Loading.task((update) => run((p) => update({ label: text(p) })), { label: text() });
 }
 /** Whether a mod can be repaired: not a 3D model and not itself a repaired copy. */
-export const eligible = (mod) => mod?.kind !== "model" && !mod?.repaired_from && !mod?.repaired_id;
+export const eligible = (mod) => mod?.resourceType !== "chibi" && !mod?.repairSourceId && !mod?.repairedCopyId;
 /**
  * Whether the mod is a portrait whose textures were drawn on a rig the App no longer has: nothing repairs it,
  * and a plain update would leave it as it is (report.rig.unknown).
@@ -147,7 +147,7 @@ export function readSkeleton(input, runtime = globalThis.spine) {
  * @param {boolean} [summarize] Reduce the issues to a short summary.
  */
 export function compare(report, runtime = globalThis.spine, summarize = false) {
-  if (!runtime && report.kind !== "model")
+  if (!runtime && report.resourceType !== "chibi")
     return { available: false, issues: [{ key: "unavailable", params: {} }], author: false, remap: false };
   const issues = [],
     add = (key, params = {}, detail = null) => issues.push({ key, params, ...(detail ? { detail } : {}) });
@@ -227,10 +227,10 @@ export function compare(report, runtime = globalThis.spine, summarize = false) {
   // The game drew the portrait anew (actions.redrawn): nothing can be moved, so no remap is offered.
   const redrawn = report.redrawn?.redrawn === true;
   if (redrawn) add("redrawn");
-  // Such a portrait can keep the rig its textures were drawn for, as a whole (actions.oldRig), unless the official
+  // Such a portrait can keep the rig its textures were drawn for, as a whole (actions.useRecordedRig), unless the official
   // skeleton has animations the old one lacks: the game calls them by name.
   const gained = redrawn ? [...new Set(Object.values(report.oldRig?.animations || {}).flat())] : [];
-  // The graft (actions.graft) keeps the mod's own rig, or that old rig, and adds what the official one gained.
+  // The graft (actions.addAnimations) keeps the mod's own rig, or that old rig, and adds what the official one gained.
   const graftable =
     eligible(report) &&
     report.graft?.available === true &&
@@ -266,12 +266,12 @@ export function compare(report, runtime = globalThis.spine, summarize = false) {
     graft: available && graftable,
     graftOldRig: report.graft?.kind === "oldRig",
     // a memorial lobby or Spine background takes new animations, not expressions
-    graftAnimations: report.kind === "lobby",
+    graftAnimations: report.resourceType === "memorialLobby",
   };
 }
 
 async function assess(report) {
-  let available = report.kind === "model";
+  let available = report.resourceType === "chibi";
   if (!available) {
     try {
       available = await ensureSpine();
@@ -371,7 +371,7 @@ const chosen = (response, choices) =>
  * @param {(choice: string) => void} [options.onRemap] Called when the user picks a repair.
  */
 export async function show(report, { onRemap } = {}) {
-  if (report.kind !== "model" && !(await ensureSpine())) return;
+  if (report.resourceType !== "chibi" && !(await ensureSpine())) return;
   const result = compare(report, globalThis.spine, true);
   const choices = onRemap ? repairs(result) : [];
   const repair = choices.length > 0;
@@ -397,13 +397,13 @@ export async function show(report, { onRemap } = {}) {
  * @param {boolean} [options.convert] Offer the converter for what a graft refused.
  */
 export function reviewLines(report, { convert = false } = {}) {
-  // an old rig set up as a whole (actions.oldRig) moves nothing: its line names the atlases kept
+  // an old rig set up as a whole (actions.useRecordedRig) moves nothing: its line names the atlases kept
   if (report.rigs?.length)
     return [
       T("remap.oldRig", { names: joined(report.rigs) }),
       ...report.warnings.map(({ key, name }) => T(`remap.${key}`, { name })),
     ];
-  // a graft (actions.graft) counts the expressions it added, corrected and could not match, the names behind Details
+  // a graft (actions.addAnimations) counts the expressions it added, corrected and could not match, the names behind Details
   if (report.grafted) {
     const named = (key, names, shown = names) =>
       !names.length
@@ -466,7 +466,7 @@ export function reviewLines(report, { convert = false } = {}) {
 // The optional converter (bmpt/spine/converter.py): its program's name, as its author writes it
 export const CONVERTER_NAME = "SpineSkeletonDataConverter";
 
-// The converter route (actions.graft, graftConvert, graftConvertCheck): the page poses the mod's setup for the packing,
+// The converter route (actions.addAnimations, addAnimationsConvert, addAnimationsConvertCheck): the page poses the mod's setup for the packing,
 // the library rewrites the rigs through the converter and hands back each rig before and after, the page poses the
 // mod's own animations on both, and the library checks how far they moved and prepares the review.
 async function converted(id, subject) {
@@ -478,7 +478,7 @@ async function converted(id, subject) {
       () =>
         Loading.page(() =>
           progressTask("Remap", subject, async (update) => {
-            const first = await waitJob(await rpc("actions.graft", { mod: id }), update);
+            const first = await waitJob(await rpc("actions.addAnimations", { mod: id }), update);
             token = first.token;
             const skeleton = (rig) => ({ data: rig.skeleton });
             const setup = Object.fromEntries(
@@ -489,7 +489,7 @@ async function converted(id, subject) {
                 },
               ]),
             );
-            const built = await waitJob(await rpc("actions.graftConvert", { token, geometry: setup }), update);
+            const built = await waitJob(await rpc("actions.addAnimationsConvert", { token, geometry: setup }), update);
             const posed = Object.fromEntries(
               Object.entries(built.rigs).map(([name, rig]) => [
                 name,
@@ -499,7 +499,10 @@ async function converted(id, subject) {
                 },
               ]),
             );
-            const result = await waitJob(await rpc("actions.graftConvertCheck", { token, geometry: posed }), update);
+            const result = await waitJob(
+              await rpc("actions.addAnimationsConvertCheck", { token, geometry: posed }),
+              update,
+            );
             token = null; // the check takes it
             return result;
           }),
@@ -507,7 +510,7 @@ async function converted(id, subject) {
       { all: true },
     );
   } finally {
-    if (token) await rpc("actions.discardGraft", { token }).catch(() => {});
+    if (token) await rpc("actions.discardAddAnimations", { token }).catch(() => {});
   }
 }
 
@@ -549,7 +552,7 @@ export async function ensureConverter() {
   return true;
 }
 
-// The graft (actions.graft, graftBuild, graftCheck): the page poses the rigs the library names, the library splices and
+// The graft (actions.addAnimations, addAnimationsBuild, addAnimationsCheck): the page poses the rigs the library names, the library splices and
 // packs and hands back a test rig with every candidate correction, the page poses that, and the library checks and
 // prepares the review. A graft left between its steps is dropped.
 async function grafted(id, subject) {
@@ -561,7 +564,7 @@ async function grafted(id, subject) {
       () =>
         Loading.page(() =>
           progressTask("Remap", subject, async (update) => {
-            const first = await waitJob(await rpc("actions.graft", { mod: id }), update);
+            const first = await waitJob(await rpc("actions.addAnimations", { mod: id }), update);
             token = first.token;
             const skeleton = (rig) => ({ data: rig.skeleton });
             // a rig without a picture to compare (a memorial lobby): built at once, each carried animation posed here
@@ -574,7 +577,7 @@ async function grafted(id, subject) {
                   },
                 ]),
               );
-              const result = await waitJob(await rpc("actions.graftCheck", { token, geometry: posed }), update);
+              const result = await waitJob(await rpc("actions.addAnimationsCheck", { token, geometry: posed }), update);
               token = null; // the check takes it
               return result;
             }
@@ -588,7 +591,7 @@ async function grafted(id, subject) {
                 },
               ]),
             );
-            const built = await waitJob(await rpc("actions.graftBuild", { token, geometry: setup }), update);
+            const built = await waitJob(await rpc("actions.addAnimationsBuild", { token, geometry: setup }), update);
             const posed = Object.fromEntries(
               Object.entries(built.rigs).map(([name, rig]) => [
                 name,
@@ -603,7 +606,7 @@ async function grafted(id, subject) {
                 },
               ]),
             );
-            const result = await waitJob(await rpc("actions.graftCheck", { token, geometry: posed }), update);
+            const result = await waitJob(await rpc("actions.addAnimationsCheck", { token, geometry: posed }), update);
             token = null; // the check takes it
             return result;
           }),
@@ -611,7 +614,7 @@ async function grafted(id, subject) {
       { all: true },
     );
   } finally {
-    if (token) await rpc("actions.discardGraft", { token }).catch(() => {});
+    if (token) await rpc("actions.discardAddAnimations", { token }).catch(() => {});
   }
 }
 
@@ -627,7 +630,7 @@ async function grafted(id, subject) {
 export async function prepare(id, label = "", subject = label, kind = "", choice = null) {
   // A portrait is baked through world space: the page poses both rigs with the runtime and posts what they draw.
   let checked = reports.get(id);
-  if (!checked && kind === "spr") checked = await inspect(id, label, null, subject);
+  if (!checked && kind === "portrait") checked = await inspect(id, label, null, subject);
   if (checked?.assessment && (!choice || choice === "default")) {
     const choices = repairs(checked.assessment);
     // More than one repair (Update without the result popup): the same choice as there.
@@ -647,13 +650,13 @@ export async function prepare(id, label = "", subject = label, kind = "", choice
     } else choice = choices[0]?.kind ?? null;
   }
   if (choice === "default") choice = null;
-  // A portrait the game drew anew keeps its old rig as a whole (actions.oldRig): no geometry to post.
+  // A portrait the game drew anew keeps its old rig as a whole (actions.useRecordedRig): no geometry to post.
   const old = choice === "oldRig" || (!choice && checked?.assessment?.oldRig === true);
   return choice === "graft"
     ? grafted(id, subject)
     : (async () => {
         const geometry =
-          !old && checked?.kind === "spr" && (await ensureSpine())
+          !old && checked?.resourceType === "portrait" && (await ensureSpine())
             ? RigGeometry.forRemap(checked, globalThis.spine)
             : undefined;
         return Loading.hold(
@@ -662,7 +665,7 @@ export async function prepare(id, label = "", subject = label, kind = "", choice
               progressTask("Remap", subject, async (update) =>
                 waitJob(
                   await rpc(
-                    old ? "actions.oldRig" : "actions.remap",
+                    old ? "actions.useRecordedRig" : "actions.useOfficialSkeleton",
                     old || !geometry ? { mod: id } : { mod: id, geometry },
                   ),
                   update,
@@ -686,11 +689,11 @@ export async function accept(id, result, onRemapped = () => {}, subject = "") {
     () =>
       Loading.page(() =>
         progressTask("Repair", subject, async (update) => {
-          const saved = await waitJob(await rpc("actions.acceptRemap", { preview: result.preview }), update);
-          reports.set(id, { ...reports.get(id), remappable: false, repaired_id: saved.mod.id });
+          const saved = await waitJob(await rpc("actions.acceptRepair", { preview: result.preview }), update);
+          reports.set(id, { ...reports.get(id), remappable: false, repairedCopyId: saved.mod.id });
           stamps.delete(id);
           stamps.delete(saved.mod.id);
-          reports.set(saved.mod.id, { remappable: false, repaired_from: id });
+          reports.set(saved.mod.id, { remappable: false, repairSourceId: id });
           await onRemapped(saved);
           return saved;
         }),
@@ -701,7 +704,7 @@ export async function accept(id, result, onRemapped = () => {}, subject = "") {
 
 /** Discard a prepared repair's preview. */
 export const discard = (result) =>
-  result?.preview ? rpc("actions.discardRemap", { preview: result.preview }).catch(() => {}) : Promise.resolve();
+  result?.preview ? rpc("actions.discardRepair", { preview: result.preview }).catch(() => {}) : Promise.resolve();
 
 /**
  * Show the repair review: both pictures, the report's lines and marks.
@@ -734,7 +737,7 @@ export function review(
       partial: report.partial,
       accept: acceptLabel,
       discard: discardLabel,
-      kind: kind || reports.get(id)?.kind || "spr",
+      kind: kind || reports.get(id)?.kind || "portrait",
       // the regions whose pixels are not the mod's own, or a graft's parts that match no candidate: what the
       // pictures can ring
       marks: report.grafted
@@ -807,7 +810,7 @@ export async function inspect(id, label = "", stamp = null, subject = label) {
     waitJob(await rpc("actions.compatibility", { mod: id }), update),
   );
   // A portrait the remap could repair: whether the game drew it anew, from the two rigs' rest poses.
-  if (report.kind === "spr" && report.remappable === true && (await ensureSpine().catch(() => false))) {
+  if (report.resourceType === "portrait" && report.remappable === true && (await ensureSpine().catch(() => false))) {
     let geometry = null;
     try {
       geometry = RigGeometry.restOnly(RigGeometry.forRemap(report, globalThis.spine));
@@ -846,7 +849,9 @@ export async function forUpdate(id, label = "", subject = label) {
 
 /** Check a mod's compatibility and show the report, with the repair offered. */
 export async function check(id, label = "", onRemapped = () => {}, mod = null, subject = label) {
-  if (mod?.kind !== "model" && !(await ensureSpine())) return;
+  if (mod?.resourceType !== "chibi" && !(await ensureSpine())) return;
   const report = await Loading.hold(() => inspect(id, label, null, subject), { all: true });
-  return show(report, { onRemap: (choice) => remap(id, onRemapped, label, subject, mod?.kind || report.kind, choice) });
+  return show(report, {
+    onRemap: (choice) => remap(id, onRemapped, label, subject, mod?.resourceType || report.resourceType, choice),
+  });
 }

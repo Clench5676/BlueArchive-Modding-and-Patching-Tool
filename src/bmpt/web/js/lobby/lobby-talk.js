@@ -56,7 +56,7 @@ export function talkPart(S, L) {
   }
   function voice(clip) {
     if (S.current?.suspended || S.current?.backgroundPaused || S.current?.loadingPaused) return;
-    const a = new Audio(`/asset/voice/${encodeURIComponent(S.current.variant)}/${encodeURIComponent(clip)}.ogg`);
+    const a = new Audio(`/asset/voice/${encodeURIComponent(S.current.alt)}/${encodeURIComponent(clip)}.ogg`);
     a.volume = S.volume;
     S.audios.push(a);
     a.play().catch(() => {});
@@ -259,7 +259,7 @@ export function talkPart(S, L) {
 /**
  * The sounds of a lobby instance's clips (SpineClip.SoundKeys, played by lobby-sync.js): an AnimationAudioEvent plays
  * one of its clips at random, at its volume and at its pitch, a playback rate as Unity's pitch is. The clips come from
- * the game files (lobby.json sounds, /asset/spine/lobby/<core>/sfx_<clip>.wav), fetched once a clip with sound keys
+ * the game files (lobby.json sounds, /asset/spine/memorialLobby/<core>/sfx_<clip>.wav), fetched once a clip with sound keys
  * starts and kept as blobs for the lobby; the game's SFX volume is the app's voice volume.
  * @param {object} S The instance's state.
  * @param {object} L The instance's functions.

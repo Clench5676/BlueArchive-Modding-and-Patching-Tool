@@ -1,7 +1,7 @@
 // Roster: the game's student list prefabs rendered by ngui.js: UICharacterCollection gives the list frame, ruled paper,
 // segment filters, search / sort / order buttons, search box and empty list; UICharacterCollectionPopulatorUnit the card
 // template (UICollectCard) and the "not owned" section bar; UIPopup_GachaCharList.Btn_Checkbox the checkbox toggle,
-// reused for "group the variants of one character". Which cards show, and in what order, is roster-order.js. Cards with
+// reused for "group the alts of one character". Which cards show, and in what order, is roster-order.js. Cards with
 // mods come first; cards without mods follow the section bar, dimmed like not-owned students; favourites (the game's
 // pins) come first in each group. The view is kept across launches (settings key "roster"), the search for the session.
 // Only the rows near the view are rendered.
@@ -76,20 +76,20 @@ export function invalidate() {
 }
 
 /**
- * Restore the saved view (settings.get's "roster"); called once at start, before the roster or a detail screen
+ * Restore the saved view (settings.get's "studentList"); called once at start, before the roster or a detail screen
  * shows.
  */
 export function init(prefs) {
   view = { ...normalizeView(prefs), scroll: 0 };
 }
-/** Whether the roster groups the variants of one character. */
-export const merged = () => view.merged;
+/** Whether the roster groups the alts of one character. */
+export const groupAlts = () => view.groupAlts;
 
 let saveTimer = 0;
 function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    rpc("settings.set", { key: "roster", value: normalizeView(view) })
+    rpc("settings.set", { key: "studentList", value: normalizeView(view) })
       .then((prefs) => {
         if (ctx) ctx.prefs = prefs;
       })
@@ -216,7 +216,7 @@ function cardTree(e) {
   // name: the recruit icon and the name centred as one group; long names shrink and wrap; the yellow marker under
   // the glyphs
   const iconH = 64,
-    iconW = e.recruit ? iconH / RECRUIT.ratio + 8 : 0;
+    iconW = e.releasedOnServer ? iconH / RECRUIT.ratio + 8 : 0;
   const f = fitText(e.name, 50, 30, 430 - iconW);
   const tw = glyphsOf(f.text, f.fs),
     adv = Math.max(...f.text.split("\n").map((l) => advanceOf(l, f.fs)));
@@ -227,7 +227,7 @@ function cardTree(e) {
   const marker = find(name, "Sprite");
   marker.widgets[0].w_ = tw + 8;
   marker.pos = [tw / 2 - adv / 2, f.lines > 1 ? -17 - 30 : -17];
-  if (e.recruit)
+  if (e.releasedOnServer)
     t.children.push(
       node(
         "Recruit",
@@ -258,19 +258,26 @@ function cardTree(e) {
 
 const portraitOf = (e) => {
   if (e.thumbnail) return e.thumbnail;
-  if (!spineAllowed()) return e.portrait || null;
+  if (!spineAllowed()) return e.officialThumbnail || null;
   const thumb = thumbnailWork.thumb;
   const kind = primaryKind(e),
-    variants = data.families.find((f) => f.key === e.family)?.variants || [];
+    alts = data.students.find((f) => f.key === e.student)?.alts || [];
   // Model-only entries stay navigable without requesting a Spine skeleton for a GLB.
-  if (kind === "model") return e.portrait || null;
+  if (kind === "chibi") return e.officialThumbnail || null;
   if (e.previewSources?.[kind] || configuredKey(e, kind)) {
-    return thumb(previewBase(e, kind, false, variants), "roster", null, kind === "lobby", specialFraming(e), e.bg);
+    return thumb(
+      previewBase(e, kind, false, alts),
+      "roster",
+      null,
+      kind === "memorialLobby",
+      specialFraming(e),
+      e.background,
+    );
   }
-  const core = kind === "spr" ? e.spr : e.lobby;
+  const core = kind === "portrait" ? e.portrait : e.memorialLobby;
   return core
-    ? thumb(spineBase(kind, core), "roster", null, kind === "lobby", specialFraming(e), e.bg)
-    : e.portrait || null;
+    ? thumb(spineBase(kind, core), "roster", null, kind === "memorialLobby", specialFraming(e), e.background)
+    : e.officialThumbnail || null;
 };
 
 // --- rows near the view ---
@@ -310,7 +317,7 @@ async function renderRow(host, rowKey) {
     if (hasAsset(it.e))
       hit.addEventListener("click", () => {
         if (!ctx.dragged)
-          location.hash = `#/student/${encodeURIComponent(it.e.family)}/${encodeURIComponent(it.e.key)}`;
+          location.hash = `#/student/${encodeURIComponent(it.e.student)}/${encodeURIComponent(it.e.key)}`;
       });
     else hit.disabled = true;
     row.appendChild(hit);
@@ -752,7 +759,7 @@ export function hide() {
 
 /**
  * Redraw the roster's names and name-based order after a language change. They come from the already loaded
- * multilingual data and reuse the thumbnail scope and cache; a language change never needs roster.list.
+ * multilingual data and reuse the thumbnail scope and cache; a language change never needs students.list.
  * @returns {Promise<void>} Settles when it has finished.
  */
 export async function relabel() {

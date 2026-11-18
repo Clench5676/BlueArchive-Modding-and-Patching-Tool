@@ -1413,7 +1413,7 @@ test("the effects draw in their layer's context with the game's blend and free e
   };
   const loads = [];
   const effects = GL.create(fx, {
-    base: "/asset/spine/lobby/x/",
+    base: "/asset/spine/memorialLobby/x/",
     bone: () => null,
     load: async (url) => {
       loads.push(url);
@@ -1421,7 +1421,7 @@ test("the effects draw in their layer's context with the game's blend and free e
     },
   });
   await new Promise((r) => setTimeout(r, 0));
-  assert.deepEqual(loads, ["/asset/spine/lobby/x/fx_cab-a_1.png"]);
+  assert.deepEqual(loads, ["/asset/spine/memorialLobby/x/fx_cab-a_1.png"]);
   effects.layers([p]);
   Linear.begin(p);
   const from = gl.calls.length;

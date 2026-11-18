@@ -1,5 +1,7 @@
 # gui/app.py
 
+import json
+import os
 import sys
 import tkinter as tk
 from tkinter import messagebox
@@ -68,8 +70,12 @@ class App(tb.Frame, ConfigMixin):
         super().__init__(master)
         self.master: tk.Tk = master
         self.setup_main_window()
-        self.config_manager = ConfigManager(self.exe_dir / "config.toml")
+        self.config_manager = ConfigManager(os.environ.get("BMPT_CLASSIC_CONFIG", self.exe_dir / "config.toml"))
         self.init_shared_variables()
+        if "BMPT_CLASSIC_ARTIFACTS" in os.environ:
+            self.output_dir_var.set(str(self.exe_dir / "output"))
+            self.mod_backup_path_var.set(str(self.exe_dir / "output" / "backup"))
+            self.adb_cache_dir_var.set(str(self.exe_dir / "Addons" / "adb_cache"))
 
         # 角色映射表（配置加载后自动加载）
         self.char_map = CharacterInternalIDMap()
@@ -94,7 +100,7 @@ class App(tb.Frame, ConfigMixin):
 
         # 设置路径
         # exe_dir: 程序所在目录（打包后为 exe 目录，开发环境为项目根目录）
-        self.exe_dir = EXE_DIR
+        self.exe_dir = Path(os.environ.get("BMPT_CLASSIC_ARTIFACTS", EXE_DIR))
         # root_path: 包资源根目录（打包后为 nuitka 解压的资源目录，开发环境为 src/ba_modding_toolkit/）
         self.root_path = PACKAGE_DIR
 
@@ -126,6 +132,9 @@ class App(tb.Frame, ConfigMixin):
     def _load_character_mapping(self):
         """加载角色ID映射表 CSV"""
         path = self.bacii_map_path_var.get().strip()
+        native_default = EXE_DIR / "Addons" / "BA-Characters-Internal-ID.csv"
+        if "BMPT_CLASSIC_ARTIFACTS" in os.environ and Path(path) == native_default and not native_default.is_file():
+            path = str(self.exe_dir / "Addons" / native_default.name)
         if path:
             self.char_map.load(Path(path), index_column=self.character_index_column_var.get().strip())
 
@@ -551,7 +560,9 @@ class App(tb.Frame, ConfigMixin):
 
     def get_output_subdir(self, subdir: str) -> Path:
         """获取输出目录下的子目录路径，自动创建"""
-        path = Path(self.output_dir_var.get()) / subdir
+        path = (Path(self.output_dir_var.get()) / subdir).expanduser().resolve()
+        if any(path.is_relative_to(Path(root)) for root in json.loads(os.environ.get("BMPT_CLASSIC_PROTECTED", "[]"))):
+            raise ValueError("The output folder is inside a protected data or game directory")
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -675,6 +686,11 @@ class App(tb.Frame, ConfigMixin):
     def show_tab(self, tab_to_show: TabFrame):
         """显示指定的Tab页面"""
         assert(isinstance(tab_to_show, TabFrame))
+        if os.environ.get("BMPT_CLASSIC_READ_ONLY") == "1" and tab_to_show in (
+            self.tabs.mod_install, self.tabs.crc_tool, self.tabs.tools, self.tabs.adb_push,
+        ):
+            self.logger.log(t("webui.error.official_unavailable", file=t("ui.settings.button_text")))
+            return
 
         # 隐藏所有Tab
         for tab, _ in self.tabs.with_titles():

@@ -66,7 +66,7 @@ class ImpactMixin:
                 try:
                     official = self._official_for(target, pin, game_first=True)
                 except ServiceError as error:
-                    if error.code not in ("original_unavailable", "original_invalid"):
+                    if error.code not in ("official_unavailable", "official_invalid"):
                         raise
                     complete = False
                     continue
@@ -104,7 +104,7 @@ class ImpactMixin:
                 try:
                     official.merge(inspection.inspect(self._official_for(target, pin, game_first=True)))
                 except ServiceError as error:
-                    if error.code not in ("original_unavailable", "original_invalid"):
+                    if error.code not in ("official_unavailable", "official_invalid"):
                         raise
             gains = atlas_remap.rig_gains(mod.atlases, mod.skeletons, official.atlases, official.skeletons)
             return {kind: names for kind, names in gains.items() if names}
@@ -913,7 +913,7 @@ class ImpactMixin:
                     try:
                         candidates.append((target.name, self._official_for(target, pin, game_first=True)))
                     except ServiceError as error:
-                        if error.code not in ("original_unavailable", "original_invalid"):
+                        if error.code not in ("official_unavailable", "official_invalid"):
                             raise
             generic = record["kind"] == "other"
             cores = {core_of(name) for name in files}

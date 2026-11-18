@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "build_fingerprints-v1.schema.json",
+  "title": "Mod build fingerprint",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "parts": {
+      "type": "array"
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{40}$"
+      }
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "event": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "parts",
+    "files"
+  ]
+}

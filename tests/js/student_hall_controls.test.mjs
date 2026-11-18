@@ -120,7 +120,7 @@ source =
   source;
 source = `const {S,clone,NGUI,alignIcon,text,T,Popup,document,UI}=globalThis.hallControlsHarness;\n${source}\nexport {lobbyControl,controls,renderChrome,renderPortraitActions};
 export function setPortraits(value){portraits=value;}
-export function fixture(mode,kind=null,writes=0,portraits=[],choices=[]){options={choices};layouts={lobby:globalThis.hallControlsHarness.lobby};store={current:()=>({mode,memorials:[],portraits}),kind:()=>kind};root={getBoundingClientRect:()=>({left:0,top:0,width:1920,height:1080})};chrome={replaceChildren(){},querySelectorAll:()=>[]};hits={querySelector:()=>null};pendingWrites=writes;hitGeneration=0;}
+export function fixture(mode,kind=null,writes=0,portraits=[],choices=[]){options={choices};layouts={lobby:globalThis.hallControlsHarness.lobby};store={current:()=>({mode,memorialLobbies:[],portraits}),kind:()=>kind};root={getBoundingClientRect:()=>({left:0,top:0,width:1920,height:1080})};chrome={replaceChildren(){},querySelectorAll:()=>[]};hits={querySelector:()=>null};pendingWrites=writes;hitGeneration=0;}
 //# sourceURL=hall-controls-fixture.js`;
 const Hall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 
@@ -159,7 +159,7 @@ test("normal and edit actions pack immediately left of the right-aligned numberl
   for (const [mode, kind] of [
     ["portraits", null],
     ["portraits", "layout"],
-    ["memorial", null],
+    ["memorialLobby", null],
   ]) {
     Hall.fixture(mode, kind);
     const all = Hall.controls(),
@@ -246,7 +246,7 @@ test("top-right icons keep the75percent baseline with the photo-only8percent opt
   assert.equal(alignedIcons.get("Hall/Add/Icon").height, 64 * S * 0.75);
   assert.equal(alignedIcons.get("Hall/Background/Icon").height, 48 * S * 1.08);
   assert.equal(alignedIcons.get("Hall/Mode/Icon").height, 48 * S);
-  Hall.fixture("memorial");
+  Hall.fixture("memorialLobby");
   await Hall.renderChrome();
   assert.equal(alignedIcons.get("Hall/Adjust/Icon").height, 64 * S * 0.75);
   Hall.fixture("portraits");
@@ -263,7 +263,7 @@ test("top-right icons keep the75percent baseline with the photo-only8percent opt
 test("Hall's real action row measures its top margin below the bar at minimum, default and large sizes", async () => {
   const { CORNER_MARGIN } = await import("../../src/bmpt/web/js/window/corner-layout.js");
   const { headerGeometry } = await import("../../src/bmpt/web/js/window/window-layout.js");
-  for (const mode of ["portraits", "memorial"])
+  for (const mode of ["portraits", "memorialLobby"])
     for (const platform of [null, "darwin", "win32"]) {
       for (const [width, height] of [
         [960, 540],
@@ -309,10 +309,10 @@ test("Hall's real action row measures its top margin below the bar at minimum, d
 });
 
 test("the Common ChangeUnit portrait icon keeps its77x68ratio and enables only with a replacement candidate", async () => {
-  const entry = { id: "a", variant: "hero", source: "mod:current", scale: 1 },
+  const entry = { id: "a", alt: "hero", source: "mod:current", scale: 1 },
     choices = [
-      { ...entry, family: "hero", kind: "spr" },
-      { variant: "alt", source: "official", family: "hero", kind: "spr" },
+      { ...entry, student: "hero", resourceType: "portrait" },
+      { alt: "alt", source: "official", student: "hero", resourceType: "portrait" },
     ];
   for (const available of [[], choices]) {
     Hall.fixture("portraits", "layout", 0, [entry], available);
@@ -335,7 +335,7 @@ test("the Common ChangeUnit portrait icon keeps its77x68ratio and enables only w
 
 test("the own-size slider moves the toolbar only once a size is set, never under a dragged thumb", async () => {
   const { portraitRect, portraitToolbarLayout } = await import("../../src/bmpt/web/js/hall/student-hall-framing.js");
-  const entry = { id: "a", variant: "hero", source: "mod:current", x: 400, y: 1100, scale: 1, mirror: false },
+  const entry = { id: "a", alt: "hero", source: "mod:current", x: 400, y: 1100, scale: 1, flipHorizontal: false },
     ui = globalThis.hallControlsHarness.UI,
     saved = { ...ui };
   let change,
@@ -385,7 +385,7 @@ test("the own-size slider moves the toolbar only once a size is set, never under
 });
 
 test("the toolbar centres on the portrait's visible head, not its Spine bounds", async () => {
-  const entry = { id: "a", variant: "hero", source: "mod:current", x: 700, y: 1100, scale: 1, mirror: false };
+  const entry = { id: "a", alt: "hero", source: "mod:current", x: 700, y: 1100, scale: 1, flipHorizontal: false };
   Hall.fixture("portraits", "layout", 0, [entry], []);
   Hall.setPortraits({ actors: new Map(), head: (id) => (id === "a" ? { x: -150, y: -600 } : null) });
   try {

@@ -13,13 +13,15 @@ from ..core.errors import ServiceError
 from bmpt.engine import parse_filename
 from ..core.openfiles import temporary_directory
 from .jobs import Cancelled
+from .contract import SPINE_TYPES
+from ..host.store_formats import source_value
 from .server import MIME, AssetResponse
 
 
 logger = logging.getLogger("bmpt.webui.services")  # the services log under one name
 
 # /asset/ kinds the shown page draws as previews (portraits, lobbies, backgrounds, 3D models): class 1 of the ordering
-PREVIEW_ASSETS = frozenset({"spine", "art", "office", "model"})
+PREVIEW_ASSETS = frozenset({"spine", "art", "office", "chibi"})
 
 
 class AssetsMixin:
@@ -54,8 +56,8 @@ class AssetsMixin:
     def _asset(self, path: str, query: dict[str, str]) -> AssetResponse:
         parts = path.split("/")
         kind = parts[0]
-        if kind == "photography":
-            return self.photography.asset(parts[1:])
+        if kind == "thumbnails":
+            return self.thumbnails.asset(parts[1:])
         if kind == "ui":
             return self._ui_asset(parts[1:], query)
         if kind == "office" and len(parts) == 3 and parts[2] == "layout.json":
@@ -63,16 +65,16 @@ class AssetsMixin:
         if kind == "office" and len(parts) == 4 and parts[2] == "texture" and parts[3].endswith(".png"):
             return AssetResponse(self.game.office_texture(parts[1], _stem(parts[3])), "image/png", light=False)
         if kind == "art" and len(parts) == 3:
-            if parts[1] == "bg":
+            if parts[1] == "background":
                 data, mime = self.game.collection_bg(_stem(parts[2]))
                 return AssetResponse(data, mime, light=False)
-            if parts[1] == "portrait":
+            if parts[1] == "officialThumbnail":
                 return AssetResponse(self.game.collection_portrait(_stem(parts[2])), "image/png", light=False)
         if kind == "spine" and len(parts) >= 5:
-            return self._spine_asset(parts[1], parts[2], "/".join(parts[4:]), revision=parts[3])
+            return self._spine_asset(SPINE_TYPES[parts[1]], parts[2], "/".join(parts[4:]), revision=parts[3])
         if kind == "spine" and len(parts) == 4:
-            return self._spine_asset(parts[1], parts[2], parts[3])
-        if kind == "model" and len(parts) == 2 and parts[1].endswith(".glb"):
+            return self._spine_asset(SPINE_TYPES[parts[1]], parts[2], parts[3])
+        if kind == "chibi" and len(parts) == 2 and parts[1].endswith(".glb"):
             # A variant's 3D chibi, exported losslessly and cached only with separate preview consent.
             key = _stem(parts[1])
             field_only = False
@@ -82,7 +84,7 @@ class AssetsMixin:
                 if not core and getattr(variant, "field_model", None):
                     core, field_only = variant.field_model, True
             except (ServiceError, KeyError) as error:
-                if isinstance(error, ServiceError) and error.code != "catalog_variant_not_found":
+                if isinstance(error, ServiceError) and error.code != "catalog_alt_not_found":
                     raise
                 # NPC models can exist without a student-list entry. Resolve only
                 # cores indexed from this game's own files, never arbitrary names.
@@ -91,7 +93,7 @@ class AssetsMixin:
                 core = target = key
             if not core:
                 raise KeyError(path)
-            source = query.get("source", "live")
+            source = source_value(query.get("source", "live"), forward=False)
             kind = source.split(":", 1)[0]
             # ?clip=<name>: one clip of the model, read from the same source as the model, for an action whose clips
             # the model's GLB does not carry. Class 1 (what the user is looking at): foreground like the model (asset
@@ -204,7 +206,7 @@ class AssetsMixin:
         try:
             cores = set(getattr(self.library, "model_cores", lambda key: [core])(target))
         except ServiceError as error:
-            if error.code != "catalog_variant_not_found" or target != core:
+            if error.code != "catalog_alt_not_found" or target != core:
                 raise
             cores = {core}  # An indexed NPC prefab can have no catalog variant.
 

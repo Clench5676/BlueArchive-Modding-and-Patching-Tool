@@ -6,8 +6,8 @@ import { T } from "../core/i18n.js";
 import { modelSource } from "../mods/switch-sources.js";
 import { $ } from "../core/util.js";
 import {
-  variantKey,
-  fam,
+  altId,
+  shownStudent,
   tab,
   fullscreen,
   modelGeneration,
@@ -30,16 +30,16 @@ import { modsOn, overwrittenMessage } from "./detail-switchers.js";
 // the 3D chibi: loaded, its shaders compiled and its first frame drawn; the actions fill row 4 and a still of it goes
 // on the switch card
 export async function showModel(v, my, alive = () => true) {
-  const still = () => alive() && open && my === leftToken && tab === "model" && variantKey === v.key;
+  const still = () => alive() && open && my === leftToken && tab === "model" && altId === v.key;
   try {
     const M = await ModelLib();
     if (!still()) return;
     const list = await M.show(v.key, $("model"), {
       frame: fullscreen ? "full" : "left",
-      version: `${fam.version}:${modelGeneration}`,
+      version: `${shownStudent.version}:${modelGeneration}`,
       source: modelSource(v, modsOn()),
       onAction: (a) => {
-        if (tab === "model" && variantKey === v.key) {
+        if (tab === "model" && altId === v.key) {
           setModelAction(actionKey(a));
           renderExpressions();
         }
@@ -59,16 +59,16 @@ export async function showModel(v, my, alive = () => true) {
     if (!still()) return;
     // the official model asked for has a part with no official copy left: the install's own repair message, not
     // awaited (the left side's load has a time limit)
-    if (err?.code === "original_unavailable") void overwrittenMessage(v, "model");
+    if (err?.code === "official_unavailable") void overwrittenMessage(v, "chibi");
     else if (
       err?.code === "source_unsupported" &&
-      v.previewSources?.model?.startsWith("variant:") &&
-      !costumeRefusals.has(`${v.key}|${v.previewSources.model}`)
+      v.previewSources?.chibi?.startsWith("alt:") &&
+      !costumeRefusals.has(`${v.key}|${v.previewSources.chibi}`)
     ) {
-      // a costume refused at its first build (saved before the check existed): read the family again, whose preview
+      // a costume refused at its first build (saved before the check existed): read the student again, whose preview
       // sources leave it out now, instead of an error
-      costumeRefusals.add(`${v.key}|${v.previewSources.model}`);
-      costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), [v.previewSources.model.slice(8)]: "refused" });
+      costumeRefusals.add(`${v.key}|${v.previewSources.chibi}`);
+      costumeState.set(v.key, { ...(costumeState.get(v.key) || {}), [v.previewSources.chibi.slice(4)]: "refused" });
       void reload();
     } else notify(T("model.failed"), { kind: "error", error: err });
   }

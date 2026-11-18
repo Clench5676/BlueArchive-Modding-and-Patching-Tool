@@ -995,7 +995,7 @@ def files_of(*paths):
 def apply_call(entry, path, source="mod:1"):
     return cl.QueuedCall(
         "actions.apply",
-        {"variant": entry[1], "source": source, "kind": "spr"},
+        {"alt": entry[1], "source": source, "resourceType": "portrait"},
         entries=(entry,),
         pins={entry[0]: PINS[entry[0]]},
         files={entry: files_of(path)},
@@ -1046,7 +1046,7 @@ def test_the_latest_action_for_an_entry_wins(tmp_path):
     q.add(toggle(False, True), intent=True)
     restore = cl.QueuedCall(
         "actions.restore",
-        {"variant": "hoshino", "kind": "spr"},
+        {"alt": "hoshino", "resourceType": "portrait"},
         entries=(entry,),
         pins={A: PINS[A]},
         files={entry: files_of(f)},
@@ -1082,7 +1082,7 @@ def test_a_drift_action_is_narrowed_by_a_later_action_on_one_of_its_entries(tmp_
         q.add(
             cl.QueuedCall(
                 "actions.restore",
-                {"variant": "b", "kind": "lobby"},
+                {"alt": "b", "resourceType": "memorialLobby"},
                 entries=(e2,),
                 pins={B: PINS[B]},
                 files={e2: files_of(f2)},
@@ -1138,7 +1138,7 @@ class Unreadable(Host):
     """A host whose mod settings cannot be read: the stored intent raises, as library.intent() does."""
 
     def intent(self):
-        raise ServiceError("profiles_unreadable", file="profiles.json")
+        raise ServiceError("mod_configuration_unreadable", file="profiles.json")
 
 
 def test_an_unreadable_intent_drops_the_toggle_with_its_error_and_runs_the_rest(tmp_path):
@@ -1151,7 +1151,7 @@ def test_an_unreadable_intent_drops_the_toggle_with_its_error_and_runs_the_rest(
     run = q.run(host)
     assert [m for m, _ in host.submitted] == ["actions.apply"] and len(q) == 0
     assert [d.to_json()["error"] for d in run.dropped] == [
-        {"code": "profiles_unreadable", "ref": "E1016", "params": {"file": "profiles.json"}}
+        {"code": "mod_configuration_unreadable", "ref": "E1016", "params": {"file": "profiles.json"}}
     ]
     assert run.dropped[0].call.toggle
 

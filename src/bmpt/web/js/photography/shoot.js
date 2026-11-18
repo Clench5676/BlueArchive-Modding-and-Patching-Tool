@@ -39,7 +39,7 @@ export async function photograph({
   check();
   bridge.pause(true);
   const pose = {
-    mode,
+    mode: mode === "lobby" ? "memorialLobby" : mode,
     expression: mode === "portrait" ? bridge.expression() : "",
     action: bridge.action() || "",
     source: bridge.info().source || "",
@@ -60,7 +60,7 @@ export async function photograph({
       } catch (error) {
         if (error.code !== "capture_not_ready") throw error;
         if (attempt === 59)
-          throw Object.assign(new Error("Renderer did not recover"), { code: "photo_capture_unavailable" });
+          throw Object.assign(new Error("Renderer did not recover"), { code: "thumbnail_capture_unavailable" });
       }
     }
     payload = { png: shot.png, ...pose };

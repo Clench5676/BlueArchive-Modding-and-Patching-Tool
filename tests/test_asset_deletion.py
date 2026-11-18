@@ -13,7 +13,7 @@ from bmpt.library import service, portrait_edit, asset_delete
 from bmpt.library.photographs import Photographs
 from bmpt.library.judge import core_of
 from bmpt.webui.state import UiState
-from bmpt.webui.photography import Photography
+from bmpt.webui.thumbnails import Thumbnails
 from test_library_profiles import world, japan, pin_of, OFFICIAL
 from test_library import header_bundle
 from ba_modding_toolkit.utils import CRCUtils
@@ -194,10 +194,10 @@ def test_gallery_applied_uses_each_collection_target_while_other_skin_deletion_s
         lib.apply_photograph(variant, key, {"bundle": target.name, "name": variants[variant]})
     if not enabled:
         world.toggle(False)
-    api = Photography(
+    api = Thumbnails(
         SimpleNamespace(
             library=lib,
-            photographs=lib.photographs,
+            thumbnail_store=lib.photographs,
             catalog=SimpleNamespace(variant=lambda key: SimpleNamespace(portrait=variants.get(key), names={})),
             game=SimpleNamespace(
                 resource_version="synthetic", collection_target=lambda name: {"bundle": target.name, "name": name}
@@ -232,7 +232,7 @@ def test_photo_removal_reports_target_skins_without_changing_confirmation(recipe
         lib.apply_photograph(variant, key, {"bundle": target.name, "name": variants[variant]})
     if not enabled:
         world.toggle(False)
-    api = Photography(SimpleNamespace(library=lib, catalog=lib.catalog))
+    api = Thumbnails(SimpleNamespace(library=lib, catalog=lib.catalog))
     assert api.removal_info("skin-a", key) == {
         "official": False,
         "used": bool(targets),
@@ -450,9 +450,9 @@ def test_a_held_record_keeps_its_photos_in_use_until_its_file_returns(recipes, m
     snapshot = target.read_bytes(), deepcopy(world.profiles())
     with pytest.raises(ServiceError, match="asset_delete_confirm"):
         held.delete_photograph("test", keys[0])
-    with pytest.raises(ServiceError, match="photo_in_use"):
+    with pytest.raises(ServiceError, match="thumbnail_in_use"):
         held.delete_photograph("test", keys[0], confirm=True)
-    with pytest.raises(ServiceError, match="photo_in_use"):
+    with pytest.raises(ServiceError, match="thumbnail_in_use"):
         portrait_edit.remove_photo(held, keys[1], lambda _: None)
     assert (target.read_bytes(), world.profiles()) == snapshot
     assert all(held.photographs.image("test", key) for key in keys)

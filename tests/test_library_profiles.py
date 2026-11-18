@@ -111,8 +111,8 @@ def test_both_files_unreadable_is_an_error_and_writes_nothing(tmp_path):
     (tmp_path / "profiles.json").write_text("{broken")
     (tmp_path / "profiles.json.prev").write_text("[]")
     profiles = Profiles(tmp_path)
-    expect_error("profiles_unreadable", profiles.read)
-    expect_error("profiles_unreadable", lambda: profiles.update(lambda data: data.update(enabled=False)))
+    expect_error("mod_configuration_unreadable", profiles.read)
+    expect_error("mod_configuration_unreadable", lambda: profiles.update(lambda data: data.update(enabled=False)))
     assert (tmp_path / "profiles.json").read_text() == "{broken"
     assert not (tmp_path / "profiles.json.bad").exists()
 
@@ -922,9 +922,9 @@ def test_unreadable_profiles_migrate_nothing_and_write_nothing(world):
     (world.root / "profiles.json").write_text("{broken")
     (world.root / "profiles.json.prev").write_text("{broken too")
     world.reload()
-    assert world.library.status()["reason"] == "profiles_unreadable"
-    expect_error("profiles_unreadable", lambda: world.toggle(False))
-    expect_error("profiles_unreadable", lambda: world.library.apply("test", "official"))
+    assert world.library.status()["reason"] == "mod_configuration_unreadable"
+    expect_error("mod_configuration_unreadable", lambda: world.toggle(False))
+    expect_error("mod_configuration_unreadable", lambda: world.library.apply("test", "official"))
     assert (world.root / "profiles.json").read_text() == "{broken"
 
 
@@ -1950,7 +1950,7 @@ def test_a_modded_backup_is_never_an_official_copy(world):
     assert world.spr.read_bytes() == mod.file.read_bytes()
     assert any(entry.file.read_bytes() == outside for entry in world.library.mods())
     assert not world.original(world.spr).exists()
-    expect_error("original_unavailable", lambda: world.library.restore("test"))
+    expect_error("official_unavailable", lambda: world.library.restore("test"))
 
 
 def test_an_official_copy_from_another_folder(world):
@@ -3018,7 +3018,7 @@ def test_the_status_lists_installs_with_ids_and_distinct_folder_names(world):
     assert status["unfinished"] == {"pending": 0, "left": 0, "stuck": 0, "held": 0}
     (world.root / "profiles.json").write_text("{broken")
     (world.root / "profiles.json.prev").write_text("{broken")
-    assert world.library.status()["reason"] == "profiles_unreadable"
+    assert world.library.status()["reason"] == "mod_configuration_unreadable"
 
 
 # --- real bundles: copies of an official game folder named by BAMT_TEST_GAME_DIR, never the folder itself ---

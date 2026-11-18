@@ -192,7 +192,7 @@ class Player {
 }
 globalThis.spine = { ...S, SpinePlayer: Player };
 setSpineConsent(true);
-const base = (name) => `/asset/spine/spr/${name}/${"a".repeat(64)}/skeleton`;
+const base = (name) => `/asset/spine/portrait/${name}/${"a".repeat(64)}/skeleton`;
 afterEach(async () => {
   await wait(25);
   focused = true;
@@ -218,7 +218,7 @@ test("a missing background retains the already validated portrait still", async 
 
 test("a cold background key loads and composes after plain card/bust cache hits with an inactive lifecycle", async () => {
   const source = base("shiroko_spr"),
-    background = "/asset/art/bg/BG_Abydos_Collection";
+    background = "/asset/art/background/BG_Abydos_Collection";
   const count = players.length;
   assert.ok(await thumb(source, "card"));
   await wait(25);

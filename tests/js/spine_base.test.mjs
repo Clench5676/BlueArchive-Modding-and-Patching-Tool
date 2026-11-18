@@ -9,35 +9,38 @@ const { setSpineConsent } = await import("../../src/bmpt/web/js/spine/spine-runt
 setSpineConsent(true);
 
 test("a core's skeleton base and its prefix", () => {
-  assert.equal(spineBase("spr", "CH0164_spr"), "/asset/spine/spr/CH0164_spr/skeleton");
-  assert.equal(spinePrefix("spr", "CH0164_spr"), "/asset/spine/spr/CH0164_spr");
-  assert.equal(spineBase("lobby", "airi_home"), "/asset/spine/lobby/airi_home/skeleton");
+  assert.equal(spineBase("portrait", "CH0164_spr"), "/asset/spine/portrait/CH0164_spr/skeleton");
+  assert.equal(spinePrefix("portrait", "CH0164_spr"), "/asset/spine/portrait/CH0164_spr");
+  assert.equal(spineBase("memorialLobby", "airi_home"), "/asset/spine/memorialLobby/airi_home/skeleton");
   assert.equal(spinePrefix("mod", "a1b2"), "/asset/spine/mod/a1b2");
   // the base of the current install's core starts with the prefix the handler forgets
   for (const [kind, core] of [
-    ["spr", "airi_spr"],
+    ["portrait", "airi_spr"],
     ["lobby", "ch0251_home"],
-    ["spr", "odd core/name"],
+    ["portrait", "odd core/name"],
   ]) {
     assert.ok(spineBase(kind, core).startsWith(spinePrefix(kind, core)), core);
   }
   // escaped as one path segment
-  assert.equal(spinePrefix("spr", "a/b"), "/asset/spine/spr/a%2Fb");
+  assert.equal(spinePrefix("portrait", "a/b"), "/asset/spine/portrait/a%2Fb");
 });
 
 test("another install's entry reads its own files through <core>@<id>, under the same prefix", () => {
-  assert.equal(spineBase("spr", "CH0164_spr", "a1b2c3d4e5f6"), "/asset/spine/spr/CH0164_spr@a1b2c3d4e5f6/skeleton");
   assert.equal(
-    spineBase("lobby", "ch0251_home", null),
-    "/asset/spine/lobby/ch0251_home/skeleton",
+    spineBase("portrait", "CH0164_spr", "a1b2c3d4e5f6"),
+    "/asset/spine/portrait/CH0164_spr@a1b2c3d4e5f6/skeleton",
+  );
+  assert.equal(
+    spineBase("memorialLobby", "ch0251_home", null),
+    "/asset/spine/memorialLobby/ch0251_home/skeleton",
     "the current install's",
   );
-  assert.equal(spineBase("lobby", "ch0251_home", ""), spineBase("lobby", "ch0251_home"));
+  assert.equal(spineBase("memorialLobby", "ch0251_home", ""), spineBase("memorialLobby", "ch0251_home"));
   // the library.changed handler's prefix covers both installs' bases, so neither shows the other's picture after a
   // switch
   for (const id of [null, "a1b2c3d4e5f6"])
-    assert.ok(spineBase("spr", "CH0164_spr", id).startsWith(spinePrefix("spr", "CH0164_spr")), String(id));
-  assert.notEqual(spineBase("spr", "CH0164_spr", "a1b2c3d4e5f6"), spineBase("spr", "CH0164_spr"));
+    assert.ok(spineBase("portrait", "CH0164_spr", id).startsWith(spinePrefix("portrait", "CH0164_spr")), String(id));
+  assert.notEqual(spineBase("portrait", "CH0164_spr", "a1b2c3d4e5f6"), spineBase("portrait", "CH0164_spr"));
 });
 
 test("forget drops the thumbnails under a prefix in any case (library.changed names cores in lower case)", async (t) => {
@@ -53,12 +56,12 @@ test("forget drops the thumbnails under a prefix in any case (library.changed na
       dispose() {}
     },
   };
-  const a = Thumbs.thumb(base("spr", "CH0164_spr"), "card");
-  const other = Thumbs.thumb(base("spr", "CH0099_spr"), "card");
-  assert.equal(Thumbs.thumb(base("spr", "CH0164_spr"), "card"), a);
-  Thumbs.forget(spinePrefix("spr", "ch0164_spr"));
-  assert.notEqual(Thumbs.thumb(base("spr", "CH0164_spr"), "card"), a, "forgotten: asked again");
-  assert.equal(Thumbs.thumb(base("spr", "CH0099_spr"), "card"), other, "another core's stays");
+  const a = Thumbs.thumb(base("portrait", "CH0164_spr"), "card");
+  const other = Thumbs.thumb(base("portrait", "CH0099_spr"), "card");
+  assert.equal(Thumbs.thumb(base("portrait", "CH0164_spr"), "card"), a);
+  Thumbs.forget(spinePrefix("portrait", "ch0164_spr"));
+  assert.notEqual(Thumbs.thumb(base("portrait", "CH0164_spr"), "card"), a, "forgotten: asked again");
+  assert.equal(Thumbs.thumb(base("portrait", "CH0099_spr"), "card"), other, "another core's stays");
   const warn = console.warn;
   console.warn = () => {};
   try {

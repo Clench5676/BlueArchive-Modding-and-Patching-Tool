@@ -45,11 +45,12 @@ test("a data folder that cannot be written shows one notice: the quit title, the
   assert.equal(options.error, undefined, "a notice, not a failure report");
 });
 
-function bootHarness(info) {
+function bootHarness(info, upgradedNotice = null) {
   const messages = [],
     sequences = [];
   const env = {
     info,
+    upgradedNotice,
     startup: {},
     fitStage() {},
     addEventListener() {},
@@ -133,4 +134,37 @@ test("a game folder chosen after the no-game notice does not show it again", asy
   await h.firstRun();
   assert.equal(h.sequences.length, 1, "the first-run sequence ran");
   assert.equal(h.messages.length, 1, "one notice per session");
+});
+
+test("an upgrade notice runs first in the start sequence, and once per session across the no-game screen", async () => {
+  const order = [];
+  let calls = 0;
+  const notice = () => {
+    calls++;
+    order.push("upgraded");
+    return Promise.resolve(true);
+  };
+  const withGame = bootHarness({ gameFound: true, dataDirWritable: false, dataDir: "/app/data" }, notice);
+  await withGame.boot();
+  assert.deepEqual(withGame.sequences, [
+    ["upgraded", "data-dir", "consent", "spine", "scan", "impact", "drift", "untracked"],
+  ]);
+  assert.equal(calls, 1);
+
+  calls = 0;
+  const noGame = bootHarness({ gameFound: false, dataDirWritable: false, dataDir: "/app/data" }, notice);
+  await noGame.boot();
+  assert.equal(calls, 1, "the no-game screen shows the notice before the data folder notice");
+  assert.deepEqual(noGame.sequences, []);
+  assert.equal(noGame.messages.length, 1);
+});
+
+test("a failing upgrade notice never stops the data folder notice or the start popups", async () => {
+  const failing = () => Promise.reject(new Error("HTTP 500"));
+  const noGame = bootHarness({ gameFound: false, dataDirWritable: false, dataDir: "/app/data" }, failing);
+  await noGame.boot();
+  assert.equal(noGame.messages.length, 1, "the data folder notice still shows");
+  const noNotice = bootHarness({ gameFound: true, dataDirWritable: true }, null);
+  await noNotice.boot();
+  assert.deepEqual(noNotice.sequences, [["consent", "spine", "scan", "impact", "drift", "untracked"]]);
 });

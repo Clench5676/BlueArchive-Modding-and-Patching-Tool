@@ -56,9 +56,9 @@ function harness(count, { selected = "p0", repository = {} } = {}) {
     photo: (id) => photos.find((item) => item.id === id),
     selectedKey: (key) => key,
     normalized: (value) => value,
-    Loading: { task: (fn) => fn(() => {}), variantName: (e) => e?.variant || "" },
+    Loading: { task: (fn) => fn(() => {}), altName: (e) => e?.alt || "" },
     modJob: () => () => ({ text: "" }),
-    sessionVariant: "v",
+    sessionAlt: "v",
     waitJob: async () => {},
     call: async (name, params) => {
       calls.push([name, params]);
@@ -73,7 +73,7 @@ function harness(count, { selected = "p0", repository = {} } = {}) {
   const api = new Function(
     "env",
     `const {${Object.keys(env)}}=env;let selected=${JSON.stringify(selected)},modal=null,generation=1,
-    repository=${JSON.stringify({ photos: [], app: null, game: {}, applicable: true, ...repository })};
+    repository=${JSON.stringify({ thumbnails: [], app: null, game: {}, applicable: true, ...repository })};
     const GALLERY_HOST='popup',GALLERY_KIND='photo',galleryHost=()=>document.getElementById(GALLERY_HOST);
     ${code};return {galleryReveal,openGallery,restoreGame,galleryDraw,modal:()=>modal,select:id=>{selected=id;},selected:()=>selected};`,
   )(env);
@@ -204,14 +204,14 @@ test("Apply is greyed while the game already shows the chosen photo", async () =
 
 test("the gallery's cards and picture are 3D Model's squares, each photo filling its inclined window", async () => {
   const { switchGrid, MIN_COLUMNS } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
-  for (const width of [1200, 1500, 1818]) assert.deepEqual(switchGrid("photo", width), switchGrid("model", width));
-  assert.equal(MIN_COLUMNS.photo, MIN_COLUMNS.model);
+  for (const width of [1200, 1500, 1818]) assert.deepEqual(switchGrid("photo", width), switchGrid("chibi", width));
+  assert.equal(MIN_COLUMNS.photo, MIN_COLUMNS.chibi);
   const popup = POPUP_MODULES.map((file) =>
     readFileSync(new URL(`../../src/bmpt/web/js/ui/${file}`, import.meta.url), "utf8"),
   ).join("\n");
   // only a model's still is shown whole (contain); a photo, like the other kinds, covers the card's and the
   // picture's window
-  assert.equal(popup.match(/imgSize: kind === "model" \? "contain" : "cover"/g)?.length, 2);
-  assert.match(popup, /const model = !portraitTexture && \(kind === "model" \|\| kind === "photo"\);/);
+  assert.equal(popup.match(/imgSize: kind === "chibi" \? "contain" : "cover"/g)?.length, 2);
+  assert.match(popup, /const model = !portraitTexture && \(kind === "chibi" \|\| kind === "photo"\);/);
   assert.match(popup, /: model \? 1 : 16 \/ 9;/);
 });

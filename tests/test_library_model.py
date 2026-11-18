@@ -155,11 +155,11 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
     env = SimpleNamespace(services=services, rpc=build_api(services))
     try:
         (row,) = analyze(env, uploads)["entries"]
-        assert (row["kind"], row["core"], row["variant"], row["state"]) == ("model", "ch0258_02", "ch0258", "ready")
+        assert (row["resourceType"], row["core"], row["alt"], row["state"]) == ("chibi", "ch0258_02", "ch0258", "ready")
         assert row["paths"] == sorted(map(str, uploads))
         assert {file["target"] for file in row["files"]} == {path.name for path in targets}
         if batch:
-            (result,) = run(env, [row], enableAfterImport=complete, backup=False)
+            (result,) = run(env, [row], enableAfterImport=complete, createBackup=False)
             assert result["outcome"] == "imported"
             assert result["applied"] is complete
             (mod,) = library.mods()
@@ -178,15 +178,15 @@ def test_official_split_model_dependency_mod_on_clones(tmp_path, batch, complete
         assert all(
             (library.root / "originals" / target.name).read_bytes() == official_bytes[target] for target in targets
         )
-        family = env.rpc.call("family.get", {"key": "hoshino"})["result"]
-        variant = next(v for v in family["variants"] if v["key"] == "ch0258")
-        assert variant["selection"]["model"]["installed"]
+        family = env.rpc.call("student.get", {"key": "hoshino"})["result"]
+        variant = next(v for v in family["alts"] if v["key"] == "ch0258")
+        assert variant["selection"]["chibi"]["installed"]
         if shutil.which("node"):
             script = (
                 'import {readFileSync} from "node:fs"; '
                 'import {candidates} from "./src/bmpt/web/js/mods/switch-sources.js"; '
-                'const f=JSON.parse(readFileSync(0,"utf8")); const v=f.variants.find(v=>v.key==="ch0258"); '
-                'if(!candidates(f,v,"model").some(c=>c.id===' + json.dumps(mod.id) + ")) process.exit(1);"
+                'const f=JSON.parse(readFileSync(0,"utf8")); const v=f.alts.find(v=>v.key==="ch0258"); '
+                'if(!candidates(f,v,"chibi").some(c=>c.id===' + json.dumps(mod.id) + ")) process.exit(1);"
             )
             check = subprocess.run(
                 ["node", "--input-type=module", "-e", script],
@@ -318,7 +318,7 @@ def test_split_model_dependency_add_apply_switch_and_restore(split_model_app, ba
     assert all(library.identify_import(path, path.name) == (path.name, "ch0258", "model") for path in uploads)
     if batch:
         (row,) = analyze(env, uploads)["entries"]
-        assert (row["core"], row["variant"], row["state"]) == ("ch0258_02", "ch0258", "ready")
+        assert (row["core"], row["alt"], row["state"]) == ("ch0258_02", "ch0258", "ready")
         (result,) = run(env, [row], enableAfterImport=False)
         assert result["outcome"] == "imported"
         (mod,) = library.mods()
@@ -346,11 +346,11 @@ def test_split_model_dependency_add_apply_switch_and_restore(split_model_app, ba
     assert filtered.core == "ch0258_02" and len(filtered.files) == len(env.parts)
     state = [part for part in library.state("ch0258").files if part.kind == "model"]
     assert {part.applied for part in state} == {f"mod:{mod.id}"} and all(part.restorable for part in state)
-    family = env.rpc.call("family.get", {"key": "hoshino"})["result"]
-    shown = next(v for v in family["variants"] if v["key"] == "ch0258")
-    assert shown["modelCores"] == ["ch0258_02", "ch0258"]
-    assert {part["file"] for part in shown["modelFiles"]} == set(map(str, env.parts))
-    assert shown["selection"]["model"]["installed"]
+    family = env.rpc.call("student.get", {"key": "hoshino"})["result"]
+    shown = next(v for v in family["alts"] if v["key"] == "ch0258")
+    assert shown["chibiCores"] == ["ch0258_02", "ch0258"]
+    assert {part["file"] for part in shown["chibiFiles"]} == set(map(str, env.parts))
+    assert shown["selection"]["chibi"]["installed"]
     (row,) = analyze(env, uploads)["entries"]
     assert row["libraryId"] == mod.id and row["state"] == ("done" if batch else "library")
     # Another choice replaces its own part and returns the previous choice's parts to official.
@@ -388,11 +388,11 @@ def test_complete_split_model_is_one_row_one_mod_and_one_choice(split_model_app,
         for i, path in enumerate(env.parts)
     ]
     (row,) = analyze(env, uploads)["entries"]
-    assert (row["core"], row["variant"], row["state"]) == (env.prefab_core, env.variant_key, "ready")
+    assert (row["core"], row["alt"], row["state"]) == (env.prefab_core, env.variant_key, "ready")
     assert row["paths"] == sorted(map(str, uploads))
     assert {file["target"] for file in row["files"]} == {path.name for path in env.parts}
     if batch:
-        (result,) = run(env, [row], enableAfterImport=True, backup=False)
+        (result,) = run(env, [row], enableAfterImport=True, createBackup=False)
         assert result["outcome"] == "imported" and result["applied"] and result["configured"]
         (mod,) = library.mods()
     else:
@@ -501,11 +501,11 @@ def test_split_model_incomplete_and_unrestorable_cover_the_whole_slot(split_mode
     result = env.library.apply("ch0258", f"mod:{mod.id}", kind="model")
     assert result.incomplete and result.kept_current
     assert env.library.selection("ch0258")["model"]["incomplete"]
-    family = env.rpc.call("family.get", {"key": "hoshino"})["result"]
-    variant = next(v for v in family["variants"] if v["key"] == "ch0258")
+    family = env.rpc.call("student.get", {"key": "hoshino"})["result"]
+    variant = next(v for v in family["alts"] if v["key"] == "ch0258")
     assert next(m for m in variant["modList"] if m["id"] == mod.id)["incomplete"]
-    assert next(p for p in variant["modelFiles"] if p["file"] == str(path))["restorable"] is False
-    with pytest.raises(ServiceError, match="original_unavailable"):
+    assert next(p for p in variant["chibiFiles"] if p["file"] == str(path))["restorable"] is False
+    with pytest.raises(ServiceError, match="official_unavailable"):
         env.library.restore("ch0258", kind="model")
     assert not (env.root / "originals" / path.name).exists()
 
@@ -517,9 +517,9 @@ def test_split_model_drift_and_needs_fix_belong_to_prefab_entry(split_model_app)
     # A record of a write can carry Needs Fix on any dependency, including the file table's copy.
     env.library._applied[str(target.resolve())]["crc"] = "needs_fix"
     env.library._save()
-    family = env.rpc.call("family.get", {"key": "hoshino"})["result"]
-    variant = next(v for v in family["variants"] if v["key"] == "ch0258")
-    assert next(p for p in variant["modelFiles"] if p["file"] == str(target))["crc"] == "needs_fix"
+    family = env.rpc.call("student.get", {"key": "hoshino"})["result"]
+    variant = next(v for v in family["alts"] if v["key"] == "ch0258")
+    assert next(p for p in variant["chibiFiles"] if p["file"] == str(target))["crc"] == "needs_fix"
     target.write_bytes(env.official[target])
     (entry,) = [e for e in env.library.scan().entries if e.kind == "model"]
     assert entry.core == "ch0258_02" and entry.state == "reset"
@@ -584,27 +584,27 @@ def test_split_model_preview_sources_use_prefab_and_every_own_core(split_model_a
     env = split_model_app
     upload = make_mod(env.parts[1], env.tmp / "incoming")
     (row,) = analyze(env, [upload])["entries"]
-    assert env.services.asset("model/ch0258.glb", {"source": "import:" + row["preview"]["key"]}).body == b"glTF"
+    assert env.services.asset("chibi/ch0258.glb", {"source": "import:" + row["preview"]["key"]}).body == b"glTF"
     assert env.previews[-1][0] == "ch0258_02"
     assert set(env.previews[-1][1]) == {upload, env.parts[0], *env.parts[2:]}
     (mod,) = env.library.add_and_apply([upload])
-    assert env.services.asset("model/ch0258.glb", {"source": f"mod:{mod.id}"}).body == b"glTF"
+    assert env.services.asset("chibi/ch0258.glb", {"source": f"mod:{mod.id}"}).body == b"glTF"
     assert env.previews[-1][0] == "ch0258_02" and mod.file in env.previews[-1][1]
-    env.services.asset("model/ch0258.glb", {"source": "official"})
+    env.services.asset("chibi/ch0258.glb", {"source": "official"})
     assert {p.name: p.read_bytes() for p in env.previews[-1][1]} == {p.name: env.official[p] for p in env.parts}
     # No official bytes remain for this omitted part: only the preview may use its current bytes.
     env.parts[3].write_bytes(header_bundle(b"outside dependency"))
-    env.services.asset("model/ch0258.glb", {"source": "official"})
+    env.services.asset("chibi/ch0258.glb", {"source": "official"})
     assert env.parts[3] in env.previews[-1][1]
-    with pytest.raises(ServiceError, match="original_unavailable"):
+    with pytest.raises(ServiceError, match="official_unavailable"):
         env.library.official_bundles("ch0258_02")
     for bundles in ([env.excluded[0]], [upload, env.excluded[-1]]):
         env.services.batch_import = SimpleNamespace(preview=lambda key: ("ch0258", bundles))
         with pytest.raises(KeyError):
-            env.services.asset("model/ch0258.glb", {"source": "import:wrong"})
+            env.services.asset("chibi/ch0258.glb", {"source": "import:wrong"})
     (foreign,) = env.library.add([make_mod(env.excluded[-1], env.tmp / "foreign")])
     with pytest.raises(KeyError):
-        env.services.asset("model/ch0258.glb", {"source": f"mod:{foreign.id}"})
+        env.services.asset("chibi/ch0258.glb", {"source": f"mod:{foreign.id}"})
 
 
 def test_model_cards_read_other_cores_by_their_source_whatever_the_mods_switch(split_model_app):
@@ -621,7 +621,7 @@ def test_model_cards_read_other_cores_by_their_source_whatever_the_mods_switch(s
     assert texture.read_bytes() == modded
 
     def read(source, path):
-        assert env.services.asset("model/ch0258.glb", {"source": source}).body == b"glTF"
+        assert env.services.asset("chibi/ch0258.glb", {"source": source}).body == b"glTF"
         return env.previews[-1][2].resolve(path)
 
     for enabled in (True, False):
@@ -988,16 +988,16 @@ def test_model_missing_official_preserves_outside_parts_and_marks_only_partial(m
         path.name: data for path, data in outside.items()
     }
     assert not list((env.root / "originals").glob("*.bundle"))
-    with pytest.raises(ServiceError, match="original_unavailable"):
+    with pytest.raises(ServiceError, match="official_unavailable"):
         env.library.restore("hoshino", kind="model")
     services = Services(
         env.settings, env.tmp / "app", cache=object(), game=object(), catalog=env.catalog, library=env.library
     )
     services.game_found = lambda: False
     try:
-        family = build_api(services).call("family.get", {"key": "hoshino"})
+        family = build_api(services).call("student.get", {"key": "hoshino"})
         assert "error" not in family, family
-        shown = next(m for v in family["result"]["variants"] for m in v["modList"] if m["id"] == mod.id)
+        shown = next(m for v in family["result"]["alts"] for m in v["modList"] if m["id"] == mod.id)
         assert shown.get("incomplete", False) is partial
     finally:
         services.close()
@@ -1019,9 +1019,9 @@ def test_model_overwritten_add_button_rpc_works_with_mods_off_without_scan(model
         env.settings, env.tmp / "app", cache=object(), game=game, catalog=env.catalog, library=env.library
     )
     try:
-        assert services.asset("model/hoshino.glb", {"source": "official"}).body == b"preview"
+        assert services.asset("chibi/hoshino.glb", {"source": "official"}).body == b"preview"
         assert set(previews[-1]) == set(env.parts)
-        with pytest.raises(ServiceError, match="original_unavailable"):
+        with pytest.raises(ServiceError, match="official_unavailable"):
             env.library.official_bundles("hoshino_original")
         api = build_api(services)
         pin = env.library.current_pin()
@@ -1157,7 +1157,7 @@ def test_official_roster_partial_and_complete_mod_preflight(tmp_path, monkeypatc
 
                     def baseline(path, *args, **kwargs):
                         if state == "all" or state == "replaced" and path in replaced:
-                            raise ServiceError("original_unavailable", file=path.name)
+                            raise ServiceError("official_unavailable", file=path.name)
                         return official_for(path, *args, **kwargs)
 
                     monkeypatch.setattr(library, "_official_for", baseline)

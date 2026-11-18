@@ -137,7 +137,7 @@ test("thumbnails declined before loading use their callers' static images withou
     },
   };
   const scope = thumbnailScope();
-  assert.equal(await thumb("/asset/spine/spr/portrait/skeleton"), null);
-  assert.equal(await scope.thumb(`/asset/spine/spr/portrait/${"a".repeat(64)}/skeleton`), null);
+  assert.equal(await thumb("/asset/spine/portrait/portrait/skeleton"), null);
+  assert.equal(await scope.thumb(`/asset/spine/portrait/portrait/${"a".repeat(64)}/skeleton`), null);
   scope.cancel();
 });

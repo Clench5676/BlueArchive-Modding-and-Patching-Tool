@@ -127,7 +127,7 @@ afterEach(async () => {
 });
 
 test("a failed portrait capture reuses an existing still of the same source revision only", async () => {
-  const base = spineBase("official-spr", "pajamas_cached"),
+  const base = spineBase("official-portrait", "pajamas_cached"),
     Player = spine.SpinePlayer;
   set(base, "a");
   const still = await thumb(base, "bust");
@@ -140,9 +140,9 @@ test("a failed portrait capture reuses an existing still of the same source revi
   };
   try {
     assert.equal(await thumb(base, "portrait"), still);
-    const twin = spineBase("official-spr", "pajamas_other");
+    const twin = spineBase("official-portrait", "pajamas_other");
     set(twin, "a");
-    assert.equal(await thumb(twin, "portrait"), null, "a similarly named variant is a different source");
+    assert.equal(await thumb(twin, "portrait"), null, "a similarly named alt is a different source");
     set(base, "b");
     assert.equal(await thumb(base, "portrait"), null, "never show art from an older revision");
   } finally {
@@ -187,7 +187,7 @@ test("portrait fallback preserves the real picture, queue priority and cancellat
 test("off-screen captures render while lifecycle hooks and the RAF clock are inactive", async () => {
   const Player = spine.SpinePlayer,
     raf = requestAnimationFrame;
-  const base = spineBase("official-spr", "inactive_spr");
+  const base = spineBase("official-portrait", "inactive_spr");
   let draws = 0;
   document.hasFocus = () => false;
   globalThis.requestAnimationFrame = () => assert.fail("a thumbnail must not wait for RAF");
@@ -238,8 +238,8 @@ test("alpha boundaries count as ink in flat-colour art; blank frames do not", ()
 test("a blank inactive capture is rejected quickly and the next skeleton still renders", async () => {
   const Player = spine.SpinePlayer,
     raf = requestAnimationFrame;
-  const blank = spineBase("spr", "inactive_blank_spr"),
-    healthy = spineBase("spr", "inactive_healthy_spr");
+  const blank = spineBase("portrait", "inactive_blank_spr"),
+    healthy = spineBase("portrait", "inactive_healthy_spr");
   let reads = 0;
   document.hidden = true;
   globalThis.requestAnimationFrame = () => assert.fail("blank captures cannot wait for RAF");
@@ -268,10 +268,10 @@ test("a blank inactive capture is rejected quickly and the next skeleton still r
 });
 
 test("thumbnail cache follows file revisions, source, install, frame and expression", async () => {
-  const official = spineBase("official-spr", "ibuki_spr");
+  const official = spineBase("official-portrait", "ibuki_spr");
   const mod = spineBase("mod", "ibuki");
-  const live = spineBase("spr", "ibuki_spr");
-  const other = spineBase("official-spr", "ibuki_spr", "other-install");
+  const live = spineBase("portrait", "ibuki_spr");
+  const other = spineBase("official-portrait", "ibuki_spr", "other-install");
   for (const base of [official, mod, live, other]) set(base, "a");
   const before = await thumb(live, "card");
   assert.equal(await thumb(live, "card"), before);
@@ -299,7 +299,7 @@ test("thumbnail cache follows file revisions, source, install, frame and express
 });
 
 test("an unavailable official source leaves the plain placeholder, including after an earlier success", async () => {
-  const base = spineBase("official-spr", "missing_spr");
+  const base = spineBase("official-portrait", "missing_spr");
   assert.equal(await thumb(base), null);
   set(base, "d");
   assert.ok(await thumb(base));
@@ -310,21 +310,21 @@ test("an unavailable official source leaves the plain placeholder, including aft
 });
 
 test("resolved bases keep the revision beside every atlas page and can be forgotten by core", async () => {
-  const base = spineBase("official-lobby", "ibuki_home");
+  const base = spineBase("official-memorialLobby", "ibuki_home");
   set(base, "e");
   const resolved = await spineAssetBase(base);
   assert.equal(await spineAssetBase(resolved), resolved);
   assert.equal(
     new URL("page.png", `http://localhost${resolved}.atlas`).pathname,
-    `/asset/spine/official-lobby/ibuki_home/${"e".repeat(64)}/page.png`,
+    `/asset/spine/official-memorialLobby/ibuki_home/${"e".repeat(64)}/page.png`,
   );
   const picture = await thumb(resolved);
-  forget("/asset/spine/official-lobby/IBUKI_HOME");
+  forget("/asset/spine/official-memorialLobby/IBUKI_HOME");
   assert.notEqual(await thumb(resolved), picture);
 });
 
 test("a still starts from cleared tracks, so the skeleton's first animation (a lobby's intro) never mixes in", async () => {
-  const base = spineBase("official-lobby", "pose_home");
+  const base = spineBase("official-memorialLobby", "pose_home");
   set(base, "1");
   animations = ["Start_Idle_01", "Idle_01", "Talk_01_A"];
   posed.length = 0;
@@ -340,13 +340,13 @@ test("a still starts from cleared tracks, so the skeleton's first animation (a l
   assert.ok(posed.findIndex((e) => e[0] === "setup") < idle, "setup pose first");
   // a lobby without Idle_01 rests in its first other animation, never an intro; one with intros only in the setup pose
   animations = ["Start_Idle_01", "Dummy", "Loop_01"];
-  const other = spineBase("official-lobby", "pose2_home");
+  const other = spineBase("official-memorialLobby", "pose2_home");
   set(other, "2");
   posed.length = 0;
   await thumb(other, "card", null, true);
   assert.equal(posed.find((e) => e[0] === "set")[2], "Loop_01");
   animations = ["Start_Idle_01"];
-  const intro = spineBase("official-lobby", "pose3_home");
+  const intro = spineBase("official-memorialLobby", "pose3_home");
   set(intro, "3");
   posed.length = 0;
   await thumb(intro, "card", null, true);
@@ -355,7 +355,7 @@ test("a still starts from cleared tracks, so the skeleton's first animation (a l
 });
 
 test("the card and the big picture of one skeleton share a load", async () => {
-  const base = spineBase("official-spr", "pair_spr");
+  const base = spineBase("official-portrait", "pair_spr");
   set(base, "4");
   const count = loaded.length;
   const card = await thumb(base, "card");
@@ -363,7 +363,7 @@ test("the card and the big picture of one skeleton share a load", async () => {
   assert.ok(card && bust && card !== bust);
   assert.equal(loaded.length, count + 1, "one skeleton load for both frames");
   // the other way round, and an expression frame is no companion
-  const second = spineBase("official-spr", "pair2_spr");
+  const second = spineBase("official-portrait", "pair2_spr");
   set(second, "5");
   await thumb(second, "bust");
   assert.equal(loaded.length, count + 2);
@@ -383,7 +383,7 @@ test("a card asked to go first is rendered before the ones queued earlier", asyn
   // the first load waits, so the rest are in the queue when the bump comes
   globalThis.spine.SpinePlayer = class extends real {
     constructor(el, config) {
-      order.push(config.skeleton.match(/official-spr\/(\w+)\//)[1]);
+      order.push(config.skeleton.match(/official-portrait\/(\w+)\//)[1]);
       super(el, {
         ...config,
         success: (player) => (order.length === 1 ? gate : Promise.resolve()).then(() => config.success(player)),
@@ -391,7 +391,7 @@ test("a card asked to go first is rendered before the ones queued earlier", asyn
     }
   };
   try {
-    const bases = ["a1", "a2", "a3", "a4"].map((core) => spineBase("official-spr", `${core}_spr`));
+    const bases = ["a1", "a2", "a3", "a4"].map((core) => spineBase("official-portrait", `${core}_spr`));
     bases.forEach((base, i) => set(base, String(6 + i)));
     const pics = bases.map((base) => thumb(base, "card"));
     await new Promise((resolve) => setTimeout(resolve, 0)); // the manifests answered, the queue filled
@@ -400,7 +400,7 @@ test("a card asked to go first is rendered before the ones queued earlier", asyn
     await Promise.all(pics);
     assert.deepEqual(order, ["a1_spr", "a4_spr", "a2_spr", "a3_spr"]);
     // asked to go first before the files were resolved: it goes first once they are
-    const later = ["b1", "b2", "b3"].map((core) => spineBase("official-spr", `${core}_spr`));
+    const later = ["b1", "b2", "b3"].map((core) => spineBase("official-portrait", `${core}_spr`));
     later.forEach((base, i) => set(base, a(i)));
     order.length = 0;
     let open2;
@@ -409,7 +409,7 @@ test("a card asked to go first is rendered before the ones queued earlier", asyn
     });
     globalThis.spine.SpinePlayer = class extends real {
       constructor(el, config) {
-        order.push(config.skeleton.match(/official-spr\/(\w+)\//)[1]);
+        order.push(config.skeleton.match(/official-portrait\/(\w+)\//)[1]);
         super(el, {
           ...config,
           success: (player) => (order.length === 1 ? gate2 : Promise.resolve()).then(() => config.success(player)),
@@ -429,7 +429,7 @@ test("a card asked to go first is rendered before the ones queued earlier", asyn
 const a = (i) => "abcdef"[i];
 
 test("overlapping manifest requests for one directory share one answer", async () => {
-  const base = spineBase("official-spr", "dedupe_spr");
+  const base = spineBase("official-portrait", "dedupe_spr");
   set(base, "8");
   const before = requests.length;
   const [x, y] = await Promise.all([spineAssetBase(base), spineAssetBase(base)]);
@@ -440,9 +440,9 @@ test("overlapping manifest requests for one directory share one answer", async (
 });
 
 test("forget invalidates delayed manifests by core without old completions deleting their replacements", async () => {
-  const base = spineBase("spr", "Delayed_spr");
-  const install = spineBase("spr", "Delayed_spr", "other-install");
-  const other = spineBase("spr", "unrelated_spr");
+  const base = spineBase("portrait", "Delayed_spr");
+  const install = spineBase("portrait", "Delayed_spr", "other-install");
+  const other = spineBase("portrait", "unrelated_spr");
   const fetch = globalThis.fetch,
     waiting = [];
   globalThis.fetch = (url) => new Promise((resolve) => waiting.push({ url, resolve }));
@@ -452,7 +452,7 @@ test("forget invalidates delayed manifests by core without old completions delet
     const before = spineAssetBase(base),
       installBefore = spineAssetBase(install),
       unrelated = spineAssetBase(other);
-    forget(spinePrefix("spr", "DELAYED_SPR"));
+    forget(spinePrefix("portrait", "DELAYED_SPR"));
     const after = spineAssetBase(base),
       installAfter = spineAssetBase(install);
     assert.equal(waiting.length, 5, "both installs get fresh requests after the change");
@@ -484,7 +484,7 @@ test("forget invalidates delayed manifests by core without old completions delet
 });
 
 test("a thumbnail with a delayed old manifest recovers after a switch without a redraw", async () => {
-  const base = spineBase("spr", "switch_spr"),
+  const base = spineBase("portrait", "switch_spr"),
     manifest = base.replace(/skeleton$/, "manifest.json");
   set(base, "a");
   const fetch = globalThis.fetch,
@@ -536,7 +536,7 @@ test("a thumbnail with a delayed old manifest recovers after a switch without a 
     const before = thumb(base, "card");
     await asking;
     set(base, "b");
-    forget(spinePrefix("spr", "SWITCH_SPR"));
+    forget(spinePrefix("portrait", "SWITCH_SPR"));
     const after = thumb(base, "card");
     assert.equal(requests.length, start + 2, "the thumbnail after the switch does not join the delayed manifest");
     release();
@@ -558,7 +558,7 @@ test("a thumbnail with a delayed old manifest recovers after a switch without a 
 });
 
 test("revision rejection retries once even if the files keep switching", async () => {
-  const base = spineBase("spr", "retry_spr");
+  const base = spineBase("portrait", "retry_spr");
   set(base, "a");
   const Player = globalThis.spine.SpinePlayer,
     count = loaded.length,
@@ -586,7 +586,7 @@ test("revision rejection retries once even if the files keep switching", async (
 test("a stalled manifest expires and a later load can ask afresh", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const fetch = globalThis.fetch,
-    base = spineBase("spr", "stalled_spr");
+    base = spineBase("portrait", "stalled_spr");
   try {
     globalThis.fetch = () => new Promise(() => {});
     const failed = assert.rejects(spineAssetBase(base), /Spine manifest .*: timed out/);
@@ -604,8 +604,8 @@ test("a stalled manifest expires and a later load can ask afresh", async (t) => 
 test("a stalled companion capture releases the thumbnail queue for another core", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const create = document.createElement,
-    base = spineBase("spr", "companion_spr"),
-    next = spineBase("spr", "after_companion_spr");
+    base = spineBase("portrait", "companion_spr"),
+    next = spineBase("portrait", "after_companion_spr");
   let encodes = 0;
   const fetch = globalThis.fetch,
     reports = [];
@@ -646,8 +646,8 @@ test("a portrait timeout is logged, waits for idle with backoff, and resolves it
     fetch = globalThis.fetch,
     reports = [],
     scope = thumbnailScope();
-  const base = spineBase("official-spr", "timeout_once_spr"),
-    next = spineBase("spr", "timeout_next_spr");
+  const base = spineBase("official-portrait", "timeout_once_spr"),
+    next = spineBase("portrait", "timeout_next_spr");
   let encodes = 0,
     release,
     late;
@@ -676,7 +676,7 @@ test("a portrait timeout is logged, waits for idle with backoff, and resolves it
     assert.equal(encodes, 2, "fresh queued work advances before the retry");
     assert.equal(reports.length, 1);
     assert.equal(reports[0].method, "preview.failed");
-    assert.match(reports[0].params.url, /official-spr\/timeout_once_spr/);
+    assert.match(reports[0].params.url, /official-portrait\/timeout_once_spr/);
     assert.equal(reports[0].params.step, "thumbnail:portrait");
     t.mock.timers.tick(1999);
     await new Promise(setImmediate);
@@ -711,8 +711,8 @@ test("portrait retries stop after three retries with backoff and cancel when the
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const create = document.createElement,
     scope = thumbnailScope();
-  const base = spineBase("official-spr", "timeout_bounded_spr"),
-    cancelled = spineBase("official-spr", "timeout_cancel_spr");
+  const base = spineBase("official-portrait", "timeout_bounded_spr"),
+    cancelled = spineBase("official-portrait", "timeout_cancel_spr");
   let encodes = 0;
   try {
     document.createElement = () => ({
@@ -767,7 +767,7 @@ test("portrait retries stop after three retries with backoff and cancel when the
 
 test("a bust requested during its companion capture joins that render without replacing its consumers", async () => {
   const create = document.createElement,
-    base = spineBase("spr", "late_companion_spr"),
+    base = spineBase("portrait", "late_companion_spr"),
     scope = thumbnailScope();
   let encodes = 0,
     release;
@@ -799,7 +799,7 @@ test("a bust requested during its companion capture joins that render without re
 });
 
 test("a detail scope reuses manifest answers across redraws and revalidates after invalidation or navigation", async () => {
-  const base = spineBase("official-spr", "scoped_spr"),
+  const base = spineBase("official-portrait", "scoped_spr"),
     start = requests.length;
   const scope = thumbnailScope();
   try {
@@ -809,7 +809,7 @@ test("a detail scope reuses manifest answers across redraws and revalidates afte
     assert.equal(await scope.thumb(base, "face", "00"), first);
     assert.equal(requests.length, start + 1, "one check for the screen's source, including subsequent redraws");
     set(base, "b");
-    forget(spinePrefix("official-spr", "SCOPED_SPR"));
+    forget(spinePrefix("official-portrait", "SCOPED_SPR"));
     assert.notEqual(await scope.thumb(base, "face", "00"), first);
     assert.equal(requests.length, start + 2);
   } finally {
@@ -825,7 +825,7 @@ test("a detail scope reuses manifest answers across redraws and revalidates afte
 });
 
 test("faces rejected at the same revision share one fresh manifest and one replacement player", async () => {
-  const base = spineBase("spr", "refresh_faces_spr"),
+  const base = spineBase("portrait", "refresh_faces_spr"),
     scope = thumbnailScope(),
     Player = spine.SpinePlayer;
   const start = requests.length,
@@ -853,7 +853,7 @@ test("faces rejected at the same revision share one fresh manifest and one repla
 test("prioritising before manifests answer puts the visible source before an older queue", async () => {
   const Player = spine.SpinePlayer,
     order = [],
-    base = spineBase("spr", "visible_spr");
+    base = spineBase("portrait", "visible_spr");
   let release;
   const gate = new Promise((resolve) => {
     release = resolve;
@@ -868,8 +868,8 @@ test("prioritising before manifests answer puts the visible source before an old
     }
   };
   try {
-    const blocker = spineBase("spr", "blocker_spr"),
-      older = spineBase("spr", "older_spr");
+    const blocker = spineBase("portrait", "blocker_spr"),
+      older = spineBase("portrait", "older_spr");
     for (const b of [base, blocker, older]) set(b, "c");
     const first = thumb(blocker, "face", "00");
     await new Promise(setImmediate);
@@ -890,8 +890,8 @@ test("prioritising before manifests answer puts the visible source before an old
 test("a stalled skeleton releases the next core and retries its faces together within a bounded budget", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const Player = spine.SpinePlayer,
-    base = spineBase("official-spr", "stuck_spr"),
-    next = spineBase("spr", "healthy_spr");
+    base = spineBase("official-portrait", "stuck_spr"),
+    next = spineBase("portrait", "healthy_spr");
   const scope = thumbnailScope(),
     disposed = [];
   spine.SpinePlayer = class extends Player {
@@ -942,8 +942,8 @@ test("a stuck encoder lets another skeleton render before recovering the pending
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const create = document.createElement,
     scope = thumbnailScope();
-  const base = spineBase("spr", "stuck_encoder_spr"),
-    next = spineBase("spr", "after_encoder_spr");
+  const base = spineBase("portrait", "stuck_encoder_spr"),
+    next = spineBase("portrait", "after_encoder_spr");
   let encodes = 0,
     late;
   const before = blobs;
@@ -983,8 +983,8 @@ test("a stuck encoder lets another skeleton render before recovering the pending
 test("cancelling scopes removes queued work and disposes a shared render only after its last consumer leaves", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const Player = spine.SpinePlayer,
-    base = spineBase("spr", "shared_cancel_spr"),
-    next = spineBase("spr", "queued_cancel_spr");
+    base = spineBase("portrait", "shared_cancel_spr"),
+    next = spineBase("portrait", "queued_cancel_spr");
   const first = thumbnailScope(),
     second = thumbnailScope(),
     players = [];
@@ -1036,7 +1036,7 @@ test("a cancelled player's cleanup cannot fail a new page's request for the same
   const Player = spine.SpinePlayer,
     first = thumbnailScope(),
     next = thumbnailScope();
-  const resolved = spineBase("spr", "reenter_spr").replace("/skeleton", `/${"c".repeat(64)}/skeleton`);
+  const resolved = spineBase("portrait", "reenter_spr").replace("/skeleton", `/${"c".repeat(64)}/skeleton`);
   let count = 0;
   spine.SpinePlayer = class extends Player {
     constructor(el, config) {
@@ -1069,7 +1069,7 @@ test("cancelling a scope aborts a stalled manifest without leaving its deadline 
       signal = options.signal;
       return new Promise(() => {});
     };
-    const pending = scope.thumb(spineBase("spr", "cancel_manifest_spr"));
+    const pending = scope.thumb(spineBase("portrait", "cancel_manifest_spr"));
     scope.cancel();
     assert.equal(signal.aborted, true);
     assert.equal(await pending, null);
@@ -1086,7 +1086,7 @@ test("backgrounds participate in still cache identity and propagate to companion
   const create = document.createElement,
     Image = globalThis.Image,
     draws = [];
-  const base = spineBase("spr", "background_spr"),
+  const base = spineBase("portrait", "background_spr"),
     loadedBefore = loaded.length;
   document.createElement = (tag) =>
     tag === "canvas"
@@ -1225,7 +1225,7 @@ test("the encoded thumbnail retains its validated portrait while the background 
 });
 
 test("a Mod portrait never falls back to the official cache even with identical revision and background", async () => {
-  const official = spineBase("official-spr", "hina_spr"),
+  const official = spineBase("official-portrait", "hina_spr"),
     mod = spineBase("mod", "hina_spr");
   set(official, "a");
   set(mod, "a");
@@ -1252,8 +1252,8 @@ test("queued stills and later faces get a full render budget after their own cap
   const create = document.createElement,
     scope = thumbnailScope(),
     callbacks = [];
-  const base = spineBase("official-spr", "busy_budget_spr"),
-    next = spineBase("official-spr", "busy_later_spr");
+  const base = spineBase("official-portrait", "busy_budget_spr"),
+    next = spineBase("official-portrait", "busy_later_spr");
   const start = loaded.length;
   try {
     document.createElement = () => ({
@@ -1293,7 +1293,7 @@ test("a popup preempts the background renderer and keeps priority between lazy r
     background = thumbnailScope(),
     callbacks = [];
   const bases = ["roster_active", "roster_queued", "hina_original", "hina_dress"].map((name) =>
-    spineBase("official-spr", name),
+    spineBase("official-portrait", name),
   );
   let popup;
   const before = blobs,
@@ -1358,9 +1358,9 @@ test("popup priority cancels a loading background player and discards abandoned 
   const Player = spine.SpinePlayer,
     background = thumbnailScope(),
     at = loaded.length;
-  const base = spineBase("spr", "preempt_loading"),
-    queuedBase = spineBase("spr", "abandoned_background"),
-    popupBase = spineBase("official-spr", "popup_after_load");
+  const base = spineBase("portrait", "preempt_loading"),
+    queuedBase = spineBase("portrait", "abandoned_background"),
+    popupBase = spineBase("official-portrait", "popup_after_load");
   let popup;
   spine.SpinePlayer = class extends Player {
     constructor(el, config) {
@@ -1396,7 +1396,7 @@ test("a shared popup and background still survives another popup scope closing",
     background = thumbnailScope();
   const first = thumbnailScope({ priority: "popup" }),
     second = thumbnailScope({ priority: "popup" });
-  const base = spineBase("official-spr", "shared_popup_priority");
+  const base = spineBase("official-portrait", "shared_popup_priority");
   let release;
   try {
     document.createElement = () => ({
@@ -1529,7 +1529,7 @@ function persistentBackend() {
 
 test("an opted-in persistent PNG hit bypasses Spine creation after the memory cache is forgotten", async () => {
   const server = persistentBackend(),
-    base = spineBase("official-spr", "disk_hit_spr"),
+    base = spineBase("official-portrait", "disk_hit_spr"),
     before = loaded.length;
   try {
     set(base, "a");
@@ -1556,8 +1556,8 @@ for (const dependency of ["source", "background", "framing"])
   test(`persistent thumbnail misses when its ${dependency} revision changes`, async () => {
     const server = persistentBackend(),
       lobby = dependency === "framing";
-    const base = spineBase(lobby ? "official-lobby" : "official-spr", `disk_${dependency}`);
-    const background = dependency === "background" ? "/asset/art/bg/disk-revision.png" : null;
+    const base = spineBase(lobby ? "official-memorialLobby" : "official-portrait", `disk_${dependency}`);
+    const background = dependency === "background" ? "/asset/art/background/disk-revision.png" : null;
     const render = () => thumb(base, "face", null, lobby, null, background);
     const before = loaded.length;
     try {
@@ -1592,8 +1592,8 @@ for (const missing of ["background", "framing"])
   test(`an incomplete ${missing} capture never poisons the persistent thumbnail cache`, async () => {
     const server = persistentBackend(),
       lobby = missing === "framing";
-    const base = spineBase(lobby ? "official-lobby" : "official-spr", `disk_missing_${missing}`);
-    const background = missing === "background" ? "/asset/art/bg/disk-missing.png" : null;
+    const base = spineBase(lobby ? "official-memorialLobby" : "official-portrait", `disk_missing_${missing}`);
+    const background = missing === "background" ? "/asset/art/background/disk-missing.png" : null;
     const before = loaded.length;
     try {
       set(base, "e");
@@ -1621,7 +1621,7 @@ for (const missing of ["background", "framing"])
 
 test("cancelling a delayed disk thumbnail read never publishes late art or starts a player", async () => {
   const server = persistentBackend(),
-    base = spineBase("official-spr", "disk_cancel_spr"),
+    base = spineBase("official-portrait", "disk_cancel_spr"),
     scope = thumbnailScope();
   let release;
   try {
@@ -1676,8 +1676,8 @@ test("Hall visible-thumbnail retries drain and settle while a modal loading hold
     Player = spine.SpinePlayer,
     scope = thumbnailScope({ priority: "popup" }),
     disposed = [];
-  const stuck = spineBase("official-spr", "hall_held_stuck_spr"),
-    healthy = spineBase("official-spr", "hall_held_healthy_spr");
+  const stuck = spineBase("official-portrait", "hall_held_stuck_spr"),
+    healthy = spineBase("official-portrait", "hall_held_healthy_spr");
   spine.SpinePlayer = class extends Player {
     constructor(el, config) {
       super(el, config.skeleton.includes("/hall_held_stuck_spr/") ? { ...config, success() {} } : config);
@@ -1730,7 +1730,7 @@ test("cancelling a Hall modal during first capture timeout releases its hold and
     }
   };
   try {
-    const base = spineBase("official-spr", "hall_cancel_retry_spr");
+    const base = spineBase("official-portrait", "hall_cancel_retry_spr");
     set(base, "e");
     const cancelled = new Promise((resolve) => scope.signal.addEventListener("abort", resolve, { once: true }));
     const pending = Loading.hold(() => scope.thumb(base, "portrait"), { until: cancelled });
@@ -1761,7 +1761,7 @@ test("a non-timeout Hall capture failure settles its modal hold without awaiting
     }
   };
   try {
-    const base = spineBase("official-spr", "hall_failed_capture_spr");
+    const base = spineBase("official-portrait", "hall_failed_capture_spr");
     set(base, "f");
     const pending = Loading.hold(() => scope.thumb(base, "portrait"));
     assert.equal(Loading.held(), true);

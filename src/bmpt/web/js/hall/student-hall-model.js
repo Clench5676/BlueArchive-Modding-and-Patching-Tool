@@ -3,22 +3,22 @@ import { order, normalizeView, fold, terms } from "../roster/roster-order.js";
 import { PORTRAIT_ANCHOR, hallScale } from "./student-hall-framing.js";
 
 const copy = (value) => structuredClone(value);
-/** The key of a portrait or lobby source: its variant and its source. */
-export const sourceKey = (source) => `${source.variant}:${source.source}`;
+/** The key of a portrait or lobby source: its alt and its source. */
+export const sourceKey = (source) => `${source.alt}:${source.source}`;
 function canonicalDraft(value) {
   const result = copy(value);
   result.portraitScale = hallScale(result.portraitScale);
-  for (const group of ["portraits", "memorials"]) {
+  for (const group of ["portraits", "memorialLobbies"]) {
     const kept = new Map();
     result[group] = result[group].filter((entry) => {
-      if (!entry.variant || !entry.source) return true;
+      if (!entry.alt || !entry.source) return true;
       const key = sourceKey(entry),
         first = kept.get(key);
       if (!first) {
         kept.set(key, entry);
         return true;
       }
-      if (group === "memorials" && entry.id === result.active) first.id = entry.id;
+      if (group === "memorialLobbies" && entry.id === result.active) first.id = entry.id;
       return false;
     });
   }
@@ -59,22 +59,22 @@ export function createDraft(saved) {
     },
     add(choice, uuid = () => crypto.randomUUID()) {
       if (!draft) throw new Error("No Hall draft");
-      const entries = choice.kind === "spr" ? draft.portraits : draft.memorials;
+      const entries = choice.resourceType === "portrait" ? draft.portraits : draft.memorialLobbies;
       if (entries.some((entry) => sourceKey(entry) === sourceKey(choice))) return null;
-      const entry = { id: uuid(), variant: choice.variant, source: choice.source };
-      if (choice.kind === "spr") {
+      const entry = { id: uuid(), alt: choice.alt, source: choice.source };
+      if (choice.resourceType === "portrait") {
         const n = draft.portraits.length;
         Object.assign(entry, { x: PORTRAIT_ANCHOR.x + (((n + 2) % 5) - 2) * 240, y: PORTRAIT_ANCHOR.y, scale: 1 });
         draft.portraits.push(entry);
       } else {
-        draft.memorials.push(entry);
+        draft.memorialLobbies.push(entry);
         draft.active ||= entry.id;
       }
       return entry;
     },
     remove(id) {
       if (!draft) return false;
-      const list = kind === "layout" ? draft.portraits : draft.memorials;
+      const list = kind === "layout" ? draft.portraits : draft.memorialLobbies;
       if (list.length <= 1) return false;
       const index = list.findIndex((entry) => entry.id === id);
       if (index < 0) return false;
@@ -84,7 +84,7 @@ export function createDraft(saved) {
     },
     move(id, before) {
       if (!draft) return false;
-      const list = draft.memorials,
+      const list = draft.memorialLobbies,
         from = list.findIndex((e) => e.id === id),
         to = list.findIndex((e) => e.id === before);
       if (from < 0 || to < 0 || from === to) return false;
@@ -118,7 +118,7 @@ export function createDraft(saved) {
         )
       )
         return false;
-      entry.variant = choice.variant;
+      entry.alt = choice.alt;
       entry.source = choice.source;
       return true;
     },
@@ -126,69 +126,69 @@ export function createDraft(saved) {
       if (!draft || kind !== "layout") return false;
       const entry = draft.portraits.find((item) => item.id === id);
       if (!entry) return false;
-      entry.mirror = !entry.mirror;
+      entry.flipHorizontal = !entry.flipHorizontal;
       return true;
     },
   };
 }
 
 /**
- * Group the source choices of a kind into the families the roster order works on.
+ * Group the source choices of a kind into the students the roster order works on.
  * @param {object[]} choices
  * @param {string|null} [kind] The kind to keep; all by default.
  */
 export function pickerData(choices, kind = null) {
-  if (kind) choices = choices.filter((choice) => choice.kind === kind);
-  const families = new Map(),
-    variants = new Map();
+  if (kind) choices = choices.filter((choice) => choice.resourceType === kind);
+  const students = new Map(),
+    alts = new Map();
   for (const choice of choices) {
-    const family = choice.family || choice.variant;
-    if (!families.has(family))
-      families.set(family, {
-        key: family,
-        base: choice.familyNames || {},
-        aliases: choice.familyAliases || [],
+    const student = choice.student || choice.alt;
+    if (!students.has(student))
+      students.set(student, {
+        key: student,
+        studentNames: choice.studentNames || {},
+        aliases: choice.studentAliases || [],
         school: choice.school,
-        variants: [],
+        alts: [],
       });
-    if (!variants.has(choice.variant)) {
+    if (!alts.has(choice.alt)) {
       const v = {
-        key: choice.variant,
-        family,
+        key: choice.alt,
+        student,
         names: choice.names || {},
         aliases: choice.aliases || [],
-        custom: choice.custom || [],
+        customAliases: choice.customAliases || [],
         fileId: choice.fileId,
-        model: choice.model,
-        portrait: choice.portrait,
+        chibi: choice.chibi,
+        officialThumbnail: choice.officialThumbnail,
         favorite: !!choice.favorite,
-        recruitable: choice.released ?? choice.recruitable ?? !!choice.core,
+        releasedOnServer: choice.releasedOnServer ?? !!choice.core,
         order: choice.order || 0,
         recent: choice.recent,
         added: choice.modAdded || choice.added,
         mods: kind ? 0 : choice.mods || 0,
         modsReported: !kind && Number.isFinite(choice.mods),
         modNames: [],
-        modCounts: { spr: 0, lobby: 0 },
+        modCounts: { portrait: 0, memorialLobby: 0 },
       };
-      variants.set(choice.variant, v);
-      families.get(family).variants.push(v);
+      alts.set(choice.alt, v);
+      students.get(student).alts.push(v);
     }
-    const v = variants.get(choice.variant);
+    const v = alts.get(choice.alt);
     v.aliases = [...new Set([...v.aliases, ...(choice.aliases || [])])];
-    v.custom = [...new Set([...v.custom, ...(choice.custom || [])])];
+    v.customAliases = [...new Set([...v.customAliases, ...(choice.customAliases || [])])];
     const added = choice.modAdded || choice.added;
     if (added && (!v.added || Date.parse(added) > Date.parse(v.added))) v.added = added;
-    if (choice.kind === "spr") v.spr ||= choice.core || choice.source;
-    if (choice.kind === "lobby") v.lobby ||= choice.core || choice.source;
+    if (choice.resourceType === "portrait") v.portrait ||= choice.core || choice.source;
+    if (choice.resourceType === "memorialLobby") v.memorialLobby ||= choice.core || choice.source;
     if (choice.source.startsWith("mod:")) {
       if (!v.modsReported) v.mods++;
-      v.modCounts[choice.kind]++;
-      v.modNames.push(choice.label || "");
-      if (choice.kind === "spr") v.replaced = choice.source;
+      v.modCounts[choice.resourceType]++;
+      v.modNames.push(choice.name || "");
+      if (choice.resourceType === "portrait") v.replaced = choice.source;
     }
   }
-  return { families: [...families.values()] };
+  return { students: [...students.values()] };
 }
 /**
  * The students to pick from, in the roster's order for a view and a search.
@@ -209,14 +209,14 @@ const namesOf = (data) =>
 function sourceMatches(choice, words) {
   const text = fold(
     [
-      choice.label,
-      choice.variant,
+      choice.name,
+      choice.alt,
       choice.fileId,
       ...(choice.aliases || []),
-      ...(choice.custom || []),
-      ...(choice.familyAliases || []),
+      ...(choice.customAliases || []),
+      ...(choice.studentAliases || []),
       ...namesOf(choice.names),
-      ...namesOf(choice.familyNames),
+      ...namesOf(choice.studentNames),
     ]
       .filter(Boolean)
       .join(" "),
@@ -230,15 +230,15 @@ function sourceMatches(choice, words) {
  * @returns {object[]}
  */
 export function portraitRows(choices, view, query, label, locale) {
-  const mods = choices.filter((c) => c.kind === "spr");
-  const cards = studentChoices(choices, view, query, label, locale, "spr"),
+  const mods = choices.filter((c) => c.resourceType === "portrait");
+  const cards = studentChoices(choices, view, query, label, locale, "portrait"),
     words = terms(query);
   return cards
-    .map((student) => ({
-      student,
-      key: view.merged ? student.family : student.key,
+    .map((card) => ({
+      student: card,
+      key: view.groupAlts ? card.student : card.key,
       choices: mods.filter((c) => {
-        const belongs = view.merged ? (c.family || c.variant) === student.family : c.variant === student.key;
+        const belongs = view.groupAlts ? (c.student || c.alt) === card.student : c.alt === card.key;
         return belongs && sourceMatches(c, words);
       }),
     }))
@@ -262,18 +262,18 @@ export function memorialChoices(
   label = (names) => names?.en,
   locale = "en",
 ) {
-  const keyOf = (choice) => (view.merged ? choice.family || choice.variant : choice.variant);
-  const visible = new Set(students.map((student) => (view.merged ? student.family : student.key))),
+  const keyOf = (choice) => (view.groupAlts ? choice.student || choice.alt : choice.alt);
+  const visible = new Set(students.map((card) => (view.groupAlts ? card.student : card.key))),
     words = terms(query);
-  const selectedKey = view.merged ? students.find((student) => student.key === selected)?.family || selected : selected;
+  const selectedKey = view.groupAlts ? students.find((card) => card.key === selected)?.student || selected : selected;
   const list = choices.filter(
     (choice) =>
-      choice.kind === "lobby" &&
+      choice.resourceType === "memorialLobby" &&
       visible.has(keyOf(choice)) &&
       (!selected || keyOf(choice) === selectedKey) &&
       sourceMatches(choice, words),
   );
-  const mods = new Map(students.map((student) => [view.merged ? student.family : student.key, student.mods || 0]));
+  const mods = new Map(students.map((card) => [view.groupAlts ? card.student : card.key, card.mods || 0]));
   const index = new Map(choices.map((choice, i) => [choice, i]));
   const value = (choice) =>
     viewed[sourceKey(choice)] ??
@@ -282,7 +282,7 @@ export function memorialChoices(
     const parsed = Date.parse(choice.modAdded || choice.added || "");
     return Number.isFinite(parsed) ? parsed : -Infinity;
   };
-  const title = (choice) => [label(choice.names)?.full || choice.variant, choice.label].filter(Boolean).join(" - ");
+  const title = (choice) => [label(choice.names)?.full || choice.alt, choice.name].filter(Boolean).join(" - ");
   const collator = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
   const difference = (a, b) => (a === b ? 0 : a - b);
   const direction = view.order === "asc" ? 1 : -1;
@@ -347,12 +347,15 @@ export function portraitSelection(selected, { type, id = null, ids = [] }) {
  * @returns {object[]}
  */
 export function portraitReplacements(entry, choices, placed) {
-  const current = choices.find((choice) => choice.kind === "spr" && sourceKey(choice) === sourceKey(entry));
-  if (!current?.family) return [];
+  const current = choices.find(
+    (choice) => choice.resourceType === "portrait" && sourceKey(choice) === sourceKey(entry),
+  );
+  if (!current?.student) return [];
   const used = new Set(placed.map(sourceKey));
   used.add(sourceKey(entry));
-  // Every other portrait of the student: a Mod portrait may also go back to its own variant's official art.
+  // Every other portrait of the student: a Mod portrait may also go back to its own alt's official art.
   return choices.filter(
-    (choice) => choice.kind === "spr" && choice.family === current.family && !used.has(sourceKey(choice)),
+    (choice) =>
+      choice.resourceType === "portrait" && choice.student === current.student && !used.has(sourceKey(choice)),
   );
 }

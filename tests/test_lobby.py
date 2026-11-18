@@ -265,19 +265,19 @@ def test_clips_resolve_mixes_chains_and_random():
         "track": 1,
         "loop": True,
         "mode": 1,
-        "finish": 2,
-        "intro": 0.4,
-        "outro": 0.4,
-        "outroAt": None,
+        "finishMode": 2,
+        "introMix": 0.4,
+        "outroMix": 0.4,
+        "outroStartOffset": None,
         "next": None,
         "sync": ["Pat_01_A"],
-        "block": False,
+        "blockInteractionOnPlay": False,
         "random": None,
     }
-    assert home["Pat_01_A"]["intro"] == 0.0 and home["PatEnd_01_M"]["outro"] == 0.3
+    assert home["Pat_01_A"]["introMix"] == 0.0 and home["PatEnd_01_M"]["outroMix"] == 0.3
     # its own outro: from the clip's end plus its OutroStartOffset; the default one ends with the clip
-    assert home["PatEnd_01_M"]["outroAt"] == 0.0
-    assert home["Pat_02_M"]["finish"] == 3 and home["Pat_02_M"]["next"] == "Pat_01_M"
+    assert home["PatEnd_01_M"]["outroStartOffset"] == 0.0
+    assert home["Pat_02_M"]["finishMode"] == 3 and home["Pat_02_M"]["next"] == "Pat_01_M"
     assert home["Eye_Close_01"]["random"] == {"min": 8.0, "max": 15.0, "loops": [0, 1], "pre": 1, "preDelay": 0.0}
     assert clips.anim(ref(8002, 3)) == "PatEnd_01_M" and clips.anim(ref(0)) is None
     assert "sounds" not in home["Pat_01_M"] and clips.sound_events() == []
@@ -320,7 +320,7 @@ def test_idle_sync_clips_and_sound_keys():
     home = clips.clips["Test_home"]
     assert home["Idle_01"]["sync"] == ["Train_00_R"]  # an empty pointer is left out
     train = home["Train_00_R"]
-    assert (train["track"], train["mode"], train["loop"], train["intro"]) == (3, 2, True, 0.0)
+    assert (train["track"], train["mode"], train["loop"], train["introMix"]) == (3, 2, True, 0.0)
     assert train["random"] == {"min": 10.0, "max": 15.0, "loops": [0, 0], "pre": 2, "preDelay": 3.0}
     assert train["sounds"] == [[3.1, "cab-common_-900"]]  # a key without an event is dropped
     assert clips.sound_events() == ["cab-common_-900", "cab-common_-901"]
@@ -389,7 +389,7 @@ def test_prefab_layout_drags_touches_and_anchors():
         "skeleton": "Test_home",
         "bone": "Touch_Point",
         "rect": [-109.0, 131.0, 491.0, 531.0],
-        "rot": 0.0,
+        "rotation": 0.0,
         "depth": -89,
         "enabled": True,
         "orig": [117.45, 55.59],
@@ -404,7 +404,7 @@ def test_prefab_layout_drags_touches_and_anchors():
     }
     assert eye["enabled"] is False and eye["bone"] is None and eye["ing"] is None
     (body,) = info["touches"]
-    assert body["rect"] == [-307.0, -1139.0, 693.0, -139.0] and body["rot"] == 10.0 and body["depth"] == -90
+    assert body["rect"] == [-307.0, -1139.0, 693.0, -139.0] and body["rotation"] == 10.0 and body["depth"] == -90
     assert info["randomIdle"] == {"Test_home": ["Eye_Close_01"]} and info["idle"] == {"Test_home": "Idle_01"}
     assert info["dialog"] == {"Talk": [487.0, 29.0]}
 
@@ -870,7 +870,7 @@ def test_lobby_json_route_is_memory_only(tmp_path):
         library=_Library(),
     )
     try:
-        response = services.asset("spine/lobby/hoshino_home/lobby.json", {})
+        response = services.asset("spine/memorialLobby/hoshino_home/lobby.json", {})
         assert json.loads(response.body) == {"prefab": "LobbyTest", "core": "hoshino_home"}
         assert response.mime == "application/json" and response.light is False
         assert game.calls == ["hoshino_home"]
@@ -911,10 +911,10 @@ def test_lobby_fx_texture_route(tmp_path):
         library=_Library(),
     )
     try:
-        response = services.asset("spine/lobby/ch0113_home/fx_cab-ab_-12.png", {})
+        response = services.asset("spine/memorialLobby/ch0113_home/fx_cab-ab_-12.png", {})
         assert (response.body, response.mime, response.light) == (b"png", "image/png", False)
         # a skeleton file that happens to start like one is still served
-        assert services.asset("spine/lobby/ch0113_home/fx_page.png", {}).body == b"atlas page"
+        assert services.asset("spine/memorialLobby/ch0113_home/fx_page.png", {}).body == b"atlas page"
         assert game.calls == [("ch0113_home", "cab-ab_-12"), ("ch0113_home", "page")]
     finally:
         services.close()
@@ -945,10 +945,10 @@ def test_lobby_sound_route(tmp_path):
         library=_Library(),
     )
     try:
-        response = services.asset("spine/lobby/shigure_home/sfx_cab-sfx_655.wav", {})
+        response = services.asset("spine/memorialLobby/shigure_home/sfx_cab-sfx_655.wav", {})
         assert (response.body, response.mime, response.light) == (b"RIFF....WAVE", "audio/wav", False)
         # a file of the skeletons that happens to start like one is still served
-        assert services.asset("spine/lobby/shigure_home/sfx_page.wav", {}).body == b"a skeleton file"
+        assert services.asset("spine/memorialLobby/shigure_home/sfx_page.wav", {}).body == b"a skeleton file"
         assert game.calls == [("shigure_home", "cab-sfx_655"), ("shigure_home", "page")]
     finally:
         services.close()

@@ -66,10 +66,16 @@ def test_official_badge_prefab_geometry(official_badge_assets):
     slot = game.layout("UIPopup_Mulligan", "Center/Popup/01/UIMulliganSlot")
     nodes = {node["name"]: node for node in slot["children"]}
     badge, label = nodes["Mulligan_IndexBg"], nodes["Mulligan_IndexLabel"]
-    sprite = next(w for w in badge["widgets"] if "sprite" in w)
+    sprite = next(w for w in badge["widgets"] if "spriteName" in w)
     text = next(w for w in label["widgets"] if "text" in w)
-    assert badge["pos"] == [120, 213]
-    assert label["pos"] == [120, 210]
+    assert badge["localPosition"] == [120, 213]
+    assert label["localPosition"] == [120, 210]
     assert badge["scale"] == label["scale"] == [1, 1]
-    assert [sprite[k] for k in ("sprite", "w_", "h_", "type", "pivot")] == ["Common_Icon_Mulligan_1", 76, 74, 1, 4]
-    assert [text[k] for k in ("fontSize", "w_", "h_", "pivot")] == [42, 70, 52, 4]
+    assert [sprite[k] for k in ("spriteName", "width", "height", "type", "pivot")] == [
+        "Common_Icon_Mulligan_1",
+        76,
+        74,
+        1,
+        4,
+    ]
+    assert [text[k] for k in ("fontSize", "width", "height", "pivot")] == [42, 70, 52, 4]

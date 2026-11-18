@@ -12,7 +12,7 @@ test("cancelling a view aborts its manifest request before constructing a player
     );
   });
   const pending = loadSpineAssets(
-    spineBase("spr", "cancelled_spr"),
+    spineBase("portrait", "cancelled_spr"),
     () => assert.fail("Cancelled manifest must not load a player"),
     { signal: controller.signal },
   );
@@ -21,7 +21,7 @@ test("cancelling a view aborts its manifest request before constructing a player
   await assert.rejects(pending, /aborted/i);
 });
 
-const base = spineBase("spr", "ibuki_spr");
+const base = spineBase("portrait", "ibuki_spr");
 const revision = (letter) => `${base.slice(0, base.lastIndexOf("/"))}/${letter.repeat(64)}/skeleton`;
 
 function manifests(t, answers) {
@@ -59,7 +59,7 @@ test("a current portrait resolves live files again after clearing the asset cach
   assert.deepEqual(loaded, [revision("a"), revision("a")]);
   assert.ok(
     requests.every(
-      ([url, options]) => url === "/asset/spine/spr/ibuki_spr/manifest.json" && options.cache === "no-store",
+      ([url, options]) => url === "/asset/spine/portrait/ibuki_spr/manifest.json" && options.cache === "no-store",
     ),
   );
 });

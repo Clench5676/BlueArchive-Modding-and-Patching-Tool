@@ -26,7 +26,7 @@ test("sections split at rules and language marks; an unmarked one is told by its
   assert.deepEqual([KANA + HAN, HANGUL, THAI, HAN, "Plain text"].map(scriptOf), ["ja", "ko", "th", "zh-CN", "en"]);
 });
 
-test("the UI language's section, else its other variant, else English, else the first", () => {
+test("the UI language's section, else its other alt, else English, else the first", () => {
   const list = [
     { lang: "en", lines: ["E"] },
     { lang: "zh-CN", lines: ["C"] },

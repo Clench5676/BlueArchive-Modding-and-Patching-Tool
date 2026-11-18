@@ -111,6 +111,32 @@
     document.body.appendChild(panel);
     return true;
   }
+  // The data upgrade notice (data-upgrade.js) in the same overlay: its title and hint, its lines, and one button
+  // per action, each answering choose(id) once.
+  function notice(view, choose) {
+    if (!shell(view.title, view.hint || "")) return false;
+    const stage = document.getElementById?.("stage");
+    if (stage) stage.inert = true;
+    for (const line of view.lines || []) panel.insertBefore(el("p", line.text), status);
+    for (const action of view.actions || []) {
+      const b = el("button", action.label);
+      b.type = "button";
+      b.dataset.action = action.id;
+      b.onclick = () => {
+        for (const other of panel.querySelectorAll("button")) other.disabled = true;
+        choose(action.id);
+      };
+      panel.appendChild(b);
+    }
+    return true;
+  }
+  function closeNotice() {
+    panel?.remove();
+    panel = null;
+    status = null;
+    const stage = document.getElementById?.("stage");
+    if (stage) stage.inert = false;
+  }
   function actions() {
     button(panel, "recovery.report", report);
     button(panel, "recovery.logs", () => rpc("app.logFolder"));
@@ -263,6 +289,8 @@
     forward,
     fail,
     context,
+    notice,
+    closeNotice,
     presentReport(fn) {
       presenter = fn;
     },

@@ -29,7 +29,7 @@ export const WIDTH = 2098;
 // label to its own decoration, SPACE.xs, instead of the lines' SPACE.l)
 export const DETAIL = Object.freeze({ fontSize: TYPE.dense.fs, minFontSize: TYPE.dense.fs, gap: SPACE.xs - SPACE.l });
 
-const kindKey = (kind) => (kind === "model" ? "tab.model" : kind === "lobby" ? "tab.lobby" : "tab.portrait");
+const kindKey = (kind) => (kind === "chibi" ? "tab.model" : kind === "memorialLobby" ? "tab.lobby" : "tab.portrait");
 
 /**
  * What the update changed in a mod's official parts ("Official Portrait: atlas repacked, 1 new animation", from
@@ -49,36 +49,36 @@ export function changeText(mod, sep = T("mods.impact.sep")) {
   if (c.added) parts.push(T("mods.impact.change.added"));
   if (!parts.length) return "";
   const changes = parts.join(sep);
-  return mod.kind === "other"
+  return mod.resourceType === "other"
     ? T("mods.impact.officialFiles", { changes })
-    : T("mods.impact.official", { kind: T(kindKey(mod.kind)), changes });
+    : T("mods.impact.official", { kind: T(kindKey(mod.resourceType)), changes });
 }
 
 /**
  * "student - kind - mod name" (the mod's own name left out where it only repeats the student's), then "Applied"
  * for a mod its student is configured with (mods.impact's configured: whatever the switch says).
- * @param {(entry: object) => string} [nameOf] Names the mod's variant.
+ * @param {(entry: object) => string} [nameOf] Names the mod's alt.
  */
-export function modName(mod, nameOf = (e) => e?.variant || e?.core || "") {
+export function modName(mod, nameOf = (e) => e?.alt || e?.core || "") {
   const applied = mod?.configured ? ` - ${T("status.applied")}` : "";
-  if (mod?.kind === "other") return `${mod.label || mod.core || ""} - ${T("settings.mods.other")}${applied}`;
-  const entry = { variant: mod?.target, core: mod?.core, kind: mod?.kind };
+  if (mod?.resourceType === "other") return `${mod.name || mod.core || ""} - ${T("settings.mods.other")}${applied}`;
+  const entry = { alt: mod?.targetAlt, core: mod?.core, resourceType: mod?.resourceType };
   const named = entryLabel(entry, nameOf, " - ");
-  return `${mod?.label && mod.label !== nameOf(entry) ? `${named} - ${mod.label}` : named}${applied}`;
+  return `${mod?.name && mod.name !== nameOf(entry) ? `${named} - ${mod.name}` : named}${applied}`;
 }
 
 /**
  * A mod's lines: its name with Go To (none for a generic mod: no student page) and, for a held mod (fix), Fix
  * after it; then what changed in its official parts.
  * @param {object} mod The mod as mods.impact lists it.
- * @param {(entry: object) => string} nameOf Names the mod's variant.
+ * @param {(entry: object) => string} nameOf Names the mod's alt.
  * @param {object} [options]
  * @param {number} [options.indent] The indent of the change line.
  * @param {boolean} [options.marker] Hang a bullet before the line.
  * @param {boolean} [options.fix] Add the Fix button.
  */
 export function modLines(mod, nameOf, { indent = ITEM.indent, marker = true, fix = false } = {}) {
-  const page = mod?.id && mod.kind !== "other" && mod.target;
+  const page = mod?.id && mod.resourceType !== "other" && mod.targetAlt;
   const repair = fix && mod?.id ? [{ label: T("mods.impact.fix"), fn: ({ close }) => close(`${FIX}${mod.id}`) }] : [];
   const go = page
     ? { button: { label: T("add.go"), inline: true, fn: ({ close }) => close(`${GO}${mod.id}`) }, more: repair }
@@ -123,7 +123,7 @@ export function heldKeys(entries, impacts) {
 
 // --- the page ---
 
-let names = async () => (e) => e?.variant || e?.core || "";
+let names = async () => (e) => e?.alt || e?.core || "";
 let goTo = async () => {}; // main.js: a mod's student page with its switch open on the mod
 let busy = false;
 let pending = null; // a check's outcome waiting for the first screen: {result, reapplied, failed}
@@ -146,7 +146,7 @@ export function init(options = {}) {
 
 /** Go To: the mod's student page with its switch open on the mod. */
 export const open = (mod) =>
-  Promise.resolve(goTo({ id: mod.id, variant: mod.target, kind: mod.kind })).catch((err) =>
+  Promise.resolve(goTo({ id: mod.id, alt: mod.targetAlt, resourceType: mod.resourceType })).catch((err) =>
     console.error("impact", err),
   );
 
@@ -282,7 +282,7 @@ export async function gate() {
  * has one and its student is not configured with it).
  */
 export const heldOf = (result) =>
-  (result?.mods || []).filter((m) => m.impact === "rig_changed" && !(m.repaired_id && !m.configured));
+  (result?.mods || []).filter((m) => m.impact === "rig_changed" && !(m.repairedCopyId && !m.configured));
 
 /** A card's key: its mod, else its core. */
 export const modKey = (mod) => mod?.id || `${mod?.core || ""}`;
@@ -291,13 +291,14 @@ export const modKey = (mod) => mod?.id || `${mod?.core || ""}`;
  * A mod's card: the student's name, its own picture (none for a 3D model), the kind and Applied as chips, the
  * Outdated badge.
  */
-export function card(mod, nameOf = (e) => e?.variant || e?.core || "") {
-  const entry = { variant: mod.target, core: mod.core, kind: mod.kind };
-  const base = mod.kind === "model" || mod.kind === "other" || !mod.id ? null : spineBase("mod", mod.id);
-  const lobby = mod.kind === "lobby";
+export function card(mod, nameOf = (e) => e?.alt || e?.core || "") {
+  const entry = { alt: mod.targetAlt, core: mod.core, resourceType: mod.resourceType };
+  const base =
+    mod.resourceType === "chibi" || mod.resourceType === "other" || !mod.id ? null : spineBase("mod", mod.id);
+  const lobby = mod.resourceType === "memorialLobby";
   // an Official chip over the details' one line of the official changes
   const chips = [
-    T(kindKey(mod.kind)),
+    T(kindKey(mod.resourceType)),
     ...(mod.configured ? [T("status.applied")] : []),
     ...(changeText(mod) ? [T("mods.impact.chipOfficial")] : []),
   ];
@@ -305,16 +306,16 @@ export function card(mod, nameOf = (e) => e?.variant || e?.core || "") {
   // the details name the mod itself (the card names the student), its kind and Applied as chips
   // a generic mod (other) has no student: its own name, never its set's key
   const name =
-    mod.kind === "other" ? mod.label || T("settings.mods.other") : nameOf(entry) || mod.label || mod.core || "";
+    mod.resourceType === "other" ? mod.name || T("settings.mods.other") : nameOf(entry) || mod.name || mod.core || "";
   return {
     key: modKey(mod),
     label: name,
-    full: mod.label || name,
+    full: mod.name || name,
     chips,
     badge,
     mod,
     thumb: base ? thumb(base, "card", null, lobby) : null,
-    big: base ? () => thumb(base, mod.kind === "spr" ? "portrait" : "bust", null, lobby) : null,
+    big: base ? () => thumb(base, mod.resourceType === "portrait" ? "portrait" : "bust", null, lobby) : null,
   };
 }
 
@@ -326,7 +327,7 @@ export function card(mod, nameOf = (e) => e?.variant || e?.core || "") {
 export function details(mod) {
   const changes = changeText(mod).replace(/^[^:：]*[:：]\s*/, "");
   const fields = changes ? [[null, changes]] : [];
-  const page = !!(mod.id && mod.kind !== "other" && mod.target);
+  const page = !!(mod.id && mod.resourceType !== "other" && mod.targetAlt);
   const actions = [
     ...(page ? [["go", T("add.go")]] : []),
     ["preview", T("mods.impact.preview")],
@@ -334,7 +335,11 @@ export function details(mod) {
   ];
   return {
     title: T(
-      mod.kind === "lobby" ? "info.title.lobby" : mod.kind === "model" ? "info.title.model" : "info.title.portrait",
+      mod.resourceType === "memorialLobby"
+        ? "info.title.lobby"
+        : mod.resourceType === "chibi"
+          ? "info.title.model"
+          : "info.title.portrait",
     ),
     fields,
     actions,
@@ -447,12 +452,12 @@ function presentList(outcome, nameOf) {
         selected: focus,
         focus,
         keepScroll: keep,
-        detailKind: (it) => it.mod?.kind,
+        detailKind: (it) => it.mod?.resourceType,
         alignStart: true,
         slimBand: true,
         empty: T("mods.impact.none"),
         // portraits alone: the portrait switch's frame and tall cards, whose details keep their actions in view
-        ...(items.length && items.every((it) => it.mod?.kind === "spr") ? { layoutKind: "spr" } : {}),
+        ...(items.length && items.every((it) => it.mod?.resourceType === "portrait") ? { layoutKind: "portrait" } : {}),
         ...(items.length
           ? {
               tick: {
@@ -507,14 +512,15 @@ async function applyRepaired(mod, id) {
   if (!mod.configured) return;
   // under the loading screen, with its line: the student, the kind, the mod and the write
   const line = modJob(
-    { variant: mod.target, kind: mod.kind, core: mod.core || "", name: mod.label || "" },
-    { nameOf: Loading.variantName, action: "progress.actionApply" },
+    { alt: mod.targetAlt, resourceType: mod.resourceType, core: mod.core || "", name: mod.name || "" },
+    { nameOf: Loading.altName, action: "progress.actionApply" },
   );
   await Loading.task(
     async (update) => {
       update(line());
-      return waitJob(await rpc("actions.apply", { variant: mod.target, source: `mod:${id}`, kind: mod.kind }), (p) =>
-        update(line(p)),
+      return waitJob(
+        await rpc("actions.apply", { alt: mod.targetAlt, source: `mod:${id}`, resourceType: mod.resourceType }),
+        (p) => update(line(p)),
       );
     },
     { label: line().text },
@@ -531,14 +537,14 @@ async function fix(mods, nameOf, { review = false } = {}) {
   for (const mod of mods) {
     const subject = modName({ ...mod, configured: false }, nameOf);
     // who the mod is on the progress line of its check, repair or update (job-progress.js modJob)
-    const who = { variant: mod.target, kind: mod.kind, core: mod.core || "", name: mod.label || "" };
+    const who = { alt: mod.targetAlt, resourceType: mod.resourceType, core: mod.core || "", name: mod.name || "" };
     try {
-      if (mod.repaired_id) {
-        await applyRepaired(mod, mod.repaired_id);
+      if (mod.repairedCopyId) {
+        await applyRepaired(mod, mod.repairedCopyId);
         fixed.push(mod);
         continue;
       }
-      const report = await Loading.hold(() => Compatibility.forUpdate(mod.id, mod.label, who), { all: true });
+      const report = await Loading.hold(() => Compatibility.forUpdate(mod.id, mod.name, who), { all: true });
       if (!report) continue;
       if (!(Compatibility.eligible(mod) && Compatibility.canRemap(mod.id, mod))) {
         // drawn on a rig the App does not have: an update would change nothing, so it stays held; the preview shows
@@ -557,7 +563,7 @@ async function fix(mods, nameOf, { review = false } = {}) {
           });
           if (answer.button !== "ok") continue;
         }
-        const line = modJob(who, { nameOf: Loading.variantName, action: "progress.actionRepair" });
+        const line = modJob(who, { nameOf: Loading.altName, action: "progress.actionRepair" });
         await Loading.task(
           async (update) => {
             update(line());
@@ -568,14 +574,14 @@ async function fix(mods, nameOf, { review = false } = {}) {
         fixed.push(mod);
         continue;
       }
-      const result = await Compatibility.prepare(mod.id, mod.label, who, mod.kind, review ? null : "default");
+      const result = await Compatibility.prepare(mod.id, mod.name, who, mod.resourceType, review ? null : "default");
       if (!result || result.unchanged) continue;
       try {
         if (review) {
           if (
             !(await Compatibility.review(mod.id, result, {
               label: subject,
-              kind: mod.kind,
+              resourceType: mod.resourceType,
               accept: T("mods.impact.fix"),
               discard: T("photo.back"),
             }))
@@ -599,16 +605,16 @@ async function fix(mods, nameOf, { review = false } = {}) {
 }
 
 /**
- * The mods.state entries a game update's rig change holds ({install, core, variant, kind, source, label}) as
+ * The mods.state entries a game update's rig change holds ({install, core, alt, kind, source, name}) as
  * the summary's mods (applied by definition).
  */
 export const heldMods = (entries) =>
   (entries || []).map((e) => ({
     id: /^mod:(.+)$/.exec(e?.source || "")?.[1] || "",
-    target: e?.variant,
+    targetAlt: e?.alt,
     core: e?.core,
-    kind: e?.kind,
-    label: e?.label || "",
+    resourceType: e?.resourceType,
+    name: e?.name || "",
     configured: true,
   }));
 

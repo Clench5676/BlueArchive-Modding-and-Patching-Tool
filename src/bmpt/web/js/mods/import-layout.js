@@ -417,7 +417,7 @@ export function importArtwork(ui, layouts) {
       }
       return t;
     },
-    // UIPopup_GachaCharList.Btn_Checkbox, as the roster's variant grouping toggle: its own caption, the body sized
+    // UIPopup_GachaCharList.Btn_Checkbox, as the roster's alt grouping toggle: its own caption, the body sized
     // to it.
     toggle(caption, on) {
       const t = at(get("UIPopup_GachaCharList.Btn_Checkbox")),
@@ -692,7 +692,7 @@ export function importArtwork(ui, layouts) {
       let kindShape = null,
         kindLines;
       if (counts) {
-        const kinds = ["spr", "lobby", "model", "other"].filter((kind) => counts[kind] > 0);
+        const kinds = ["portrait", "memorialLobby", "chibi", "other"].filter((kind) => counts[kind] > 0);
         sender.widgets = [];
         sender.children = countNodes(counts, {}, ui.translate, {
           kinds,

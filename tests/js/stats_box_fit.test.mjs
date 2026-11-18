@@ -584,7 +584,7 @@ test("the Switch Portrait panel keeps the line 5 larger than its box", () => {
     fields,
     [],
     texture,
-    "spr",
+    "portrait",
   );
   const box = child(tree.children, "Fields"),
     fill = box.widgets[0],

@@ -201,7 +201,7 @@ export function standPoint(origin, hips, far = 0.2) {
 
 const stageScale = () => (document.getElementById("stage")?.getBoundingClientRect().width || 1920) / 1920;
 
-// a GLB of the model route, parsed; the server's refusal code (X-BAMT-Error, e.g. original_unavailable: no official
+// a GLB of the model route, parsed; the server's refusal code (X-BAMT-Error, e.g. official_unavailable: no official
 // copy of a part is left) on the error
 async function readGlb(url, signal) {
   const loader = new GLTFLoader();
@@ -1191,7 +1191,7 @@ let view = null,
   token = 0;
 
 /**
- * Load and show a variant's chibi. The shown view is kept for the same variant of the same install (version:
+ * Load and show an alt's chibi. The shown view is kept for the same alt of the same install (version:
  * the game's resource version; another game folder or file source loads it again).
  * @param {object} [options]
  * @param {string} [options.frame] The framing, "left" or "full".

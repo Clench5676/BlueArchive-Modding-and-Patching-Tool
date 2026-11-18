@@ -42,15 +42,15 @@ function harness({ start = "portrait", show } = {}) {
     console,
     Promise,
     tab: start,
-    variantKey: "cycling",
+    altId: "cycling",
     open: true,
     fullscreen: true,
     mainPlayer: player,
-    fam: { version: "r1" },
+    shownStudent: { version: "r1" },
     lobbyFrom: null,
     lobbyStale: false,
     previewAvailable: () => true,
-    variant: () => ({ key: "cycling", spr: "cycling_spr", lobby: "cycling_home" }),
+    alt: () => ({ key: "cycling", portrait: "cycling_spr", memorialLobby: "cycling_home" }),
     current: () => ({ kind: "self" }),
     modsOn: () => true,
     specialFraming: () => null,
@@ -186,6 +186,6 @@ test("expression previews reuse the detail face renderer and request each expres
 });
 test("default thumbnail is the student collection portrait", async () => {
   const h = harness();
-  h.env.variant = () => ({ portrait: "/Student_Portrait_Cycling_Collection.png", spr: "cycling_spr" });
+  h.env.alt = () => ({ officialThumbnail: "/Student_Portrait_Cycling_Collection.png", portrait: "cycling_spr" });
   assert.equal(await h.bridge.defaultThumbnail(), "/Student_Portrait_Cycling_Collection.png");
 });

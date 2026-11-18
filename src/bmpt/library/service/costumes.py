@@ -231,9 +231,9 @@ class CostumesMixin:
                 physics=physics,
                 halo=True,
                 step=step,
-                worn=_WornVerdicts(self.root / "worn-items.json", inputs.revisions),
+                worn=_WornVerdicts(self.cache_root / "worn-items.json", inputs.revisions),
                 meter=meter,
-                poses=PoseStore(self.root / "costume-poses", inputs.revisions),
+                poses=PoseStore(self.cache_root / "costume-poses", inputs.revisions),
             )
         if report is not None and result.plan.unfit:
             report["unfit"] = {
@@ -298,7 +298,7 @@ class CostumesMixin:
         try:
             return self._build_signature(inputs, targets, pin, rule), targets
         except ServiceError as error:
-            if error.code != "original_unavailable":
+            if error.code != "official_unavailable":
                 raise
             return hashlib.sha1(
                 repr(
@@ -314,7 +314,7 @@ class CostumesMixin:
         return verdict is None or verdict["ok"] or verdict.get("preview")
 
     def _verdicts(self) -> dict[str, dict[str, Any]]:
-        path = self.root / "costume-verdicts.json"
+        path = self.cache_root / "costume-verdicts.json"
         try:
             data = json.loads(path.read_text())
         except (OSError, ValueError):
@@ -352,7 +352,7 @@ class CostumesMixin:
             sorted(verdicts.items(), key=lambda item: str(item[1].get("at", "")), reverse=True)[:COSTUME_VERDICTS]
         )
         try:
-            atomic_json(self.root / "costume-verdicts.json", {"version": 1, "verdicts": kept})
+            atomic_json(self.cache_root / "costume-verdicts.json", {"version": 1, "verdicts": kept})
         except OSError as error:  # the verdict is still returned; the pair is checked again next time
             log_failure(logger, logging.WARNING, "Could not save a costume verdict", error)
         return verdict
@@ -400,7 +400,7 @@ class CostumesMixin:
     def _preview_cautions(self, signature: str) -> list[str]:
         """The cautions the preview build of a pair recorded (``costume_preview``'s parts.json), none when unknown."""
         try:
-            kept = json.loads((self.root / "built" / "previews" / signature / "parts.json").read_text())
+            kept = json.loads((self.cache_root / "built" / "previews" / signature / "parts.json").read_text())
         except (OSError, ValueError):
             return []
         cautions = kept.get("cautions") if isinstance(kept, dict) else None
@@ -595,7 +595,7 @@ class CostumesMixin:
         """
         pin = self._current(pin)
         signature, targets = self._costume_signature(variant_key, other, pin)
-        folder = self.root / "built" / "previews" / signature
+        folder = self.cache_root / "built" / "previews" / signature
         done = folder / "parts.json"
         if done.is_file():
             try:
@@ -646,7 +646,7 @@ class CostumesMixin:
         """
         if self._costume_signature(variant_key, other, self._current(pin))[0] != signature:
             return None
-        folder = self.root / "built" / "previews" / signature
+        folder = self.cache_root / "built" / "previews" / signature
         folder.mkdir(parents=True, exist_ok=True)
         for path in built:
             atomic_copy(path, folder / path.name)

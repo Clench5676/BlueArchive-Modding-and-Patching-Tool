@@ -23,9 +23,9 @@ test("a configured lobby reads every art layer from the library preview and keep
     const modded = await Lobby.layersOf("hero_home", "configured");
     assert.deepEqual(requests, [
       "/asset/spine/mod/configured/manifest.json",
-      "/asset/spine/lobby/hero_home/manifest.json",
+      "/asset/spine/memorialLobby/hero_home/manifest.json",
       `/asset/spine/mod/configured/${artRevision}/files.json`,
-      `/asset/spine/lobby/hero_home/${layoutRevision}/lobby.json`,
+      `/asset/spine/memorialLobby/hero_home/${layoutRevision}/lobby.json`,
     ]);
     assert.equal(modded.layers[0].spine, `/asset/spine/mod/configured/${artRevision}/hero_home`);
     assert.equal(modded.layers[0].atlas, `/asset/spine/mod/configured/${artRevision}/hero_home.atlas`);
@@ -34,11 +34,11 @@ test("a configured lobby reads every art layer from the library preview and keep
     requests.length = 0;
     const official = await Lobby.layersOf("hero_home");
     assert.deepEqual(requests, [
-      "/asset/spine/lobby/hero_home/manifest.json",
-      `/asset/spine/lobby/hero_home/${layoutRevision}/files.json`,
-      `/asset/spine/lobby/hero_home/${layoutRevision}/lobby.json`,
+      "/asset/spine/memorialLobby/hero_home/manifest.json",
+      `/asset/spine/memorialLobby/hero_home/${layoutRevision}/files.json`,
+      `/asset/spine/memorialLobby/hero_home/${layoutRevision}/lobby.json`,
     ]);
-    assert.equal(official.layers[0].spine, `/asset/spine/lobby/hero_home/${layoutRevision}/hero_home`);
+    assert.equal(official.layers[0].spine, `/asset/spine/memorialLobby/hero_home/${layoutRevision}/hero_home`);
   } finally {
     globalThis.fetch = before;
   }
@@ -245,8 +245,8 @@ test("each zoom-out option gives its own limit, never less than the game's view 
   };
   const game = { x0: -1480, x1: 1480, y0: -832.5, y1: 832.5 };
   const B = (mode, custom) => Lobby.zoomBounds({ mode, custom }, m, G);
-  assert.deepEqual(B("game"), game);
-  assert.deepEqual(B("art"), m.outer);
+  assert.deepEqual(B("gameView"), game);
+  assert.deepEqual(B("fullArt"), m.outer);
   assert.deepEqual(B("unlocked"), m.whole);
   // custom: that many game views across, around the game's view
   assert.deepEqual(B("custom", 2), { x0: -2960, x1: 2960, y0: -1665, y1: 1665 });
@@ -259,14 +259,14 @@ test("each zoom-out option gives its own limit, never less than the game's view 
   // views is cut to them
   assert.deepEqual(B("everything"), game);
   assert.deepEqual(
-    Lobby.zoomBounds({ mode: "art" }, { ...m, outer: { x0: -100, x1: 100, y0: -100, y1: 100 } }, G),
+    Lobby.zoomBounds({ mode: "fullArt" }, { ...m, outer: { x0: -100, x1: 100, y0: -100, y1: 100 } }, G),
     game,
   );
   assert.deepEqual(
     Lobby.zoomBounds({ mode: "unlocked" }, { ...m, whole: { x0: -90000, x1: 1600, y0: -900, y1: 900 } }, G),
     { x0: -5920, x1: 1600, y0: -900, y1: 900 },
   );
-  assert.deepEqual(Lobby.ZOOM_MODES, ["game", "art", "unlocked", "custom"]);
+  assert.deepEqual(Lobby.ZOOM_MODES, ["gameView", "fullArt", "unlocked", "custom"]);
 });
 
 test("every layer's post-processing is placed in the game's view, whatever view the stage shows", () => {

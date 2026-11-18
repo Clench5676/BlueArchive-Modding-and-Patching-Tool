@@ -34,14 +34,14 @@ def test_lossless_rectangular_capture_ownership_and_independent_app_selection(tm
     assert Photographs(tmp_path).app_url("student_a").endswith(key + ".png")
     assert gallery.list("student_b")["app"] is None
     assert gallery.list("student_b")["photos"][0]["id"] == second["saved"]
-    with pytest.raises(ServiceError, match="photo_missing"):
+    with pytest.raises(ServiceError, match="thumbnail_missing"):
         gallery.image("student_b", key)
 
 
 @pytest.mark.parametrize("bad", ["", "data:image/jpeg;base64,abc", "data:image/png;base64,!!!", 42])
 def test_invalid_capture_is_rejected_without_creating_files(tmp_path, bad):
     gallery = Photographs(tmp_path)
-    with pytest.raises(ServiceError, match="photo_invalid"):
+    with pytest.raises(ServiceError, match="thumbnail_invalid"):
         gallery.save("a", bad, "portrait")
     assert not gallery.root.exists()
 
@@ -49,9 +49,9 @@ def test_invalid_capture_is_rejected_without_creating_files(tmp_path, bad):
 def test_unreasonable_dimensions_and_wrong_mode_are_rejected(tmp_path):
     gallery = Photographs(tmp_path)
     for size in ((32, 228), (202, 32), (4097, 64)):
-        with pytest.raises(ServiceError, match="photo_invalid"):
+        with pytest.raises(ServiceError, match="thumbnail_invalid"):
             gallery.save("a", capture(size)[0], "portrait")
-    with pytest.raises(ServiceError, match="photo_invalid"):
+    with pytest.raises(ServiceError, match="thumbnail_invalid"):
         gallery.save("a", capture()[0], "model")
 
 
@@ -68,7 +68,7 @@ def test_preview_selection_is_deletable_but_unreconciled_game_use_is_protected(t
     gallery = Photographs(tmp_path)
     key = gallery.save("a", capture()[0], "portrait")["saved"]
     gallery.select("a", key)
-    with pytest.raises(ServiceError, match="photo_in_use"):
+    with pytest.raises(ServiceError, match="thumbnail_in_use"):
         gallery.delete("a", key, {key})
     gallery.delete("a", key)
     assert gallery.selection("a") is None
@@ -79,10 +79,10 @@ def test_modified_png_and_path_traversal_cannot_be_selected(tmp_path):
     gallery = Photographs(tmp_path)
     key = gallery.save("a", capture()[0], "portrait")["saved"]
     (gallery.root / "images" / (key + ".png")).write_bytes(b"changed")
-    with pytest.raises(ServiceError, match="photo_invalid"):
+    with pytest.raises(ServiceError, match="thumbnail_invalid"):
         gallery.select("a", key)
     for value in ("../../escape", "default", None, "A" * 32):
-        with pytest.raises(ServiceError, match="photo_missing"):
+        with pytest.raises(ServiceError, match="thumbnail_missing"):
             gallery.image("a", value)
     assert gallery.list("a")["app"] is None
 
@@ -91,7 +91,7 @@ def test_manifest_corruption_is_reported_without_overwriting_it(tmp_path):
     gallery = Photographs(tmp_path)
     gallery.root.mkdir()
     gallery.index.write_text("bad JSON")
-    with pytest.raises(ServiceError, match="photo_library_invalid"):
+    with pytest.raises(ServiceError, match="thumbnail_library_invalid"):
         gallery.save("a", capture()[0], "portrait")
     assert gallery.index.read_text() == "bad JSON"
 
@@ -127,7 +127,7 @@ def test_symlinked_capture_cannot_escape_the_library(tmp_path):
     elsewhere = tmp_path / "elsewhere.png"
     path.rename(elsewhere)
     path.symlink_to(elsewhere)
-    with pytest.raises(ServiceError, match="photo_invalid"):
+    with pytest.raises(ServiceError, match="thumbnail_invalid"):
         gallery.image("a", key)
     assert elsewhere.exists()
 

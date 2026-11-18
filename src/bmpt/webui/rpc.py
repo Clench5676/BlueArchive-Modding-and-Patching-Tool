@@ -7,6 +7,7 @@ import logging
 from typing import Any, Callable
 
 from ..core.errors import ServiceError, log_service_error
+from .contract import rpc_params, wire_error, wire_resource_map, wire_value
 
 logger = logging.getLogger(__name__)
 
@@ -14,10 +15,11 @@ logger = logging.getLogger(__name__)
 class RpcRegistry:
     """The named methods the front end may call, and the one place that turns every outcome into JSON."""
 
-    def __init__(self, on_exception=None, translate=None) -> None:
+    def __init__(self, on_exception=None, translate=None, *, current: bool = False) -> None:
         """Create an empty registry.
 
         Args:
+            current: Apply the web API vocabulary to library input and output.
             on_exception: Called with ``(type, value, traceback)`` for an unexpected exception from a method, for
                 the crash report; None reports nothing.
             translate: Maps an exception to the ``ServiceError`` it stands for (an environment fault the user can
@@ -26,6 +28,7 @@ class RpcRegistry:
         self.on_exception = on_exception
         # an exception -> the ServiceError it stands for (an environment fault the user can act on), or None
         self.translate = translate
+        self.current = current
         self._methods: dict[str, Callable[..., Any]] = {}
 
     def method(self, name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -66,7 +69,8 @@ class RpcRegistry:
 
         def failed(error: ServiceError) -> dict[str, Any]:
             log_service_error(logger, error)
-            return {"error": error.to_json()}
+            payload = error.to_json()
+            return {"error": wire_error(payload) if self.current else payload}
 
         fn = self._methods.get(name)
         if fn is None:
@@ -74,6 +78,8 @@ class RpcRegistry:
         params = params or {}
         if not isinstance(params, dict):
             return failed(ServiceError("bad_params", method=name))
+        if self.current:
+            params = rpc_params(name, params)
         try:
             inspect.signature(fn).bind(**params)
         except TypeError as e:
@@ -90,7 +96,22 @@ class RpcRegistry:
             if self.on_exception:
                 self.on_exception(type(e), e, e.__traceback__)
             return failed(ServiceError("internal", method=name, error=f"{type(e).__name__}: {e}"))
-        return {"result": to_json(result)}
+        converted = to_json(result)
+        if self.current:
+            if name == "ui.preview" and isinstance(converted, dict):
+                converted = wire_resource_map(converted)
+            elif name == "jobs.get" and isinstance(converted, dict):
+                converted = {
+                    key: item
+                    if key == "kind"
+                    else wire_error(item)
+                    if key == "error" and isinstance(item, dict)
+                    else wire_value(item)
+                    for key, item in converted.items()
+                }
+            else:
+                converted = wire_value(converted)
+        return {"result": converted}
 
 
 def to_json(value: Any) -> Any:

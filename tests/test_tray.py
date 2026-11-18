@@ -74,7 +74,7 @@ def test_the_menu_is_unchecked_when_off():
         ("steam_busy", {}, "Steam is updating or verifying the game"),
         ("classic_open", {}, "Close the classic UI first"),
         ("game_not_found", {}, "Game folder not found"),
-        ("profiles_unreadable", {"file": "profiles.json"}, "Unreadable mod settings: profiles.json"),
+        ("mod_configuration_unreadable", {"file": "profiles.json"}, "Unreadable mod settings: profiles.json"),
     ],
 )
 def test_an_unavailable_switch_is_greyed_with_its_reason(reason, params, line):
@@ -426,6 +426,7 @@ def run_window(monkeypatch, tmp_path, supported):
     services = FakeServices()
     services.timings = Timings()
     services.window, services.data_dir, services.tray_supported = None, tmp_path, None
+    services.committed = None
     try:
         main._run_window(services, SimpleNamespace(url="http://127.0.0.1:1/"), False)
     finally:

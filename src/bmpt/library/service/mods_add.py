@@ -422,7 +422,7 @@ class AddMixin:
                 originals[target] = inspect(original)
                 original_paths.append(original)
             except ServiceError as error:
-                if error.code not in ("original_unavailable", "original_invalid"):
+                if error.code not in ("official_unavailable", "official_invalid"):
                     raise
                 unavailable = True
                 current_parts[target] = inspect(target)

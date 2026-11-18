@@ -82,8 +82,8 @@ const saved = () => ({
   mode: "portraits",
   background: "office-day",
   portraitScale: 1,
-  portraits: ["a", "b", "c"].map((id) => ({ id, variant: id, source: `mod:${id}`, x: 700, y: 1100, scale: 1 })),
-  memorials: [],
+  portraits: ["a", "b", "c"].map((id) => ({ id, alt: id, source: `mod:${id}`, x: 700, y: 1100, scale: 1 })),
+  memorialLobbies: [],
   active: null,
 });
 let loads = 0,
@@ -147,7 +147,7 @@ globalThis.sceneHarness = {
   Popup: { notify() {}, anyOpen: () => false },
   UI: { button: async () => {}, caption: async () => {} },
   rpc: async (method, params) => {
-    if (method === "lobby.lines") return globalThis.sceneHarness.lineResponse(params);
+    if (method === "memorialLobby.lines") return globalThis.sceneHarness.lineResponse(params);
     const { value, revision } = params;
     persisted.push(method);
     return { ...structuredClone(value), revision: revision + 1 };
@@ -173,7 +173,7 @@ export function fixture(value,renderer,memory=null,shownMode=value.mode){
  store=createDraft(value);root=document.createElement('div');art=document.createElement('div');hits=document.createElement('div');chrome=document.createElement('div');subtitle=document.createElement('div');root.append(art,hits,chrome,subtitle);
  portraits=renderer;abort=new AbortController();sceneMode=shownMode;backgroundName='office-day';backgroundHost=document.createElement('div');portraitSceneHost=document.createElement('div');art.append(portraitSceneHost);ctx={prefs:{},info:{}};actorHover=null;selected=null;sceneCover=null;fullscreen=null;sceneCamera=null;dialogue=null;
  memorials=memory||{current:()=>null,suspend(){},cancelPending(){},dispose(){}};
- options={choices:[...value.portraits.map(e=>({...e,kind:'spr',names:{en:{full:e.id}}})),...value.memorials.map(e=>({...e,kind:'lobby',names:{en:{full:e.id}}}))],backgrounds:[]};
+ options={choices:[...value.portraits.map(e=>({...e,resourceType:'portrait',names:{en:{full:e.id}}})),...value.memorialLobbies.map(e=>({...e,resourceType:'memorialLobby',names:{en:{full:e.id}}}))],backgrounds:[]};
  renderChrome=async()=>{await globalThis.sceneHarness.chromeReady?.();return document.createElement('div');};renderHits=()=>Promise.resolve();renderPortraitActions=async()=>{};
 }
 export function elements(){return {root,art,hits,chrome,portraitSceneHost,sceneCover,sceneMode};}
@@ -208,7 +208,7 @@ test("Change Layout Save and Cancel reconcile the existing scene without loading
   Hall.draft().current().portraits[0].x = 900;
   await Hall.saveDraft();
   assert.equal(Hall.draft().saved().portraits[0].x, 900);
-  assert.deepEqual(persisted, ["hall.update"]);
+  assert.deepEqual(persisted, ["studentHall.update"]);
   await Hall.controls().find((action) => action[0] === "Layout")[4]();
   Hall.draft().current().portraits[0].x = 1200;
   await Hall.cancelDraft();
@@ -389,7 +389,7 @@ function memoryFixture() {
 }
 test("a mode transition retains old complete art and controls until target resources and chrome are both ready", async () => {
   const value = setup();
-  value.memorials = [{ id: "m1", variant: "memory", source: "mod:memory" }];
+  value.memorialLobbies = [{ id: "m1", alt: "memory", source: "mod:memory" }];
   value.active = "m1";
   const memory = memoryFixture();
   Hall.fixture(value, renderer, memory.pool);
@@ -405,7 +405,7 @@ test("a mode transition retains old complete art and controls until target resou
   chromeDelay = new Promise((resolve) => {
     chromeReady = resolve;
   });
-  Hall.draft().current().mode = "memorial";
+  Hall.draft().current().mode = "memorialLobby";
   const pending = Hall.renderScene();
   await tick();
   assert.equal(before.chrome.children[0], oldChrome);
@@ -422,30 +422,30 @@ test("a mode transition retains old complete art and controls until target resou
   await pending;
   assert.notEqual(before.chrome.children[0], oldChrome);
   assert.equal(before.hits.isConnected, false);
-  assert.equal(Hall.elements().sceneMode, "memorial");
+  assert.equal(Hall.elements().sceneMode, "memorialLobby");
   assert.equal(before.portraitSceneHost.style.visibility, "hidden");
   assert.equal(memory.pool.current().host.style.visibility, "");
 });
 test("playlist edits and source-identical active UUID changes never restart the retained memorial", async () => {
   const value = setup();
-  value.mode = "memorial";
-  value.memorials = [
-    { id: "m1", variant: "memory", source: "mod:memory" },
-    { id: "m2", variant: "other", source: "mod:other" },
+  value.mode = "memorialLobby";
+  value.memorialLobbies = [
+    { id: "m1", alt: "memory", source: "mod:memory" },
+    { id: "m2", alt: "other", source: "mod:other" },
   ];
   value.active = "m1";
   const memory = memoryFixture(),
-    session = await memory.pool.prepare(value.memorials[0], () => new Element(), new AbortController().signal);
+    session = await memory.pool.prepare(value.memorialLobbies[0], () => new Element(), new AbortController().signal);
   memory.pool.commit(session);
   memory.pool.resume();
   Hall.fixture(value, renderer, memory.pool);
   memory.events.length = 0;
-  Hall.draft().begin("memorial");
-  Hall.draft().current().memorials.reverse();
+  Hall.draft().begin("memorialLobby");
+  Hall.draft().current().memorialLobbies.reverse();
   await Hall.renderScene();
   await Hall.saveDraft();
-  Hall.draft().begin("memorial");
-  Hall.draft().current().memorials[1].id = "replacement-id";
+  Hall.draft().begin("memorialLobby");
+  Hall.draft().current().memorialLobbies[1].id = "replacement-id";
   Hall.draft().current().active = "replacement-id";
   await Hall.renderScene();
   await Hall.cancelDraft();
@@ -454,16 +454,16 @@ test("playlist edits and source-identical active UUID changes never restart the 
 });
 test("portraits and the last memorial survive round trips with one memory load and stable player identity", async () => {
   const value = setup();
-  value.memorials = [{ id: "m1", variant: "memory", source: "mod:memory" }];
+  value.memorialLobbies = [{ id: "m1", alt: "memory", source: "mod:memory" }];
   value.active = "m1";
   const memory = memoryFixture();
   Hall.fixture(value, renderer, memory.pool);
-  Hall.draft().current().mode = "memorial";
+  Hall.draft().current().mode = "memorialLobby";
   await Hall.renderScene();
   const retained = memory.pool.current();
   Hall.draft().current().mode = "portraits";
   await Hall.renderScene();
-  Hall.draft().current().mode = "memorial";
+  Hall.draft().current().mode = "memorialLobby";
   await Hall.renderScene();
   assert.equal(memory.pool.current(), retained);
   assert.equal(memory.events.filter((event) => event[0] === "load").length, 1);
@@ -476,7 +476,7 @@ test("the real memorial wrapper rejects null metadata or a false frame result be
   setup();
   const host = new Element(),
     signal = new AbortController().signal,
-    choice = { variant: "m", core: "m", source: "official" };
+    choice = { alt: "m", core: "m", source: "official" };
   const player = {
     setVolume() {},
     setZoomLimit() {},
@@ -496,14 +496,14 @@ test("the real memorial wrapper rejects null metadata or a false frame result be
 });
 test("Next then Previous during staging cancels the pending source and resumes the retained current memory", async () => {
   const value = setup();
-  value.mode = "memorial";
-  value.memorials = [
-    { id: "m1", variant: "a", source: "mod:a" },
-    { id: "m2", variant: "b", source: "mod:b" },
+  value.mode = "memorialLobby";
+  value.memorialLobbies = [
+    { id: "m1", alt: "a", source: "mod:a" },
+    { id: "m2", alt: "b", source: "mod:b" },
   ];
   value.active = "m1";
   const memory = memoryFixture(),
-    session = await memory.pool.prepare(value.memorials[0], () => new Element(), new AbortController().signal);
+    session = await memory.pool.prepare(value.memorialLobbies[0], () => new Element(), new AbortController().signal);
   memory.pool.commit(session);
   memory.pool.resume();
   Hall.fixture(value, renderer, memory.pool);
@@ -576,7 +576,7 @@ test("viewing zoom projects every portrait hit with the artwork, and editing kee
 test("a retained memorial changes caption language without replaying and rejects stale language requests", async () => {
   setup();
   const controller = new AbortController(),
-    source = { variant: "hero", talks: { Talk_01_M: ["voice"] }, signal: controller.signal };
+    source = { alt: "hero", talks: { Talk_01_M: ["voice"] }, signal: controller.signal };
   const requests = [],
     published = [];
   let oldReady;

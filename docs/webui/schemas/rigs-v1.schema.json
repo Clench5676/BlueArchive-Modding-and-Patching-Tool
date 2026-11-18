@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rigs-v1.schema.json",
+  "title": "Archived rig index",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "rigs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "atlasSha1": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "skeletonSha1": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "atlas": {
+              "type": "string"
+            },
+            "skeleton": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "atlasSha1",
+            "skeletonSha1"
+          ]
+        }
+      }
+    },
+    "stamps": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "version",
+    "rigs",
+    "stamps"
+  ]
+}

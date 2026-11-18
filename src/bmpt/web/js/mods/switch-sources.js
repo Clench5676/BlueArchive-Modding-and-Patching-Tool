@@ -1,57 +1,72 @@
-// What the detail screen's switch cards offer and what the game shows now, for the portrait ("spr") and the
-// memorial lobby ("lobby"), and the 3D model: pure functions of the family that family.get returns, tested in
+// What the detail screen's switch cards offer and what the game shows now, for the portrait ("portrait") and the
+// memorial lobby ("lobby"), and the 3D model: pure functions of the student that student.get returns, tested in
 // Node (tests/js/switch_sources.test.mjs). Switching saves the chosen source and installs it while enabled; the
 // library keeps what it replaces (docs/webui/library.md, library).
 import { spineBase } from "../core/api.js";
 
 /**
  * The kind of source an asset tab switches; every asset tab uses the same source selection and apply flow.
- * @returns {"spr"|"lobby"|"model"|null} The kind; null for another tab.
+ * @returns {"portrait"|"memorialLobby"|"chibi"|null} The resource type; null for another tab.
  */
-export const switchKindOf = (tab) => ({ portrait: "spr", lobby: "lobby", model: "model" })[tab] || null;
+export const switchKindOf = (tab) => ({ portrait: "portrait", lobby: "memorialLobby", model: "chibi" })[tab] || null;
+/** The detail tab that shows a resource type: "portrait", "lobby" or "model"; null for another type. */
+export const tabOfKind = (kind) => ({ portrait: "portrait", memorialLobby: "lobby", chibi: "model" })[kind] || null;
 
-/** The core of a variant's skeleton of a kind: its portrait or its memorial lobby (or its 3D model's). */
-export const coreOf = (v, kind = "spr") => (kind === "model" ? v.model : kind === "lobby" ? v.lobby : v.spr) || null;
+/** The core of an alt's skeleton of a kind: its portrait or its memorial lobby (or its 3D model's). */
+export const coreOf = (v, kind = "portrait") =>
+  (kind === "chibi" ? v.chibi : kind === "memorialLobby" ? v.memorialLobby : v.portrait) || null;
 /**
- * Whether a variant has a kind to show: a variant with only a field-mode model (fieldModel: an event or story
+ * Whether an alt has a kind to show: an alt with only a field-mode model (fieldModel: an event or story
  * costume) has a 3D tab, but no slot to switch.
  */
 export const hasKind = (v, kind) =>
-  ["spr", "lobby", "model"].includes(kind) &&
-  (!!coreOf(v, kind) || (kind === "model" && !!v?.fieldModel) || !!v?.storedKinds?.includes(kind));
-/** Whether a variant has any kind to show. */
-export const hasAsset = (v) => hasKind(v, "spr") || hasKind(v, "lobby") || hasKind(v, "model");
-/** The first kind a variant has: the portrait, else the lobby, else the model. */
+  ["portrait", "memorialLobby", "chibi"].includes(kind) &&
+  (!!coreOf(v, kind) || (kind === "chibi" && !!v?.fieldChibi) || !!v?.storedKinds?.includes(kind));
+/** Whether an alt has any kind to show. */
+export const hasAsset = (v) => hasKind(v, "portrait") || hasKind(v, "memorialLobby") || hasKind(v, "chibi");
+/** The first kind an alt has: the portrait, else the lobby, else the model. */
 export const primaryKind = (v) =>
-  hasKind(v, "spr") ? "spr" : hasKind(v, "lobby") ? "lobby" : hasKind(v, "model") ? "model" : "lobby";
-/** The tab to show for a variant: the wanted one when the variant has its kind, else the first it has. */
+  hasKind(v, "portrait")
+    ? "portrait"
+    : hasKind(v, "memorialLobby")
+      ? "memorialLobby"
+      : hasKind(v, "chibi")
+        ? "chibi"
+        : "memorialLobby";
+/** The tab to show for an alt: the wanted one when the alt has its kind, else the first it has. */
 export function availableTab(v, tab) {
   if (hasKind(v, switchKindOf(tab))) return tab;
-  return hasKind(v, "spr") ? "portrait" : hasKind(v, "lobby") ? "lobby" : hasKind(v, "model") ? "model" : "lobby";
+  return hasKind(v, "portrait")
+    ? "portrait"
+    : hasKind(v, "memorialLobby")
+      ? "lobby"
+      : hasKind(v, "chibi")
+        ? "model"
+        : "lobby";
 }
 
 /**
- * The game file parts of one kind ("spr" portrait, "lobby" memorial lobby, "model" the 3D chibi's whole slot),
+ * The game file parts of one kind ("portrait" portrait, "lobby" memorial lobby, "model" the 3D chibi's whole slot),
  * newest first.
  */
-export const partsOf = (v, kind = "spr") => {
-  const parts = (v?.state?.files || []).filter((f) => f.kind === kind);
-  return kind === "model" && !parts.length ? v?.modelFiles || [] : parts;
+export const partsOf = (v, kind = "portrait") => {
+  const parts = (v?.state?.files || []).filter((f) => f.resourceType === kind);
+  return kind === "chibi" && !parts.length ? v?.chibiFiles || [] : parts;
 };
 
 /**
- * Whether a game file part holds official bytes: the server's verdict (family.get's official), else, from a
+ * Whether a game file part holds official bytes: the server's verdict (student.get's official), else, from a
  * server without it, its applied source.
  */
 export const isOfficial = (f) => (typeof f.official === "boolean" ? f.official : f.applied === "official");
 
 /**
- * What the variant's game files of a kind carry now, from their non-official parts only (the library records
+ * What the alt's game files of a kind carry now, from their non-official parts only (the library records
  * every part of a switched kind, the parts a mod left official included): the one source among them (a mod
  * often replaces one part), "official", or "unknown" when they carry several
  * (tests/data/source_rule_cases.json, shared with the library's own rule).
  */
-export function appliedOf(v, kind = "spr") {
+export function appliedOf(v, kind = "portrait") {
   const sources = new Set(
     partsOf(v, kind)
       .filter((f) => !isOfficial(f))
@@ -61,31 +76,31 @@ export function appliedOf(v, kind = "spr") {
 }
 
 /**
- * The candidate key of what the game shows: "self" (the variant's own official files), "m:<mod id>",
- * "v:<variant key>" (another variant's official files, adapted) or "unknown" (changed outside the library).
+ * The candidate key of what the game shows: "self" (the alt's own official files), "m:<mod id>",
+ * "v:<alt key>" (another alt's official files, adapted) or "unknown" (changed outside the library).
  */
-export function appliedKey(v, kind = "spr") {
+export function appliedKey(v, kind = "portrait") {
   const a = appliedOf(v, kind);
   if (a === "official") return "self";
   if (a.startsWith("mod:")) return `m:${a.slice(4)}`;
-  if (a.startsWith("variant:")) return `v:${a.slice(8)}`;
+  if (a.startsWith("alt:")) return `v:${a.slice(4)}`;
   return "unknown";
 }
 
 /** A candidate key as an actions.apply source. */
 export const sourceOf = (key) =>
-  key === "self" ? "official" : key.startsWith("m:") ? `mod:${key.slice(2)}` : `variant:${key.slice(2)}`;
+  key === "self" ? "official" : key.startsWith("m:") ? `mod:${key.slice(2)}` : `alt:${key.slice(2)}`;
 
 /**
- * Whether a variant's files of a kind are overwritten: a part that is not official has no official copy
- * anywhere (family.get's restorable false). Its official choice is unavailable; library mods can still replace
+ * Whether an alt's files of a kind are overwritten: a part that is not official has no official copy
+ * anywhere (student.get's restorable false). Its official choice is unavailable; library mods can still replace
  * it.
  */
-export const overwrittenOf = (v, kind = "spr") =>
+export const overwrittenOf = (v, kind = "portrait") =>
   partsOf(v, kind).some((f) => !isOfficial(f) && f.restorable === false);
 
 // The cautions of the 3D model's costume pairs (model.costumeCautions) are kept beside the verdicts under this
-// key: { other: ["ex_parts" | "carried_shader", ...] }. It is a symbol, so it never reads as a variant.
+// key: { other: ["ex_parts" | "carried_shader", ...] }. It is a symbol, so it never reads as an alt.
 export const CAUTIONS = Symbol("cautions");
 const CAUTION_TEXT = { ex_parts: "model.exParts", carried_shader: "model.carriedShader" };
 const cautionsOf = (costumes, key) => {
@@ -98,87 +113,87 @@ export const cautionKey = (c) => {
   return found ? CAUTION_TEXT[found] : null;
 };
 /**
- * The sources a variant's portrait or lobby can be switched to, in the switch popup's order: its own official
- * files, its own mods of that kind, then for the portrait the other variants' official files (those with a
- * portrait of their own) and the other variants' portrait mods. Other variants' memorial lobbies and their
- * lobby mods are not offered: another student's lobby under this variant's lobby prefab is untested in the
- * game. Each is { key, kind ("self" | "mod" | "variant"), core, variant, id, mod, origin (the variant a mod was
+ * The sources an alt's portrait or lobby can be switched to, in the switch popup's order: its own official
+ * files, its own mods of that kind, then for the portrait the other alts' official files (those with a
+ * portrait of their own) and the other alts' portrait mods. Other alts' memorial lobbies and their
+ * lobby mods are not offered: another student's lobby under this alt's lobby prefab is untested in the
+ * game. Each is { key, kind ("self" | "mod" | "alt"), core, alt, id, mod, origin (the alt a mod was
  * made for), restorable (its files have an official copy), greyed (cannot be chosen) }. The 3D model lists
  * every other model of the student as a costume at once; only a pair that was built and exported for these
  * files can be applied (`costumes`: model.costumes' verdicts, "ok" | "preview" | "refused" | null): "ok" and
  * "preview" pairs are offered, the latter with a caution (`beyondFit`); unchecked or refused pairs are for a
  * preview only (`previewOnly`), and a refused pair cannot be chosen as the preview either (`refused`). Another
- * student's model (`families`: roster.list's) is offered through the popup's search, or all at once with "Show
+ * student's model (`students`: students.list's) is offered through the popup's search, or all at once with "Show
  * other students" (crossCandidates), save the one already chosen, listed last (`cross`).
- * @param {object} fam The family, as family.get gives it.
- * @param {"spr"|"lobby"|"model"} [kind] The kind to switch.
- * @param {object|null} [costumes] The 3D model's verdicts by variant.
- * @param {object[]|null} [families] roster.list's families, for other students' models.
+ * @param {object} shownStudent The student, as student.get gives it.
+ * @param {"portrait"|"lobby"|"model"} [kind] The kind to switch.
+ * @param {object|null} [costumes] The 3D model's verdicts by alt.
+ * @param {object[]|null} [students] students.list's students, for other students' models.
  */
-export function candidates(fam, v, kind = "spr", costumes = null, families = null) {
+export function candidates(shownStudent, v, kind = "portrait", costumes = null, students = null) {
   const own = coreOf(v, kind);
-  const cores = (kind === "model" && v.modelCores?.length ? v.modelCores : [own]).map((core) =>
+  const cores = (kind === "chibi" && v.chibiCores?.length ? v.chibiCores : [own]).map((core) =>
     String(core).toLowerCase(),
   );
-  const mods = fam.variants
+  const mods = shownStudent.alts
     .flatMap((o) => o.modList || [])
-    .filter((m) => m.kind === kind)
-    .filter((m) => kind === "spr" || !m.core || !own || cores.includes(m.core));
-  // cross-variant adaptation requires an actual local target
-  const across = (kind === "spr" || kind === "model") && !!own;
+    .filter((m) => m.resourceType === kind)
+    .filter((m) => kind === "portrait" || !m.core || !own || cores.includes(m.core));
+  // cross-alt adaptation requires an actual local target
+  const across = (kind === "portrait" || kind === "chibi") && !!own;
   const others = !across
     ? []
-    : kind === "model"
-      ? costumeCandidates(fam, v)
-      : fam.variants.filter((o) => o.key !== v.key && !!coreOf(o, kind) && coreOf(o, kind) !== own);
-  const chosen = kind === "model" ? new Set([configuredKey(v, kind), sourceKey(v?.previewSources?.model)]) : null;
+    : kind === "chibi"
+      ? costumeCandidates(shownStudent, v)
+      : shownStudent.alts.filter((o) => o.key !== v.key && !!coreOf(o, kind) && coreOf(o, kind) !== own);
+  const chosen = kind === "chibi" ? new Set([configuredKey(v, kind), sourceKey(v?.previewSources?.chibi)]) : null;
   const chosenCross =
-    kind === "model" && across ? crossModels(families, v).filter((o) => chosen.has(`v:${o.key}`)) : [];
+    kind === "chibi" && across ? crossModels(students, v).filter((o) => chosen.has(`v:${o.key}`)) : [];
   const mod = (m) => ({
     key: `m:${m.id}`,
     kind: "mod",
     id: m.id,
     mod: m,
     core: null,
-    origin: fam.variants.find((o) => o.key === m.target) || null,
+    origin: shownStudent.alts.find((o) => o.key === m.targetAlt) || null,
   });
   const list = [
-    { key: "self", kind: "self", core: own, variant: v },
-    ...mods.filter((m) => m.target === v.key).map(mod),
+    { key: "self", kind: "self", core: own, alt: v },
+    ...mods.filter((m) => m.targetAlt === v.key).map(mod),
     // beyondFit: past the stretch limit; previewOnly: not checked yet or refused, shown but never applied
     ...others.map((o) => ({
       key: `v:${o.key}`,
-      kind: "variant",
+      kind: "alt",
       core: coreOf(o, kind),
-      variant: o,
-      ...(kind === "model" && costumes?.[o.key] === "preview"
+      alt: o,
+      ...(kind === "chibi" && costumes?.[o.key] === "preview"
         ? { beyondFit: true }
-        : kind === "model" && costumes?.[o.key] !== "ok"
+        : kind === "chibi" && costumes?.[o.key] !== "ok"
           ? { previewOnly: true }
           : {}),
-      ...(kind === "model" && costumes?.[o.key] === "refused" ? { refused: true } : {}),
-      ...(kind === "model" ? cautionsOf(costumes, o.key) : {}),
+      ...(kind === "chibi" && costumes?.[o.key] === "refused" ? { refused: true } : {}),
+      ...(kind === "chibi" ? cautionsOf(costumes, o.key) : {}),
     })),
-    ...(across && kind === "spr" ? mods.filter((m) => m.target !== v.key).map(mod) : []),
+    ...(across && kind === "portrait" ? mods.filter((m) => m.targetAlt !== v.key).map(mod) : []),
     ...chosenCross.map((o) => crossCard(o, costumes)),
   ];
   const stuck = overwrittenOf(v, kind);
   return list.map((c) => {
-    const restorable = c.cross || c.kind === "mod" ? true : !overwrittenOf(c.variant, kind);
-    const greyed = (c.kind === "self" && (!own || stuck)) || (c.kind === "variant" && !restorable);
+    const restorable = c.cross || c.kind === "mod" ? true : !overwrittenOf(c.alt, kind);
+    const greyed = (c.kind === "self" && (!own || stuck)) || (c.kind === "alt" && !restorable);
     return { ...c, restorable, greyed };
   });
 }
 
 /**
- * The other variants whose model a variant's 3D model may take as a costume, before their check: any other
+ * The other alts whose model an alt's 3D model may take as a costume, before their check: any other
  * model of the student, field-mode models included (model.costumes / model.checkCostumes judge each pair).
  */
-export function costumeCandidates(fam, v) {
-  const own = coreOf(v, "model");
+export function costumeCandidates(shownStudent, v) {
+  const own = coreOf(v, "chibi");
   if (!own) return [];
-  return fam.variants.filter(
-    (o) => o.key !== v.key && !!(coreOf(o, "model") || o.fieldModel) && coreOf(o, "model") !== own,
+  return shownStudent.alts.filter(
+    (o) => o.key !== v.key && !!(coreOf(o, "chibi") || o.fieldChibi) && coreOf(o, "chibi") !== own,
   );
 }
 
@@ -197,14 +212,14 @@ export const setShowOthers = (on) => {
   others.shown = !!on;
 };
 /**
- * The other students' variants (roster.list's families) whose model a variant's 3D model may take as a costume:
+ * The other students' alts (students.list's students) whose model an alt's 3D model may take as a costume:
  * any with a battle model or a field-mode or NPC one.
  */
-export function crossModels(families, v) {
-  if (!coreOf(v, "model")) return [];
-  return (families || [])
-    .flatMap((f) => f.variants || [])
-    .filter((o) => o.family !== v.family && o.key !== v.key && !!(coreOf(o, "model") || o.fieldModel));
+export function crossModels(students, v) {
+  if (!coreOf(v, "chibi")) return [];
+  return (students || [])
+    .flatMap((f) => f.alts || [])
+    .filter((o) => o.student !== v.student && o.key !== v.key && !!(coreOf(o, "chibi") || o.fieldChibi));
 }
 /**
  * The card of another student's model. It is a deliberate choice: past the stretch limit ("preview") it is
@@ -215,9 +230,9 @@ export const crossCard = (o, costumes = null) => {
   const verdict = costumes?.[o.key];
   return {
     key: `v:${o.key}`,
-    kind: "variant",
-    core: coreOf(o, "model"),
-    variant: o,
+    kind: "alt",
+    core: coreOf(o, "chibi"),
+    alt: o,
     cross: true,
     restorable: true,
     greyed: false,
@@ -233,7 +248,7 @@ export const crossCard = (o, costumes = null) => {
  * The cards a search adds after the popup's own: the other students' models `match` finds, refused ones left
  * out, in `compare`'s order (the roster's name order), the first `limit` (CROSS_LIMIT: what one RPC call takes;
  * "Show other students" lists them all).
- * @param {object[]} families roster.list's families.
+ * @param {object[]} students students.list's students.
  * @param {object|null} [costumes] The 3D model's verdicts.
  * @param {object} [options]
  * @param {(model: object) => boolean} [options.match] Whether a model matches the search.
@@ -242,13 +257,13 @@ export const crossCard = (o, costumes = null) => {
  * @param {number} [options.limit] The most cards.
  */
 export function crossCandidates(
-  families,
+  students,
   v,
   costumes = null,
   { match = () => true, compare = null, exclude = [], limit = CROSS_LIMIT } = {},
 ) {
   const skip = new Set(exclude);
-  const hits = crossModels(families, v).filter(
+  const hits = crossModels(students, v).filter(
     (o) => !skip.has(`v:${o.key}`) && costumes?.[o.key] !== "refused" && match(o),
   );
   if (compare) hits.sort(compare);
@@ -260,32 +275,31 @@ export function crossCandidates(
  * by.
  */
 export const crossExtras = (c, caution) =>
-  c.cross ? { hint: caution, terms: [c.variant.fileId, c.variant.model, c.variant.fieldModel] } : {};
+  c.cross ? { hint: caution, terms: [c.alt.fileId, c.alt.chibi, c.alt.fieldChibi] } : {};
 /**
  * What keeps a 3D candidate from being applied by its costume check.
  * @returns {"pending"|"unfit"|null} "pending" (another student's model before its verdict), "unfit" (refused:
  *     shown, never applied) or null.
  */
-export function costumeHold(fam, v, key, costumes) {
+export function costumeHold(shownStudent, v, key, costumes) {
   if (typeof key !== "string" || !key.startsWith("v:")) return null;
   const other = key.slice(2),
     verdict = costumes?.[other];
-  if (fam.variants.some((o) => o.key === other))
+  if (shownStudent.alts.some((o) => o.key === other))
     return verdict != null && verdict !== "ok" && verdict !== "preview" ? "unfit" : null;
   return verdict === "ok" || verdict === "preview" ? null : verdict == null ? "pending" : "unfit";
 }
 
-const sourceKey = (source) =>
-  typeof source === "string" && source.startsWith("variant:") ? `v:${source.slice(8)}` : null;
+const sourceKey = (source) => (typeof source === "string" && source.startsWith("alt:") ? `v:${source.slice(4)}` : null);
 
 /**
- * A configured source (family.get's configured[kind]) as a candidate key; null when the kind is not configured.
+ * A configured source (student.get's configured[kind]) as a candidate key; null when the kind is not configured.
  */
-export function configuredKey(v, kind = "spr") {
+export function configuredKey(v, kind = "portrait") {
   const source = v?.configured?.[kind];
   if (typeof source !== "string" || !source || source === "official") return null;
   if (source.startsWith("mod:")) return `m:${source.slice(4)}`;
-  if (source.startsWith("variant:")) return `v:${source.slice(8)}`;
+  if (source.startsWith("alt:")) return `v:${source.slice(4)}`;
   return null;
 }
 
@@ -293,24 +307,24 @@ export function configuredKey(v, kind = "spr") {
  * The candidate key the previews show: always the saved source. The file table and write guards still use
  * appliedOf/appliedKey, which describe the bytes in the game folder.
  */
-export const previewKey = (v, kind = "spr", enabled = true) => {
+export const previewKey = (v, kind = "portrait", enabled = true) => {
   const source = v?.previewSources?.[kind];
   if (source === "official") return "self";
   if (source?.startsWith("mod:")) return `m:${source.slice(4)}`;
-  if (source?.startsWith("variant:")) return `v:${source.slice(8)}`;
+  if (source?.startsWith("alt:")) return `v:${source.slice(4)}`;
   return configuredKey(v, kind) || (v?.configured || !enabled ? "self" : appliedKey(v, kind));
 };
 
 /** The candidate key the game should use, including while Mods are off: the manifest's. */
-export const intendedKey = (v, kind = "spr") => configuredKey(v, kind) || "self";
+export const intendedKey = (v, kind = "portrait") => configuredKey(v, kind) || "self";
 export const isApplied = (v, kind, key = previewKey(v, kind)) => key === intendedKey(v, kind);
 
 /**
- * The status of a variant's selection of a kind. A switch being On is intent, never evidence that the chosen
+ * The status of an alt's selection of a kind. A switch being On is intent, never evidence that the chosen
  * source reached the game.
  * @returns {"mods.incomplete"|"status.applied"|null} The locale key of the status.
  */
-export function selectionStatus(v, kind = "spr") {
+export function selectionStatus(v, kind = "portrait") {
   if (
     (previewKey(v, kind) === intendedKey(v, kind) && v?.selection?.[kind]?.incomplete) ||
     (v?.modList || []).some((m) => m.incomplete && `m:${m.id}` === previewKey(v, kind))
@@ -332,17 +346,17 @@ export const previewChanged = (before, after, kind, beforeEnabled, enabled) =>
   beforeEnabled !== enabled ||
   previewKey(before, kind, beforeEnabled) !== previewKey(after, kind, enabled);
 export function modelSource(v, enabled = true) {
-  if (enabled && !v?.configured && !v?.previewSources?.model) return "live";
-  const key = previewKey(v, "model", enabled);
+  if (enabled && !v?.configured && !v?.previewSources?.chibi) return "live";
+  const key = previewKey(v, "chibi", enabled);
   return key.startsWith("m:")
     ? `mod:${key.slice(2)}`
     : key.startsWith("v:")
-      ? `variant:${key.slice(2)}`
+      ? `alt:${key.slice(2)}`
       : key === "self"
         ? "official"
         : "live";
 }
-// the model route's address of a variant's chibi from a source; with `clip`, of that clip of it alone (model.js
+// the model route's address of an alt's chibi from a source; with `clip`, of that clip of it alone (model.js
 // addClips)
 export function modelUrl(key, source = "live", clip = null) {
   const query = [
@@ -350,15 +364,15 @@ export function modelUrl(key, source = "live", clip = null) {
     clip ? `clip=${encodeURIComponent(clip)}` : "",
   ];
   const q = query.filter(Boolean).join("&");
-  return `/asset/model/${encodeURIComponent(key)}.glb${q ? `?${q}` : ""}`;
+  return `/asset/chibi/${encodeURIComponent(key)}.glb${q ? `?${q}` : ""}`;
 }
 
-export function previewBase(v, kind = "spr", enabled = true, variants = []) {
-  if (kind === "model") return modelUrl(v.key, modelSource(v, enabled));
+export function previewBase(v, kind = "portrait", enabled = true, alts = []) {
+  if (kind === "chibi") return modelUrl(v.key, modelSource(v, enabled));
   if (enabled && !v?.configured && !v?.previewSources?.[kind]) return spineBase(kind, coreOf(v, kind));
   const key = previewKey(v, kind, enabled);
   if (key.startsWith("m:")) return spineBase("mod", key.slice(2));
-  const source = key.startsWith("v:") ? variants.find((o) => o.key === key.slice(2)) : v;
+  const source = key.startsWith("v:") ? alts.find((o) => o.key === key.slice(2)) : v;
   return spineBase(`official-${kind}`, coreOf(source || v, kind));
 }
 
@@ -368,9 +382,9 @@ export function previewBase(v, kind = "spr", enabled = true, variants = []) {
  * @returns {{start: string, button: string, set: boolean}} The card to start on, the primary button's locale
  *     key and whether it saves.
  */
-export function popupMode(fam, v, kind = "spr", enabled = true, families = null) {
+export function popupMode(shownStudent, v, kind = "portrait", enabled = true, students = null) {
   const set = configuredKey(v, kind);
-  const listed = candidates(fam, v, kind, null, families);
+  const listed = candidates(shownStudent, v, kind, null, students);
   const want = previewKey(v, kind, enabled);
   const start = listed.some((c) => c.key === want) ? want : "self";
   return { start, button: "popup.save", set };

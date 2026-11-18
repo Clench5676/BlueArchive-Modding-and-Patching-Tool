@@ -3,6 +3,7 @@ import * as NGUI from "../ui/ngui.js";
 import { withTimeout } from "../core/async.js";
 import { T } from "../core/i18n.js";
 import { S } from "../core/util.js";
+import { readSerialized } from "../core/serialized-fields.js";
 
 /**
  * Choose the Hall background: the saved one, else office-day, else the first with a picture, else the first.
@@ -55,7 +56,7 @@ export function blending(material) {
 export async function layers(background, target, { signal } = {}) {
   const response = await withTimeout(fetch(background.layoutUrl, { signal }), 15000, "Office background", { signal });
   if (!response.ok) throw new Error(`Office background: HTTP ${response.status}`);
-  const asset = await response.json();
+  const asset = readSerialized(await response.json());
   if (signal?.aborted) return null;
   const textures = {},
     modes = new Map(),

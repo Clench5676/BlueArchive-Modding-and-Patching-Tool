@@ -136,16 +136,16 @@ def mobile(tmp_path):
 
 def test_mobile_parts_convert_into_parts_kept_under_older_dates_and_import(mobile):
     portrait, lobby = mobile.mods["ch0242_spr"], mobile.mods["ch0242_home"]
-    rows = {row["kind"]: row for row in analyze(mobile, [*portrait, *lobby])["entries"]}
-    assert set(rows) == {"spr", "lobby"}
+    rows = {row["resourceType"]: row for row in analyze(mobile, [*portrait, *lobby])["entries"]}
+    assert set(rows) == {"portrait", "memorialLobby"}
     for row in rows.values():
         assert (row["state"], row["reason"]) == ("convert", None), row
         assert row["source"] == {"server": "global", "platform": "android", "detected": True}
     text, page, _ = mobile.parts["ch0242_spr"]
-    assert sorted(path.name for path in mobile.services.batch_import._latest[rows["spr"]["id"]].targets) == sorted(
+    assert sorted(path.name for path in mobile.services.batch_import._latest[rows["portrait"]["id"]].targets) == sorted(
         [text.name, page.name]
     )
-    (result,) = run(mobile, [rows["spr"]], enableAfterImport=False)
+    (result,) = run(mobile, [rows["portrait"]], enableAfterImport=False)
     assert result["outcome"] == "updated" and result["libraryId"], result
     # The mod's page goes into the part dated 2024-11-18 that holds it; its unchanged skeleton part stays official.
     output = dict(mobile.library._record(result["libraryId"])["import_sources"][0]["output"])
@@ -157,8 +157,8 @@ def test_mobile_parts_convert_into_parts_kept_under_older_dates_and_import(mobil
 def test_one_selected_mobile_part_per_core_finds_the_other_in_its_folder(mobile):
     portrait, lobby = mobile.mods["ch0242_spr"], mobile.mods["ch0242_home"]
     for chosen in (0, 1):
-        rows = {row["kind"]: row for row in analyze(mobile, [portrait[chosen], lobby[chosen]])["entries"]}
-        for kind, files in (("spr", portrait), ("lobby", lobby)):
+        rows = {row["resourceType"]: row for row in analyze(mobile, [portrait[chosen], lobby[chosen]])["entries"]}
+        for kind, files in (("portrait", portrait), ("memorialLobby", lobby)):
             row = rows[kind]
             assert row["state"] == "incomplete" and row["missing"]["unresolved"] == 0
             assert [found["path"] for found in row["missing"]["found"]] == [str(files[1 - chosen])]

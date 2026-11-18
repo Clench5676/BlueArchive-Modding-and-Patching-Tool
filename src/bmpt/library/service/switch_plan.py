@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-import json
+import tempfile
 import logging
 import shutil
 import time
@@ -19,6 +19,7 @@ from bmpt.engine import (
     parse_filename,
     t,
 )
+from ...host.store_formats import read_runtime
 from ...core.errors import ServiceError
 from ...core.filelock import file_lock
 from ...core.logging_utils import log_failure
@@ -129,7 +130,10 @@ class SwitchPlanMixin:
             if target in staged.values():
                 raise ServiceError("game_file_conflict", file=path)
             source = self._official_or_current(path, pin) if current_fallback else self._official_for(path, pin)
-            atomic_copy(source, target)
+            if self._managed and self._is_kept(source):
+                self._copy_verified_official(source, target)
+            else:
+                atomic_copy(source, target)
             staged[path] = target
         return staged
 
@@ -149,10 +153,13 @@ class SwitchPlanMixin:
             try:
                 source = self._official_for(path, pin)
             except ServiceError as error:
-                if error.code != "original_unavailable" or path in updating:
+                if error.code != "official_unavailable" or path in updating:
                     raise
                 source = sources.get(path.name) or path
-            atomic_copy(source, prepared)
+            if self._managed and self._is_kept(source):
+                self._copy_verified_official(source, prepared)
+            else:
+                atomic_copy(source, prepared)
             staged[path] = prepared
         return staged
 
@@ -210,7 +217,12 @@ class SwitchPlanMixin:
         if self._write_check is not None:
             self._write_check(pin)
         self._check_idle([pin])
-        with safety.writable_game_files(paths, list(pin.dirs), allow_missing=recovering):
+        legacy_gate = (
+            self._game_write_gate(paths, pin.root, self._is_official_as)
+            if self._game_write_gate
+            else contextlib.nullcontext()
+        )
+        with safety.writable_game_files(paths, list(pin.dirs), allow_missing=recovering), legacy_gate:
             yield
 
     @contextlib.contextmanager
@@ -354,10 +366,18 @@ class SwitchPlanMixin:
         A failure (ServiceError) leaves the journal and stops here; a write journal whose install is not known now waits
         (skipped, logged once). A game file changed outside the library is left as it is (``_rollback_write``).
         """
+        if self._managed:
+            from ...host.store_formats import InvalidStore
+            from ...host.upgrade_journals import verify_journals
+
+            try:
+                verify_journals(self.root, self._records, check_game=True)
+            except (OSError, InvalidStore) as error:
+                raise ServiceError("library_recovery_pending", file=self.root) from error
         self._recover_imports()
         for path in sorted((self.root / "transactions").glob("*/journal.json")):
             try:
-                data = json.loads(path.read_text(encoding="utf-8"))
+                data = read_runtime(path)
                 if (
                     data["version"] != 1
                     or data["phase"] not in ("preparing", "writing", "committed")
@@ -397,6 +417,12 @@ class SwitchPlanMixin:
                     if item["restore"] and self.root / item["restore"] != self._original_path(target):
                         raise ValueError("Invalid original path")
                     targets.append(target)
+                if self._managed:
+                    targets = [
+                        target
+                        for target, item in zip(targets, data["files"])
+                        if not target.exists() or self._hashes.get(target).sha1 != item["before"]
+                    ]
                 with self._writable(targets, pin, recovering=True):
                     left = self._rollback_write(data, pin)
                 self._release_failed(
@@ -449,8 +475,9 @@ class SwitchPlanMixin:
             original = self.root / item["restore"] if item["restore"] else None
             if original is not None and not original.exists():
                 if current != item["after"]:
-                    raise ServiceError("original_unavailable", file=target)
+                    raise ServiceError("official_unavailable", file=target)
                 verified_move(target, original, item["after"])
+                self._original_checks.remember_digest(original, item["after"])
                 current = None
             if current == item["before"]:
                 continue
@@ -463,11 +490,18 @@ class SwitchPlanMixin:
             backup = self.root / item["rollback"]
             verify_file(backup, item["before"])
             if (
-                item["official"]
+                not self._managed
+                and item["official"]
                 and item["kept_now"]
                 and not self._needed_elsewhere(target.name, {str(target.resolve())}, self._all_pins())
             ):
                 verified_move(backup, target, item["before"])
+            elif self._managed and self._is_kept(backup):
+                with tempfile.TemporaryDirectory(prefix="verified-official-", dir=self.root) as folder:
+                    staged = Path(folder) / backup.name
+                    self._copy_verified_official(backup, staged)
+                    verify_file(staged, item["before"])
+                    atomic_copy(staged, target)
             elif not atomic_clone(backup, target):
                 atomic_copy(backup, target)
             verify_file(target, item["before"])
@@ -547,7 +581,7 @@ class SwitchPlanMixin:
             try:
                 official[target] = self._official_for(target, pin)
             except ServiceError as error:
-                if error.code not in ("original_unavailable", "original_invalid"):
+                if error.code not in ("official_unavailable", "official_invalid"):
                     raise
                 official[target] = None
         written = [
@@ -683,6 +717,34 @@ class SwitchPlanMixin:
         kept_current: list[str] | None = None,
         untested: bool = True,
     ) -> list[Path]:
+        kept = {target: path for target, path in replacements.items() if self._managed and self._is_kept(path)}
+        options = dict(create_backup=create_backup, expected=expected, kept_current=kept_current, untested=untested)
+        with contextlib.ExitStack() as resources:
+            if kept:
+                work = Path(
+                    resources.enter_context(tempfile.TemporaryDirectory(prefix="verified-official-", dir=self.root))
+                )
+                replacements = dict(replacements)
+                for index, (target, path) in enumerate(kept.items()):
+                    staged = work / str(index) / path.name
+                    self._copy_verified_official(path, staged)
+                    replacements[target] = staged
+            return self._write_prepared(replacements, source, log, progress, pin, build_keys, **options)
+
+    def _write_prepared(
+        self,
+        replacements: dict[Path, Path],
+        source: str,
+        log: LogFunc,
+        progress: ProgressCallback | None,
+        pin: Pin,
+        build_keys: dict[Path, str] | None = None,
+        *,
+        create_backup: bool = False,
+        expected: dict[Path, str] | None = None,
+        kept_current: list[str] | None = None,
+        untested: bool = True,
+    ) -> list[Path]:
         from ...gameassets.costume_rule import COSTUME_RULE
 
         dirs = list(pin.dirs)
@@ -765,7 +827,7 @@ class SwitchPlanMixin:
                     try:
                         officials[target] = self._official_for(target, pin)
                     except ServiceError as error:
-                        if error.code != "original_unavailable":
+                        if error.code != "official_unavailable":
                             raise
                 # Include omitted parts of the core: the outside mod must survive as a whole.
                 kept = self._keep_replaced(list(replacements), pin)
@@ -786,7 +848,8 @@ class SwitchPlanMixin:
                     if new_original:
                         kept_now.append(target)
                     restore = (
-                        source == "official"
+                        not self._managed
+                        and source == "official"
                         and changed[target] == original
                         and not self._needed_elsewhere(target.name, {str(target.resolve())}, pins)
                     )

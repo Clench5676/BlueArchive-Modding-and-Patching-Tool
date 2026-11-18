@@ -215,7 +215,7 @@ export function playersPart(S, L) {
   function show(
     core,
     host,
-    variant,
+    alt,
     { mod = null, framing = null, official = false, camera = false, deferPlayback = false } = {},
   ) {
     const current = S.current;
@@ -237,7 +237,7 @@ export function playersPart(S, L) {
       }
       if (sourceSignal.aborted) return null;
       let stopped = false;
-      const url = spineBase(mod ? "mod" : official ? "official-lobby" : "lobby", mod || core);
+      const url = spineBase(mod ? "mod" : official ? "official-memorialLobby" : "memorialLobby", mod || core);
       const abort = () => S.lobbyLoads.cancel();
       sourceSignal.addEventListener("abort", abort, { once: true });
       const run = async () => {
@@ -260,7 +260,7 @@ export function playersPart(S, L) {
             return current.ready;
           try {
             return await S.lobbyLoads.run((signal) =>
-              showNow(core, host, variant, mod, sources, signal, framing, deferPlayback),
+              showNow(core, host, alt, mod, sources, signal, framing, deferPlayback),
             );
           } catch (err) {
             if (sourceSignal.aborted || attempt) throw err;
@@ -286,7 +286,7 @@ export function playersPart(S, L) {
       }
     });
   }
-  async function showNow(core, host, variant, mod, sources, signal, framing, deferPlayback = false) {
+  async function showNow(core, host, alt, mod, sources, signal, framing, deferPlayback = false) {
     clearView(host);
     if (!sources.artBase) throw new Error("Lobby source unavailable");
     const { base } = sources;
@@ -304,7 +304,7 @@ export function playersPart(S, L) {
       core,
       mod,
       ...sources,
-      variant,
+      alt,
       host,
       signal,
       framing,
@@ -507,7 +507,7 @@ export function playersPart(S, L) {
           const meta = await showNow(
             c.core,
             c.host,
-            c.variant,
+            c.alt,
             c.mod,
             { base: c.base, artBase: c.artBase, official: c.official },
             signal,

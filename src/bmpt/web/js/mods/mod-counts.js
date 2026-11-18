@@ -6,14 +6,14 @@ import { label, node, sprite, textWidth } from "../ui/ngui.js";
 // bottom navigation (nav-items.js) and the play button of the lobby tab (detail.js). Change a name here to swap
 // an icon.
 export const COUNT_ICONS = Object.freeze({
-  spr: "Common_Icon_Student",
-  lobby: "Common_Icon_Play",
-  model: "Common_Icon_Craft",
+  portrait: "Common_Icon_Student",
+  memorialLobby: "Common_Icon_Play",
+  chibi: "Common_Icon_Craft",
   other: "Common_Icon_Inventory_Equip",
 });
 
-const KINDS = ["spr", "lobby", "model", "other"];
-const WORD = { spr: "band.portrait", lobby: "band.lobby", model: "tab.model", other: "import.other" };
+const KINDS = ["portrait", "memorialLobby", "chibi", "other"];
+const WORD = { portrait: "band.portrait", memorialLobby: "band.lobby", chibi: "tab.model", other: "import.other" };
 
 /**
  * The count icons the loaded atlas index has, by kind: { atlas, name, ratio }; a kind without its sprite is
@@ -37,7 +37,7 @@ export function iconsOf(index = {}) {
  * The accessible text of a card's mod counts.
  */
 export const countText = (counts, T) =>
-  T("band.modCounts", { portraits: counts?.spr || 0, lobbies: counts?.lobby || 0 });
+  T("band.modCounts", { portraits: counts?.portrait || 0, lobbies: counts?.memorialLobby || 0 });
 
 /**
  * The portrait band's count nodes: one half per kind, both always shown (zero too); long text shrinks in place.
@@ -46,7 +46,7 @@ export function countNodes(
   counts,
   icons = {},
   T = null,
-  { kinds = ["spr", "lobby"], width = 400, color = "#ffffff/1.00", fontSize = 36, top = false } = {},
+  { kinds = ["portrait", "memorialLobby"], width = 400, color = "#ffffff/1.00", fontSize = 36, top = false } = {},
 ) {
   return kinds.map((kind, i) => {
     const icon = icons[kind],

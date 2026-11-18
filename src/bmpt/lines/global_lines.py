@@ -134,7 +134,7 @@ def portrait_dialogues(rows: Iterable[dict[str, Any]]) -> dict[int, dict[int, li
             {
                 **{lang: text for column, lang in COLUMNS.items() if (text := caption(row.get(column)))},
                 **(
-                    {"expression": row["AnimationName"]}
+                    {"animationName": row["AnimationName"]}
                     if isinstance(row.get("AnimationName"), str) and row["AnimationName"]
                     else {}
                 ),
@@ -164,7 +164,7 @@ def portrait_by_clip(groups: dict, clips: dict[str, list[str | None]]) -> dict[s
             recording's place.
 
     Returns:
-        ``{clip id: {lang: text, "expression", "expressionCues": [{"time", "expression"}]}}``, the expression keys
+        ``{clip id: {lang: text, "animationName", "animationCues": [{"time", "animationName"}]}}``, the expression keys
         only when a row names one.
     """
     out = {}
@@ -188,16 +188,16 @@ def portrait_by_clip(groups: dict, clips: dict[str, list[str | None]]) -> dict[s
                         line[lang] = _join(line.get(lang, ""), row[lang])
             cues, elapsed = [], 0.0
             for row in values:
-                expression = row.get("expression")
+                expression = row.get("animationName")
                 if expression:
-                    cues.append({"time": elapsed, "expression": expression})
+                    cues.append({"time": elapsed, "animationName": expression})
                 duration = row.get("duration", 0)
                 if not isinstance(duration, (int, float)) or duration <= 0:
                     break  # No authored offset for later rows: never guess a fraction of the audio duration.
                 elapsed += duration
             if cues:
-                line["expression"] = cues[0]["expression"]
-                line["expressionCues"] = cues
+                line["animationName"] = cues[0]["animationName"]
+                line["animationCues"] = cues
             out[clip] = line
     return out
 

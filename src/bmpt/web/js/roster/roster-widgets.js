@@ -245,13 +245,13 @@ export function toggleHits(view, lay, segY = 720 - 219 - 50.2) {
     }));
   return [
     ...segments("mods", ["all", "mods", "none"], ["seg.all", "seg.mods", "seg.noMods"], lay.seg1),
-    ...segments("recruit", ["all", "yes", "no"], ["seg.all", "seg.recruit", "seg.noRecruit"], lay.seg2),
+    ...segments("releaseStatus", ["all", "yes", "no"], ["seg.all", "seg.recruit", "seg.noRecruit"], lay.seg2),
     {
       box: [lay.cbLeft + lay.cbW / 2, segY, lay.cbW, CONTROL.toolbar.h],
       name: T("roster.merge"),
-      pressed: view.merged === true,
+      pressed: view.groupAlts === true,
       apply: (target) => {
-        target.merged = !target.merged;
+        target.groupAlts = !target.groupAlts;
       },
     },
   ];
@@ -271,9 +271,9 @@ export const TOOLBAR_CENTRE_Y = -219 - 50.2;
 export const rosterToolbarState = (view) => ({
   filters: [
     { name: "ModFilter", active: { all: 0, mods: 1, none: 2 }[view.mods] },
-    { name: "RecruitFilter", active: { all: 0, yes: 1, no: 2 }[view.recruit] },
+    { name: "RecruitFilter", active: { all: 0, yes: 1, no: 2 }[view.releaseStatus] },
   ],
-  checked: view.merged,
+  checked: view.groupAlts,
   filtered: filtering(view.filters),
   ascending: view.order !== "desc",
 });

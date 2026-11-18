@@ -22,10 +22,10 @@ def verified_frame(tmp_path_factory):
     item = game.layout("UINonEquipmentInventoryListItem")
     normal = next(n for n in item["children"][0]["children"] if n["name"] == "Normal")
     frame = next(n for n in normal["children"] if n["name"] == "Cover_Select")
-    widget = next(w for w in frame["widgets"] if "sprite" in w)
-    assert (widget["w_"], widget["h_"], widget["incline"]) == (240, 220, 10)
-    meta = game.atlases()[widget["atlas"]][widget["sprite"]]
-    image = Image.open(io.BytesIO(game.sprite_png(widget["atlas"], widget["sprite"]))).convert("RGBA")
+    widget = next(w for w in frame["widgets"] if "spriteName" in w)
+    assert (widget["width"], widget["height"], widget["inclineAngle"]) == (240, 220, 10)
+    meta = game.atlases()[widget["atlas"]][widget["spriteName"]]
+    image = Image.open(io.BytesIO(game.sprite_png(widget["atlas"], widget["spriteName"]))).convert("RGBA")
     return widget, meta, image
 
 
@@ -33,12 +33,14 @@ def verified_frame(tmp_path_factory):
 def test_verified_item_frame_contour_matches_rounded_thumbnail_within_one_pixel(verified_frame, scale):
     widget, meta, image = verified_frame
     module = Path(__file__).resolve().parents[1] / "src/bmpt/web/js/ui/row-thumbnail.js"
+    serializer = module.parent.parent / "core/serialized-fields.js"
     script = """import {frameOutline, innerFrame} from MODULE;
+import {readSerialized} from SERIALIZER;
 let s=""; for await (const part of process.stdin) s += part;
 const {pixels,widget,meta,scale}=JSON.parse(s), outline=frameOutline(pixels);
-console.log(JSON.stringify({outline,window:innerFrame(widget,meta,outline,{scale})}));""".replace(
+console.log(JSON.stringify({outline,window:innerFrame(readSerialized(widget),meta,outline,{scale})}));""".replace(
         "MODULE", json.dumps(module.as_uri())
-    )
+    ).replace("SERIALIZER", json.dumps(serializer.as_uri()))
     result = subprocess.run(
         ["node", "--input-type=module", "-e", script],
         capture_output=True,

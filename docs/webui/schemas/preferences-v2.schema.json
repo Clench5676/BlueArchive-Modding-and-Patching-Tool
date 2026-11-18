@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "preferences-v2.schema.json",
+  "title": "Application preferences",
+  "type": "object",
+  "properties": {
+    "consent": {
+      "type": "boolean"
+    },
+    "recent": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "aliases": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "asset_previews": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "tours": {
+      "type": "object"
+    },
+    "prefs": {
+      "type": "object",
+      "properties": {
+        "student_list": {
+          "type": "object",
+          "properties": {
+            "group_alts": {
+              "type": "boolean"
+            },
+            "releaseStatus": {
+              "type": "string"
+            }
+          }
+        },
+        "student_hall": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "enum": [
+                "portraits",
+                "memorialLobby"
+              ]
+            },
+            "revision": {
+              "type": "integer"
+            },
+            "portraits": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "alt": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "flipHorizontal": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            },
+            "memorialLobbies": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "alt": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "flipHorizontal": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "student_hall_viewed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "batch_import": {
+          "type": "object",
+          "properties": {
+            "outputFolder": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "crcCorrection": {
+              "enum": [
+                "auto",
+                "on",
+                "off"
+              ]
+            },
+            "createBackup": {
+              "type": "boolean"
+            },
+            "matchStrategy": {
+              "enum": [
+                "path_id",
+                "containerNameType",
+                "name_type"
+              ]
+            },
+            "threads": {
+              "type": "integer"
+            },
+            "assetTypes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

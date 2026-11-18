@@ -13,6 +13,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from ...host.data_upgrade import CommittedPaths
 from typing import Any, Callable, Iterator
 
 from ...core.errors import ServiceError
@@ -90,6 +91,9 @@ class ClassicWindow:
         poll_timeout: float = CONTROL_POLL,
         silent_exit: float = SILENT_EXIT,
         watch_interval: float = 1.0,
+        committed: Callable[[], CommittedPaths | None] = lambda: None,
+        read_only: Callable[[], bool] = lambda: False,
+        protected: Callable[[], list[str]] = lambda: [],
     ):
         """Create the manager; no window is started.
 
@@ -108,8 +112,14 @@ class ClassicWindow:
             poll_timeout: Seconds a control long-poll waits for a line.
             silent_exit: Seconds without a poll after which a child whose launcher returned early counts as ended.
             watch_interval: Seconds between two checks of the child's process.
+            committed: The current path binding provided to the authenticated child.
+            read_only: Whether the child must block game-writing commands.
+            protected: Paths where the child must refuse general-purpose exports.
         """
         self.data_dir = Path(data_dir)
+        self._committed = committed
+        self._read_only = read_only
+        self._protected = protected
         self._origin = origin if callable(origin) else (lambda: origin)
         self._publish = publish or (lambda event, data=None: None)
         self.native = native or NativeOps()
@@ -237,7 +247,8 @@ class ClassicWindow:
     def _start(self, tab: str | None) -> _Child:
         token = secrets.token_urlsafe(24)
         env = os.environ.copy()
-        env["BAMT_DATA_DIR"] = str(self.data_dir.resolve())
+        paths = self._committed()
+        env["BAMT_DATA_DIR"] = str(paths.data_root if paths else self.data_dir.resolve())
         env[ENV_URL] = self._origin().rstrip("/")
         env[ENV_TOKEN] = token
         env["PYTHONIOENCODING"] = "utf-8"
@@ -451,6 +462,22 @@ class ClassicWindow:
         path = environ.get("PATH_INFO", "")
         method = environ.get("REQUEST_METHOD", "GET")
         token = environ.get("HTTP_X_BAMT_CLASSIC", "")
+        if path == "/api/classic/session":
+            if method != "GET":
+                return _reply(start_response, "405 Method Not Allowed", {})
+            if self._match(token) is None or (paths := self._committed()) is None:
+                return _reply(start_response, "403 Forbidden", {})
+            return _reply(
+                start_response,
+                "200 OK",
+                {
+                    "config": str(paths.config),
+                    "artifacts": str(paths.artifacts),
+                    "runtime": str(paths.runtime),
+                    "readOnly": self._read_only(),
+                    "protected": self._protected(),
+                },
+            )
         if path == CONTROL_PATH:
             if method != "GET":
                 return _reply(start_response, "405 Method Not Allowed", {})

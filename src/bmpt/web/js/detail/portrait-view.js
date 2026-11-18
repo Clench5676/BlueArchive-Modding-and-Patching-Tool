@@ -1,7 +1,7 @@
 // The detail screen's portrait framing, as in the game: UICharacterDetail places every portrait skeleton with its
 // origin on the node CharacterPos, at that node's scale, whatever the skeleton holds. Framing on the skeleton's
 // bounds instead shrank and shifted every character with a long weapon, wings or a prop beside her (Eimi (Armed)'s
-// gun made her 30 % smaller, 200 px to the right and lower than her other variants). No DOM: the tests run it in Node.
+// gun made her 30 % smaller, 200 px to the right and lower than her other alts). No DOM: the tests run it in Node.
 
 // every portrait's SkeletonDataAsset scale: a skeleton unit is 1/100 of a Unity unit (all 630 in the 2026-10 install)
 export const SKELETON_SCALE = 0.01;

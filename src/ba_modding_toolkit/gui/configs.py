@@ -181,8 +181,20 @@ class ConfigManager:
                 key = meta.key or var_name.removesuffix("_var")
                 data[meta.group][key] = var.get()
             
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                toml.dump(data, f)
+            from bmpt.core.filelock import file_lock
+            from bmpt.host.store_formats import epoch_root
+            from bmpt.host.upgrade_files import write_bytes
+
+            if epoch_root(self.config_file, "data"):
+                lock = self.config_file.with_suffix(".toml.lock")
+                with file_lock(lock, timeout=2):
+                    current = toml.load(self.config_file) if self.config_file.exists() else {}
+                    for group, values in data.items():
+                        current.setdefault(group, {}).update(values)
+                    write_bytes(self.config_file, toml.dumps(current).encode("utf-8"))
+            else:
+                with open(self.config_file, 'w', encoding='utf-8') as f:
+                    toml.dump(data, f)
             return True
         except Exception as e:
             print(t("log.config.save_failed", error=e))

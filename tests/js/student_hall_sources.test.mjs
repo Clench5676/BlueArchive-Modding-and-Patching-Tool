@@ -21,9 +21,9 @@ test("official Hall memorial uses original art with full game metadata", async (
   };
   try {
     const result = await Lobby.layersOf("hall_home", null, null, null, { official: true });
-    assert.ok(result.layers[0].spine.startsWith("/asset/spine/official-lobby/hall_home/"));
+    assert.ok(result.layers[0].spine.startsWith("/asset/spine/official-memorialLobby/hall_home/"));
     assert.equal(result.info, info);
-    assert.ok(requests.includes(`/asset/spine/lobby/hall_home/${revision}/lobby.json`));
+    assert.ok(requests.includes(`/asset/spine/memorialLobby/hall_home/${revision}/lobby.json`));
   } finally {
     globalThis.fetch = before;
   }

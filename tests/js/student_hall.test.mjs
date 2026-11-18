@@ -234,7 +234,7 @@ test("edit save cancel reconciliation preserves canvas, actors, pose tracks and 
   });
   let draft = structuredClone(original);
   draft[0].x = 650;
-  draft[1].mirror = true;
+  draft[1].flipHorizontal = true;
   await result.update(draft, 0.7);
   assert.equal(result.actors.get(draft[0].id).entry, draft[0]);
   assert.equal(result.actors.get(draft[1].id).player.skeleton.scaleX, -portraitScale(draft[1], 0.7));

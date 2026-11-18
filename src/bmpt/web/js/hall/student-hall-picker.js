@@ -10,12 +10,12 @@ import { lazyThumbnail } from "../ui/lazy-thumbnail.js";
 import { spineBase } from "../core/api.js";
 import { L, T, language } from "../core/i18n.js";
 
-const titleOf = (choice) => [L(choice.names)?.full || choice.variant, choice.label].filter(Boolean).join(" - ");
+const titleOf = (choice) => [L(choice.names)?.full || choice.alt, choice.name].filter(Boolean).join(" - ");
 /**
  * Open the Hall's picker: the modal that chooses a portrait source (the student, then its portrait) or a
  * memorial lobby, with previews and a search.
  * @param {object} options
- * @param {string} options.kind The kind of source: "lobby" for a memorial lobby.
+ * @param {string} options.kind The resource type of the source: "memorialLobby" for a memorial lobby.
  * @param {object[]} options.choices
  * @param {(entry: object) => void} options.onPreview
  * @param {(change: object) => void} options.onChange
@@ -42,7 +42,7 @@ export function openPicker({
   onReplace,
   isSaving = () => false,
 }) {
-  const memorial = kind === "lobby",
+  const memorial = kind === "memorialLobby",
     work = thumbnailScope({ priority: "popup" }),
     pictures = new Map(),
     headsPictures = new Map(),
@@ -71,13 +71,19 @@ export function openPicker({
     const key = sourceKey(choice);
     if (!pictures.has(key)) {
       const base = spineBase(
-        choice.source.startsWith("mod:") ? "mod" : `official-${choice.kind}`,
+        choice.source.startsWith("mod:") ? "mod" : `official-${choice.resourceType}`,
         choice.source.startsWith("mod:") ? choice.source.slice(4) : choice.core,
       );
       pictures.set(
         key,
         lazyThumbnail(
-          () => work.thumb(base, choice.kind === "spr" ? "portrait" : "landscape", null, choice.kind === "lobby"),
+          () =>
+            work.thumb(
+              base,
+              choice.resourceType === "portrait" ? "portrait" : "landscape",
+              null,
+              choice.resourceType === "memorialLobby",
+            ),
           work.signal,
         ),
       );
@@ -87,11 +93,11 @@ export function openPicker({
   const item = (choice, key = sourceKey(choice)) => ({
     key,
     full: titleOf(choice),
-    label: choice.label || L(choice.names)?.full || choice.variant,
+    label: choice.name || L(choice.names)?.full || choice.alt,
     thumb: picture(choice),
   });
   const canAdd = (choice) =>
-    !(choice.kind === "spr" ? draft.current().portraits : draft.current().memorials).some(
+    !(choice.resourceType === "portrait" ? draft.current().portraits : draft.current().memorialLobbies).some(
       (entry) => sourceKey(entry) === sourceKey(choice),
     );
   const addLabel = (choice) => T(onReplace ? "import.select" : canAdd(choice) ? "hall.add" : "hall.added");
@@ -111,7 +117,8 @@ export function openPicker({
     return true;
   };
   const rows = () => portraitRows(choices, view, query, L, language());
-  const students = () => studentChoices(choices, view, query, L, language(), "lobby").filter((s) => s.lobby);
+  const students = () =>
+    studentChoices(choices, view, query, L, language(), "memorialLobby").filter((s) => s.memorialLobby);
   const changed = () => {
     clearTimeout(debounce);
     debounce = setTimeout(() => {
@@ -145,7 +152,8 @@ export function openPicker({
       openDisplay({
         view,
         sorts: ["recent", "name", "added", "mods", "default"],
-        count: (next) => studentChoices(choices, next, query, L, language(), memorial ? "lobby" : "spr").length,
+        count: (next) =>
+          studentChoices(choices, next, query, L, language(), memorial ? "memorialLobby" : "portrait").length,
         onDone: (next) => {
           if (next && modal.live()) {
             view = normalizeView({ ...view, ...next });
@@ -223,7 +231,7 @@ export function openPicker({
             UI.card(cell, item(row.choices[i]), {
               x: rowLayout.cardX,
               y: rowLayout.cardY,
-              kind: "spr",
+              kind: "portrait",
               scale: 0.46,
               onAdd: safe((event) => add(row.choices[i], event?.currentTarget)),
               addLabel: addLabel(row.choices[i]),
@@ -271,7 +279,7 @@ export function openPicker({
             if (!headsPictures.has(entry.key))
               headsPictures.set(
                 entry.key,
-                lazyThumbnail(() => entry.portrait, work.signal),
+                lazyThumbnail(() => entry.officialThumbnail, work.signal),
               );
             return UI.studentCard(
               cell,
@@ -321,7 +329,7 @@ export function openPicker({
         [0, (height - 73) / 2 - 20, candW - 35],
         { align: 2 },
       );
-    const list = draft.current().memorials;
+    const list = draft.current().memorialLobbies;
     await UI.queuePanel(layer, [wideLeft, 720, wideW, 195]);
     const pitch = UI.MEMORIAL_QUEUE_PITCH;
     const reorder = (id, index) => {
@@ -339,7 +347,7 @@ export function openPicker({
       pitch,
       async (cell, index, rowSignal) => {
         const entry = list[index];
-        const choice = choices.find((c) => c.kind === "lobby" && sourceKey(c) === sourceKey(entry));
+        const choice = choices.find((c) => c.resourceType === "memorialLobby" && sourceKey(c) === sourceKey(entry));
         const box = document.createElement("div");
         Object.assign(box.style, { position: "absolute", left: "0", top: "0", width: `${pitch}px`, height: "175px" });
         box.dataset.queue = entry.id;
@@ -402,7 +410,7 @@ export function openPicker({
               label: T("popup.save"),
               fn: safe(onSave),
               semantic: "save",
-              enabled: draft.current().memorials.length > 0,
+              enabled: draft.current().memorialLobbies.length > 0,
             },
           ]
         : [{ label: T(onReplace ? "popup.cancel" : "hall.doneAdding"), fn: safe(onDone) }],

@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 # the lock and the replace shared with the mod library (bmpt.core.filelock)
+from ..host.store_formats import managed_bytes, read_runtime, runtime_store
 from ..core.filelock import file_lock as _file_lock, replace as _replace
 from ..core.logging_utils import log_failure
 
@@ -92,9 +93,9 @@ def custom_aliases(value: Any) -> list[str]:
 
 # The student list's view (web/js/roster/roster-order.js keeps the same rules): merge toggle, the two segment filters,
 # the display settings' sort, order and filter groups.
-ROSTER_SORTS = ("recent", "added", "name", "mods", "default")
-ROSTER_NATURAL = {"recent": "desc", "added": "desc", "name": "asc", "mods": "desc", "default": "asc"}
-ROSTER_FILTERS = {
+STUDENT_LIST_SORTS = ("recent", "added", "name", "mods", "default")
+STUDENT_LIST_NATURAL = {"recent": "desc", "added": "desc", "name": "asc", "mods": "desc", "default": "asc"}
+STUDENT_LIST_FILTERS = {
     "favorite": ("yes", "no"),
     "portrait": ("official", "replaced"),
     "lobby": ("yes", "no"),
@@ -102,7 +103,7 @@ ROSTER_FILTERS = {
 }
 
 
-def roster_view(value: Any) -> dict[str, Any]:
+def student_list_view(value: Any) -> dict[str, Any]:
     """Make a stored or sent roster view valid; unknown fields and options are dropped.
 
     Args:
@@ -118,10 +119,10 @@ def roster_view(value: Any) -> dict[str, Any]:
         v = src.get(key)
         return v if isinstance(v, str) and v in allowed else fallback
 
-    sort = pick("sort", ROSTER_SORTS, "recent")
+    sort = pick("sort", STUDENT_LIST_SORTS, "recent")
     given = src.get("filters") if isinstance(src.get("filters"), dict) else {}
     filters = {}
-    for group, options in ROSTER_FILTERS.items():
+    for group, options in STUDENT_LIST_FILTERS.items():
         chosen = given.get(group)
         on = [o for o in options if isinstance(chosen, list) and o in chosen]
         if on:
@@ -131,7 +132,7 @@ def roster_view(value: Any) -> dict[str, Any]:
         "mods": pick("mods", ("all", "mods", "none"), "all"),
         "recruit": pick("recruit", ("all", "yes", "no"), "all"),
         "sort": sort,
-        "order": pick("order", ("asc", "desc"), ROSTER_NATURAL[sort]),
+        "order": pick("order", ("asc", "desc"), STUDENT_LIST_NATURAL[sort]),
         "filters": filters,
     }
 
@@ -197,7 +198,7 @@ class UiState:
     @staticmethod
     def _parse(path: Path) -> dict[str, Any]:
         """A state file's content; OSError when it cannot be read, ValueError when it is not a JSON object."""
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = read_runtime(path)
         if not isinstance(data, dict):
             raise ValueError("UI state must be an object")
         return data
@@ -288,8 +289,10 @@ class UiState:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, name = tempfile.mkstemp(prefix=f".{self.path.name}.", suffix=".tmp", dir=self.path.parent)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as out:
-                out.write(json.dumps(data, ensure_ascii=False, indent=1))
+            with os.fdopen(fd, "wb") as out:
+                store = runtime_store(self.path)
+                raw = managed_bytes(store, data) if store else json.dumps(data, ensure_ascii=False, indent=1).encode()
+                out.write(raw)
                 out.flush()
                 os.fsync(out.fileno())
             if bad:
@@ -770,9 +773,9 @@ def _holds_id(folder: Path, data_id: str) -> bool:
 # The memorial lobby's fullscreen zoom-out limit (web/js/lobby/lobby.js zoomBounds): the game's view, the art every clip
 # keeps painted (Full Art), the box of the scene's art over its poses (Unlocked), or a custom number of game views
 # across.
-LOBBY_ZOOM_MODES = ("game", "art", "unlocked", "custom")
-LOBBY_ZOOM_CUSTOM = (1.0, 4.0)  # the custom limit's range; lobby.js never zooms out further (ZOOM_OUT_MAX)
-LOBBY_ZOOM_CUSTOM_DEFAULT = 2.0
+MEMORIAL_LOBBY_ZOOM_MODES = ("game", "art", "unlocked", "custom")
+MEMORIAL_LOBBY_ZOOM_CUSTOM = (1.0, 4.0)  # the custom limit's range; lobby.js never zooms out further (ZOOM_OUT_MAX)
+MEMORIAL_LOBBY_ZOOM_CUSTOM_DEFAULT = 2.0
 
 
 def is_number(value: Any) -> bool:
@@ -780,7 +783,7 @@ def is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def lobby_zoom(mode: Any, custom: Any, legacy: Any = None) -> dict[str, Any]:
+def memorial_lobby_zoom(mode: Any, custom: Any, legacy: Any = None) -> dict[str, Any]:
     """Make the memorial lobby's zoom-out setting valid, as it is stored.
 
     Args:
@@ -793,8 +796,14 @@ def lobby_zoom(mode: Any, custom: Any, legacy: Any = None) -> dict[str, Any]:
     Returns:
         ``mode`` and ``custom``.
     """
-    lo, hi = LOBBY_ZOOM_CUSTOM
+    lo, hi = MEMORIAL_LOBBY_ZOOM_CUSTOM
     return {
-        "mode": mode if isinstance(mode, str) and mode in LOBBY_ZOOM_MODES else "game" if legacy is False else "art",
-        "custom": round(min(hi, max(lo, float(custom))), 1) if is_number(custom) else LOBBY_ZOOM_CUSTOM_DEFAULT,
+        "mode": mode
+        if isinstance(mode, str) and mode in MEMORIAL_LOBBY_ZOOM_MODES
+        else "game"
+        if legacy is False
+        else "art",
+        "custom": round(min(hi, max(lo, float(custom))), 1)
+        if is_number(custom)
+        else MEMORIAL_LOBBY_ZOOM_CUSTOM_DEFAULT,
     }

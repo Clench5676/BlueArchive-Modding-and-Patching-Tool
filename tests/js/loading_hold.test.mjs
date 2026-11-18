@@ -284,10 +284,10 @@ function detailHarness(overrides = {}) {
     Loading,
     notify() {},
     T: (key) => key,
-    variant: () => ({}),
+    alt: () => ({}),
     fullName: () => "Student",
-    fam: {},
-    switchKind: () => "spr",
+    shownStudent: {},
+    switchKind: () => "portrait",
     progressName: () => "Student",
     modJob: () => () => ({ text: "Repairing: Student" }),
     modLabel: () => "",
@@ -322,7 +322,7 @@ test("detail jobs ignore Back, nav and every other interaction until the final r
       if (++renders === 2) await redraw.promise;
     },
   });
-  const targets = ["back", "nav", "student", "variant", "tab", "mods switch", "action card", "popup trigger"].map(
+  const targets = ["back", "nav", "student", "alt", "tab", "mods switch", "action card", "popup trigger"].map(
     (name) => {
       const target = new El();
       target.back = name === "back";
@@ -369,14 +369,14 @@ test("a detail write refusal opens its answerable popup only after releasing the
   const job = detailHarness({
     QUEUEABLE: ["actions.apply"],
     waitJob: async () => {
-      throw { code: "original_unavailable" };
+      throw { code: "official_unavailable" };
     },
     overwrittenMessage: async () => {
       assert.equal(Loading.held(), false);
       shown++;
     },
   });
-  assert.equal(await job("actions.apply", { kind: "spr" }), false);
+  assert.equal(await job("actions.apply", { resourceType: "portrait" }), false);
   assert.equal(shown, 1);
   assert.equal(Loading.held(), false);
 });
@@ -386,7 +386,7 @@ for (const entry of ["Enable Mods"])
     const submitted = deferred(),
       work = deferred(),
       redraw = deferred();
-    const targets = ["back", "nav", "student", "variant", "tab", "mods switch", "action", "popup"].map((name) => {
+    const targets = ["back", "nav", "student", "alt", "tab", "mods switch", "action", "popup"].map((name) => {
       const target = new El();
       target.back = name === "back";
       if (name === "popup") target.className = "popup-host";

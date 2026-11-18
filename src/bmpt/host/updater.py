@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import platform
+import plistlib
 import re
 import shlex
 import subprocess
@@ -343,6 +344,95 @@ def install_target() -> Path | None:
     return target
 
 
+_HANDOFF = "BAMT_UPDATE_APPLIED"
+
+
+def _program_path() -> Path:
+    if sys.platform == "darwin":
+        return next(
+            (path for path in Path(sys.executable).resolve().parents if path.suffix == ".app"),
+            Path(sys.executable).resolve(),
+        )
+    return Path(sys.argv[0]).resolve()
+
+
+def _product_name(name: str) -> bool:
+    normal = re.sub(r"[^a-z0-9]", "", name.lower())
+    return any(word in normal for word in ("bluearchivemodding", "bamoddingtoolkit", "bmpt", "bamt"))
+
+
+def _windows_product(path: Path) -> str:
+    import ctypes
+
+    version = ctypes.WinDLL("version", use_last_error=True)
+    size = version.GetFileVersionInfoSizeW(str(path), None)
+    if not size:
+        return ""
+    buffer = ctypes.create_string_buffer(size)
+    if not version.GetFileVersionInfoW(str(path), 0, size, buffer):
+        return ""
+    return buffer.raw.decode("utf-16-le", errors="ignore").replace("\x00", " ")
+
+
+def _has_older_neighbor(program: Path) -> bool:
+    current = parse_version(current_version())
+    for other in program.parent.iterdir():
+        if other == program or other.suffix.lower() != program.suffix.lower():
+            continue
+        if sys.platform == "darwin":
+            try:
+                with (other / "Contents" / "Info.plist").open("rb") as stream:
+                    metadata = plistlib.load(stream)
+            except (OSError, ValueError):
+                if _product_name(other.stem):
+                    return True
+                continue
+            text = " ".join(
+                str(metadata.get(key, "")) for key in ("CFBundleIdentifier", "CFBundleName", "CFBundleDisplayName")
+            )
+            if not (_product_name(text) or _product_name(other.stem)):
+                continue
+            candidate = str(metadata.get("CFBundleShortVersionString", ""))
+        else:
+            text = _windows_product(other)
+            if not (_product_name(text) or _product_name(other.stem)):
+                continue
+            match = re.search(r"(?:ProductVersion|FileVersion)\s+(\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)", text)
+            if not match:
+                match = re.search(r"(?:^|[- _])(\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)", other.stem)
+            candidate = match[1] if match else ""
+        found = parse_version(candidate)
+        if found is None or current is None or found < current:
+            return True
+    return False
+
+
+def consume_upgrade_handoff() -> bool:
+    """Recognize the updater's successful restart only without a neighboring older build.
+
+    Older builds' Windows updater starts the replaced program with ``BAMT_UPDATE_EXE`` and ``BAMT_UPDATE_MD5`` in
+    its environment and no handoff flag, so on Windows a matching path and digest are the evidence. Their macOS
+    updater leaves nothing behind, so there only the flag counts.
+    """
+    flagged = os.environ.pop(_HANDOFF, "") == "1"
+    if sys.platform not in ("darwin", "win32") or (sys.platform == "darwin" and not flagged):
+        return False
+    program = _program_path()
+    try:
+        if sys.platform == "win32":
+            # One recognition per start: a child process must not read the same evidence again.
+            supplied = os.environ.pop("BAMT_UPDATE_EXE", "")
+            if not supplied or Path(supplied).resolve() != program:
+                return False
+            if md5_of(program).lower() != os.environ.pop("BAMT_UPDATE_MD5", "").lower():
+                return False
+        elif program.suffix != ".app":
+            return False
+        return not _has_older_neighbor(program)
+    except (OSError, ValueError):
+        return False
+
+
 def macos_script(dmg: Path, app: Path, pid: int) -> str:
     """Return the shell script that swaps the app for the one in a disk image once this process has quit.
 
@@ -366,15 +456,22 @@ if [ "$STATUS" -ne 0 ]; then
   exit "$STATUS"
 fi
 SRC=$(find "$MNT" -maxdepth 1 -name '*.app' | head -n 1)
+UPDATED=0
 if [ -n "$SRC" ]; then
   rm -rf {q(str(staged))}
-  ditto "$SRC" {q(str(staged))} && rm -rf {q(str(app))} && mv {q(str(staged))} {q(str(app))}
+  if ditto "$SRC" {q(str(staged))} && rm -rf {q(str(app))} && mv {q(str(staged))} {q(str(app))}; then
+    UPDATED=1
+  fi
 fi
 hdiutil detach "$MNT" >/dev/null
 rmdir "$MNT"
 xattr -dr com.apple.quarantine {q(str(app))} 2>/dev/null
 rm -f {q(str(dmg))}
-open {q(str(app))}
+if [ "$UPDATED" -eq 1 ]; then
+  open --env BAMT_UPDATE_APPLIED=1 {q(str(app))} || open {q(str(app))}
+else
+  open {q(str(app))}
+fi
 """
 
 
@@ -409,11 +506,13 @@ if %tries% geq 60 goto failed
 timeout /t 1 /nobreak >nul
 goto move
 :start
+set BAMT_UPDATE_APPLIED=1
 start "" /D "%BAMT_UPDATE_DIR%" "%BAMT_UPDATE_EXE%"
 if errorlevel 1 goto rollback
 del "%BAMT_UPDATE_NEW_EXE%" >nul 2>&1
 goto end
 :rollback
+set BAMT_UPDATE_APPLIED=
 powershell -NoProfile -NonInteractive -Command "if (Test-Path -LiteralPath $env:BAMT_UPDATE_BACKUP) {{ [System.IO.File]::Replace($env:BAMT_UPDATE_BACKUP,$env:BAMT_UPDATE_EXE,$null) }}" >nul 2>&1
 :failed
 rem a failed replacement leaves the original executable usable

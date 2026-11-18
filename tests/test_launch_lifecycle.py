@@ -99,6 +99,7 @@ def make_desktop(monkeypatch, tmp_path, platform):
     state.window = window
     state.services = SimpleNamespace(
         data_dir=tmp_path,
+        committed=None,
         events=EventBus(),
         timings=Timings(),
         on_closing=lambda: state.callbacks.append("closing") or False,
@@ -415,7 +416,19 @@ def test_loop_return_still_drains_writer_and_releases_instance(desktop, monkeypa
     s.classic = SimpleNamespace(close=lambda: None)
     s.log_secrets = set()
     s.restart_requested = False
-    instance = InstanceLock(s.data_dir)
+    from bmpt.host.data_upgrade import DataUpgrade
+    from bmpt.host.store_formats import NAMESPACE
+
+    def coordinator(data):
+        return DataUpgrade(data, qualify=lambda _: "apfs")
+
+    bootstrap = coordinator(s.data_dir)
+    try:
+        assert bootstrap.run()["status"] == "ready"
+    finally:
+        bootstrap.close()
+    runtime = s.data_dir / NAMESPACE / "runtime"
+    instance = InstanceLock(s.data_dir, runtime=runtime)
 
     def write(log, progress):
         writer_started.set()
@@ -453,7 +466,8 @@ def test_loop_return_still_drains_writer_and_releases_instance(desktop, monkeypa
         stop=lambda: None,
     )
     monkeypatch.setattr(main, "EXE_DIR", s.data_dir)
-    monkeypatch.setattr(main, "InstanceLock", lambda data_dir: instance)
+    monkeypatch.setattr(main, "InstanceLock", lambda data_dir, *, runtime: instance)
+    monkeypatch.setattr(main, "DataUpgrade", coordinator)
     monkeypatch.setattr(main, "build", lambda *args, **kwargs: (s, server))
     finisher = threading.Thread(target=finish_writer, daemon=True)
     finisher.start()
@@ -468,7 +482,7 @@ def test_loop_return_still_drains_writer_and_releases_instance(desktop, monkeypa
     assert observations == [True, True, True]
     assert cleanup_finished.is_set() and not s.jobs.busy()
     assert (s.data_dir / "writer-finished").read_text(encoding="utf-8") == "done"
-    assert not instance.held and read_info(s.data_dir) is None
+    assert not instance.held and read_info(runtime) is None
     probe = InstanceLock(s.data_dir)
     try:
         assert probe.acquire()
@@ -487,8 +501,10 @@ def test_run_completion_is_written_before_the_session_log_closes(monkeypatch, tm
     logger = logging.getLogger(main.__name__)
     previous = logger.level
     logger.setLevel(logging.INFO)
+    runtime = tmp_path / "runtime"
+    upgrade = SimpleNamespace(paths=SimpleNamespace(runtime=runtime))
     try:
-        assert main._run(args, SimpleNamespace()) is False
+        assert main._run(args, SimpleNamespace(), upgrade) is False
     finally:
         logger.setLevel(previous)
-    assert "Application lifecycle: run finished" in (tmp_path / "webui.log").read_text(encoding="utf-8")
+    assert "Application lifecycle: run finished" in (runtime / "webui.log").read_text(encoding="utf-8")

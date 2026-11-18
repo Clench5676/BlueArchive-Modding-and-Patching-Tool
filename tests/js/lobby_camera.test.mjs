@@ -174,12 +174,12 @@ const words = { "lobby.original": "Original", "lobby.cameraName": "Camera {n}" }
 const translate = (key, params = {}) => (words[key] || key).replace(/\{(\w+)\}/g, (_, k) => params[k]);
 
 test("a camera is named after its source, then its number", () => {
-  const art = { id: "art", kind: "lobby", label: "Summer Art", target: "azusa", core: "azusa_home" };
+  const art = { id: "art", resourceType: "memorialLobby", name: "Summer Art", targetAlt: "azusa", core: "azusa_home" };
   const official = {
     id: "c1",
-    kind: "lobby",
-    label: "Camera 1",
-    target: "azusa",
+    resourceType: "memorialLobby",
+    name: "Camera 1",
+    targetAlt: "azusa",
     core: "azusa_home",
     camera: { source: "official", number: 1, scale: 1.2, offset: [0, -100] },
   };
@@ -195,25 +195,25 @@ test("a camera is named after its source, then its number", () => {
 test("Switch Memorial Lobby lists the cameras with the lobby mods and starts on the chosen one", () => {
   const camera = {
     id: "c1",
-    kind: "lobby",
-    target: "azusa",
+    resourceType: "memorialLobby",
+    targetAlt: "azusa",
     core: "azusa_home",
     camera: { source: "official", number: 1 },
   };
   const v = {
     key: "azusa",
-    lobby: "Azusa_home",
+    memorialLobby: "Azusa_home",
     modList: [camera],
-    configured: { lobby: "mod:c1" },
+    configured: { memorialLobby: "mod:c1" },
     state: { files: [] },
   };
-  const fam = { variants: [v] };
-  const listed = Sources.candidates(fam, v, "lobby");
+  const shownStudent = { alts: [v] };
+  const listed = Sources.candidates(shownStudent, v, "memorialLobby");
   assert.deepEqual(
     listed.map((c) => c.key),
     ["self", "m:c1"],
   );
-  assert.equal(Sources.intendedKey(v, "lobby"), "m:c1");
-  assert.equal(Sources.popupMode(fam, v, "lobby").start, "m:c1");
-  assert.match(Sources.previewBase(v, "lobby"), /\/mod\/c1\//);
+  assert.equal(Sources.intendedKey(v, "memorialLobby"), "m:c1");
+  assert.equal(Sources.popupMode(shownStudent, v, "memorialLobby").start, "m:c1");
+  assert.match(Sources.previewBase(v, "memorialLobby"), /\/mod\/c1\//);
 });

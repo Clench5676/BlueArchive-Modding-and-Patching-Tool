@@ -197,13 +197,13 @@ def test_a_kept_original_steams_list_rejects_is_flagged_and_never_written_back(t
     assert checks_of(library)[official.name]["by"] == "failed"
     with pytest.raises(ServiceError) as raised:
         library._official_for(official, pin)
-    assert raised.value.code == "original_unavailable"
+    assert raised.value.code == "official_unavailable"
     # without the list again, neither the kept copy nor the same bytes in the game folder pass as official
     allowed[0] = False
     library._steam_roots_cache = None
     with pytest.raises(ServiceError) as raised:
         library._official_for(official, pin)
-    assert raised.value.code == "original_unavailable"
+    assert raised.value.code == "official_unavailable"
     assert kept.is_file()  # flagged, never deleted
     # a game file of other bytes: the screens name no official copy for it
     official.write_bytes(header_bundle(b"a larger mod"))

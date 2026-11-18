@@ -4,6 +4,7 @@ import { forgetSpineAssets, spineBase, spineAssetBase } from "../core/api.js";
 // every wait of the lobby is a preview's: counted in the foreground, without the time a read waits for the library
 import { withPreviewTimeout as withTimeout } from "../core/async.js";
 import { atStep } from "../detail/preview-error.js";
+import { readSerialized } from "../core/serialized-fields.js";
 
 const isBg = (n) => /background|_bg\b|bg_/i.test(n);
 
@@ -19,8 +20,8 @@ const isBg = (n) => /background|_bg\b|bg_/i.test(n);
  * @returns {Promise<{artBase: string|null, base: string|null, official: boolean}>} The art's and the layout's folders.
  */
 export async function sourcesOf(core, mod, refresh = false, signal = null, official = false, camera = false) {
-  const artSource = spineBase(mod ? "mod" : official ? "official-lobby" : "lobby", mod || core);
-  const layoutSource = mod && camera ? artSource : core ? spineBase("lobby", core) : null;
+  const artSource = spineBase(mod ? "mod" : official ? "official-memorialLobby" : "memorialLobby", mod || core);
+  const layoutSource = mod && camera ? artSource : core ? spineBase("memorialLobby", core) : null;
   // A shown tab must not inherit a manifest request that belonged to a cancelled or previous source.
   if (refresh)
     for (const source of new Set([artSource, layoutSource].filter(Boolean)))
@@ -68,7 +69,10 @@ export async function layersOf(
     ).catch((err) => {
       throw atStep(err, url, "metadata");
     });
-  const [files, info] = await Promise.all([read(`${artBase}files.json`), base ? read(`${base}lobby.json`) : null]);
+  const [files, info] = await Promise.all([
+    read(`${artBase}files.json`),
+    base ? read(`${base}lobby.json`).then(readSerialized) : null,
+  ]);
   if (!Array.isArray(files) || files.some((f) => typeof f !== "string")) throw new Error("Invalid lobby file list");
   const atlasOf = pairAtlases(files),
     skels = [...atlasOf.keys()];

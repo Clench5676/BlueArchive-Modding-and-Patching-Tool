@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "config-v1.schema.json",
+  "title": "Configuration after parsing TOML",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object"
+  }
+}

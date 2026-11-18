@@ -7,6 +7,7 @@ import { segmentTree, segmentOrigin, segmentDensity, SEGMENT_SCALE } from "./mod
 // pure parts (the view from mods.state, the click, the help's lines, the result, the start prompts, the classic
 // modal's outcome) are tested in Node (tests/js/mod_switch.test.mjs).
 import { notify } from "../ui/popup.js";
+import { sizeText } from "../core/size-text.js";
 import * as NGUI from "../ui/ngui.js";
 import * as Consent from "../app/consent.js";
 import * as Loading from "../app/loading.js";
@@ -27,17 +28,7 @@ export const QUEUEABLE = ["actions.apply", "actions.restore", "mods.toggle", "mo
 /** The language's list separator: 、 in Chinese and Japanese, a comma elsewhere. */
 export const listSep = (lang = language()) => (/^(zh|ja)/i.test(lang) ? "、" : ", ");
 
-/**
- * A size as the help shows it.
- * @param {number} bytes The size in bytes.
- */
-export function sizeText(bytes) {
-  const b = Math.max(0, Number(bytes) || 0);
-  if (!b) return "0 MB";
-  if (b < 1048576) return `${Math.max(1, Math.round(b / 1024))} KB`;
-  if (b < 1073741824) return `${(b / 1048576).toFixed(1)} MB`;
-  return `${(b / 1073741824).toFixed(2)} GB`;
-}
+export { sizeText };
 
 /** An error's string; the free-space refusal names sizes. */
 export function errorText(code, params = {}) {
@@ -50,7 +41,7 @@ export function errorText(code, params = {}) {
 /**
  * How the switch draws from mods.state: on (mods are enabled); busy (a toggle queued or running, or writes
  * queued for the classic window: dimmed); unavailable (greyed, with a reason: game_running,
- * game_status_unavailable, steam_busy, classic_open, game_not_found, profiles_unreadable); dot (entries not
+ * game_status_unavailable, steam_busy, classic_open, game_not_found, mod_configuration_unreadable); dot (entries not
  * switched or left as is: the services count them from the last scan with the scan consent, from the unfinished
  * list without it).
  * @param {object} state mods.state.
@@ -163,18 +154,18 @@ export function helpLines(state, { sep = listSep() } = {}) {
 }
 
 /**
- * An entry as the result and the messages name it: the variant's name and the kind.
- * @param {(entry: object) => string} [nameOf] Names the entry's variant.
+ * An entry as the result and the messages name it: the alt's name and the kind.
+ * @param {(entry: object) => string} [nameOf] Names the entry's alt.
  */
-export function entryLabel(entry, nameOf = (e) => e?.variant || e?.core || "", sep = listSep()) {
-  if (entry?.kind === "other") {
+export function entryLabel(entry, nameOf = (e) => e?.alt || e?.core || "", sep = listSep()) {
+  if (entry?.resourceType === "other") {
     const name = entry.files?.[0]?.file?.split(/[\\/]/).pop() || nameOf(entry);
     return `${name}${sep}${T("settings.mods.other")}`;
   }
   const kind =
-    entry?.kind === "model"
+    entry?.resourceType === "chibi"
       ? "tab.model"
-      : entry?.kind === "lobby" || (entry?.core && !/_spr$/i.test(entry.core))
+      : entry?.resourceType === "memorialLobby" || (entry?.core && !/_spr$/i.test(entry.core))
         ? "tab.lobby"
         : "tab.portrait";
   return `${nameOf(entry)}${sep}${T(kind)}`;
@@ -186,7 +177,7 @@ const MAX_LISTED = 6; // failed entries a result names; the rest are counted
  * A silent success, or {title, lines} for adopted entries and unfinished work. Each failed entry keeps its
  * error string.
  * @param {object} result The result of mods.toggle.
- * @param {(entry: object) => string} nameOf Names an entry's variant.
+ * @param {(entry: object) => string} nameOf Names an entry's alt.
  */
 export function resultSummary(result, nameOf) {
   const list = (k) => result?.[k] || [];
@@ -291,7 +282,7 @@ export function driftChoice(button, entries, selected) {
 let state = null;
 let explainedHere = false; // the explanation was shown in this page (mods.state follows a moment later)
 let inFlight = false; // a toggle (or Retry) this page started runs
-let names = async () => (e) => e?.variant || e?.core || ""; // main.js gives the variants' names (the roster's data)
+let names = async () => (e) => e?.alt || e?.core || ""; // main.js gives the alts' names (the roster's data)
 let refreshPage = async () => {}; // main.js resolves this once the visible page has refreshed and drawn
 const REFRESH_CAP = 15000;
 let host = null,
@@ -379,7 +370,7 @@ export async function refresh() {
 /**
  * Set up the top bar's switch and the events it follows.
  * @param {object} [options]
- * @param {() => ((entry: object) => string)} [options.names] Gives the function that names an entry's variant.
+ * @param {() => ((entry: object) => string)} [options.names] Gives the function that names an entry's alt.
  * @param {() => Promise<void>} [options.refreshPage] Resolves once the visible page has refreshed and drawn.
  */
 export async function init(options = {}) {
@@ -722,7 +713,7 @@ export async function refused(err, method = null, params = null, retry = null) {
  * The untested build confirmation's lines: how many entries the update affected, then each one as a list item
  * ("name - kind"), the rest counted.
  */
-export function untestedLines(params, nameOf = (e) => e?.variant || e?.core || "") {
+export function untestedLines(params, nameOf = (e) => e?.alt || e?.core || "") {
   const entries = params?.entries || [];
   const listed = entries.slice(0, MAX_LISTED).map((e) => entryLabel(e, nameOf, " - "));
   if (entries.length > MAX_LISTED) listed.push(`+${entries.length - MAX_LISTED}`);
@@ -811,7 +802,7 @@ async function queueDone({ submitted = [], dropped = [] } = {}) {
   const what = (d) => {
     if (d.method === "mods.toggle") return T(d.params?.enabled ? "mods.onTitle" : "mods.offTitle");
     if (d.method === "mods.restoreDrift") return T("mods.driftApply");
-    return entryLabel({ variant: d.params?.variant, kind: d.params?.kind }, nameOf);
+    return entryLabel({ alt: d.params?.alt, resourceType: d.params?.resourceType }, nameOf);
   };
   await Popup.message({
     title: T("classic.notApplied"),

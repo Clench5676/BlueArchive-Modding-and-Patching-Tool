@@ -52,7 +52,7 @@ function portraitHarness(portrait, confirm = async () => false, decode = () => P
     HARD_CAP: 15000,
     Loading: { covering: () => true },
     commit: (fn) => fn(),
-    variant: () => ({ portrait }),
+    alt: () => ({ officialThumbnail: portrait }),
     Lobby: { licenseRequired: (layer, retry) => status.push({ layer, retry }) },
     renderLeft: () => {
       retries++;
@@ -79,12 +79,12 @@ function portraitHarness(portrait, confirm = async () => false, decode = () => P
 }
 
 test("the detail portrait uses the collection image without loading preview assets", async () => {
-  const h = portraitHarness("/asset/art/portrait/ibuki.png");
+  const h = portraitHarness("/asset/art/officialThumbnail/ibuki.png");
   await h.show();
   const image = h.host.children[0].children[0];
   assert.equal(image.tag, "img");
   assert.equal(image.className, "portrait-static");
-  assert.equal(image.src, "/asset/art/portrait/ibuki.png");
+  assert.equal(image.src, "/asset/art/officialThumbnail/ibuki.png");
   assert.equal(image.alt, "");
   assert.deepEqual(h.unexpected, []);
   assert.equal(h.status.length, 0);
@@ -160,16 +160,21 @@ test("detail thumbnail fallbacks use collection portraits only for the matching 
     detailSource.indexOf("function collectionPortrait("),
     detailSource.indexOf("function begin()"),
   );
-  const variants = [
-    { key: "ibuki", spr: "ibuki_spr", portrait: "/ibuki.png", modList: [{ id: "added", kind: "spr" }] },
-    { key: "special:npc", lobby: "npc" },
+  const alts = [
+    {
+      key: "ibuki",
+      portrait: "ibuki_spr",
+      officialThumbnail: "/ibuki.png",
+      modList: [{ id: "added", resourceType: "portrait" }],
+    },
+    { key: "special:npc", memorialLobby: "npc" },
   ];
-  const read = new Function("fam", "spineBase", "variantBase", `${code}; return collectionPortrait;`)(
-    { variants },
+  const read = new Function("shownStudent", "spineBase", "altBase", `${code}; return collectionPortrait;`)(
+    { alts },
     (kind, core) => `${kind}/${core}`,
-    (v) => `installed/${v.spr}`,
+    (v) => `installed/${v.portrait}`,
   );
-  assert.equal(read("official-spr/ibuki_spr"), "/ibuki.png");
+  assert.equal(read("official-portrait/ibuki_spr"), "/ibuki.png");
   for (const base of ["spr/ibuki_spr", "installed/ibuki_spr", "mod/added"]) assert.equal(read(base), null);
   assert.equal(read("lobby/npc"), null);
   assert.equal(read("unknown"), null);

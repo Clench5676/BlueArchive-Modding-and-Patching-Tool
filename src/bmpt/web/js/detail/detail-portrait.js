@@ -21,7 +21,7 @@ import {
   batch,
   commit,
   open,
-  variant,
+  alt,
   setMainPlayer,
 } from "./detail.js";
 import { renderExpressions } from "./detail-strip.js";
@@ -33,7 +33,7 @@ export let spineToken = 0;
 // loadSpine(base) resolves once the portrait's first frame is drawn and the expression strip shows its faces
 // (also on an error, after the message popup). The new layer stays transparent until committed, then fades in
 // over the old one, which goes. A portrait that cannot be shown takes the old one away too: the left side stays
-// empty rather than showing another variant under this one's name.
+// empty rather than showing another alt under this one's name.
 const portraitLoads = latestLoad();
 export function loadSpine(base) {
   const my = ++spineToken;
@@ -70,7 +70,7 @@ async function showSpine(base, my, signal) {
   };
   if (!allowed) {
     setMainPlayer(null);
-    const portrait = variant().portrait;
+    const portrait = alt().officialThumbnail;
     if (portrait) {
       const image = document.createElement("img");
       image.className = "portrait-static";

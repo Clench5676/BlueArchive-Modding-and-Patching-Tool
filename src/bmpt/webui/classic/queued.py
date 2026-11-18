@@ -222,7 +222,7 @@ class ClassicQueue:
         Dropped: a toggle whose ``expect`` is not the stored intent (``state_changed``) or whose pins are not the
         known installs (``folder_changed``); an entry whose install changed (``folder_changed``: only its own
         install counts, and the current one for an action on the current install) or whose files changed
-        (``entry_changed``). An item the host cannot check (``profiles_unreadable`` from the stored intent) is
+        (``entry_changed``). An item the host cannot check (``mod_configuration_unreadable`` from the stored intent) is
         dropped with that error, like a refused submit; the others still run.
 
         Args:

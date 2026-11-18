@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "state-v2.schema.json",
+  "title": "Mod state and held records",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 2
+    },
+    "mods": {
+      "type": "array"
+    },
+    "favorites": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "applied": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "sha1": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "sha1"
+        ]
+      }
+    },
+    "migrations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "version"
+  ]
+}

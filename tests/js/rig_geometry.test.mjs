@@ -114,7 +114,7 @@ test("the remap pairs each official atlas with its skeleton and takes the mod's 
   const official = { skeletons: { "a.skel": encoded(skeleton()) }, atlases: { "a.atlas": ATLAS }, textures: {} };
   const moved = ATLAS.replace("body\n bounds: 0,0,8,8", "body\n bounds: 40,40,8,8");
   const report = {
-    kind: "spr",
+    resourceType: "portrait",
     official,
     mod: official,
     source: { skeletons: { "a.skel": encoded(skeleton()) }, atlases: { "a.atlas": moved } },
@@ -128,7 +128,7 @@ test("the remap pairs each official atlas with its skeleton and takes the mod's 
   assert.equal(u(geometry, "source"), 48 / 64); // the mod's own atlas comes first
   geometry = forRemap({ ...report, source: undefined }, S);
   assert.equal(u(geometry, "source"), 0);
-  assert.deepEqual(forRemap({ ...report, kind: "lobby" }, S), {});
+  assert.deepEqual(forRemap({ ...report, resourceType: "memorialLobby" }, S), {});
   const rest = restOnly(forRemap(report, S));
   assert.deepEqual(Object.keys(rest["a.atlas"].source.poses), [""]);
 });

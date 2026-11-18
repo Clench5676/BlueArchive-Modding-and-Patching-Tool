@@ -22,13 +22,13 @@ def test_ordinary_day_and_night_share_the_authored_portrait_transform(tmp_path):
     for root, _, _, bundle in BACKGROUNDS.values():
         with open_bundle(game._bundle_path(bundle)) as env:
             tree = export_layout(env, root, {})
-        assert tree["pos"] == [0, 0]
+        assert tree["localPosition"] == [0, 0]
         assert tree["scale"] == [1, 1]
         parent = subtree(tree, "TweenController")
-        assert parent["pos"] == [0, 0]
+        assert parent["localPosition"] == [0, 0]
         assert parent["scale"] == [1, 1]
         character = subtree(tree, "TweenController/CharPos")
-        assert character["pos"] == [-112, -886]
+        assert character["localPosition"] == [-112, -886]
         assert character["scale"] == [111, 111]
 
 

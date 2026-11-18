@@ -57,7 +57,7 @@ class EditingMixin:
             if core_of(name) != core or date_of(name) not in dates:
                 continue
             if not self._is_official(path):
-                raise ServiceError("original_invalid", file=name)
+                raise ServiceError("official_invalid", file=name)
             for asset, text in integrity.inspect(path).atlases.items():
                 if asset in fallback and fallback[asset] != text:
                     raise atlas_remap.RemapError("atlas_remap_asset_ambiguous", file=name, name=asset)
@@ -432,8 +432,8 @@ class EditingMixin:
         whole (``atlas_remap.old_rig_plan`` over the recorded rig, ``_remap_view`` ``layout``, or the official copy
         of the mod's date, ``dated``): that atlas and skeleton with the mod's textures, ported into the current
         official parts. Only accept_remap can add it to the library. For a portrait the game drew anew, whose pixels
-        the rebake cannot move (``rebake.REDRAWN_BELOW``). Refused with ``old_rig_animations`` when an official
-        skeleton has animations the old one lacks (the game calls them by name), and with ``old_rig_unavailable``
+        the rebake cannot move (``rebake.REDRAWN_BELOW``). Refused with ``recorded_rig_animations`` when an official
+        skeleton has animations the old one lacks (the game calls them by name), and with ``recorded_rig_unavailable``
         when a recorded rig cannot be set up.
 
         Args:
@@ -446,8 +446,8 @@ class EditingMixin:
             Temporary preview accepted only through accept_remap.
 
         Raises:
-            ServiceError: The rig is unavailable (old_rig_unavailable), lacks required official
-                animations (old_rig_animations), or the source or target changed.
+            ServiceError: The rig is unavailable (recorded_rig_unavailable), lacks required official
+                animations (recorded_rig_animations), or the source or target changed.
         """
         pin = self._current(pin)
         record = self._record(mod_id)
@@ -460,7 +460,7 @@ class EditingMixin:
         }
         paths = self._paths(record)
         if kind_of_file(paths[0].name) != "spr":
-            raise ServiceError("old_rig_unavailable")
+            raise ServiceError("recorded_rig_unavailable")
         identity = self._identity({path.name: path for path in paths})
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
@@ -495,9 +495,9 @@ class EditingMixin:
                 ) from error
             if plan.animations:
                 names = dict.fromkeys(name for missing in plan.animations.values() for name in missing)
-                raise ServiceError("old_rig_animations", names=", ".join(names))
+                raise ServiceError("recorded_rig_animations", names=", ".join(names))
             if not plan.available:
-                raise ServiceError("old_rig_unavailable")
+                raise ServiceError("recorded_rig_unavailable")
             report = {
                 "moved": [],
                 "added": [],

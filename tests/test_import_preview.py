@@ -84,7 +84,7 @@ def test_a_transferring_import_previews_only_the_asset_types_it_writes(env, monk
     monkeypatch.setattr("bmpt.gameassets.service.extract_spine", extract)
     options = rpc(env, "import.options")
     for types, skeleton in ((["Texture2D"], b"official skeleton"), (["Texture2D", "TextAsset"], b"mod skeleton")):
-        rpc(env, "import.setOptions", **{**options, "types": types})
+        rpc(env, "import.setOptions", **{**options, "assetTypes": types})
         (entry,) = analyze(env, [source])["entries"]
         assert entry["state"] == "update", entry
         app, prefix = preview_route(env, entry)
@@ -102,7 +102,11 @@ def test_source_preview_uses_the_identified_core_for_renamed_uploads(env, monkey
         spine_files_from=lambda paths: {"background.skel": b"background", "test_home_gl.skel": b"incoming lobby"}
     )
     (entry,) = analyze(env, [source])["entries"]
-    assert (entry["kind"], entry["core"], entry["files"][0]["target"]) == ("lobby", "test_home_gl", target.name)
+    assert (entry["resourceType"], entry["core"], entry["files"][0]["target"]) == (
+        "memorialLobby",
+        "test_home_gl",
+        target.name,
+    )
     app, prefix = preview_route(env, entry)
     assert call(app, prefix + "/skeleton.skel")[2] == b"incoming lobby"
 
@@ -147,7 +151,7 @@ def test_preview_can_use_a_self_contained_source_without_recoverable_originals(e
     (entry,) = analyze(env, [source])["entries"]
 
     def missing(*args, **kwargs):
-        raise ServiceError("original_unavailable")
+        raise ServiceError("official_unavailable")
 
     monkeypatch.setattr(env.library, "official_bundles", missing)
     app, prefix = preview_route(env, entry)
@@ -202,12 +206,12 @@ def test_blocked_model_source_has_an_import_preview_route(batch_model_env, monke
     source = make_mod(env.parts[0], env.tmp / "input")
     monkeypatch.setattr(env.library, "supports_kind", lambda kind: False)
     (entry,) = analyze(env, [source])["entries"]
-    assert entry["state"] == "blocked" and entry["kind"] == "model" and entry["preview"]
+    assert entry["state"] == "blocked" and entry["resourceType"] == "chibi" and entry["preview"]
     seen = []
     env.services._game = SimpleNamespace(
         model_glb=lambda core, **kwargs: seen.append((core, kwargs)) or b"model preview"
     )
-    response = env.services.asset("model/hoshino.glb", {"source": "import:" + entry["preview"]["key"]})
+    response = env.services.asset("chibi/hoshino.glb", {"source": "import:" + entry["preview"]["key"]})
     assert response.body == b"model preview"
     assert seen[0][0] == "hoshino_original" and seen[0][1]["overrides"][-1] == source
 
@@ -322,16 +326,27 @@ def test_missing_files_with_verified_prefabs_and_shipped_font(tmp_path):
                 kern[left + right] = delta
     ascent, descent = font.getmetrics()
     proof = tmp_path / "choose-fit.json"
-    proof.write_text(
-        json.dumps(
-            {
-                "prefabs": prefabs,
-                "atlases": game.atlases(),
-                "font": {"glyphs": glyphs, "kern": kern, "ascent": ascent, "descent": descent},
-            }
-        ),
-        encoding="utf-8",
-    )
+    serializer = (project / "src/bmpt/web/js/core/serialized-fields.js").as_uri()
+    script = f"""import {{readSerialized}} from {json.dumps(serializer)};
+let input = ""; for await (const part of process.stdin) input += part;
+const proof = JSON.parse(input);
+proof.prefabs = readSerialized(proof.prefabs);
+console.log(JSON.stringify(proof));"""
+    with proof.open("w", encoding="utf-8") as output:
+        subprocess.run(
+            [NODE, "--input-type=module", "-e", script],
+            input=json.dumps(
+                {
+                    "prefabs": prefabs,
+                    "atlases": game.atlases(),
+                    "font": {"glyphs": glyphs, "kern": kern, "ascent": ascent, "descent": descent},
+                }
+            ),
+            stdout=output,
+            text=True,
+            check=True,
+            timeout=30,
+        )
     environment = dict(os.environ, BAMT_IMPORT_FIT_PROOF=str(proof))
     result = subprocess.run(
         [

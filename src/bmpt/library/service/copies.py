@@ -92,7 +92,7 @@ class CopiesMixin:
         try:
             signature = self._build_signature(sources, targets, pin)
         except ServiceError as error:
-            if error.code != "original_unavailable":
+            if error.code != "official_unavailable":
                 raise
             return build()  # No official baseline to sign; never cache a live fallback as official.
         build_keys.update((target, signature) for target in targets)
@@ -413,7 +413,7 @@ class CopiesMixin:
             for path in directory.glob("*.bundle"):
                 with contextlib.suppress(OSError):
                     path.unlink()
-            previews = directory / "previews"
+            previews = self.cache_root / "built" / "previews"
             if previews.is_dir():
                 for part in previews.rglob("*.bundle"):
                     with contextlib.suppress(OSError):
@@ -1083,7 +1083,7 @@ class CopiesMixin:
             entries with install, core, variant, kind, source, and any stored mod label.
 
         Raises:
-            ServiceError: The configuration cannot be read (profiles_unreadable).
+            ServiceError: The configuration cannot be read (mod_configuration_unreadable).
         """
         config = self.profiles.read()
         keys = {pin.key for pin in self.installs()}

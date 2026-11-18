@@ -838,7 +838,7 @@ function observePicture(element, picture) {
 /**
  * Draw a candidate card of the picker.
  * @param {object} options
- * @param {string} [options.kind] The kind of card, "lobby" by default.
+ * @param {string} [options.kind] The resource type of the card, "memorialLobby" by default.
  * @param {(item: object) => void} [options.onPreview]
  * @param {(item: object) => void} [options.onAdd]
  * @param {string} [options.addLabel] The Add button's caption.
@@ -854,7 +854,7 @@ export async function card(
   {
     x,
     y,
-    kind = "lobby",
+    kind = "memorialLobby",
     scale = 0.48,
     selected = false,
     onPreview,
@@ -867,7 +867,7 @@ export async function card(
     interactive = !!onPreview,
   },
 ) {
-  const geometry = kind === "spr" ? { w: 320, h: 600, bar: 88 } : { w: 720, h: 405, bar: 88 };
+  const geometry = kind === "portrait" ? { w: 320, h: 600, bar: 88 } : { w: 720, h: 405, bar: 88 };
   if (typeof item.applied === "boolean") await Popup.selectionReady();
   const tree = Popup.listCard(item, 0, 0, selected, geometry, kind);
   NGUI.find(tree, "Thumb").widgets.find((widget) => "clipImage" in widget).placeholderOnFailure = true;
@@ -899,9 +899,10 @@ export async function card(
   const actionWidth = barWidget.w_ * scale,
     actionX = x + bar.pos[0] * scale - actionWidth / 2;
   if (onAdd) {
-    const draw = kind === "spr" ? button : retainedButton,
-      height = kind === "spr" ? COMPACT_BUTTON_H * S : 40;
-    const size = kind === "spr" ? compactButtonSize : (captions, width) => retainedButtonSize(captions, width, height);
+    const draw = kind === "portrait" ? button : retainedButton,
+      height = kind === "portrait" ? COMPACT_BUTTON_H * S : 40;
+    const size =
+      kind === "portrait" ? compactButtonSize : (captions, width) => retainedButtonSize(captions, width, height);
     await draw(
       host,
       `Add${item.key}`,
@@ -910,7 +911,7 @@ export async function card(
       onAdd,
       {
         enabled: addEnabled,
-        ...(kind === "spr" ? { height, captionSite: "hall.add", floor: COMPACT_FLOOR } : {}),
+        ...(kind === "portrait" ? { height, captionSite: "hall.add", floor: COMPACT_FLOOR } : {}),
         ...(addSize != null ? { size: addSize } : fitAdd ? { size: size([addLabel], actionWidth) } : {}),
       },
     );
@@ -1057,7 +1058,7 @@ export function formationCardTree(formation, item, selected) {
   const image = NGUI.find(normal, "Card_Char").widgets.find((w) => "texture" in w);
   delete image.texture;
   Object.assign(image, {
-    clipImage: item.thumb || item.portrait,
+    clipImage: item.thumb || item.officialThumbnail,
     imgSize: "cover",
     w_: 220,
     h_: 202,
@@ -1191,19 +1192,19 @@ export async function rosterToolbar(
     hit(
       lay.seg2 - (2.5 - i) * lay.segW,
       lay.segW,
-      () => actions.change({ recruit: value }),
+      () => actions.change({ releaseStatus: value }),
       T(["seg.all", "seg.recruit", "seg.noRecruit"][i]),
-      `recruit:${value}`,
-      view.recruit === value,
+      `releaseStatus:${value}`,
+      view.releaseStatus === value,
     ),
   );
   hit(
     lay.cbLeft + lay.cbW / 2,
     lay.cbW,
-    () => actions.change({ merged: !view.merged }),
+    () => actions.change({ groupAlts: !view.groupAlts }),
     T("roster.merge"),
     "hall-merge",
-    view.merged,
+    view.groupAlts,
   );
   hit(lay.search, 150, actions.search, T("roster.search"), "hall-search-toggle", searching);
   hit(lay.sort, lay.sortW, actions.display, T("display.title"), "hall-display");

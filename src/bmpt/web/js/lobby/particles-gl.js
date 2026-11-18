@@ -268,7 +268,7 @@ void main() {
 }`,
   },
   // DSFX/FX_SHADER_Step_0 (One OneMinusSrcAlpha): the mask against a threshold cuts the main texture; also
-  // DSFX/FX_SHADER_Step_0_MXChar, the same program with dither and grayscale variants (the material's blend)
+  // DSFX/FX_SHADER_Step_0_MXChar, the same program with dither and grayscale alts (the material's blend)
   step: {
     tex: ["_Tex_Main", "_Tex_Mask"],
     colors: ["_Color"],

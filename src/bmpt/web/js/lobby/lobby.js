@@ -77,7 +77,7 @@ function createState() {
     chain: null,
     token: 0,
     wantTouch: false,
-    zoomMode: "art",
+    zoomMode: "fullArt",
     zoomCustom: ZOOM_CUSTOM, // the zoom-out setting (setZoomLimit)
     talk: null,
     talkIndex: -1,

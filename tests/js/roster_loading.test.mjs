@@ -20,10 +20,10 @@ test("declined licence keeps collection portraits with a configured source and m
   const code = source.slice(source.indexOf("const portraitOf ="), source.indexOf("// --- rows near the view"));
   const portraitOf = new Function("spineAllowed", `${code}\nreturn portraitOf;`)(() => false);
   assert.equal(
-    portraitOf({ portrait: "/asset/collection/portrait.png", configured: { spr: "mod:a" } }),
+    portraitOf({ officialThumbnail: "/asset/collection/portrait.png", configured: { portrait: "mod:a" } }),
     "/asset/collection/portrait.png",
   );
-  assert.equal(portraitOf({ portrait: null, configured: { lobby: "mod:a" } }), null);
+  assert.equal(portraitOf({ portrait: null, configured: { memorialLobby: "mod:a" } }), null);
 });
 
 class El {
@@ -44,7 +44,7 @@ class El {
   remove() {}
 }
 
-function harness(kind = "spr", generated = false) {
+function harness(kind = "portrait", generated = false) {
   const requested = [],
     host = new El(),
     pictures = new Map(),
@@ -65,8 +65,8 @@ function harness(kind = "spr", generated = false) {
                 key,
                 name: `Student ${key}`,
                 mods: 0,
-                spr: kind === "spr" ? "spr" : null,
-                lobby: kind === "lobby" ? "arona_workpage_daytime" : null,
+                portrait: kind === "portrait" ? "portrait" : null,
+                memorialLobby: kind === "memorialLobby" ? "arona_workpage_daytime" : null,
               },
             },
           ],
@@ -116,7 +116,7 @@ function harness(kind = "spr", generated = false) {
 test("roster cards keep their full accessible name and counts without a hover title", async () => {
   const h = harness();
   h.rows.get(0).items[0].e.mods = 2;
-  h.rows.get(0).items[0].e.modCounts = { spr: 1, lobby: 1 };
+  h.rows.get(0).items[0].e.modCounts = { portrait: 1, lobby: 1 };
   const pending = h.syncRows();
   const card = h.host.children[0].children[0];
   assert.equal(card.attrs["aria-label"], "Student 0 - Portraits: 1, Memorial lobbies: 1");
@@ -129,7 +129,7 @@ test("roster cards keep their full accessible name and counts without a hover ti
   await pending;
 });
 
-for (const kind of ["spr", "lobby"])
+for (const kind of ["portrait", "memorialLobby"])
   test(`visible generated ${kind} thumbnails complete before the roster is revealed`, async () => {
     const h = harness(kind, true);
     let ready = false;
@@ -163,7 +163,7 @@ test("leaving the roster cancels overscan queued behind the visible rows", async
   assert.deepEqual(h.requested, [0, 1]);
 });
 
-for (const kind of ["spr", "lobby"])
+for (const kind of ["portrait", "memorialLobby"])
   test(`the first screenful waits for every ${kind} picture before overscan is requested`, async () => {
     const h = harness(kind);
     let ready = false;
@@ -185,7 +185,7 @@ for (const kind of ["spr", "lobby"])
     // The off-screen portrait may stay pending without delaying the first frame.
   });
 
-for (const kind of ["spr", "lobby"])
+for (const kind of ["portrait", "memorialLobby"])
   test(`a repeated row sync still waits for rows whose ${kind} pictures are being prepared`, async () => {
     const h = harness(kind);
     const first = h.syncRows();
@@ -204,17 +204,23 @@ for (const kind of ["spr", "lobby"])
     assert.equal(ready, true);
   });
 
-test("roster fallback and configured-source stills receive the variant's default background", () => {
+test("roster fallback and configured-source stills receive the alt's default background", () => {
   const code = source.slice(source.indexOf("const portraitOf ="), source.indexOf("// --- rows near the view"));
   const requested = [],
-    student = { key: "np0189", family: "student", spr: "np0189_spr", bg: "/bg/practice-room", portrait: null };
+    student = {
+      key: "np0189",
+      student: "student",
+      portrait: "np0189_spr",
+      background: "/bg/practice-room",
+      officialThumbnail: null,
+    };
   let enabled = true,
     configured = false;
   const env = {
     spineAllowed: () => true,
     thumbnailWork: { thumb: (...args) => requested.push(args) },
-    primaryKind: () => "spr",
-    data: { families: [{ key: "student", variants: [student] }] },
+    primaryKind: () => "portrait",
+    data: { students: [{ key: "student", alts: [student] }] },
     modsState: () => ({ enabled }),
     configuredKey: () => (configured ? "mod:incoming" : null),
     previewBase: () => "configured-skeleton",
@@ -243,7 +249,7 @@ test("roster fallback and configured-source stills receive the variant's default
 test("library-only roster cards use saved Mod previews without inventing local cores", () => {
   const code = source.slice(source.indexOf("const portraitOf ="), source.indexOf("// --- rows near the view"));
   const requested = [],
-    variants = [];
+    alts = [];
   const env = {
     spineAllowed: () => true,
     thumbnailWork: {
@@ -256,7 +262,7 @@ test("library-only roster cards use saved Mod previews without inventing local c
     configuredKey,
     previewBase,
     hasAsset,
-    data: { families: [{ key: "assigned", variants }] },
+    data: { students: [{ key: "assigned", alts }] },
     spineBase: () => {
       throw new Error("No local core is available");
     },
@@ -265,22 +271,22 @@ test("library-only roster cards use saved Mod previews without inventing local c
   const portraitOf = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${code} return portraitOf;`)(
     env,
   );
-  for (const kind of ["spr", "lobby", "model"]) {
+  for (const kind of ["portrait", "memorialLobby", "chibi"]) {
     const student = {
       key: kind,
-      family: "assigned",
-      spr: null,
-      lobby: null,
-      model: null,
+      student: "assigned",
+      portrait: null,
+      memorialLobby: null,
+      chibi: null,
       storedKinds: [kind],
       configured: {},
     };
-    variants.push(student);
+    alts.push(student);
     assert.equal(hasAsset(student), true);
     assert.equal(portraitOf(student), null, "preview opt-out stays unselected");
     student.previewSources = { [kind]: `mod:assigned-${kind}` };
     const result = portraitOf(student);
-    if (kind === "model") assert.equal(result, null, "model cards never request Spine assets");
+    if (kind === "chibi") assert.equal(result, null, "model cards never request Spine assets");
     else assert.ok(result.includes(`/mod/assigned-${kind}/`));
   }
   assert.equal(requested.length, 2);

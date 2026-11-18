@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "original_checks-v2.schema.json",
+  "title": "Kept official verification",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 2
+    },
+    "officials": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "enum": [
+              "crc",
+              "steam",
+              "failed"
+            ]
+          },
+          "sha1": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "mtime": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "by",
+          "sha1",
+          "size"
+        ]
+      }
+    },
+    "digests": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    }
+  },
+  "required": [
+    "version",
+    "officials"
+  ]
+}

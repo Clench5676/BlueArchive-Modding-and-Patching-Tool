@@ -92,7 +92,7 @@ test("shared roster toolbar fits every control in one row and keeps anchors fixe
 // the six segments and Group Alts have names and pressed states
 test("the segments and Group Alts are named by their captions and pressed while their setting is on", () => {
   const lay = toolbarLayout({ sort: "name" });
-  const view = { mods: "mods", recruit: "all", merged: true };
+  const view = { mods: "mods", releaseStatus: "all", groupAlts: true };
   const hits = toggleHits(view, lay);
   assert.deepEqual(
     hits.map((h) => h.name),
@@ -115,17 +115,17 @@ test("the segments and Group Alts are named by their captions and pressed while 
   assert.ok(hits.slice(0, 6).every((h) => h.box[1] === 720 - 219 - 50.2 && h.box[2] === lay.segW && h.box[3] === 104));
   assert.deepEqual(hits[6].box, [lay.cbLeft + lay.cbW / 2, 720 - 219 - 50.2, lay.cbW, CONTROL.toolbar.h]);
   // apply sets the setting and nothing else
-  const next = { mods: "all", recruit: "all", merged: false };
+  const next = { mods: "all", releaseStatus: "all", groupAlts: false };
   hits[2].apply(next);
-  assert.deepEqual(next, { mods: "none", recruit: "all", merged: false });
+  assert.deepEqual(next, { mods: "none", releaseStatus: "all", groupAlts: false });
   hits[4].apply(next);
-  assert.deepEqual(next, { mods: "none", recruit: "yes", merged: false });
+  assert.deepEqual(next, { mods: "none", releaseStatus: "yes", groupAlts: false });
   hits[6].apply(next);
-  assert.equal(next.merged, true);
+  assert.equal(next.groupAlts, true);
   hits[6].apply(next);
-  assert.equal(next.merged, false);
+  assert.equal(next.groupAlts, false);
   assert.equal(
-    toggleHits({ mods: "all", recruit: "no", merged: false }, lay).filter((h) => h.pressed).length,
+    toggleHits({ mods: "all", releaseStatus: "no", groupAlts: false }, lay).filter((h) => h.pressed).length,
     2,
     "one segment of each filter is pressed",
   );
@@ -142,7 +142,7 @@ test("every shipped language names the segments and Group Alts with its own capt
         ...Object.entries(ui.seg).map(([k, v]) => [`seg.${k}`, v]),
         ["roster.merge", ui.roster.merge],
       ]);
-      const names = toggleHits({ mods: "all", recruit: "all", merged: false }, lay).map((h) => h.name);
+      const names = toggleHits({ mods: "all", releaseStatus: "all", groupAlts: false }, lay).map((h) => h.name);
       assert.deepEqual(
         names,
         [ui.seg.all, ui.seg.mods, ui.seg.noMods, ui.seg.all, ui.seg.recruit, ui.seg.noRecruit, ui.roster.merge],
@@ -328,7 +328,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
       ),
     ]);
     try {
-      const view = { sort: "recent", mods: "all", recruit: "all", order: "asc", merged: true },
+      const view = { sort: "recent", mods: "all", releaseStatus: "all", order: "asc", groupAlts: true },
         lay = toolbarLayout(view),
         prefab = toolbarPrefab(),
         before = structuredClone(prefab);

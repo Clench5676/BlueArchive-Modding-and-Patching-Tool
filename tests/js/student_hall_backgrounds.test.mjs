@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
+import { readSerialized } from "../../src/bmpt/web/js/core/serialized-fields.js";
 
 let payload,
   rendered = [],
@@ -53,14 +54,15 @@ globalThis.hallBackgroundHarness = {
     },
   },
   withTimeout: (promise) => promise,
+  readSerialized,
 };
 let source = await readFile(new URL("../../src/bmpt/web/js/hall/student-hall-backgrounds.js", import.meta.url), "utf8");
 source = source.replace(/^import [^;]*;$/gm, "");
-source = `const {NGUI, withTimeout} = globalThis.hallBackgroundHarness; const S = 1920 / 2960; const T = (key) => key;\n${source}`;
+source = `const {NGUI, withTimeout, readSerialized} = globalThis.hallBackgroundHarness; const S = 1920 / 2960; const T = (key) => key;\n${source}`;
 const Hall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 const day = { name: "office-day", layoutUrl: "/asset/office/day/layout.json" };
 const night = { name: "office-night", layoutUrl: "/asset/office/night/layout.json" };
-const collection = { name: "BG_School_Collection", url: "/asset/art/bg/BG_School_Collection" };
+const collection = { name: "BG_School_Collection", url: "/asset/art/background/BG_School_Collection" };
 
 test("office day is the unsaved default while explicit saved backgrounds and partial installs are preserved", () => {
   assert.equal(Hall.backgroundChoice("", [collection, night, day]), day);

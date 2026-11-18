@@ -1,28 +1,28 @@
 /**
- * The saved aliases of a variant: the first is the display name; all remain searchable and editable.
+ * The saved aliases of an alt: the first is the display name; all remain searchable and editable.
  */
-export const customAliases = (variant) =>
-  Array.isArray(variant?.custom) ? variant.custom.filter((a) => typeof a === "string" && a) : [];
+export const customAliases = (alt) =>
+  Array.isArray(alt?.customAliases) ? alt.customAliases.filter((a) => typeof a === "string" && a) : [];
 /**
- * The display name of a variant: its first alias, else the original name.
+ * The display name of an alt: its first alias, else the original name.
  */
-export const studentName = (variant, original) => customAliases(variant)[0] || original;
+export const studentName = (alt, original) => customAliases(alt)[0] || original;
 /**
  * Another student's costume: "Student (Costume)" in the language's brackets, the rule job progress names a
- * variant by (progress.subject). The student is the family's base name, or the user's alias of the variant; the
+ * alt by (progress.subject). The student is the student's base name, or the user's alias of the alt; the
  * costume is always named, the original one too.
  */
-export const crossName = (variant, student, costume, translate) =>
-  translate("progress.subject", { name: studentName(variant, student), parts: costume });
+export const crossName = (alt, student, costume, translate) =>
+  translate("progress.subject", { name: studentName(alt, student), parts: costume });
 
 /**
- * A mod's name. The backend's label is presentation text in the language of its last read, so the repair
+ * A mod's name. The backend's name is presentation text in the language of its last read, so the repair
  * suffixes are rebuilt from stable names and a locale change needs no reread.
  */
 export function modName(mod, entries, translate, seen = new Set()) {
   if (!mod) return "";
   if (mod.alias) return mod.alias;
-  if (mod.optimized_from) return translate("model.optimizedName", { name: mod.label_base || mod.label });
+  if (mod.optimized_from) return translate("model.optimizedName", { name: mod.baseName || mod.name });
   // a memorial lobby camera: its source's name, then its own, "<source> - Camera <n>"
   if (mod.camera) {
     const own = translate("lobby.cameraName", { n: mod.camera.number });
@@ -32,17 +32,17 @@ export function modName(mod, entries, translate, seen = new Set()) {
       ? `${modName(from, entries, translate, new Set([...seen, mod.id]))} - ${own}`
       : own;
   }
-  if (mod.repaired_from && !seen.has(mod.repaired_from)) {
-    const parent = entries.find((entry) => entry.id === mod.repaired_from);
-    const name = parent ? modName(parent, entries, translate, new Set([...seen, mod.id])) : mod.label_base;
+  if (mod.repairSourceId && !seen.has(mod.repairSourceId)) {
+    const parent = entries.find((entry) => entry.id === mod.repairSourceId);
+    const name = parent ? modName(parent, entries, translate, new Set([...seen, mod.id])) : mod.baseName;
     if (name) return translate("remap.name", { name });
   }
-  return mod.label_base || mod.label || mod.file?.split(/[\\/]/).pop() || mod.id;
+  return mod.baseName || mod.name || mod.file?.split(/[\\/]/).pop() || mod.id;
 }
 
 /**
- * The name of the game resource a mod replaces: a mod's label may already be its alias, but its core and file
+ * The name of the game resource a mod replaces: a mod's name may already be its alias, but its core and file
  * name still identify the original.
  */
 export const modOriginalName = (mod) =>
-  mod?.core || mod?.file?.split(/[\\/]/).pop() || (mod?.label !== mod?.alias ? mod?.label : "") || "";
+  mod?.core || mod?.file?.split(/[\\/]/).pop() || (mod?.name !== mod?.alias ? mod?.name : "") || "";

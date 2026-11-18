@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "asset_deletions-v2.schema.json",
+  "title": "Asset deletion journal",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 2
+    },
+    "phase": {
+      "enum": [
+        "active",
+        "committed"
+      ]
+    },
+    "records": {
+      "type": "object"
+    },
+    "applied": {
+      "type": "object"
+    },
+    "profiles": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 2
+            },
+            "folders": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "configured": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "alt": {
+                          "type": "string"
+                        },
+                        "resource_type": {
+                          "enum": [
+                            "portrait",
+                            "memorialLobby",
+                            "chibi",
+                            "other"
+                          ]
+                        },
+                        "source": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "source"
+                      ]
+                    }
+                  },
+                  "built": {
+                    "type": "object"
+                  },
+                  "named_by": {
+                    "type": "object"
+                  },
+                  "updated": {
+                    "type": "object"
+                  },
+                  "dismissed": {
+                    "type": "object"
+                  },
+                  "hidden": {
+                    "type": "array"
+                  }
+                }
+              }
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "unfinished": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "install": {
+                    "type": "string"
+                  },
+                  "core": {
+                    "type": "string"
+                  },
+                  "why": {
+                    "enum": [
+                      "pending",
+                      "left",
+                      "stuck",
+                      "held"
+                    ]
+                  }
+                },
+                "required": [
+                  "install",
+                  "core",
+                  "why"
+                ]
+              }
+            }
+          },
+          "required": [
+            "version"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "mods": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{32}$"
+      }
+    },
+    "built": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "games": {
+      "type": "array"
+    },
+    "held": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{32}$"
+      }
+    },
+    "thumbnail": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "version",
+    "phase",
+    "records",
+    "applied",
+    "mods",
+    "built",
+    "games"
+  ]
+}

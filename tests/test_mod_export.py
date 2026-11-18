@@ -15,13 +15,18 @@ from bmpt.library import targets as resolver
 from bmpt.webui import batch_import
 from bmpt.webui import export_service
 from bmpt.webui.rpc import RpcRegistry
+from bmpt.webui.services import Services
 
 from test_library import game_bundle, make_mod, setup_library  # noqa: F401 - fixtures
 from test_mod_origin import REAL_SHARING_KEYS, inspect_bundle, bundle_metadata, official_bundle, old_bundle
 
 
 def services(env):
-    return SimpleNamespace(settings=env.settings, library=env.library, state=SimpleNamespace(get=lambda *_: {}))
+    stub = SimpleNamespace(
+        settings=env.settings, library=env.library, state=SimpleNamespace(get=lambda *_: {}), upgrade=None
+    )
+    stub.check_output = lambda destination: Services.check_output(stub, destination)
+    return stub
 
 
 def run(env, scope="library", target=None, progress=lambda *_: None):

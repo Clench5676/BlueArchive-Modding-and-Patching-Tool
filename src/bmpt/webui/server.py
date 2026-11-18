@@ -30,9 +30,10 @@ from .rpc import RpcRegistry
 logger = logging.getLogger(__name__)
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+UPGRADE_ACTIONS = frozenset(("retry", "update", "openLog", "quit", "acknowledge", "keep", "import", "relocate"))
 MAX_BODY = 4 * 1024 * 1024
 MAX_PHOTOGRAPH_BODY = 49 * 1024 * 1024
-HTTP_EXPORT_SCHEMA = "http-exports-v1"
+HTTP_EXPORT_SCHEMA = "http-exports-v2"
 
 MIME = {
     ".js": "text/javascript; charset=utf-8",
@@ -86,6 +87,8 @@ class WebApp:
         ui_cached: Callable[[], bool] = lambda: False,
         recovery: Callable[[], dict] = lambda: {},
         on_exception: Callable | None = None,
+        upgrade: Callable[[str], dict] | None = None,
+        services_ready: bool = True,
     ):
         """Create the application.
 
@@ -104,9 +107,13 @@ class WebApp:
             ui_cached: Whether the page is served without the plain placeholder of its start cover.
             recovery: Returns the configuration the recovery script of ``index.html`` embeds (see
                 ``main.recovery_config``).
+            upgrade: The authorized bootstrap action handler.
+            services_ready: Whether requests may reach ordinary services.
             on_exception: Called as ``(type, value, traceback)`` for an exception no handler caught; the request
                 answers 500.
         """
+        self.upgrade = upgrade
+        self.services_ready = services_ready
         self.rpc = rpc
         self.events = events
         self.assets = assets
@@ -140,7 +147,7 @@ class WebApp:
         if not self._host_ok(environ):
             return self._text(start_response, "403 Forbidden", "forbidden")
         if path.startswith("/api/classic/"):
-            if self.classic is None:
+            if not self.services_ready or self.classic is None:
                 return self._text(start_response, "404 Not Found", "not found")
             return self.classic(environ, start_response)
         if path == RAISE_PATH:
@@ -159,6 +166,12 @@ class WebApp:
             return self._text(start_response, "403 Forbidden", "forbidden")
 
         try:
+            if path.startswith("/upgrade/") and self.upgrade:
+                return self._upgrade(start_response, path.removeprefix("/upgrade/"), method)
+            if self.services_ready and path == "/upgrade/state" and method == "GET":
+                return self._json(start_response, {"status": "ready", "notice": None})
+            if not self.services_ready and path.startswith(("/api/", "/asset/")):
+                return self._text(start_response, "503 Service Unavailable", "Data upgrade is pending")
             if path == "/api/rpc" and method == "POST":
                 return self._rpc(environ, start_response)
             if path == "/api/events" and method == "GET":
@@ -222,6 +235,13 @@ class WebApp:
                 logger.exception("cannot raise the window")
         return self._json(start_response, {})
 
+    def _upgrade(self, start_response: Callable, action: str, method: str) -> Iterable[bytes]:
+        if action != "state" and action not in UPGRADE_ACTIONS:
+            return self._text(start_response, "404 Not Found", "not found")
+        if method != ("GET" if action == "state" else "POST"):
+            return self._text(start_response, "405 Method Not Allowed", "method not allowed")
+        return self._json(start_response, self.upgrade(action))
+
     def _rpc(self, environ: dict, start_response: Callable) -> Iterable[bytes]:
         try:
             length = int(environ.get("CONTENT_LENGTH") or 0)
@@ -233,11 +253,11 @@ class WebApp:
             body = json.loads(environ["wsgi.input"].read(length))
             name, params = body["method"], body.get("params") or {}
             if length > MAX_BODY and name not in (
-                "photography.save",
-                "photography.apply",
-                "photography.restore",
-                "photography.export",
-                "actions.remap",
+                "thumbnails.save",
+                "thumbnails.apply",
+                "thumbnails.restore",
+                "thumbnails.export",
+                "actions.useOfficialSkeleton",
                 "actions.redrawn",
             ):
                 raise ValueError("Oversized RPC body")

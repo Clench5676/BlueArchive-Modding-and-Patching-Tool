@@ -1,7 +1,7 @@
 # Front end
 
 `ngui.js` (prefab renderer), the roster, the detail screen, the popups, the consent popup and the lobby player, as ES
-modules under `web/js/`, one page with a hash router (`#/roster`, `#/student/<family>/<variant>`). The modules sit in
+modules under `web/js/`, one page with a hash router (`#/roster`, `#/student/<student>/<alt>`). The modules sit in
 folders by screen area: `app/` (start-up, navigation, loading, updates, prompts), `window/` (window chrome and top bar),
 `core/` (RPC, strings, shared helpers), `ui/` (NGUI, popups, shared widgets and tokens), `roster/`, `detail/`, `mods/`
 (mod switching and import), `spine/`, `lobby/`, `model/` (3D), `hall/`, `settings/` and `photography/`. Data comes from
@@ -10,28 +10,27 @@ accessible names from the locale files; a control that picks one of several carr
 
 ## Student list
 
-`roster-order.js` decides which cards the list shows and in what order (pure functions, tested in Node from
-`tests/test_roster_order.py`); `roster.js` draws them and `display.js` is the game's display settings popup.
+`roster-order.js` decides which cards the list shows and in what order; `roster.js` draws them and `display.js` is the game's display settings popup.
 
-- One card per variant, or per family with "Group Variants". Cards with mods first, the rest after the "No Mod" bar;
+- One card per alt, or per student with "Group Alts". Cards with Mods appear before the "No Mod" bar;
   favourites lead each group whatever the sort.
 - Segment filters, the display settings' filter groups (options in a group add up, groups narrow) and the sort
   (recently viewed, recently added, name with the UI language's collation, mod count, default). All of it is saved
-  (`settings.set roster`); the search lasts the session.
+  (`settings.set` with key `studentList`). The search lasts the session.
 - The search matches every name language, the base names, the aliases (the CN server's and the user's own) and the
   file id, ignoring case, width, kana and separators; every word must match.
 - Keyboard focus moves the list through its own scroll position; the left and right arrow keys step through students
-  as in the PC client (`step-keys.js`, tested in Node), one step at a time, paced by the screen, inert with a modifier
+  as in the PC client (`step-keys.js`), one step at a time, paced by the screen, inert with a modifier
   held, in a text field, under a popup, in a fullscreen view or during a job.
 - Back from the detail screen, the list is built behind the loading cover: the visible rows finish their portraits and
-  frames before reveal, and pictures are decoded first (`NGUI.decoded`, `image-decode.js`, tested in Node) — WebKit
+  frames before reveal, and pictures are decoded first (`NGUI.decoded`, `image-decode.js`) — WebKit
   lets go of blob images a hidden screen draws, so without the wait the first frames painted bare.
-- A visit to a variant (`ui.visit`) is mirrored in the page's roster data, so "Recently Viewed" updates without a new
-  `roster.list`.
+- A visit to an alt (`ui.visit`) is mirrored in the page's student-list data, so "Recently Viewed" updates without a new
+  `students.list`.
 
 ## Quit
 
-The student list quits the app as the PC client's back key does in the lobby (`quit.js`, tested in Node): the top
+The student list quits the app as the PC client's back key does in the lobby (`quit.js`): the top
 bar's round back button and Escape on the list open the game's quit prompt (Cancel / Confirm; Enter and Space confirm
 while the prompt holds the focus, per the PC client's key mapping). Escape is left alone when another handler took the
 key, while an input method composes, for a held key's repeat, with a modifier, while any popup is open, behind the
@@ -40,7 +39,7 @@ runs); in browser mode the page shows Closed after the server stops.
 
 ## Bottom navigation
 
-`nav-items.js` (tested in Node) lists the bottom bar's entries and decides what a click does; `nav.js` draws them.
+`nav-items.js` lists the bottom bar's entries and decides what a click does; `nav.js` draws them.
 Student Hall (`#/hall`) is the root page, followed by Students and Batch Import; `route-history.js` records committed
 page entries in memory (failed transitions do not become history; direct-entry routes fall back to Student Hall). An
 entry is greyed exactly when it has a classic tab and no web screen: it keeps the game's disabled tint (read from
@@ -87,7 +86,7 @@ given back on leave.
 
 The detail screen's popups are drawn on the game's popup frame (UIPopup_Sort) with its dark backdrop (`BACKDROP` in
 `ui-tokens.js`); a click on the backdrop or Escape closes them. The shared module (`popup.js`, with the `popup-*.js`
-modules split from it, tested in Node on a stand-in DOM) reads its prefabs once and provides:
+modules split from it on a stand-in DOM) reads its prefabs once and provides:
 
 - **Hosts.** `#popup` and `#picker` inside the detail screen; `#prompt` and `#dialog` on the stage, so a popup shows
   on any screen. Each message popup is a layer of its own in `#dialog`, so one opened from another shows over it.
@@ -106,7 +105,8 @@ modules split from it, tested in Node on a stand-in DOM) reads its prefabs once 
   the left, cards in a framed list on the right, single or multi selection, optional roster tools.
 
 **Start sequence** (`main.js`, `Popup.sequence`), run once per session when a game folder is known: the start popups
-come one at a time after the first screen is revealed, each only when due — the read-only data folder notice, the
+come one at a time after the first screen is revealed, each only when due — the one-time notice of the first start
+after a data upgrade ([api](api.md#data-upgrade-notice)), the read-only data folder notice, the
 asset consent, the Spine licence notice, the scan consent; then the release update check (its own background check,
 never holding startup; the offer waits for open popups and loading work; download and install stay in its popup);
 then the game update impact gate (see [Mods already in use](mods-switch.md#mods-already-in-use)); then the prompts of mods back to official and mods
@@ -118,14 +118,14 @@ stored No stays false and shows the notice until Confirm. `spine-runtime.js ensu
 acknowledgement; the first screen uses a static portrait where one exists. Settings' General tab keeps a View button
 that opens the same notice without changing state.
 
-**Switch popups** (Switch Portrait / Memorial Lobby / Chibi). The sources (`switch-sources.js`, tested in Node):
-the variant's own files and its added mods; for the portrait also the other variants' own and added ones (other
-variants' lobbies are not offered — untested in the game). Save changes only the preview (persisted per install and
-variant in `webui.json`, exposed as `previewSources`); Apply updates the manifest through `actions.apply` (with Mods
-off it only updates the intended source). On an overwritten kind, Original is greyed with the Overwritten treatment;
+**Switch popups** (Switch Portrait / Memorial Lobby / Chibi). The sources (`switch-sources.js`):
+the alt's own files and its added mods; for the portrait also the other alts' own and added ones (other
+alts' lobbies are not offered — untested in the game). Save changes only the preview (persisted per install and
+alt in `webui.json`, exposed as `previewSources`); Apply updates the manifest through `actions.apply` (with Mods
+off it only updates the intended source). On an overwritten resource type, Official is greyed with the Overwritten treatment;
 greyed cards can still be previewed. Delete always confirms with the mod's name and explains affected entries.
 Duplicates show Already in the Mod Library; exact outside game content is adopted without reapplying. Unseen mods
-mark their variant chip, tab and roster card; opening a switch popup marks what it offers as seen (`mods.seen`,
+mark their alt chip, tab and roster card; opening a switch popup marks what it offers as seen (`mods.seen`,
 independent of the library's legacy flags). **Aliases** (the pencil on the nameplate): the user's own search aliases,
 edited in the game's input rows, IME-safe. **Details** (the info bars' button): the shown tab's game files, one row
 per bundle with size, date, CRC state and contents.
@@ -150,7 +150,7 @@ scales, controls, popup anatomy and alignment rules are documented in [`design-s
 corner, animated in `app.css` from the game's clip. Before asset consent, covers use neutral system text and no game
 assets; the server selects the initial document's style from consent and the disk cache, so a cached launch is
 stylized before modules arrive. `scene(fn)` covers startup, navigation, student steps and detail tabs (fade to black,
-indicator, reveal; it warns after 15 s and waits without a client deadline for `family.get` and `roster.list`, since
+indicator, reveal; it warns after 15 s and waits without a client deadline for `student.get` and `students.list`, since
 a writer job can hold the library lock; a later navigation supersedes the wait). `wait(promise, {label, cap})` shows
 the indicator alone for other waits. The detail screen resolves `show()` only when every part is ready and swaps
 changes in one frame. Startup phase durations are recorded in the session log and `app.timings`.
@@ -159,7 +159,7 @@ changes in one frame. Startup phase durations are recorded in the session log an
 
 `cursor.js` gives the page the PC client's own pointer (`PCIcon_MousePoint`, a 32 CSS px cursor with the texture as
 its 2x image) and `touch-fx.js` simulates the touch effect the game spawns on every press (two spinning rings, a
-flash, triangles and a trail, drawn on two canvases over the window in linear light; pure functions tested in Node).
+flash, triangles and a trail, drawn on two canvases over the window in linear light).
 Both read their textures through the light texture route; without a game the system cursor stays. WebKit drops a
 cursor whose box would cross the window's edge, so smaller cuts of the image follow in the list and the pointer is
 cut at the edge instead of reverting to the arrow. With `prefers-reduced-motion`, a drag leaves no trail.

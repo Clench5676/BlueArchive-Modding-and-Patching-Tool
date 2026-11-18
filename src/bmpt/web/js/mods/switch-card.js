@@ -93,14 +93,20 @@ export function cardColours(rows, edge = 0.4) {
  * @param {(url: string) => Promise<HTMLImageElement>} load Loads an image.
  * @param {object} [options]
  * @param {AbortSignal} [options.signal] Cancels the work.
- * @param {string} [options.kind] "lobby" by default.
+ * @param {string} [options.kind] The resource type, "memorialLobby" by default.
  * @param {object} [options.background] The background under a portrait.
  */
-export async function colourSwitchCard(picture, text, widget, load, { signal, kind = "lobby", background } = {}) {
+export async function colourSwitchCard(
+  picture,
+  text,
+  widget,
+  load,
+  { signal, kind = "memorialLobby", background } = {},
+) {
   if (signal?.aborted) return;
   // the portrait card keeps the prefab's own look: no background picture and no fade
   if (kind === "portrait") return;
-  if (kind !== "lobby" && kind !== "model") return;
+  if (kind !== "memorialLobby" && kind !== "chibi") return;
   const url = await withTimeout(
     Promise.resolve(widget.clipImage),
     widget.clipImage?.thumbnail ? Infinity : 15000,

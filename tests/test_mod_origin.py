@@ -148,7 +148,12 @@ def test_conversion_update_add_apply_uses_real_classic_core(real_metadata, platf
     }
     events = env.services.events.subscribe()
     (result,) = run(
-        env, [entry], strategy="path_id", types=["TextAsset"], backup=True, crc="on" if target_platform == 19 else "off"
+        env,
+        [entry],
+        matchStrategy="path_id",
+        assetTypes=["TextAsset"],
+        createBackup=True,
+        crcCorrection="on" if target_platform == 19 else "off",
     )
     assert result["outcome"] == "updated" and result["applied"]
     updates = []
@@ -208,7 +213,7 @@ def test_current_release_spine_rebuilds_foreign_platform_instead_of_copying(
     if manual:
         entry = finish(env, rpc(env, "import.setSource", id=entry["id"], server="global", platform=source_platform))
         assert (entry["state"], entry["reason"], entry["source"]["detected"]) == ("convert", None, False)
-    (result,) = run(env, [entry], types=["TextAsset"])
+    (result,) = run(env, [entry], assetTypes=["TextAsset"])
     assert (result["outcome"], result["applied"]) == ("updated", True), result
     converted = Bundle.load(env.original)
     assert converted.platform_info[0] == "StandaloneWindows64"
@@ -264,7 +269,7 @@ def test_current_release_cross_platform_rebuild_rejects_invalid_output(real_meta
         return RebuildResult(True, "converted", [FilePair(output, target)])
 
     patch_batch(monkeypatch, "rebuild", foreign_output)
-    (result,) = run(env, [entry], types=["TextAsset"])
+    (result,) = run(env, [entry], assetTypes=["TextAsset"])
     assert (result["outcome"], result["reason"], result["applied"]) == ("failed", reason, False)
     assert env.original.read_bytes() == before and not env.library.mods()
 
@@ -293,7 +298,7 @@ def test_current_release_spine_upgrades_serialized_version_using_target_format(r
     if manual:
         entry = finish(env, rpc(env, "import.setSource", id=entry["id"], server="global", platform="windows"))
         assert (entry["state"], entry["reason"]) == ("update", None)
-    (result,) = run(env, [entry], types=["TextAsset"])
+    (result,) = run(env, [entry], assetTypes=["TextAsset"])
     assert (result["outcome"], result["applied"]) == ("updated", True), result
     converted = Bundle.load(env.original)
     assert converted.platform_info[0] == "StandaloneWindows64"
@@ -348,7 +353,7 @@ def test_renderable_current_release_texture_rebuilds_without_losing_pixels(real_
     assert Bundle.load(source).env.objects[0].read().image.convert("RGBA").tobytes() == modified.tobytes()
     (entry,) = analyze(env, [source])["entries"]
     assert (entry["state"], entry["reason"]) == ("convert", None), entry
-    (result,) = run(env, [entry], types=["Texture2D"])
+    (result,) = run(env, [entry], assetTypes=["Texture2D"])
     assert (result["outcome"], result["applied"]) == ("updated", True), result
     output = Bundle.load(env.original)
     assert output.platform_info[0] == "StandaloneWindows64"
@@ -369,7 +374,7 @@ def test_cross_server_old_filename_converts_instead_of_copying(real_metadata):
     (entry,) = analyze(env, [source])["entries"]
     assert entry["source"]["server"] == "japan" and entry["target"]["server"] == "global"
     assert entry["state"] == "convert"
-    (result,) = run(env, [entry], types=["TextAsset"])
+    (result,) = run(env, [entry], assetTypes=["TextAsset"])
     assert result["outcome"] == "updated" and result["applied"]
     assert Bundle.load(env.original).env.objects[0].read().m_Script == "JP mod"
     assert inspect_bundle(env.original).platforms == {"StandaloneWindows64"}
@@ -396,7 +401,7 @@ def test_mobile_names_convert_into_a_part_kept_under_an_older_date(real_metadata
     assert (entry["state"], entry["reason"]) == ("convert", None)
     assert entry["source"] == {"server": "global", "platform": "android", "detected": True}
     assert [file["target"] for file in entry["files"]] == [env.original.name]
-    (result,) = run(env, [entry], types=["TextAsset"])
+    (result,) = run(env, [entry], assetTypes=["TextAsset"])
     assert result["outcome"] == "updated" and result["applied"]
     assert Bundle.load(env.original).env.objects[0].read().m_Script == "mobile mod"
     assert inspect_bundle(env.original).platforms == {"StandaloneWindows64"}
@@ -423,7 +428,7 @@ def test_converted_source_is_already_in_library_after_move_and_restart(real_meta
         references=["com.nexon.bluearchive"],
     )
     (entry,) = analyze(env, [source])["entries"]
-    (result,) = run(env, [entry], types=["TextAsset"], enableAfterImport=enabled)
+    (result,) = run(env, [entry], assetTypes=["TextAsset"], enableAfterImport=enabled)
     assert result["outcome"] == "updated"
     if enabled:
         env.library.restore("test")
@@ -460,7 +465,7 @@ def test_conversion_provenance_never_matches_changed_bytes_or_removed_entry(real
         references=["com.nexon.bluearchive"],
     )
     (entry,) = analyze(env, [source])["entries"]
-    (result,) = run(env, [entry], types=["TextAsset"], enableAfterImport=False)
+    (result,) = run(env, [entry], assetTypes=["TextAsset"], enableAfterImport=False)
     if change == "source":
         unity_bundle(source, 13, cab="CAB-source", payload=b"new mod", references=["com.nexon.bluearchive"])
     elif change == "output":
@@ -535,7 +540,7 @@ def test_unknown_source_set_source_reanalyzes_and_persists_for_run_and_recheck(
     assert selected["state"] == "convert" and selected["id"] == entry["id"]
     (selected,) = analyze(env, [source])["entries"]
     assert selected["source"]["detected"] is False and selected["state"] == "convert"
-    (result,) = run(env, [selected], types=["TextAsset"])
+    (result,) = run(env, [selected], assetTypes=["TextAsset"])
     assert result["outcome"] == "updated" and result["applied"]
     assert Bundle.load(env.original).env.objects[0].read().m_Script == "unknown mod"
 
@@ -616,7 +621,7 @@ def test_same_platform_cross_server_still_rebuilds(real_metadata):
     )
     (entry,) = analyze(env, [source])["entries"]
     assert entry["state"] == "convert"
-    (result,) = run(env, [entry], types=["TextAsset"])
+    (result,) = run(env, [entry], assetTypes=["TextAsset"])
     assert result["applied"] and result["outcome"] == "updated"
     assert "com.yostar jp.bluearchive" not in inspect_bundle(env.original).references
 
@@ -690,7 +695,7 @@ def test_conversion_failure_cannot_store_or_apply_mobile_bytes(real_metadata, mo
     (entry,) = analyze(env, [source])["entries"]
     before = env.original.read_bytes()
     patch_batch(monkeypatch, "rebuild", lambda **kwargs: RebuildResult(False, "failed", []))
-    (result,) = run(env, [entry], types=["TextAsset"])
+    (result,) = run(env, [entry], assetTypes=["TextAsset"])
     assert result["outcome"] == "failed" and result["reason"] == "conversion_failed"
     assert not result["applied"] and not env.library.mods() and env.original.read_bytes() == before
 
@@ -720,7 +725,7 @@ def test_conversion_stages_only_inside_the_pinned_library_with_dev_guards(real_m
         return update(**kwargs)
 
     patch_batch(monkeypatch, "rebuild", convert)
-    (result,) = run(env, [entry], types=["TextAsset"], output=str(env.tmp / "output") if output else None)
+    (result,) = run(env, [entry], assetTypes=["TextAsset"], outputFolder=str(env.tmp / "output") if output else None)
     assert result["outcome"] == "updated" and result["applied"], result
     assert seen and all(path.is_relative_to(env.library.root / "staging") for path in seen)
     assert all(not path.exists() for path in seen), "temporary conversions are removed after import"
@@ -755,7 +760,7 @@ def test_system_temp_conversion_output_reproduces_the_dev_read_guard_failure(rea
             yield directory
 
     monkeypatch.setattr(batch_import.staging, "temporary_directory", former_staging)
-    (result,) = run(env, [entry], types=["TextAsset"], enableAfterImport=False)
+    (result,) = run(env, [entry], assetTypes=["TextAsset"], enableAfterImport=False)
     refused = staged[0] / batch_candidates.staging_name(entry["id"]) / "output" / env.original.name
     assert result["outcome"] == "failed" and result["reason"] == "dev_path_outside"
     assert result["params"] == {"path": str(refused)}
@@ -785,7 +790,7 @@ def test_converted_output_still_requires_full_dependency_validation(real_metadat
         return RebuildResult(True, "converted", [FilePair(output, target)])
 
     patch_batch(monkeypatch, "rebuild", broken_output)
-    (result,) = run(env, [entry], types=["TextAsset"])
+    (result,) = run(env, [entry], assetTypes=["TextAsset"])
     assert result["outcome"] == "failed" and result["reason"] == "mod_parts_missing"
     assert not env.library.mods() and not result["applied"]
 
@@ -815,7 +820,7 @@ def test_installed_mobile_bytes_do_not_bypass_conversion(real_metadata):
     env.original.write_bytes(source.read_bytes())
     (entry,) = analyze(env, [source])["entries"]
     assert entry["state"] == "convert" and entry["target"]["platform"] == "windows"
-    (result,) = run(env, [entry], types=["TextAsset"])
+    (result,) = run(env, [entry], assetTypes=["TextAsset"])
     assert result["outcome"] == "updated" and result["applied"]
     assert inspect_bundle(env.original).platforms == {"StandaloneWindows64"}
 
@@ -847,9 +852,9 @@ def test_markerless_lobby_fallback_validates_compressed_renamed_bundles(
         source.with_name(env.original.name.replace("ch0156_home", "test_spr").replace("2026-01-01", "2025-01-01"))
     )
     (entry,) = analyze(env, [source])["entries"]
-    assert entry["kind"] == "lobby" and entry["state"] == "convert"
+    assert entry["resourceType"] == "memorialLobby" and entry["state"] == "convert"
     assert entry["source"] == {"server": "global", "platform": expected, "detected": True}
-    assert run(env, [entry], types=["TextAsset"])[0]["applied"]
+    assert run(env, [entry], assetTypes=["TextAsset"])[0]["applied"]
 
 
 def test_unknown_fallback_rejects_unmatched_assets(real_metadata):
@@ -997,20 +1002,20 @@ def test_inference_rejects_only_selected_unreadable_assets(real_metadata, monkey
         return result
 
     monkeypatch.setattr(Bundle, "load", broken_load)
-    env.services.batch_import.set_options({"types": ["TextAsset", kind] if selected else ["TextAsset"]})
+    env.services.batch_import.set_options({"assetTypes": ["TextAsset", kind] if selected else ["TextAsset"]})
     (entry,) = analyze(env, [source])["entries"]
     if selected:
         assert (entry["state"], entry["reason"], entry["source"]) == ("blocked", "required_asset_extract_failed", None)
     else:
         assert (entry["state"], entry["reason"]) == ("convert", None)
-        (result,) = run(env, [entry], types=["TextAsset"])
+        (result,) = run(env, [entry], assetTypes=["TextAsset"])
         assert result["outcome"] == "updated" and result["applied"]
 
 
 @pytest.mark.parametrize("manual", [False, True])
 @pytest.mark.parametrize("counterpart", ["missing", "identical", "changed"])
 def test_import_uses_current_counterparts_and_reports_omissions(real_metadata, monkeypatch, manual, counterpart):
-    from tests.test_rebuild_failures import asset
+    from test_rebuild_failures import asset
     from ba_modding_toolkit.models import AssetType
 
     env = real_metadata
@@ -1038,7 +1043,7 @@ def test_import_uses_current_counterparts_and_reports_omissions(real_metadata, m
         return result
 
     monkeypatch.setattr(Bundle, "load", with_texture)
-    env.services.batch_import.set_options({"types": ["TextAsset", "Texture2D"]})
+    env.services.batch_import.set_options({"assetTypes": ["TextAsset", "Texture2D"]})
     (entry,) = analyze(env, [source])["entries"]
     if manual:
         entry = finish(env, rpc(env, "import.setSource", id=entry["id"], server="global", platform="android"))
@@ -1046,7 +1051,7 @@ def test_import_uses_current_counterparts_and_reports_omissions(real_metadata, m
         assert (entry["state"], entry["reason"]) == ("blocked", "required_asset_extract_failed")
     else:
         assert entry["state"] == "convert", entry
-        (result,) = run(env, [entry], types=["TextAsset", "Texture2D"])
+        (result,) = run(env, [entry], assetTypes=["TextAsset", "Texture2D"])
         if counterpart == "changed":
             assert (result["outcome"], result["reason"]) == ("failed", "required_asset_extract_failed")
         else:
@@ -1178,7 +1183,7 @@ def test_required_asset_failure_never_imports_or_applies_a_partial_mod(real_meta
         return result
 
     monkeypatch.setattr(Bundle, "load", broken_load)
-    (result,) = run(env, [entry], types=["Texture2D", "TextAsset"])
+    (result,) = run(env, [entry], assetTypes=["Texture2D", "TextAsset"])
     assert result["outcome"] == "failed"
     assert result["reason"] == f"required_asset_{failure}_failed"
     assert result["params"]["name"] == ("required_texture" if failure == "extract" else "test_spr_note")
@@ -1291,7 +1296,7 @@ def test_reimport_rebuild_does_not_rebind_provenance_to_swapped_parts(real_metad
         for index, (target, name) in enumerate([(env.original, "first"), (second, "second")])
     ]
     (entry,) = analyze(env, sources)["entries"]
-    (first,) = run(env, [entry], types=["TextAsset"], enableAfterImport=False)
+    (first,) = run(env, [entry], assetTypes=["TextAsset"], enableAfterImport=False)
     assert first["outcome"] == "updated", first
     record = env.library._records[first["libraryId"]]
     provenance = record["import_sources"][0]["source"]
@@ -1305,7 +1310,7 @@ def test_reimport_rebuild_does_not_rebind_provenance_to_swapped_parts(real_metad
 
     (entry,) = analyze(env, sources)["entries"]
     assert entry["state"] == "convert"
-    (rebuilt,) = run(env, [entry], types=["TextAsset"], enableAfterImport=False)
+    (rebuilt,) = run(env, [entry], assetTypes=["TextAsset"], enableAfterImport=False)
     assert rebuilt["outcome"] == "updated", rebuilt
     assert rebuilt["libraryId"] != first["libraryId"]
     assert {path.name: path.read_bytes() for path in paths} == swapped

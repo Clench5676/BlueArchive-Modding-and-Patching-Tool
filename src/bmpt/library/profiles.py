@@ -24,7 +24,7 @@ Several instances may share one library: every change is applied to the file as 
 a lock file the instances share (``profiles.json.lock``), and unknown keys are kept. The last good file is kept as
 ``profiles.json.prev`` before every write; an unreadable file is read from it instead and kept as
 ``profiles.json.bad`` at the next write. With neither readable, the configuration is unavailable
-(``profiles_unreadable``) and nothing is written until the user fixes or removes the file.
+(``mod_configuration_unreadable``) and nothing is written until the user fixes or removes the file.
 """
 
 from __future__ import annotations
@@ -41,6 +41,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from ..host.store_formats import FutureFormat, managed_bytes, read_runtime, runtime_store
 from ..core.errors import ServiceError
 from ..core.filelock import file_lock, replace
 from ..core.logging_utils import log_failure
@@ -53,7 +54,7 @@ WHY = ("pending", "left", "stuck", "held")
 
 def _parse(path: Path) -> dict[str, Any]:
     """A profiles file's contents; ValueError when it is not a configuration of this version."""
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = read_runtime(path)
     if not isinstance(data, dict) or data.get("version") != 1:
         raise ValueError("not a version 1 configuration")
     if not isinstance(data.get("folders", {}), dict) or not isinstance(data.get("unfinished", []), list):
@@ -159,12 +160,14 @@ class Profiles:
             The configuration now, and whether profiles.json itself is unreadable.
 
         Raises:
-            ServiceError: profiles_unreadable, when neither file can be read.
+            ServiceError: mod_configuration_unreadable, when neither file can be read.
         """
         bad = False
         if self.path.exists():
             try:
                 return _parse(self.path), False
+            except FutureFormat as error:
+                raise ServiceError("mod_configuration_unreadable", file=str(self.path)) from error
             except (OSError, ValueError) as error:
                 log_failure(logger, logging.WARNING, "Cannot read profiles, reading previous copy instead", error)
                 bad = True
@@ -173,12 +176,12 @@ class Profiles:
                 data = _parse(self.prev)
             except (OSError, ValueError) as error:
                 log_failure(logger, logging.ERROR, "Cannot read previous profiles either", error)
-                raise ServiceError("profiles_unreadable", file=str(self.path if bad else self.prev)) from error
+                raise ServiceError("mod_configuration_unreadable", file=str(self.path if bad else self.prev)) from error
             if not bad:
                 logger.warning("Profiles missing, reading previous copy")
             return data, bad
         if bad:
-            raise ServiceError("profiles_unreadable", file=str(self.path))
+            raise ServiceError("mod_configuration_unreadable", file=str(self.path))
         return None, False
 
     def read(self) -> dict[str, Any] | None:
@@ -190,7 +193,7 @@ class Profiles:
 
         Raises:
             ServiceError: Neither profiles.json nor its recovery copy is readable
-                (profiles_unreadable).
+                (mod_configuration_unreadable).
         """
         with self._lock:
             signatures = self._signatures()
@@ -270,9 +273,14 @@ class Profiles:
     def _write(self, data: dict[str, Any]) -> None:
         fd, name = tempfile.mkstemp(prefix=f".{FILE}.", suffix=".tmp", dir=self.root)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as output:
-                output.write(json.dumps(data, ensure_ascii=False, indent=1))
-                output.write("\n")
+            with os.fdopen(fd, "wb") as output:
+                store = runtime_store(self.path)
+                raw = (
+                    managed_bytes(store, data)
+                    if store
+                    else (json.dumps(data, ensure_ascii=False, indent=1) + "\n").encode()
+                )
+                output.write(raw)
                 output.flush()
                 os.fsync(output.fileno())
             replace(name, self.path)

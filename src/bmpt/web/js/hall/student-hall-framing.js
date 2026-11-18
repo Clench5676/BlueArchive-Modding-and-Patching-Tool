@@ -27,7 +27,7 @@ export const portraitScale = (entry, globalScale = HALL_SCALE.default) =>
 
 /**
  * The stage rect of a placed portrait.
- * @param {{x: number, y: number, mirror?: boolean}} entry
+ * @param {{x: number, y: number, flipHorizontal?: boolean}} entry
  * @param {object|null} [bounds] The portrait's skeleton bounds; the nominal box by default.
  * @returns {{x: number, y: number, width: number, height: number}} The rect on the stage.
  */
@@ -35,7 +35,7 @@ export function portraitRect(entry, bounds = null, globalScale = HALL_SCALE.defa
   const source = bounds || { x: -195, y: 0, width: 390, height: 850 },
     scale = portraitScale(entry, globalScale);
   return {
-    x: entry.x + (entry.mirror ? -source.x - source.width : source.x) * scale,
+    x: entry.x + (entry.flipHorizontal ? -source.x - source.width : source.x) * scale,
     y: entry.y - (source.y + source.height) * scale,
     width: source.width * scale,
     height: source.height * scale,

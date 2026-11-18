@@ -24,6 +24,7 @@ from bmpt.engine import (
     no_log,
     parse_filename,
 )
+from ...host.store_formats import read_runtime
 from ...core.errors import ServiceError
 from ...core.filelock import file_lock
 from ...gameassets.cabs import CabIndex
@@ -408,7 +409,7 @@ class ImportsMixin:
             try:
                 original = self._official_for(target, pin, game_first=True)
             except ServiceError as error:
-                if error.code != "original_unavailable":
+                if error.code != "official_unavailable":
                     raise
                 # Current slots can accept whole files without an official baseline. The live file is
                 # format evidence only; it must never enter originals or a conversion's baselines.
@@ -546,7 +547,7 @@ class ImportsMixin:
         try:
             direct = self.direct_import(files, pin, inspection=inspection) if conversion else None
         except ServiceError as error:
-            if (duplicate or installed) and error.code in ("original_unavailable", "original_invalid"):
+            if (duplicate or installed) and error.code in ("official_unavailable", "official_invalid"):
                 return {
                     "identity": identity,
                     "libraryId": duplicate,
@@ -823,7 +824,7 @@ class ImportsMixin:
         path = self._state_path
         with file_lock(self.root / "state.json.lock"):
             try:
-                state = json.loads(path.read_text(encoding="utf-8"))
+                state = read_runtime(path)
             except FileNotFoundError:
                 state = None
             if state is not None:
@@ -886,7 +887,7 @@ class ImportsMixin:
                         or not journal.resolve().is_relative_to(root.resolve())
                     ):
                         raise ValueError("Invalid import journal path")
-                    data = json.loads(journal.read_text(encoding="utf-8"))
+                    data = read_runtime(journal)
                     if isinstance(data, dict) and data.get("operation") == "update":
                         self._recover_update(journal, data)
                         continue

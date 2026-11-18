@@ -114,7 +114,7 @@ test("stopped memorial sites explicitly retain their existing button boxes and c
     /retainedButtonSize = .*NGUI\.fitGroup\(captions, 40, 26, width \/ S - 60, 2, \{ maxH: height \/ S - 20 \}\)/,
   );
   assert.match(hall, /actions.map\(\(action, index\) => retainedButton/);
-  assert.match(hall, /kind === "spr" \? button : retainedButton/);
+  assert.match(hall, /kind === "portrait" \? button : retainedButton/);
   // the queue's Remove is a trash button over the card
   assert.match(src("js/hall/student-hall-picker.js"), /UI\.trashButton\(box, `Remove/);
   assert.match(src("js/hall/student-hall-portrait-toolbar.js"), /UI\.button\(destination, "HallPortraitScaleReset"/);
@@ -760,7 +760,7 @@ test("portrait Add and Select keep horizontal centres and widths below both one-
       await card(
         { append() {} },
         { key: "x", full: "Name" },
-        { x: row.cardX, y: row.cardY, kind: "spr", scale: 0.46, onAdd() {}, fitAdd, addEnabled: false },
+        { x: row.cardX, y: row.cardY, kind: "portrait", scale: 0.46, onAdd() {}, fitAdd, addEnabled: false },
       );
       const [left, top, w, h] = drawn.box;
       assert.equal(h, (Tokens.XS_BUTTON.h / 2) * S, "the Add body is half a buttonS body");

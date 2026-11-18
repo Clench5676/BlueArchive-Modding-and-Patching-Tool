@@ -97,7 +97,7 @@ def assert_mapped(before: dict, after: dict, k: float, offset, anchors=("Talk", 
             l, bt = point(k, offset, a["rect"][0], a["rect"][1])
             r, t = point(k, offset, a["rect"][2], a["rect"][3])
             assert b["rect"] == pytest.approx([l, bt, r, t], abs=0.1 * (1 + k))
-            assert b["rot"] == pytest.approx(a["rot"], abs=0.02)
+            assert b["rotation"] == pytest.approx(a["rotation"], abs=0.02)
             assert {f: v for f, v in b.items() if f != "rect" and f != "rot"} == {
                 f: v for f, v in a.items() if f != "rect" and f != "rot"
             }
@@ -532,7 +532,7 @@ def test_camera_still_is_framed_by_its_camera(camera_env, tmp_path):
         def framing(route):
             return json.loads(services.asset(f"spine/{route}/framing.json", {}).body)
 
-        official = framing("official-lobby/azusa_home")
+        official = framing("official-memorialLobby/azusa_home")
         own = framing(f"mod/{record['id']}")
         # the still's camera (lobby-still.js) is the lobby's own: the camera's view, its main layer as the camera's
         # prefab places it, which is the official one mapped by p -> k p + offset
@@ -544,7 +544,7 @@ def test_camera_still_is_framed_by_its_camera(camera_env, tmp_path):
         assert own["layer"]["x"] == pytest.approx(x, abs=0.05) and own["layer"]["y"] == pytest.approx(y, abs=0.05)
         assert own["layer"]["scale"] == pytest.approx(official["layer"]["scale"] * k, rel=1e-4)
         # the official still keeps the official framing
-        assert official["layer"] == framing("lobby/azusa_home")["layer"]
+        assert official["layer"] == framing("memorialLobby/azusa_home")["layer"]
     finally:
         services.close()
 

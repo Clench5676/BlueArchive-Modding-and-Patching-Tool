@@ -32,7 +32,7 @@ const cardTree = ({ w, h, bar }) => ({
     },
   ],
 });
-const KINDS = ["spr", "lobby", "model", "other"];
+const KINDS = ["portrait", "memorialLobby", "chibi", "other"];
 const PAPER = { left: 0, right: 1818, top: 600 };
 
 test("the gap between cards, across and down, is the grid gutter (SPACE.xl) for every kind", () => {
@@ -41,7 +41,7 @@ test("the gap between cards, across and down, is the grid gutter (SPACE.xl) for 
       const { card, pitch, rowH, columns } = switchGrid(kind, width);
       assert.equal(rowH, card.h + card.bar, `${kind}: a row is a card and its name band`);
       assert.equal(pitch[1] - rowH, SPACE.xl, `${kind}: rows ${SPACE.xl} apart`);
-      if (kind === "spr")
+      if (kind === "portrait")
         assert.equal(pitch[0] - card.w, SPACE.xl, "portraits: bodies SPACE.xl apart, however wide the viewport");
       else if (columns > 1)
         assert.ok(
@@ -49,9 +49,9 @@ test("the gap between cards, across and down, is the grid gutter (SPACE.xl) for 
           `${kind} ${width}: columns at least SPACE.xl apart (${pitch[0] - card.w})`,
         );
     }
-  assert.equal(switchGrid("spr").columns, 4);
-  assert.equal(switchGrid("lobby").columns, 2);
-  assert.equal(switchGrid("model").columns, 4);
+  assert.equal(switchGrid("portrait").columns, 4);
+  assert.equal(switchGrid("memorialLobby").columns, 2);
+  assert.equal(switchGrid("chibi").columns, 4);
 });
 
 test("the column count is the most cards that fit the content box with at least the gutter between them", () => {
@@ -90,7 +90,7 @@ test("full rows span the content box edge to edge and later rows stand a row and
 });
 
 test("portraits stay one strip, their bodies SPACE.xl apart from the left inset", () => {
-  const grid = switchGrid("spr"),
+  const grid = switchGrid("portrait"),
     trees = Array.from({ length: 7 }, () => cardTree(grid.card));
   const bounds = placeSwitchCards(trees, structuredClone(grid), PAPER);
   near(bounds[0].left, PAPER.left + SPACE.xl);
@@ -102,7 +102,7 @@ test("portraits stay one strip, their bodies SPACE.xl apart from the left inset"
 });
 
 test("the cards are placed the same with and without the grid's row height (older callers)", () => {
-  const grid = switchGrid("model"),
+  const grid = switchGrid("chibi"),
     { rowH, ...legacy } = structuredClone(grid);
   const a = Array.from({ length: 9 }, () => cardTree(grid.card)),
     b = Array.from({ length: 9 }, () => cardTree(grid.card));

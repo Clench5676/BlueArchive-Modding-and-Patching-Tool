@@ -485,16 +485,16 @@ async function drawScan(host, over, resolve) {
  * The game folders Steam's records name for a region. Finding them reads those records, so without the Check
  * Game Files consent the server refuses (scan_off): ask() shows the consent popup, and only an Allow searches;
  * declined, nothing is searched.
- * @param {string} region The server's region.
+ * @param {string} server The game server: "global" or "japan".
  * @param {() => Promise<boolean>} ask Shows the scan consent popup.
  * @returns {Promise<string[]|null>} The folders; null when the consent was declined.
  */
-export async function detectGame(region, ask) {
+export async function detectGame(server, ask) {
   try {
-    return await rpc("settings.detectGame", { region });
+    return await rpc("settings.detectGame", { server });
   } catch (err) {
     if (err?.code !== "scan_off") throw err;
     if (!(await ask())) return null;
-    return rpc("settings.detectGame", { region });
+    return rpc("settings.detectGame", { server });
   }
 }

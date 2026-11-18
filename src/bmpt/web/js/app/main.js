@@ -1,6 +1,6 @@
-// Boot and routing: #/roster (the student list) and #/student/<family>/<variant> (the detail screen). The game's
+// Boot and routing: #/roster (the student list) and #/student/<student>/<alt> (the detail screen). The game's
 // loading screen covers the start and every change of screen until the new one is ready; a change inside the detail
-// screen (a variant chip, the arrows) is covered too, through its first complete frame.
+// screen (an alt chip, the arrows) is covered too, through its first complete frame.
 import { notify } from "../ui/popup.js";
 import * as Consent from "./consent.js";
 import * as BatchImport from "../mods/batch-import.js";
@@ -21,7 +21,7 @@ import { on, rpc, spinePrefix } from "../core/api.js";
 import { setLibraryWaiting } from "../detail/preview-lifecycle.js";
 import { L, T, errorText, setStrings, languageRefresh } from "../core/i18n.js";
 import { neighbour, visit } from "../roster/roster-order.js";
-import { hasAsset, primaryKind } from "../mods/switch-sources.js";
+import { hasAsset, primaryKind, tabOfKind } from "../mods/switch-sources.js";
 import { renderNav, setTitle, setTopActions } from "./nav.js";
 import { confirmQuit, quitKey } from "./quit.js";
 import { forget } from "../detail/thumbs.js";
@@ -34,7 +34,13 @@ import { setupWindowChrome } from "../window/window-chrome.js";
 import { chromeMotion } from "../window/chrome-motion.js";
 import { installCloseGuard } from "../window/window-close.js";
 import { installVerticalWheel } from "../ui/horizontal-scroll.js";
+import { startGate, upgradedNoticeFor } from "./data-upgrade.js";
+import { COLOUR } from "../ui/ui-tokens.js";
 
+// the data upgrade notice first (data-upgrade.js): nothing of the App runs until the data is open in its format
+const upgradeState = await startGate();
+// the one-time notice of a first start after an upgrade, with the start popups; null when none is due
+const upgradedNotice = upgradedNoticeFor(upgradeState, { message: Popup.message, T, warning: COLOUR.warning });
 installCloseGuard({
   prepare: () => StudentHall.canLeave(),
   revision: StudentHall.closeRevision,
@@ -116,39 +122,39 @@ const refreshLanguage = languageRefresh({
 const ctx = {
   dragged: false,
   back: () => goBack(),
-  go: (family, variant, kind) => {
-    const target = kind === "spr" ? "portrait" : kind;
-    const tab = ["portrait", "lobby", "model"].includes(target) ? `/${target}` : "";
-    location.hash = `#/student/${encodeURIComponent(family)}/${encodeURIComponent(variant)}${tab}`;
+  go: (student, alt, kind) => {
+    const target = tabOfKind(kind) || (["portrait", "lobby", "model"].includes(kind) ? kind : null);
+    const tab = target ? `/${target}` : "";
+    location.hash = `#/student/${encodeURIComponent(student)}/${encodeURIComponent(alt)}${tab}`;
   },
   invalidateRoster: () => {
     rosterStale = true;
     rosterGen += 1;
     Roster.invalidate();
   },
-  // roster.list's data (read again once invalidated): Switch 3D Model's other students. ``stale``: the copy in
-  // hand at once, even when invalidated, read again in the background (roster.list waits for the library's
+  // students.list's data (read again once invalidated): Switch 3D Model's other students. ``stale``: the copy in
+  // hand at once, even when invalidated, read again in the background (students.list waits for the library's
   // lock, held by a costume check for seconds)
   roster: ({ stale = false } = {}) => {
     if (!stale || !rosterData || rosterEpoch !== resourceEpoch) return roster();
     if (rosterStale) roster().catch(() => {});
     return Promise.resolve(rosterData);
   },
-  // the card before or after the shown variant (merged: family) in the roster's order, within its filters
-  step: async (delta, family, variant) => {
+  // the card before or after the shown alt (merged: student) in the roster's order, within its filters
+  step: async (delta, student, alt) => {
     const data = await roster();
     stepCards ||= Roster.order(data);
     const next = neighbour(
       stepCards,
       () => Roster.order(data, { unfiltered: true }),
-      { family, variant, merged: Roster.merged() },
+      { student, alt, groupAlts: Roster.groupAlts() },
       delta,
     );
-    if (next) ctx.go(next.family, next.key);
+    if (next) ctx.go(next.student, next.key);
   },
 };
 
-// one roster.list at a time: callers while it runs share its answer, unless the roster was invalidated since it began
+// one students.list at a time: callers while it runs share its answer, unless the roster was invalidated since it began
 // (rosterGen); rosterEpoch: the resources the data was read for
 let rosterRead = null,
   rosterGen = 0,
@@ -159,7 +165,7 @@ function roster() {
   const gen = rosterGen;
   const done = (async () => {
     const epoch = resourceEpoch,
-      next = await rpc("roster.list");
+      next = await rpc("students.list");
     if (epoch !== resourceEpoch) throw new DOMException("Game resources changed", "AbortError");
     const before = rosterData;
     rosterData = next;
@@ -178,24 +184,24 @@ function roster() {
 // library.changed without its cores): their thumbnails are rendered again
 function forgetReplaced(before, after) {
   if (!before) return;
-  const was = new Map(before.families.flatMap((f) => f.variants.map((v) => [v.key, v.replaced ?? null])));
-  for (const f of after.families) {
-    for (const v of f.variants)
+  const was = new Map(before.students.flatMap((f) => f.alts.map((v) => [v.key, v.replaced ?? null])));
+  for (const f of after.students) {
+    for (const v of f.alts)
       if (hasAsset(v) && was.has(v.key) && was.get(v.key) !== (v.replaced ?? null)) {
         const kind = primaryKind(v);
-        forget(spinePrefix(kind, kind === "spr" ? v.spr : v.lobby));
+        forget(spinePrefix(kind, kind === "portrait" ? v.portrait : v.memorialLobby));
       }
   }
 }
 
-// an entry's variant named as the roster names it (entries of cores the catalog does not map carry their shipped
+// an entry's alt named as the roster names it (entries of cores the catalog does not map carry their shipped
 // names, else their core); resolves once the roster's data is in
-async function variantNames() {
+async function altNames() {
   const data = await roster().catch(() => rosterData);
-  const byKey = new Map((data?.families || []).flatMap((f) => f.variants.map((v) => [v.key, v])));
+  const byKey = new Map((data?.students || []).flatMap((f) => f.alts.map((v) => [v.key, v])));
   return (entry) => {
-    const v = byKey.get(entry?.variant);
-    return studentName(v, (v && L(v.names)?.full) || L(entry?.names)?.full || entry?.variant || entry?.core || "");
+    const v = byKey.get(entry?.alt);
+    return studentName(v, (v && L(v.names)?.full) || L(entry?.names)?.full || entry?.alt || entry?.core || "");
   };
 }
 
@@ -205,26 +211,26 @@ let nameIndex = new Map(),
 function progressNames(entry) {
   if (nameIndexOf !== rosterData) {
     nameIndexOf = rosterData;
-    nameIndex = new Map((rosterData?.families || []).flatMap((f) => f.variants.map((v) => [v.key, v])));
+    nameIndex = new Map((rosterData?.students || []).flatMap((f) => f.alts.map((v) => [v.key, v])));
   }
-  const v = nameIndex.get(entry?.variant);
-  return studentName(v, (v && L(v.names)?.full) || entry?.variant || entry?.core || "");
+  const v = nameIndex.get(entry?.alt);
+  return studentName(v, (v && L(v.names)?.full) || entry?.alt || entry?.core || "");
 }
 
 // Go To from the update summary or the held entries' Details (update-impact.js): the mod's student page on the tab of
 // its kind, its switch open on the mod (Detail.takeWanted); Settings closes first
-async function openMod({ id, variant, kind }) {
+async function openMod({ id, alt, resourceType }) {
   const data = await roster().catch(() => rosterData);
-  const family = (data?.families || []).find((f) => f.variants.some((v) => v.key === variant));
-  if (!family || !id) return;
+  const student = (data?.students || []).find((f) => f.alts.some((v) => v.key === alt));
+  if (!student || !id) return;
   if (!$("settings").hidden) Settings.close();
-  Detail.want({ id, variant, kind });
+  Detail.want({ id, alt, resourceType });
   const before = location.hash;
-  ctx.go(family.key, variant, kind);
+  ctx.go(student.key, alt, resourceType);
   if (location.hash === before) await Detail.takeWanted();
 }
 
-// --- library.changed: a writer job switched game files ({cores, kinds}), or anything may have changed (no data: the
+// --- library.changed: a writer job switched game files ({cores, resourceTypes}), or anything may have changed (no data: the
 // classic UI closed, a job stopped midway, the mod list changed). The roster is read again, the thumbnails of those
 // cores are forgotten (both live and official sources, including other installs' bases) and the detail screen
 // reloads what it shows of them ---
@@ -237,7 +243,9 @@ function libraryChanged(data) {
   if (change && !change.cores.length) return;
   BatchImport.invalidate();
   for (const core of change?.cores || []) {
-    const kinds = data.kinds?.length ? data.kinds : [/_spr$/i.test(core) ? "spr" : "lobby"];
+    const kinds = data.resourceTypes?.length
+      ? data.resourceTypes
+      : [/_spr$/i.test(core) ? "portrait" : "memorialLobby"];
     for (const kind of kinds) {
       forget(spinePrefix(kind, core));
       forget(spinePrefix(`official-${kind}`, core));
@@ -295,9 +303,9 @@ function watchFront() {
 }
 
 // the visit the detail screen records (ui.visit) goes into the roster's data too, so "Recently Viewed" has it on the
-// way back; the variant is the one the detail screen shows for the link
-function visited(fam, key) {
-  const vs = fam?.variants || [];
+// way back; the alt is the one the detail screen shows for the link
+function visited(shownStudent, key) {
+  const vs = shownStudent?.alts || [];
   const shown = vs.some((v) => v.key === key && hasAsset(v)) ? key : (vs.find(hasAsset) || vs[0])?.key;
   if (rosterData && shown) visit(rosterData, shown);
 }
@@ -593,16 +601,16 @@ async function route() {
       if (!stepCards && rosterData && !$("screen-roster").hidden) stepCards = Roster.order(rosterData);
       Roster.invalidate();
       Roster.hide();
-      const inPlace = !$("screen-detail").hidden && !!Detail.currentVariant();
+      const inPlace = !$("screen-detail").hidden && !!Detail.currentAlt();
       await Loading.hold(
         () =>
           Loading.scene(
             async (covered) => {
-              // no client deadline, as roster.list: a writer job can hold the library lock for its whole run
-              const fam = await rpc("family.get", { key: parts[1] });
+              // no client deadline, as students.list: a writer job can hold the library lock for its whole run
+              const shownStudent = await rpc("student.get", { key: parts[1] });
               await covered;
               if (!current()) return; // a later navigation took over
-              visited(fam, parts[2]);
+              visited(shownStudent, parts[2]);
               const target = $("screen-detail"),
                 wasHidden = target.hidden;
               let committed = false;
@@ -613,7 +621,7 @@ async function route() {
                 stagedDetail = { target, token: my };
               }
               try {
-                await Detail.show(ctx, fam, parts[2], { inPlace, kind: parts[3] });
+                await Detail.show(ctx, shownStudent, parts[2], { inPlace, kind: parts[3] });
                 if (!current()) return;
                 showScreen("detail");
                 committed = true;
@@ -706,6 +714,7 @@ async function firstRun() {
   Cursor.init();
   // the start popups only once the first screen is revealed, the data folder notice first
   const popups = Popup.sequence([
+    ...(upgradedNotice ? [["upgraded", upgradedNotice]] : []),
     ...(info.dataDirWritable === false ? [["data-dir", dataDirNotice]] : []),
     ...startPopups(),
   ]);
@@ -745,7 +754,11 @@ async function boot() {
   }
   if (globalThis.BAMTRecovery && !globalThis.BAMTRecovery.ready()) return;
   sessionReady = rpc("app.ready", { timings: { ...startup, ...Loading.timings() } }).catch(console.error);
-  if (!info?.gameFound) await dataDirNotice().catch(console.error); // the no-game screen has no other start popup
+  if (!info?.gameFound) {
+    // the no-game screen has no other start popup
+    await upgradedNotice?.().catch(console.error);
+    await dataDirNotice().catch(console.error);
+  }
   await firstRun();
 }
 
@@ -808,7 +821,7 @@ async function start() {
   ctx.prefs = await prefs;
   previewCache.configure(ctx.prefs);
   NGUI.setTierTags?.(ctx.prefs?.buttonSizeTags === true);
-  Roster.init(ctx.prefs?.roster);
+  Roster.init(ctx.prefs?.studentList);
   setStrings(info.language, await timed("strings", () => rpc("i18n.strings", { lang: info.language })));
   Loading.relabel();
   document.title = T("top.students");
@@ -834,7 +847,7 @@ async function start() {
   await ui;
   renderNav(-1, navOptions);
   // the Enable Mods switch in the top bar, and what the writer jobs switched
-  await timed("mod-state", () => ModSwitch.init({ names: variantNames, refreshPage: refreshAfterToggle }));
+  await timed("mod-state", () => ModSwitch.init({ names: altNames, refreshPage: refreshAfterToggle }));
   let enabled = ModSwitch.current()?.enabled !== false;
   ModSwitch.onChange((state) => {
     const next = state.enabled !== false;
@@ -842,8 +855,8 @@ async function start() {
     enabled = next;
     libraryChanged(null);
   });
-  Prompts.init({ names: variantNames });
-  Impact.init({ names: variantNames, go: openMod });
+  Prompts.init({ names: altNames });
+  Impact.init({ names: altNames, go: openMod });
   Loading.setNames(progressNames);
   const settingsChanged = async (key, prefs) => {
     ctx.prefs = prefs;
@@ -864,7 +877,7 @@ async function start() {
   on("library.changed", libraryChanged);
   on("library.waiting", (data) => setLibraryWaiting(!!data?.busy));
   on("preview.waiting", (data) => setLibraryWaiting(!!data?.busy, "job"));
-  on("photography.changed", () => {
+  on("thumbnails.changed", () => {
     ctx.invalidateRoster();
     if ($("screen-roster").hidden) return;
     const token = routeToken;

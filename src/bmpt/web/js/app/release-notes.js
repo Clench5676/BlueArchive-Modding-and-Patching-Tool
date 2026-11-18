@@ -1,7 +1,7 @@
 // Release notes as the update popup shows them (update.js): the release's Markdown, read in the UI language. A
 // release body holds one section per language, separated by a rule (---) and marked with <!-- lang: xx -->,
 // which GitHub does not show; an unmarked section is told by its script. The section in the UI language is
-// shown, else the same language's other variant (zh-TW reads zh-CN), else English, else the first. Markdown is
+// shown, else the same language's other alt (zh-TW reads zh-CN), else English, else the first. Markdown is
 // drawn rather than shown: headings larger, list items with a bullet and a hanging indent; emphasis, code and
 // link marks go, their text stays. Pure functions: no DOM, no imports.
 

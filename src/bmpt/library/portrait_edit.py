@@ -42,7 +42,7 @@ def _streams(bundle: Bundle) -> dict[str, str]:
 def _texture(bundle: Bundle, name: str):
     found = [obj for obj in bundle.env.objects if obj.type.name == "Texture2D" and obj.peek_name() == name]
     if len(found) != 1:
-        raise ServiceError("photo_target_unavailable")
+        raise ServiceError("thumbnail_target_unavailable")
     return found[0]
 
 
@@ -93,7 +93,7 @@ def patch_portraits(
                 else source_data.image_data
             )
             if not payload:
-                raise ServiceError("photo_target_unavailable")
+                raise ServiceError("thumbnail_target_unavailable")
             source_data.image_data = payload
             if stream:
                 stream.path, stream.offset, stream.size = "", 0, 0
@@ -110,10 +110,10 @@ def patch_portraits(
             expected[name] = (width, height, 4, None, fitted.tobytes())
     success, _ = bundle.save(output, SaveOptions(perform_crc=crc, compression=compression))
     if not success:
-        raise ServiceError("photo_apply_failed")
+        raise ServiceError("thumbnail_apply_failed")
     checked = Bundle.load(output)
     if checked is None:
-        raise ServiceError("photo_apply_failed")
+        raise ServiceError("thumbnail_apply_failed")
     after_objects = _objects(checked)
     if (
         set(after_objects) != set(_objects(bundle))
@@ -123,16 +123,16 @@ def patch_portraits(
             for entry, digest in before.items()
         )
     ):
-        raise ServiceError("photo_apply_failed")
+        raise ServiceError("thumbnail_apply_failed")
     for name, (width, height, texture_format, encoded, pixels) in expected.items():
         result = _texture(checked, name).read()
         if (result.m_Width, result.m_Height, result.m_TextureFormat) != (width, height, texture_format):
-            raise ServiceError("photo_apply_failed")
+            raise ServiceError("thumbnail_apply_failed")
         if pixels is not None:
             if texture_image(result, output.name).convert("RGBA").tobytes() != pixels:
-                raise ServiceError("photo_apply_failed")
+                raise ServiceError("thumbnail_apply_failed")
         elif bytes(result.image_data) != encoded:
-            raise ServiceError("photo_apply_failed")
+            raise ServiceError("thumbnail_apply_failed")
 
 
 def patch_portrait(
@@ -168,13 +168,13 @@ def target_file(library: ModLibrary, descriptor: dict, pin: Pin) -> Path:
         pin: Game install and server the operation is fixed to.
 
     Raises:
-        ServiceError: The target is missing, duplicated, or superseded (photo_target_unavailable).
+        ServiceError: The target is missing, duplicated, or superseded (thumbnail_target_unavailable).
     """
     core = core_of(descriptor["bundle"])
     paths = library._index(pin).get(core, [])
     exact = [path for path in paths if path.name == descriptor["bundle"]]
     if len(exact) != 1 or any(date_of(path.name) > date_of(descriptor["bundle"]) for path in paths):
-        raise ServiceError("photo_target_unavailable")
+        raise ServiceError("thumbnail_target_unavailable")
     return exact[0]
 
 
@@ -224,7 +224,7 @@ def choice(library: ModLibrary, descriptor: dict, pin: Pin) -> dict:
             "enabled": enabled,
             "pending": enabled and part.carried != source,
             "error": entry.get("error")
-            or ({"code": "photo_target_unavailable", "params": {}} if slot != core_of(target.name) else None),
+            or ({"code": "thumbnail_target_unavailable", "params": {}} if slot != core_of(target.name) else None),
         }
     return {
         "id": None,
@@ -333,7 +333,7 @@ def remove_photo(library: ModLibrary, key: str, log) -> None:
     """
     if _held_use(library, key):
         # a held record's recipe cannot be rebuilt while its files are missing: the photo stays until they return
-        raise ServiceError("photo_in_use")
+        raise ServiceError("thumbnail_in_use")
     config = library.profiles.read() or {}
     enabled = profiles.enabled(config)
     pins = {pin.key: pin for pin in library._all_pins()}
@@ -378,13 +378,13 @@ def remove_photo(library: ModLibrary, key: str, log) -> None:
                 raise ServiceError("game_not_found")
             paths = library._index(pin).get(core, [])
             if len(paths) != 1:
-                raise ServiceError("photo_target_unavailable")
+                raise ServiceError("thumbnail_target_unavailable")
             tasks.extend((pin, {"bundle": paths[0].name, "name": name}, value["variant"]) for name, value in matches)
     for pin, descriptor, variant in tasks:
         apply(library, variant, None, None, descriptor, pin, log, None)
     library._save()
     if key in in_use(library):
-        raise ServiceError("photo_in_use")
+        raise ServiceError("thumbnail_in_use")
 
 
 def _prune_composites(library: ModLibrary) -> None:
@@ -504,7 +504,7 @@ def apply(
         edits = {descriptor["name"]: png}
         if record is not None and slot != core:
             if not meta.get("base_official"):
-                raise ServiceError("photo_target_unavailable")
+                raise ServiceError("thumbnail_target_unavailable")
             loaded = Bundle.load(official)
             if loaded is None:
                 raise ServiceError("bundle_invalid", file=official)

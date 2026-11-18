@@ -1,4 +1,4 @@
-// Tests for web/js/model/chibi-materials.js (the game's shaders on the 3D chibi): which textures, colours and variants
+// Tests for web/js/model/chibi-materials.js (the game's shaders on the 3D chibi): which textures, colours and alts
 // a material gets. Run by tests/test_chibi_materials.py with Node's test runner; "three" resolves to the bundled copy.
 import assert from "node:assert/strict";
 import { register } from "node:module";

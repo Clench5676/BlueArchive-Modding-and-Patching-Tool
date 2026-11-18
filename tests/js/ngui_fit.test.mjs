@@ -143,8 +143,8 @@ test("Thai uses system fonts and keeps its size when measured on a Thai or Engli
   assert.equal(fontSizeFor("Mod", 40), 44.800000000000004);
   textWidth("ไทย", 40);
   assert.match(ctx.font, /^500 40px "RHR Latin",/);
-  for (const family of ["Thonburi", "Sukhumvit Set", "Leelawadee UI", "Tahoma", "Noto Sans Thai"]) {
-    assert.ok(ctx.font.includes(`"${family}"`), family);
+  for (const student of ["Thonburi", "Sukhumvit Set", "Leelawadee UI", "Tahoma", "Noto Sans Thai"]) {
+    assert.ok(ctx.font.includes(`"${student}"`), student);
   }
   document.documentElement.lang = "en-US";
   const widget = { text: "", fontSize: 40, w_: 200, lang: "th-TH" };

@@ -201,7 +201,7 @@ def test_assigning_a_blocked_entry_keeps_the_recorded_file(env, monkeypatch):
     batch = env.services.batch_import
     candidate = batch._latest[broken["id"]]
     assert candidate.error == "unreadable" and candidate.failure["params"] == {"file": str(other)}
-    error = raised(lambda: batch.assign_character(broken["id"], "future-student"))
+    error = raised(lambda: batch.assign_alt(broken["id"], "future-student"))
     assert (error.code, error.params) == ("unreadable", {"file": str(other)})
     # Without recorded details, the first file of the entry is named
     candidate.failure, candidate.error = None, "library_io_error"
@@ -249,13 +249,15 @@ def test_an_import_that_stores_several_mods_names_the_entry_file(env, monkeypatc
 def test_export_names_the_colliding_member(setup_library, monkeypatch):
     env = setup_library
     env.library.add([make_mod(env.original, env.tmp / "incoming")])
+    from test_mod_export import services
+
     names = ["Part-1.bundle", "part-1.bundle", "other.bundle"]
     paths = [env.tmp / name for name in names]
     monkeypatch.setattr(export_service, "_prepare", lambda *args, **kwargs: (paths, {}))
     monkeypatch.setattr(export_service, "_member_name", lambda path: path.name)
     error = raised(
         lambda: export_service.export_zip(
-            SimpleNamespace(settings=env.settings),
+            services(env),
             env.library,
             env.library.current_pin(),
             scope="library",

@@ -24,9 +24,9 @@ def node(name, children=(), widgets=(), **kwargs):
     return {
         "name": name,
         "active": True,
-        "pos": [10, -20],
+        "localPosition": [10, -20],
         "scale": [1.2, 0.8],
-        "rotZ": 0,
+        "localRotationZDegrees": 0,
         "widgets": list(widgets),
         "children": list(children),
         **kwargs,
@@ -49,10 +49,10 @@ def installed(tmp_path, monkeypatch):
             "Front",
             widgets=[
                 {
-                    "cls": "UITexture",
+                    "className": "UITexture",
                     "texture": key.title() + "Front",
-                    "w_": 3160,
-                    "h_": 2220,
+                    "width": 3160,
+                    "height": 2220,
                     "depth": 9,
                     "pivot": 4,
                     "color": "#ffffff/0.45",
@@ -241,7 +241,7 @@ def test_hall_options_include_office_choices_and_retain_collection_fallback(app,
     monkeypatch.setattr(services.library, "mods", lambda: [])
     monkeypatch.setattr(services.game, "collection_names", lambda: {"bg": ["BG_Test_Collection"]}, raising=False)
     monkeypatch.setattr(services.game, "office_backgrounds", lambda: office.choices(installed.game), raising=False)
-    result = rpc(app, "hall.options")
+    result = rpc(app, "studentHall.options")
     assert "error" not in result, result
     assert [entry["name"] for entry in result["result"]["backgrounds"]] == [
         "office-day",
@@ -249,8 +249,8 @@ def test_hall_options_include_office_choices_and_retain_collection_fallback(app,
         "BG_Test_Collection",
     ]
     installed.paths.remove(installed.texture_path)
-    result = rpc(app, "hall.options")["result"]
-    assert result["backgrounds"] == [{"name": "BG_Test_Collection", "url": "/asset/art/bg/BG_Test_Collection"}]
+    result = rpc(app, "studentHall.options")["result"]
+    assert result["backgrounds"] == [{"name": "BG_Test_Collection", "url": "/asset/art/background/BG_Test_Collection"}]
 
 
 def shader_form(src=5, dst=1, source_name="<noninit>"):

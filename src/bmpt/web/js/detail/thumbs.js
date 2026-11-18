@@ -305,7 +305,7 @@ export function hasThumbnailInk(pixels) {
 }
 
 /**
- * A collection portrait: the variant background fills the texture before the transparent Spine still.
+ * A collection portrait: the alt background fills the texture before the transparent Spine still.
  */
 export async function collectionStill(
   portrait,
@@ -733,7 +733,7 @@ function request(
   const picture = subscribe(cache.get(key), signal);
   queueMicrotask(pump);
   if (frame !== "portrait") return picture;
-  // Reuse only a still of these exact source bytes. Never borrow the other similarly named variant's art,
+  // Reuse only a still of these exact source bytes. Never borrow the other similarly named alt's art,
   // a face-only crop, or a thumbnail from before an install/update changed the revision.
   return withThumbnailFallback(picture, () => {
     for (const otherFrame of ["roster", "bust", "card"]) {

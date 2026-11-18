@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import json
 import logging
 import re
 import shutil
@@ -11,6 +10,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
+from ..host.store_formats import read_runtime
 from ..core.errors import ServiceError
 from ..core.openfiles import remove_tree
 from .judge import core_of
@@ -261,7 +261,7 @@ def recover(library):
     """
     for journal in sorted((library.root / "asset-deletions").glob("*/journal.json")):
         try:
-            data = json.loads(journal.read_text(encoding="utf-8"))
+            data = read_runtime(journal)
             _validate(library, journal.parent, data)
             if data["phase"] != "committed":
                 deletion = Deletion(library, journal.parent, data)

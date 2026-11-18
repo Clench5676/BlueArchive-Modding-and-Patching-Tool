@@ -63,56 +63,76 @@ def rpc(app, method, **params):
 
 
 def test_zoom_out_setting_is_full_art_by_default_and_persists(app, tmp_path):
-    assert rpc(app, "settings.get")["result"]["lobbyZoom"] == {"mode": "art", "custom": 2.0}
-    for mode in ("art", "unlocked", "custom", "game"):
-        assert rpc(app, "settings.set", key="lobbyZoom", value=mode)["result"]["lobbyZoom"]["mode"] == mode
-        assert UiState(tmp_path / "webui.json").get("lobby_zoom") == mode
+    assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"] == {"mode": "fullArt", "custom": 2.0}
+    for mode in ("fullArt", "unlocked", "custom", "gameView"):
+        assert (
+            rpc(app, "settings.set", key="memorialLobbyZoomOut", value=mode)["result"]["memorialLobbyZoomOut"]["mode"]
+            == mode
+        )
+        assert UiState(tmp_path / "webui.json").get("lobby_zoom") == {"fullArt": "art", "gameView": "game"}.get(
+            mode, mode
+        )
     for bad in ("wide", "", None, True, ["art"]):
-        assert rpc(app, "settings.set", key="lobbyZoom", value=bad)["error"]["code"] == "bad_params"
-    assert rpc(app, "settings.get")["result"]["lobbyZoom"]["mode"] == "game"
+        assert rpc(app, "settings.set", key="memorialLobbyZoomOut", value=bad)["error"]["code"] == "bad_params"
+    assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"]["mode"] == "gameView"
 
 
 def test_custom_zoom_out_limit_is_kept_in_range_and_steps(app, tmp_path):
     # game views across, 1.0 to 4.0 in 0.1 steps (lobby.js never zooms out further)
     for value, kept in ((3.33, 3.3), (1, 1.0), (9, 4.0), (0.2, 1.0), (2.75, 2.8)):
-        assert rpc(app, "settings.set", key="lobbyZoomCustom", value=value)["result"]["lobbyZoom"]["custom"] == kept
+        assert (
+            rpc(app, "settings.set", key="memorialLobbyZoomOutCustomLimit", value=value)["result"][
+                "memorialLobbyZoomOut"
+            ]["custom"]
+            == kept
+        )
     assert UiState(tmp_path / "webui.json").get("lobby_zoom_custom") == 2.8
     for bad in ("2", None, True, float("nan"), float("inf")):
-        assert rpc(app, "settings.set", key="lobbyZoomCustom", value=bad)["error"]["code"] == "bad_params"
-    assert rpc(app, "settings.get")["result"]["lobbyZoom"]["custom"] == 2.8
+        assert (
+            rpc(app, "settings.set", key="memorialLobbyZoomOutCustomLimit", value=bad)["error"]["code"] == "bad_params"
+        )
+    assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"]["custom"] == 2.8
 
 
 def test_zoom_out_setting_migrates_the_saved_boolean(services, app):
     # the setting is a saved boolean (lobby_zoom_out) without a mode: true is Full Art, false the game's view
     services.state.set("lobby_zoom_out", True)
-    assert rpc(app, "settings.get")["result"]["lobbyZoom"] == {"mode": "art", "custom": 2.0}
+    assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"] == {"mode": "fullArt", "custom": 2.0}
     services.state.set("lobby_zoom_out", False)
-    assert rpc(app, "settings.get")["result"]["lobbyZoom"]["mode"] == "game"
+    assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"]["mode"] == "gameView"
     # a chosen mode wins over the saved boolean, and a damaged value falls back to it
     services.state.set("lobby_zoom_out", True)
-    rpc(app, "settings.set", key="lobbyZoom", value="unlocked")
-    assert rpc(app, "settings.get")["result"]["lobbyZoom"]["mode"] == "unlocked"
+    rpc(app, "settings.set", key="memorialLobbyZoomOut", value="unlocked")
+    assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"]["mode"] == "unlocked"
     services.state.set("lobby_zoom", "everything")
     services.state.set("lobby_zoom_custom", "far")
-    assert rpc(app, "settings.get")["result"]["lobbyZoom"] == {"mode": "art", "custom": 2.0}
+    assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"] == {"mode": "fullArt", "custom": 2.0}
     services.state.set("lobby_zoom_out", False)
-    assert rpc(app, "settings.get")["result"]["lobbyZoom"]["mode"] == "game"
+    assert rpc(app, "settings.get")["result"]["memorialLobbyZoomOut"]["mode"] == "gameView"
 
 
 def test_post_processing_setting_is_on_by_default_and_persists(app, tmp_path):
     # the game's PP option: the lobby is drawn with its post-processing volumes unless it is turned off
-    assert rpc(app, "settings.get")["result"]["lobbyPost"] is True
-    assert rpc(app, "settings.set", key="lobbyPost", value=False)["result"]["lobbyPost"] is False
+    assert rpc(app, "settings.get")["result"]["memorialLobbyPostProcessing"] is True
+    assert (
+        rpc(app, "settings.set", key="memorialLobbyPostProcessing", value=False)["result"][
+            "memorialLobbyPostProcessing"
+        ]
+        is False
+    )
     assert UiState(tmp_path / "webui.json").get("lobby_post") is False
-    assert rpc(app, "settings.set", key="lobbyPost", value=1)["result"]["lobbyPost"] is True
+    assert (
+        rpc(app, "settings.set", key="memorialLobbyPostProcessing", value=1)["result"]["memorialLobbyPostProcessing"]
+        is True
+    )
 
 
 def test_intro_setting_is_on_by_default_and_persists(app, tmp_path):
     # the memorial lobby's intro plays when the lobby is entered unless it is turned off
-    assert rpc(app, "settings.get")["result"]["lobbyIntro"] is True
-    assert rpc(app, "settings.set", key="lobbyIntro", value=False)["result"]["lobbyIntro"] is False
+    assert rpc(app, "settings.get")["result"]["memorialLobbyIntro"] is True
+    assert rpc(app, "settings.set", key="memorialLobbyIntro", value=False)["result"]["memorialLobbyIntro"] is False
     assert UiState(tmp_path / "webui.json").get("lobby_intro") is False
-    assert rpc(app, "settings.set", key="lobbyIntro", value=True)["result"]["lobbyIntro"] is True
+    assert rpc(app, "settings.set", key="memorialLobbyIntro", value=True)["result"]["memorialLobbyIntro"] is True
 
 
 def test_input_trace_is_logged_only_when_started_with_debug(app, services, caplog):
@@ -269,7 +289,7 @@ def test_talk_template_is_the_prefab_box_at_the_origin(game):
     with open_bundle(path) as env:
         original = subtree(export_layout(env, "LobbyCommon", {}), "DialogPanel/ChatDialog/Talk")
     saved = dialogue_layout(game)
-    assert saved["pos"] == [0, 0]
+    assert saved["localPosition"] == [0, 0]
     assert [child["name"] for child in saved["children"]] == [child["name"] for child in original["children"]]
 
 
@@ -368,4 +388,4 @@ def test_dialogue_and_pat_boxes_share_prefab_root_coordinates(game):
     hw, hh = size["x"] * math.hypot(a, b) / 2, size["y"] * math.hypot(c, d) / 2
     corners = [round(x - hw, 1), round(y - hh, 1), round(x + hw, 1), round(y + hh, 1)]
     assert corners == info["drags"][0]["rect"] == [-1077.8, 196.7, -548.9, 566.9]
-    assert info["drags"][0]["rot"] == round(math.degrees(math.atan2(b, a)), 2)
+    assert info["drags"][0]["rotation"] == round(math.degrees(math.atan2(b, a)), 2)

@@ -26,6 +26,7 @@ from .batch_candidates import (
     bundle_evidence,
     claimed_first,
     copy_compatibility,
+    engine_match_strategy,
     failure_detail,
     missing_detail,
     source_file,
@@ -245,7 +246,7 @@ class JudgeMixin:
         sets: dict[tuple, list[tuple]] = {}
         for path, name, kind, variant, core, error, _ in versioned:
             sets.setdefault((path.parent, core, kind, variant), []).append((path, name, error))
-        inspection = integrity.Inspection(set(self.options()["types"]))
+        inspection = integrity.Inspection(set(self.options()["assetTypes"]))
         for key, items in sets.items():
             if not any(version_by_path.get(path) for path, _, _ in items):
                 continue
@@ -411,7 +412,7 @@ class JudgeMixin:
         candidate.direct = {}
         candidate.provenance = None
         inspection = integrity.Inspection(
-            asset_types if asset_types is not None else set(self.options()["types"]), header_only_missing=True
+            asset_types if asset_types is not None else set(self.options()["assetTypes"]), header_only_missing=True
         )
         entry.pop("resolution", None)
         entry.pop("attempts", None)
@@ -609,7 +610,9 @@ class JudgeMixin:
                             sources,
                             [baseline[path] for path in chosen],
                             originals,
-                            "name_type" if converting or rebuild else strategy or self.options()["strategy"],
+                            "name_type"
+                            if converting or rebuild
+                            else strategy or engine_match_strategy(self.options()["matchStrategy"]),
                         )
                     try:
                         mismatch = self._check_spine(candidate, official, incoming, remappable)

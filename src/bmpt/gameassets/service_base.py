@@ -13,7 +13,7 @@ from .unity import reference
 
 logger = logging.getLogger("bmpt.gameassets.service")  # the game asset service logs under one name
 
-_SCHEMA = "gameassets-v1/"
+_SCHEMA = "gameassets-v2/"
 
 
 class _ModelLock:

@@ -310,7 +310,7 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
           incline: 10,
           radius: 18,
           color: "#ffffff/1.00",
-          imgSize: kind === "model" ? "contain" : "cover",
+          imgSize: kind === "chibi" ? "contain" : "cover",
           imgPosition: "center 30%",
           imgLeft: `${-overscan * 100}%`,
           imgWidth: `${(1 + 2 * overscan) * 100}%`,
@@ -569,9 +569,9 @@ export function listCard(it, x, y, selected, card = LP.card, kind = null, tick =
  * @property {string|null} [empty] What an empty list says, in the middle of its paper (hall.noCandidates by default).
  *     A list with no card to show puts it there; with tools, while the chosen card (selected) is not among the cards
  *     shown, the primary button is the game's disabled one and answers nothing.
- * @property {string} [layoutKind] The kind of cards the list lays out ("spr", "lobby", "model", ...).
+ * @property {string} [layoutKind] The kind of cards the list lays out ("portrait", "lobby", "model", ...).
  * @property {(it: ListItem) => string} [detailKind] The kind whose details panel a card shows when it differs from
- *     layoutKind's ("spr": the portrait panel, an upright picture beside the stacked fields), for lists of several
+ *     layoutKind's ("portrait": the portrait panel, an upright picture beside the stacked fields), for lists of several
  *     kinds.
  * @property {boolean} [alignStart] The generic grid's cards start at the paper's left edge, as the kinds' grids place
  *     them.
@@ -617,10 +617,10 @@ export async function listPopup(options) {
   let portraitTexture = null;
   if (items.some((it) => typeof it.applied === "boolean")) await selectionReady();
   const detailKind = options.detailKind || (() => options.layoutKind);
-  if (options.layoutKind === "spr") {
+  if (options.layoutKind === "portrait") {
     const inventory = await NGUI.layout("UINonEquipmentInventory");
     portraitTexture = find(inventory, "Inventory_ListControl/EquipPos/Texture");
-  } else if (options.detailKind && items.some((it) => options.detailKind(it) === "spr")) {
+  } else if (options.detailKind && items.some((it) => options.detailKind(it) === "portrait")) {
     // a list of several kinds: without the prefab its portraits' details fall back to the generic panel
     const inventory = await NGUI.layout("UINonEquipmentInventory").catch(() => null);
     portraitTexture = inventory ? find(inventory, "Inventory_ListControl/EquipPos/Texture") : null;
@@ -968,7 +968,7 @@ export async function listPopup(options) {
       d.title,
       d.fields,
       d.actions,
-      kind === "spr" ? portraitTexture : null,
+      kind === "portrait" ? portraitTexture : null,
       kind,
       LP.left,
       { truncate: !!d.truncate },

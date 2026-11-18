@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from bmpt.host import steam_records
 from ...catalog.models import CoreMap
+from ...host.store_formats import FutureFormat, epoch_root, read_runtime
 from ...core.errors import ServiceError
 from ...core.filelock import file_lock
 from ...gameassets.cabs import CabIndex
@@ -89,6 +90,7 @@ class ModLibrary(
         data_id: str = "local",
         write_check: Callable[[Pin], None] | None = None,
         steam_files: steam_records.OfficialFiles | None = None,
+        game_write_gate: Callable | None = None,
     ) -> None:
         """Load a library and recover pending managed writes before accepting new changes.
 
@@ -102,8 +104,12 @@ class ModLibrary(
             write_check: Runs immediately before an install's game writes and may raise ServiceError;
                 None adds no gate. The web UI uses it to refuse writes while a classic window is open.
             steam_files: Shared official-file cache, also usable by error reports; None creates one.
+            game_write_gate: Context holding verified legacy restore paths through a managed game write.
         """
         self.root = Path(root).resolve()
+        self._managed = epoch_root(self.root, "library") is not None
+        self.cache_root = self.root.parent.parent.parent / "cache" / "g2" if self._managed else self.root
+        self._state_extra: dict = {}
         self._state_path = self.root / "state.json"
         self._prev_path = self.root / "state.json.prev"  # the last good state.json, kept before every write
         self._bad_path = self.root / "state.json.bad"  # an unreadable state.json, kept at the next write
@@ -113,6 +119,7 @@ class ModLibrary(
         self.data_id = data_id
         self._scan_allowed_input = scan_allowed
         self._write_check = write_check
+        self._game_write_gate = game_write_gate
         self._lock = _LibraryLock()
         self._hashes = Fingerprints()
         # cross-bundle pointers of a file by its SHA-1, and the objects of a game file's CABs by its revision
@@ -185,6 +192,8 @@ class ModLibrary(
                 self._migrate_packed_slots()
                 self._known()
             except ServiceError as error:
+                if self._managed and self._recovery_error is not None:
+                    raise
                 log_failure(logger, logging.WARNING, "Mod configuration not looked up", error)
             except Exception as error:  # the library still works without it; the next build tries again
                 log_failure(logger, logging.ERROR, "Mod configuration lookup failed", error)
@@ -274,7 +283,17 @@ class ModLibrary(
         return None
 
     def _parse_file(self, path: Path) -> tuple[dict, set, dict, set, list]:
-        return self._parse_state(json.loads(path.read_text(encoding="utf-8")))
+        try:
+            document = read_runtime(path)
+        except FutureFormat as error:
+            raise _NewerState(str(error)) from error
+        parsed = self._parse_state(document)
+        self._state_extra = {
+            key: value
+            for key, value in document.items()
+            if key not in ("version", "mods", "favorites", "applied", "migrations")
+        }
+        return parsed
 
     def _read_state(self) -> _Reading:
         """Read state.json, else (when it is unreadable or gone) its previous copy; never raises.
@@ -454,6 +473,7 @@ class ModLibrary(
             if LEGACY_REMAP not in merged[3]:
                 merged = (legacy_remapped(merged[0]), merged[1], merged[2], merged[3] | {LEGACY_REMAP})
             payload = {
+                **self._state_extra,
                 "version": 1,
                 "mods": [*merged[0].values(), *held],
                 "favorites": sorted(merged[1]),

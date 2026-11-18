@@ -54,25 +54,25 @@ test("card, info panel and detail switch share a render; original, Mods, models 
 });
 
 test("cache revisions include installation, model parts, Mod updates and explicit invalidation", () => {
-  const variant = {
+  const alt = {
     model: "hina",
-    modelFiles: [{ path: "/game-a/hina", crc: 1 }],
-    modList: [{ id: "m", kind: "model", files: [{ hash: "old" }] }],
+    chibiFiles: [{ path: "/game-a/hina", crc: 1 }],
+    modList: [{ id: "m", resourceType: "chibi", files: [{ hash: "old" }] }],
   };
-  const family = { version: "a", variants: [variant] };
-  const key = () => modelStillVersion(family, variant);
+  const student = { version: "a", alts: [alt] };
+  const key = () => modelStillVersion(student, alt);
   const a = key();
-  Object.assign(variant.modList[0], { fresh: false, alias: "Owner label", label: "Original label" });
+  Object.assign(alt.modList[0], { fresh: false, alias: "Owner label", label: "Original label" });
   assert.equal(key(), a, "display metadata cannot invalidate source bytes");
-  family.version = "b";
+  student.version = "b";
   assert.notEqual(key(), a);
   const b = key();
-  variant.modelFiles[0].path = "/game-b/hina";
+  alt.chibiFiles[0].path = "/game-b/hina";
   assert.notEqual(key(), b);
   const c = key();
-  variant.modList[0].files[0].hash = "new";
+  alt.modList[0].files[0].hash = "new";
   assert.notEqual(key(), c);
-  assert.notEqual(key(), modelStillVersion(family, variant, 1));
+  assert.notEqual(key(), modelStillVersion(student, alt, 1));
 });
 
 for (const error of [new Error("shader compilation failed"), null])

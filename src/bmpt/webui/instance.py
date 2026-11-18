@@ -33,15 +33,16 @@ class InstanceLock:
     ``release()`` lets go at exit.
     """
 
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, *, runtime: Path | None = None):
         """Point the lock at a data directory; nothing is locked until ``acquire``.
 
         Args:
-            data_dir: The data directory, which holds ``instance.lock`` and ``instance.json``.
+            data_dir: Directory holding the interoperable instance lock.
+            runtime: Directory holding the current handshake, when separate from the data directory.
         """
         self.data_dir = Path(data_dir)
         self.path = self.data_dir / LOCK
-        self.info = self.data_dir / INFO
+        self.info = (runtime or self.data_dir) / INFO
         self._handle: Any = None
 
     @property
@@ -49,11 +50,14 @@ class InstanceLock:
         """Whether this process holds the lock; False after an unlocked start."""
         return self._handle is not None
 
-    def acquire(self) -> bool:
+    def acquire(self, *, strict: bool = False) -> bool:
         """Take the lock without waiting.
 
         Without a lock file (an unwritable folder) the start goes ahead unlocked, as the other shared files of the
         data directory do.
+
+        Args:
+            strict: Refuse startup if the lock file cannot be opened.
 
         Returns:
             False while another process holds the lock; True otherwise.
@@ -64,6 +68,8 @@ class InstanceLock:
             self.data_dir.mkdir(parents=True, exist_ok=True)
             handle = open(self.path, "a+b")  # noqa: SIM115 - held for the process lifetime
         except OSError:
+            if strict:
+                raise
             logger.warning("cannot open %s, starting without the instance lock", self.path, exc_info=True)
             return True
         try:
@@ -91,6 +97,7 @@ class InstanceLock:
         """
         tmp = self.info.with_name(f".{self.info.name}.{os.getpid()}.tmp")
         try:
+            self.info.parent.mkdir(parents=True, exist_ok=True)
             tmp.write_text(json.dumps({"pid": os.getpid(), "port": int(port), "raise_token": token}), encoding="utf-8")
             os.replace(tmp, self.info)
         except OSError:
@@ -101,12 +108,7 @@ class InstanceLock:
         """Remove instance.json (while it names this process) and let the lock go."""
         if self._handle is None:
             return
-        info = read_info(self.data_dir)
-        if info is not None and info.get("pid") == os.getpid():
-            try:
-                self.info.unlink(missing_ok=True)
-            except OSError:
-                logger.debug("cannot remove %s", self.info, exc_info=True)
+        self.clear()
         handle, self._handle = self._handle, None
         try:
             if os.name == "nt":
@@ -122,6 +124,15 @@ class InstanceLock:
             pass
         finally:
             handle.close()
+
+    def clear(self) -> None:
+        """Remove this process's handshake while the coordinator still holds the instance lease."""
+        info = read_info(self.info.parent)
+        if info is not None and info.get("pid") == os.getpid():
+            try:
+                self.info.unlink(missing_ok=True)
+            except OSError:
+                logger.debug("cannot remove %s", self.info, exc_info=True)
 
 
 def read_info(data_dir: Path) -> dict[str, Any] | None:

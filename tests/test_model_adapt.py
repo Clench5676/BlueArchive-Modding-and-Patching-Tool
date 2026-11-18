@@ -1961,6 +1961,7 @@ def test_the_library_builds_a_costume_without_the_model_lock(monkeypatch, tmp_pa
 
     library = object.__new__(service.ModLibrary)
     library.root = tmp_path
+    library.cache_root = tmp_path / "cache"
     monkeypatch.setattr(model_adapt, "adapt", adapt)
     monkeypatch.setattr(service.ModLibrary, "_official_or_current", lambda self, path, pin: path)
     monkeypatch.setattr(service.ModLibrary, "_stage_copies", lambda self, originals, folder: {})

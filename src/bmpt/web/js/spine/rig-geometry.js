@@ -127,7 +127,7 @@ const byStem = (items, name) => Object.entries(items || {}).find(([other]) => st
  * @param {object} [S] The spine runtime's namespace.
  */
 export function forRemap(report, S = globalThis.spine) {
-  if (report?.kind !== "spr") return {};
+  if (report?.resourceType !== "portrait") return {};
   const official = report.official,
     mod = report.mod || {},
     recorded = report.source || {};

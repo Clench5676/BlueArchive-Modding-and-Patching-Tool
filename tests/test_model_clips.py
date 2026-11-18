@@ -128,15 +128,15 @@ def test_the_model_route_reads_a_clip_from_every_source_the_model_takes(tmp_path
         library=library,
     )
     try:
-        assert s.asset("model/ch0242.glb", {"clip": "CH0242_Exs"}).body == b"glTF"
+        assert s.asset("chibi/ch0242.glb", {"clip": "CH0242_Exs"}).body == b"glTF"
         assert calls[-1] == ("ch0242", [], None, "CH0242_Exs")
-        assert s.asset("model/ch0242.glb", {"source": "official", "clip": "CH0242_Exs"}).body == b"glTF"
+        assert s.asset("chibi/ch0242.glb", {"source": "official", "clip": "CH0242_Exs"}).body == b"glTF"
         assert calls[-1] == ("ch0242", official, "reads:official", "CH0242_Exs")
         # a switched costume: the clip of the slot, from the same adapted bundles as the shown model
-        assert s.asset("model/ch0242.glb", {"source": "variant:ch0242_swimsuit", "clip": "CH0242_Exs"}).body == b"glTF"
+        assert s.asset("chibi/ch0242.glb", {"source": "alt:ch0242_swimsuit", "clip": "CH0242_Exs"}).body == b"glTF"
         assert calls[-1] == ("ch0242", costume_parts, "reads:official", "CH0242_Exs")
         # without ?clip= the model, as before
-        assert s.asset("model/ch0242.glb", {"source": "official"}).body == b"glTF"
+        assert s.asset("chibi/ch0242.glb", {"source": "official"}).body == b"glTF"
         assert calls[-1] == ("ch0242", official, "reads:official", None)
     finally:
         s.close()
@@ -223,7 +223,8 @@ def _library_with_build(monkeypatch, adapt, root):
     from bmpt.library import service as library_service
 
     library = object.__new__(library_service.ModLibrary)
-    library.root = root  # the build keeps its worn-item verdicts beside the library
+    library.root = root
+    library.cache_root = root / "cache"
     monkeypatch.setattr(model_adapt, "adapt", adapt)
     monkeypatch.setattr(library_service.ModLibrary, "_official_or_current", lambda self, path, pin: path)
     monkeypatch.setattr(library_service.ModLibrary, "_stage_copies", lambda self, originals, folder: {})

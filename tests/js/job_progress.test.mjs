@@ -7,10 +7,10 @@ import { NAME_LANG, setStrings, T } from "../../src/bmpt/web/js/core/i18n.js";
 globalThis.document = { documentElement: {} };
 const locales = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 const catalog = JSON.parse(readFileSync(new URL("../../src/bmpt/catalog/data/catalog.json", import.meta.url)));
-function catalogVariant(key) {
+function catalogAlt(key) {
   const entry = catalog.variants[key],
     student = catalog.students[entry.student_id];
-  return { key, names: entry.names, family: { key: student.base, base: student.names } };
+  return { key, names: entry.names, student: { key: student.base, studentNames: student.names } };
 }
 const flat = (data, prefix = "", out = {}) => {
   for (const [key, value] of Object.entries(data)) {
@@ -26,16 +26,16 @@ for (const locale of locales)
       flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url)))),
     );
     const names = { full: "Yoshimi (Band)", short: "Band" },
-      variant = { key: "ch0220", names: { en: names }, family: { key: "yoshimi", base: { en: "Yoshimi" } } },
+      alt = { key: "ch0220", names: { en: names }, student: { key: "yoshimi", studentNames: { en: "Yoshimi" } } },
       kind = T("tab.lobby");
-    const name = progressName(variant, kind);
+    const name = progressName(alt, kind);
     assert.equal(name, T("progress.subject", { name: "Yoshimi", parts: ["Band", kind].join(T("progress.comma")) }));
     assert.equal([...name.matchAll(/[（(]/g)].length, 1);
     const base = progressName(
       {
         key: "azusa",
         names: { en: { full: "Azusa", short: "Original" } },
-        family: { key: "azusa", base: { en: "Azusa" } },
+        student: { key: "azusa", studentNames: { en: "Azusa" } },
       },
       kind,
     );
@@ -44,18 +44,18 @@ for (const locale of locales)
       ["Shiroko", "Shiroko*Terror", "Terror"],
       ["Arona", "Arona - Tasks - Daytime", "Tasks - Daytime"],
     ]) {
-      const family = { key: base, base: { en: base } },
-        v = { key: full, names: { en: { full, short } }, family };
+      const student = { key: base, studentNames: { en: base } },
+        v = { key: full, names: { en: { full, short } }, student };
       assert.equal(
         progressName(v, kind),
         T("progress.subject", { name: base, parts: [short, kind].join(T("progress.comma")) }),
       );
-      family.custom = ["Legacy base alias"];
+      student.customAliases = ["Legacy base alias"];
       assert.equal(
         progressName(v, kind),
         T("progress.subject", { name: base, parts: [short, kind].join(T("progress.comma")) }),
       );
-      v.custom = ["Custom"];
+      v.customAliases = ["Custom"];
       assert.equal(progressName(v, kind), T("progress.subject", { name: "Custom", parts: kind }));
     }
     const line = jobProgress({ action: "import.phase.add", name, current: 2, total: 3, step: "import.step.add" });
@@ -77,36 +77,39 @@ for (const locale of locales) {
         locale,
         flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url)))),
       );
-      const variant = catalogVariant(key),
-        family = variant.family,
-        base = family.base[NAME_LANG[locale]];
-      assert.equal(variant.key, family.key);
+      const alt = catalogAlt(key),
+        student = alt.student,
+        base = student.studentNames[NAME_LANG[locale]];
+      assert.equal(alt.key, student.key);
       for (const kind of [T("tab.portrait"), T("tab.lobby"), T("tab.model")]) {
         const expected = T("progress.subject", { name: base, parts: kind });
-        assert.equal(progressName({ ...variant, family: { key: family.key, names: family.base } }, kind), expected);
-        assert.equal(progressName(variant, kind), expected);
-        assert.equal(progressName({ ...variant, family: family.key }, kind, "", family), expected);
-        assert.equal(progressName(variant, ""), base);
-        variant.custom = ["Custom"];
-        assert.equal(progressName(variant, kind), T("progress.subject", { name: "Custom", parts: kind }));
-        delete variant.custom;
+        assert.equal(
+          progressName({ ...alt, student: { key: student.key, names: student.studentNames } }, kind),
+          expected,
+        );
+        assert.equal(progressName(alt, kind), expected);
+        assert.equal(progressName({ ...alt, student: student.key }, kind, "", student), expected);
+        assert.equal(progressName(alt, ""), base);
+        alt.customAliases = ["Custom"];
+        assert.equal(progressName(alt, kind), T("progress.subject", { name: "Custom", parts: kind }));
+        delete alt.customAliases;
       }
     });
-  test(`catalog variants retain their labels in ${locale}`, () => {
+  test(`catalog alts retain their labels in ${locale}`, () => {
     setStrings(
       locale,
       flat(JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url)))),
     );
     for (const key of ["ch0220", "ch0263", "np0168", "np0169", "np0170"]) {
-      const variant = catalogVariant(key),
+      const alt = catalogAlt(key),
         lang = NAME_LANG[locale],
         kind = T("tab.lobby");
-      assert.notEqual(variant.key, variant.family.key);
+      assert.notEqual(alt.key, alt.student.key);
       assert.equal(
-        progressName(variant, kind),
+        progressName(alt, kind),
         T("progress.subject", {
-          name: variant.family.base[lang],
-          parts: [variant.names[lang].short, kind].join(T("progress.comma")),
+          name: alt.student.studentNames[lang],
+          parts: [alt.names[lang].short, kind].join(T("progress.comma")),
         }),
       );
     }
@@ -115,7 +118,7 @@ for (const locale of locales) {
 
 // A job over mods (library/mod_progress.py): one line per item at hand, the parts the bottom-left line shortens.
 import { fitLine, modLine } from "../../src/bmpt/web/js/core/job-progress.js";
-const nameOf = ({ variant }) => ({ ch0063: "Hoshino (Swimsuit)", ch0145: "Hina" })[variant] || variant;
+const nameOf = ({ alt }) => ({ ch0063: "Hoshino (Swimsuit)", ch0145: "Hina" })[alt] || alt;
 for (const locale of locales)
   test(`a job over mods names the item at hand, its kind, own name, percentage and step in ${locale}`, () => {
     setStrings(
@@ -128,8 +131,8 @@ for (const locale of locales)
         action: "process",
         current: 3,
         total: 13,
-        variant: "ch0063",
-        kind: "model",
+        alt: "ch0063",
+        resourceType: "chibi",
         name: "My Swim Edit",
         step: "import.step.save",
         fraction: 0.427,
@@ -143,16 +146,18 @@ for (const locale of locales)
     );
     assert.equal(line.parts.map(([text]) => text).join(""), line.text);
     // the count is of the item at hand: the first of 13 reads 1/13, never 0/13
-    assert.ok(modLine({ current: 1, total: 13, variant: "ch0063", kind: "spr" }, { nameOf }).text.includes("1"));
-    // a costume swap names the variant whose costume it takes; one item leaves the count out; no fraction, no
+    assert.ok(
+      modLine({ current: 1, total: 13, alt: "ch0063", resourceType: "portrait" }, { nameOf }).text.includes("1"),
+    );
+    // a costume swap names the alt whose costume it takes; one item leaves the count out; no fraction, no
     // percentage
     const swap = modLine(
       {
         action: "apply",
         current: 1,
         total: 1,
-        variant: "ch0063",
-        kind: "model",
+        alt: "ch0063",
+        resourceType: "chibi",
         source: "ch0145",
         step: "import.step.write",
       },
@@ -164,11 +169,14 @@ for (const locale of locales)
         `${sep}${T("progress.from", { name: "Hina" })}${sep}${T("import.step.write")}`,
     );
     // a name that only repeats who it is is left out
-    assert.equal(modLine({ variant: "ch0063", kind: "lobby", name: "Hoshino (Swimsuit)" }, { nameOf }).parts.length, 3);
-    for (const kind of ["spr", "lobby", "model"])
+    assert.equal(
+      modLine({ alt: "ch0063", resourceType: "memorialLobby", name: "Hoshino (Swimsuit)" }, { nameOf }).parts.length,
+      3,
+    );
+    for (const kind of ["portrait", "memorialLobby", "chibi"])
       assert.ok(
-        modLine({ variant: "ch0063", kind }, { nameOf }).text.endsWith(
-          T(`tab.${{ spr: "portrait", lobby: "lobby", model: "model" }[kind]}`),
+        modLine({ alt: "ch0063", resourceType: kind }, { nameOf }).text.endsWith(
+          T(`tab.${{ portrait: "portrait", memorialLobby: "lobby", chibi: "model" }[kind]}`),
         ),
       );
     for (const key of ["readModel", "fitCostume", "buildModel", "write", "restore", "save", "check"]) {
@@ -189,8 +197,8 @@ test("a long line shortens the mod's own name first, then who it is, and keeps t
       action: "process",
       current: 3,
       total: 13,
-      variant: "ch0063",
-      kind: "model",
+      alt: "ch0063",
+      resourceType: "chibi",
       name: "一个特别特别长的自定义名字一个特别特别长的自定义名字",
       step: "import.step.save",
       fraction: 0.42,
@@ -219,7 +227,7 @@ test("a one-mod job keeps who it is, shows no count and keeps its step through a
   setStrings("zh-CN", flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/zh-CN.json", import.meta.url)))));
   const sep = T("progress.sep");
   const line = modJob(
-    { variant: "ch0063", kind: "spr", core: "ch0063_spr", name: "ch0063_spr" },
+    { alt: "ch0063", resourceType: "portrait", core: "ch0063_spr", name: "ch0063_spr" },
     { nameOf, action: "progress.actionRepair" },
   );
   const head = `${T("progress.modHead", { action: T("progress.actionRepair") })}Hoshino (Swimsuit)${sep}${T("tab.portrait")}`;
@@ -234,7 +242,7 @@ test("a one-mod job keeps who it is, shows no count and keeps its step through a
   );
   // a student thumbnail is its own kind
   assert.ok(
-    modJob({ variant: "ch0063", kind: "photo" }, { nameOf, action: "progress.actionApply" })().text.endsWith(
+    modJob({ alt: "ch0063", resourceType: "thumbnail" }, { nameOf, action: "progress.actionApply" })().text.endsWith(
       `${sep}${T("photo.modName")}`,
     ),
   );

@@ -113,7 +113,7 @@ test("exhausted readiness is a distinct failure and never publishes success", as
   h.options.capture = async () => {
     throw Object.assign(new Error("Pending"), { code: "capture_not_ready" });
   };
-  await assert.rejects(() => photograph(h.options), { code: "photo_capture_unavailable" });
+  await assert.rejects(() => photograph(h.options), { code: "thumbnail_capture_unavailable" });
   assert.ok(!h.calls.some(([name]) => name === "save"));
 });
 for (const phase of ["redraw", "capture", "save"])
@@ -153,7 +153,7 @@ test("every successful retry draws immediately before readback, after layout set
   };
   await photograph(h.options);
 });
-for (const code of ["photo_invalid", "internal", "write_failed"])
+for (const code of ["thumbnail_invalid", "internal", "write_failed"])
   test(`permanent ${code} failure is not retried or reported as saved`, async () => {
     const h = setup();
     let attempts = 0,

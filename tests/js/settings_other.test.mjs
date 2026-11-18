@@ -24,7 +24,7 @@ function harness({ locale = "en-US", answer = "ok", used = true, error = null, r
   const deps = {
     T,
     overwrittenLines,
-    Loading: { task: (fn) => fn(() => {}), variantName: (e) => e?.variant || "" },
+    Loading: { task: (fn) => fn(() => {}), altName: (e) => e?.alt || "" },
     modJob: () => () => ({ text: "" }),
     ModSwitch: {
       refresh: async () => {},
@@ -66,8 +66,8 @@ function harness({ locale = "en-US", answer = "ok", used = true, error = null, r
 }
 const mod = {
   id: "m1",
-  label: "UI Pack",
-  target: "other-set:ui",
+  name: "UI Pack",
+  genericTarget: "other-set:ui",
   files: ["ui-textures.bundle", "music-audio.bundle"],
   state: "official",
   selected: false,
@@ -142,8 +142,8 @@ test("Settings switches generic Mods through the shared apply and restore jobs",
   await h.select(mod, h.changed, true);
   await h.select({ ...mod, selected: true }, h.changed, false);
   assert.deepEqual(h.calls, [
-    ["actions.apply", { variant: mod.target, kind: "other", source: "mod:m1" }],
-    ["actions.restore", { variant: mod.target, kind: "other" }],
+    ["actions.apply", { alt: mod.genericTarget, resourceType: "other", source: "mod:m1" }],
+    ["actions.restore", { alt: mod.genericTarget, resourceType: "other" }],
   ]);
   assert.equal(h.changes(), 2);
 });
@@ -182,7 +182,7 @@ test("refused writes keep the list and expose the shared refusal flow", async ()
   assert.equal(h.changes(), 1);
   assert.deepEqual(
     h.refused.map((args) => args.slice(0, 3)),
-    [[error, "actions.apply", { variant: mod.target, kind: "other", source: "mod:m1" }]],
+    [[error, "actions.apply", { alt: mod.genericTarget, resourceType: "other", source: "mod:m1" }]],
   );
   // an untested game build's confirmation makes the same write again
   assert.equal(typeof h.refused[0][3], "function");
@@ -227,7 +227,7 @@ test("generic Settings rows render names, every target file, status and actions 
     const valueRow = new Function("deps", `const {${Object.keys(deps)}} = deps; ${strip(settings)}; return valueRow;`)(
       deps,
     );
-    const rows = h.rows([mod, { ...mod, id: "m2", label: "Missing Pack", state: "missing" }], valueRow, h.changed);
+    const rows = h.rows([mod, { ...mod, id: "m2", name: "Missing Pack", state: "missing" }], valueRow, h.changed);
     const host = new El();
     const tree = NGUI.node(
       "Rows",
@@ -247,7 +247,7 @@ test("generic Settings rows render names, every target file, status and actions 
     ]);
     const text = texts.join(" ").replace(/\n/g, "");
     for (const caption of [
-      mod.label,
+      mod.name,
       ...mod.files,
       h.T("settings.mods.otherState.official"),
       h.T("settings.mods.useMod"),
@@ -282,7 +282,7 @@ test("generic applies report kept files and disable Original without an official
       h.changed,
     );
     assert.equal(actions.find(([caption]) => caption === h.T("settings.mods.official"))[2], false);
-    const failed = harness({ locale, error: { code: "original_unavailable" } });
+    const failed = harness({ locale, error: { code: "official_unavailable" } });
     await failed.select(mod, failed.changed, false);
     assert.equal(failed.messages[0].title, failed.T("mods.overwrittenTitle"));
     for (const key of ["overwrittenNone", "repairGame", "repairThen"])

@@ -15,7 +15,9 @@ test("cssUrls reads the URLs of a background-image value as the browsers write i
   ]);
   assert.deepEqual(cssUrls("url('a.png'), url(\"b.png\"), url(c.png)"), ["a.png", "b.png", "c.png"]);
   // escaped quotes and brackets inside a quoted URL
-  assert.deepEqual(cssUrls('url("/asset/art/portrait/A \\"B\\" (1).png")'), ['/asset/art/portrait/A "B" (1).png']);
+  assert.deepEqual(cssUrls('url("/asset/art/officialThumbnail/A \\"B\\" (1).png")'), [
+    '/asset/art/officialThumbnail/A "B" (1).png',
+  ]);
   // a data URL keeps its brackets and commas
   assert.deepEqual(cssUrls("url(\"data:image/svg+xml,<svg viewBox='0 0 1 1'></svg>\")"), [
     "data:image/svg+xml,<svg viewBox='0 0 1 1'></svg>",
