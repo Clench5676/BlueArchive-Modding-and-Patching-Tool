@@ -107,6 +107,14 @@ def safe_restart_command() -> list[str]:
     return program_command()
 
 
+def restart_command(*, safe_mode: bool, browser: bool, debug: bool, mute: bool) -> list[str]:
+    """Build a restart command with the launch flags that carry over to the new session."""
+    command = safe_restart_command() + ["--safe-mode"] if safe_mode else program_command()
+    return command + [
+        flag for flag, enabled in (("--browser", browser), ("--debug", debug), ("--mute", mute)) if enabled
+    ]
+
+
 CLASSIC_TABS = (
     "mod_update",
     "batch_update",

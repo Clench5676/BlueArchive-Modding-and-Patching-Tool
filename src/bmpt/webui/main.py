@@ -10,6 +10,7 @@ import threading
 import time
 import webbrowser
 from pathlib import Path
+from typing import Literal
 
 from ..core.localization import register_locales
 
@@ -60,11 +61,7 @@ def build(
     """
     s = services or Services(safe_mode=safe_mode, upgrade=upgrade)
     if reports is not None:
-        reports.services = s
-        reports.game = s.reports.game
-        reports.secrets.update(s.log_secrets)
-        s.log_secrets = reports.secrets
-        s.reports = reports
+        _bind_reports(s, reports)
     with s.timings.measure("server.build"):
         lang = s.settings.get("language")
         if lang and lang != i18n_manager.lang:
@@ -98,6 +95,15 @@ def build(
     return s, server
 
 
+def _bind_reports(s: Services, reports: Reports) -> None:
+    reports.services = s
+    reports.game = s.reports.game
+    reports.secrets.update(s.log_secrets)
+    s.log_secrets = reports.secrets
+    s.log_path = reports.log_path
+    s.reports = reports
+
+
 def _watch_config(s: Services, stop: threading.Event) -> None:
     # the classic GUI may save config.toml while the web UI runs
     while not stop.wait(CONFIG_POLL_SECONDS):
@@ -129,7 +135,7 @@ def main(argv: list[str] | None = None) -> None:
     """Run the web UI until its window or browser session ends.
 
     A second start on the same data directory raises the running instance's window and exits. After a request
-    to restart, a new process starts in safe mode.
+    to restart in safe mode or a native upgrade handoff, the next process starts after the leases close.
 
     Args:
         argv: The command line without the program name; None reads ``sys.argv``.
@@ -185,10 +191,11 @@ def main(argv: list[str] | None = None) -> None:
             instance.release()
     if restart:
         import subprocess
-        from .system import safe_restart_command
+        from .system import restart_command
 
-        command = safe_restart_command() + ["--safe-mode"]
-        command += [flag for flag in ("--browser", "--debug", "--mute") if getattr(args, flag[2:])]
+        command = restart_command(
+            safe_mode=restart != "relaunch", browser=args.browser, debug=args.debug, mute=args.mute
+        )
         subprocess.Popen(command)
 
 
@@ -242,7 +249,7 @@ def recovery_config(s: Services) -> dict:
     }
 
 
-def _run(args: argparse.Namespace, instance: InstanceLock, upgrade: DataUpgrade) -> bool:
+def _run(args: argparse.Namespace, instance: InstanceLock, upgrade: DataUpgrade) -> bool | Literal["relaunch"]:
     safe_mode = getattr(args, "safe_mode", False)
     runtime = upgrade.paths.runtime
     reports = Reports(runtime, safe_mode=safe_mode)
@@ -265,7 +272,7 @@ def _run(args: argparse.Namespace, instance: InstanceLock, upgrade: DataUpgrade)
             upgrade.open_failed()
             if args.serve:
                 raise SystemExit(1) from error
-            return _serve_bootstrap(args, instance, upgrade)
+            return _serve_bootstrap(args, instance, upgrade, reports=reports if handler is not None else None)
         logger.exception("Startup failed")
         reports.backend_exception(type(error), error, error.__traceback__)
         if not args.serve:
@@ -284,7 +291,6 @@ def _run(args: argparse.Namespace, instance: InstanceLock, upgrade: DataUpgrade)
 def _serve(args: argparse.Namespace, instance: InstanceLock, reports: Reports, handler, upgrade: DataUpgrade) -> bool:
     s, server = build(args.port, token=args.token, safe_mode=reports.safe_mode, reports=reports, upgrade=upgrade)
     s.serve_only = args.serve
-    s.log_path = reports.log_path
     handler.setFormatter(RedactingFormatter(s.log_secrets))
     for phase, value in s.timings.snapshot().items():
         logger.info("Timing %s: %.3f s (%s calls before log opened)", phase, value["seconds"], value["count"])
@@ -509,10 +515,19 @@ def _serve_bootstrap(
     *,
     classic: bool = False,
     start_upgrade: bool = False,
-) -> bool:
+    reports: Reports | None = None,
+) -> bool | Literal["relaunch"]:
+    from .system import can_restart_safe
+
     stop = threading.Event()
     window = None
     services = None
+    safe_mode = getattr(args, "safe_mode", False)
+    relaunch = not (classic or args.browser or safe_mode) and can_restart_safe()
+    relaunch_requested = False
+    own_log = reports is None
+    if reports is None:
+        reports = Reports(upgrade.data_dir / NAMESPACE / "runtime", safe_mode=safe_mode)
 
     def quit_app() -> None:
         stop.set()
@@ -528,15 +543,19 @@ def _serve_bootstrap(
         return Path(selected[0]) if selected else None
 
     def ready() -> None:
-        nonlocal services
+        nonlocal relaunch_requested, services
         if stop.is_set():
+            return
+        if relaunch:
+            relaunch_requested = True
             return
         if classic:
             _recover_for_classic(upgrade)
             threading.Timer(0.1, quit_app).start()
             return
-        candidate = Services(safe_mode=args.safe_mode, upgrade=upgrade)
+        candidate = Services(safe_mode=safe_mode, upgrade=upgrade)
         try:
+            _bind_reports(candidate, reports)
             candidate.library
             candidate.mute, candidate.debug = args.mute, args.debug
             candidate.origin = f"http://127.0.0.1:{server.port}"
@@ -566,7 +585,12 @@ def _serve_bootstrap(
         threading.Timer(0.1, quit_app).start()
 
     bootstrap = UpgradeBootstrap(
-        upgrade, language=lambda: i18n_manager.lang, ready=ready, quit_app=schedule_quit, pick=pick
+        upgrade,
+        language=lambda: i18n_manager.lang,
+        ready=ready,
+        quit_app=schedule_quit,
+        pick=pick,
+        on_opened=schedule_quit if relaunch else None,
     )
 
     def bootstrap_config() -> dict:
@@ -574,7 +598,7 @@ def _serve_bootstrap(
             "language": i18n_manager.lang,
             "strings": bootstrap.state()["strings"],
             "canRelocateUpgrade": not args.browser,
-            "upgradeHandoff": "classic" if classic else "safeMode" if args.safe_mode else None,
+            "upgradeHandoff": "classic" if classic else "safeMode" if safe_mode else "relaunch" if relaunch else None,
         }
 
     app = WebApp(
@@ -583,11 +607,20 @@ def _serve_bootstrap(
         token=args.token,
         upgrade=bootstrap.dispatch,
         recovery=bootstrap_config,
+        on_exception=reports.backend_exception,
         services_ready=False,
     )
-    server = Server(app, args.port)
-    server.start()
+    reports.secrets.update((app.token, app.raise_token))
+    handler = None
+    server = None
     try:
+        if own_log:
+            handler = open_run_log(reports.data_dir / "webui.log", reports.secrets, safe_mode=safe_mode)
+            reports.log_path = Path(handler.baseFilename) if hasattr(handler, "baseFilename") else None
+            logging.getLogger().addHandler(handler)
+        server = Server(app, args.port)
+        server.start()
+        logger.info("Data upgrade bootstrap listening on port %s", server.port)
         if args.browser:
             app.raise_window = lambda: webbrowser.open(server.url)
             instance.publish(server.port, app.raise_token)
@@ -619,9 +652,17 @@ def _serve_bootstrap(
         pass
     finally:
         stop.set()
-        server.stop()
-        if services is not None:
-            services.close()
+        try:
+            if server is not None:
+                server.stop()
+            if services is not None:
+                services.close()
+        finally:
+            if handler is not None:
+                logging.getLogger().removeHandler(handler)
+                handler.close()
+    if relaunch_requested:
+        return "relaunch"
     return bool(services and services.restart_requested)
 
 

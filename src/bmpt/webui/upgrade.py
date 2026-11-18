@@ -29,6 +29,7 @@ class UpgradeBootstrap:
         pick: Callable[[], Path | None] = lambda: None,
         opened: bool = False,
         update: Callable[[], None] | None = None,
+        on_opened: Callable[[], None] | None = None,
     ) -> None:
         """Bind the coordinator to the lifetime and native actions of its bootstrap window."""
         self.coordinator = coordinator
@@ -39,6 +40,7 @@ class UpgradeBootstrap:
         self._action = threading.Lock()
         self._opened = opened
         self._update = update or _open_update
+        self._on_opened = on_opened
 
     def state(self) -> dict:
         """Return the localized notice state."""
@@ -46,6 +48,9 @@ class UpgradeBootstrap:
         if state["status"] == "ready" and not self._opened:
             state["status"] = "running"
             state["notice"] = None
+            if state.get("steps"):
+                state["steps"][-1]["status"] = "running"
+            state["percent"] = min(99, state["percent"])
         return {
             **state,
             "strings": {
@@ -82,9 +87,12 @@ class UpgradeBootstrap:
                     self._update()
                 return self.state()
             target = self.pick() if action == "relocate" else None
-            if action != "relocate" or target is not None:
-                self.coordinator.run(action, target=target)
-            if self.coordinator.paths is not None:
+            state = (
+                self.coordinator.state()
+                if action == "relocate" and target is None
+                else self.coordinator.run(action, target=target)
+            )
+            if state["status"] == "ready" and self.coordinator.paths is not None:
                 try:
                     self.ready()
                 except Exception:
@@ -92,6 +100,8 @@ class UpgradeBootstrap:
                     self.coordinator.open_failed()
                 else:
                     self._opened = True
+                    if self._on_opened is not None:
+                        self._on_opened()
             return self.state()
         finally:
             self._action.release()

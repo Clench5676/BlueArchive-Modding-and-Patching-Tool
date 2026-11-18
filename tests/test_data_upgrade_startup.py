@@ -2,10 +2,18 @@
 
 from io import BytesIO
 import json
+import logging
+import subprocess
+import sys
+import threading
 from pathlib import Path
+from types import SimpleNamespace
 
-from bmpt.host.data_upgrade import DataUpgrade
+import pytest
+
+from bmpt.host.data_upgrade import NAMESPACE, DataUpgrade
 from bmpt.webui.events import EventBus
+from bmpt.webui.instance import InstanceLock
 from bmpt.webui.rpc import RpcRegistry
 from bmpt.webui.server import WebApp
 from bmpt.webui.upgrade import UpgradeBootstrap
@@ -49,6 +57,152 @@ def test_notice_authentication_and_services_gate(tmp_path, monkeypatch):
         assert coordinator.paths.runtime.is_relative_to(data)
     finally:
         coordinator.close()
+
+
+def test_bootstrap_masks_ready_progress_while_services_open(tmp_path):
+    coordinator = DataUpgrade(tmp_path, qualify=lambda _: "apfs")
+    masked = []
+    bootstrap = UpgradeBootstrap(
+        coordinator, language=lambda: "en-US", ready=lambda: masked.append(bootstrap.state()), quit_app=lambda: None
+    )
+    try:
+        completed = bootstrap.dispatch("retry")
+        assert masked[0]["status"] == "running"
+        assert masked[0]["percent"] == 99
+        assert masked[0]["steps"][-1] == {"id": "open", "status": "running"}
+        assert completed["status"] == "ready"
+        assert completed["percent"] == 100
+        assert completed["steps"][-1] == {"id": "open", "status": "done"}
+    finally:
+        coordinator.close()
+
+
+@pytest.mark.parametrize(
+    ("compiled", "flags", "handoff"),
+    [(True, [], "relaunch"), (False, [], None), (True, ["--browser"], None), (True, ["--safe-mode"], "safeMode")],
+)
+def test_first_start_handoff_and_bootstrap_run_log(tmp_path, monkeypatch, caplog, compiled, flags, handoff):
+    from bmpt.webui import main, system
+
+    runtime = tmp_path / NAMESPACE / "runtime"
+    log = runtime / "webui.log"
+    (tmp_path / "webui.json").write_text(json.dumps({"prefs": {"data_id": "012345abcdef"}}))
+    coordinators = []
+
+    def make_upgrade(path):
+        coordinator = DataUpgrade(path, qualify=lambda _: "apfs", updated_in_app=False)
+        coordinators.append(coordinator)
+        return coordinator
+
+    monkeypatch.setattr(main, "EXE_DIR", tmp_path)
+    monkeypatch.setattr(main, "DataUpgrade", make_upgrade)
+    monkeypatch.setattr(system, "can_restart_safe", lambda: compiled)
+    monkeypatch.setattr(system, "program_command", lambda: ["bmpt-test-program"])
+    monkeypatch.setattr(main.Services, "start", lambda self: None)
+    monkeypatch.setattr(main, "_watch_config", lambda *_: None)
+    caplog.set_level(logging.INFO, logger=main.__name__)
+
+    class ImmediateThread:
+        def __init__(self, target, args=(), **_):
+            self.target, self.args = target, args
+
+        def start(self):
+            self.target(*self.args)
+
+    monkeypatch.setattr(
+        main, "threading", SimpleNamespace(Event=threading.Event, Thread=ImmediateThread, Timer=threading.Timer)
+    )
+    apps = []
+
+    def make_server(app, _port):
+        apps.append(app)
+
+        def start():
+            assert log.read_text().startswith("Environment ")
+            logging.getLogger(main.__name__).info("Session credential %s", app.token)
+
+        return SimpleNamespace(
+            app=app, port=4321, url=f"http://127.0.0.1:4321/?t={app.token}", start=start, stop=lambda: None
+        )
+
+    monkeypatch.setattr(main, "Server", make_server)
+    closed = threading.Event()
+
+    class Shown(list):
+        def __iadd__(self, callback):
+            self.append(callback)
+            return self
+
+    window = SimpleNamespace(events=SimpleNamespace(shown=Shown()), destroy=closed.set)
+
+    def check_bootstrap(app):
+        state = json.loads(_request(app, "/upgrade/state", token=app.token)[1])
+        assert state["status"] == "ready" and state["notice"] == "upgraded"
+        assert app.services_ready is (handoff != "relaunch")
+        if app.services_ready:
+            assert app.on_exception.__self__.log_path == log
+
+    def native_start(**_):
+        app = apps[-1]
+        assert app.recovery()["upgradeHandoff"] == handoff
+        assert len(window.events.shown) == 1
+        window.events.shown[0]()
+        check_bootstrap(app)
+        if handoff == "relaunch":
+            assert closed.wait(2)
+
+    def browser_open(_):
+        app = apps[-1]
+        check_bootstrap(app)
+        assert _request(app, "/upgrade/quit", method="POST", token=app.token)[0].startswith("200")
+
+    monkeypatch.setitem(
+        sys.modules, "webview", SimpleNamespace(create_window=lambda *_, **__: window, start=native_start)
+    )
+    monkeypatch.setattr(main.webbrowser, "open", browser_open)
+    popen = subprocess.Popen
+    launches = []
+
+    def launch(command, *args, **kwargs):
+        if command[0] != "bmpt-test-program":
+            return popen(command, *args, **kwargs)
+        assert coordinators[-1].paths is None
+        assert not (runtime / "instance.json").exists()
+        probe = InstanceLock(tmp_path, runtime=runtime)
+        assert probe.acquire(strict=True)
+        probe.release()
+        launches.append(command)
+
+    monkeypatch.setattr(subprocess, "Popen", launch)
+    if handoff == "relaunch":
+        service = main.Services
+        monkeypatch.setattr(main, "Services", lambda **_: pytest.fail("Bootstrap opened services before relaunch"))
+    root = logging.getLogger()
+    handlers = list(root.handlers)
+    main.main(["--debug", "--mute", "--token", "private-bootstrap-token", *flags])
+    assert root.handlers == handlers
+    contents = log.read_text()
+    assert "Data upgrade bootstrap listening" in contents
+    assert "[redacted]" in contents and "private-bootstrap-token" not in contents
+    assert not (runtime / "instance.json").exists()
+    if handoff == "relaunch":
+        assert launches == [["bmpt-test-program", "--debug", "--mute"]]
+        monkeypatch.setattr(main, "Services", service)
+        normal_window = []
+
+        def open_window(services, server, debug):
+            normal_window.append((services.safe_mode, debug, services.mute, services.log_path))
+            notice = _request(server.app, "/upgrade/state", token=server.app.token)[1]
+            assert json.loads(notice)["notice"] == "upgraded"
+
+        monkeypatch.setattr(main, "_run_window", open_window)
+        monkeypatch.setattr(main, "_trace_to_file", lambda _: None)
+        main.main(launches[0][1:])
+        assert normal_window == [(False, True, True, log)]
+        assert "Application lifecycle: run finished" in log.read_text()
+        assert (runtime / "webui.1.log").read_text() == contents
+    else:
+        assert launches == []
 
 
 def test_completed_upgrade_notice_survives_restarts_until_authenticated_acknowledgement(tmp_path):
