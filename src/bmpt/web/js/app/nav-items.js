@@ -5,7 +5,7 @@
 
 export const ITEMS = Object.freeze(
   [
-    { label: "nav.students", icon: "Common_Icon_Student", route: "#/roster" },
+    { label: "nav.students", icon: "Common_Icon_Student", route: "#/student-list" },
     { label: "nav.import", icon: "Common_Icon_All_Download", route: "#/import" },
     { label: "nav.crc", icon: "School_Icon_Schedule", classic: "crc_tool" },
     { label: "nav.pack", icon: "Common_Icon_Craft", classic: "asset_packer" },
@@ -93,7 +93,7 @@ export async function activate(item, { prompt = true, go, ask, open, savePrompt 
   return "open";
 }
 
-// --- the greyed look --- The game draws a locked lobby entry (UILobby's bottom menu,
+// --- the greyed look --- The game draws a locked home-screen entry (UILobby's bottom menu,
 // Front/Bottom/Menu/BG/Grid/<entry>) with its Disable node: the icon's sprite tinted (#797979 in the 2026-10
 // resource version) under a lock, the label in its usual colour. The tool takes the tint alone (no lock: these
 // entries are not locked, they open elsewhere). In order: "game", the tint of the first entry's Disable/Icon, as

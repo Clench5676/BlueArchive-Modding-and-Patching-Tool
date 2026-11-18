@@ -75,14 +75,14 @@ def test_mods_of_two_bundles_of_one_packed_group_are_two_slots_applied_side_by_s
         source = cab_bundle(
             env.tmp / f"upload-{letter}", cab(letter), f"modded prefab {letter}".encode(), name=path.name
         )
-        (mod,) = env.library.add([source], kind="other", direct=True)
+        (mod,) = env.library.add([source], resource_type="other", direct=True)
         mods.append((mod, source))
     (first, first_source), (second, second_source) = mods
     assert first.target != second.target
     index = env.library._index(env.library.current_pin())
     assert len({core for core, paths in index.items() for path in paths if path in env.prefabs}) == 3
-    env.library.apply(first.target, f"mod:{first.id}", kind="other")
-    env.library.apply(second.target, f"mod:{second.id}", kind="other")
+    env.library.apply(first.target, f"mod:{first.id}", resource_type="other")
+    env.library.apply(second.target, f"mod:{second.id}", resource_type="other")
     assert a.read_bytes() == first_source.read_bytes()
     assert b.read_bytes() == second_source.read_bytes()  # applying the second mod left the first in place
     assert c.read_bytes() == untouched
@@ -92,8 +92,8 @@ def test_a_slot_an_earlier_build_shared_moves_to_the_files_own_slot(packed):
     env = packed
     a = env.prefabs[0]
     source = cab_bundle(env.tmp / "upload", cab("a"), b"modded prefab a", name=a.name)
-    (mod,) = env.library.add([source], kind="other", direct=True)
-    env.library.apply(mod.target, f"mod:{mod.id}", kind="other")
+    (mod,) = env.library.add([source], resource_type="other", direct=True)
+    env.library.apply(mod.target, f"mod:{mod.id}", resource_type="other")
     pin = env.library.current_pin()
     own, shared = core_of(a.name), "other:" + hashlib.sha256(repr(part_of(a.name)).encode()).hexdigest()
     old_target = "other-set:" + hashlib.sha256(shared.encode()).hexdigest()
@@ -106,7 +106,9 @@ def test_a_slot_an_earlier_build_shared_moves_to_the_files_own_slot(packed):
                 folder[field][shared] = folder[field].pop(own)
 
     env.library.profiles.update(earlier)
-    env.library._record(mod.id)["target"] = old_target
+    record = env.library._record(mod.id)
+    record.pop("generic_target", None)
+    record["target_alt"] = old_target
     env.library._save()
     judge._packed.clear()  # a new start knows nothing yet
     before = a.read_bytes()
@@ -114,7 +116,7 @@ def test_a_slot_an_earlier_build_shared_moves_to_the_files_own_slot(packed):
     configured = fresh.profiles.read()["folders"][pin.key]["configured"]
     assert own in configured and shared not in configured
     assert configured[own]["source"] == f"mod:{mod.id}"
-    assert fresh._record(mod.id)["target"] == other_target([a.name]) != old_target
+    assert fresh._target_of(fresh._record(mod.id)) == other_target([a.name]) != old_target
     assert a.read_bytes() == before  # no game file written
 
 
@@ -125,12 +127,12 @@ GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="Set BAMT_TEST_GAME_DIR to a verified official view")
 def test_every_official_memorial_lobby_prefab_gets_its_own_slot(tmp_path):
     from bmpt.host.config import Settings
-    from test_library import FakeCatalog, FakeVariant
+    from test_library import FakeCatalog, FakeAlt
 
     settings = Settings(tmp_path / "config.toml")
     settings.set("game_resource_dir", str(GAME_DIR))
     library = ModLibrary(
-        tmp_path / "library", FakeCatalog(FakeVariant("test", "test_spr", "test_home")), object(), settings
+        tmp_path / "library", FakeCatalog(FakeAlt("test", "test_spr", "test_home")), object(), settings
     )
     pin = library.current_pin()
     prefabs = sorted(

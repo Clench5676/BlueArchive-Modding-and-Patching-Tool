@@ -12,7 +12,7 @@ from ba_modding_toolkit.i18n import t
 from bmpt.library.identity import content_cores, identify
 from ba_modding_toolkit.naming import parse_filename
 
-from test_library import FakeVariant, game_bundle, make_mod, setup_library
+from test_library import FakeAlt, game_bundle, make_mod, setup_library
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def catalog():
             core: []
             for core in (
                 ["mutsuki_spr", "ch0246_spr", "shun_spr", "ch0066_spr", "np0167_spr"]
-                if kind == "spr"
+                if kind == "portrait"
                 else ["mutsuki_home", "mutsuki_dress_home", "shun_home", "shun_small_home"]
             )
         },
@@ -103,15 +103,15 @@ def test_dress_lobby_overrules_base_filename_and_uses_installed_core(catalog, tm
     source = game_bundle(tmp_path, "mutsuki_home")
     objects(monkeypatch, ["CH0246_home.atlas", "mutsuki_dress_home.skel"])
     name, target, kind = identify(source, source.name, catalog)
-    assert (parse_filename(name).core, target, kind) == ("mutsuki_dress_home", "ch0246", "lobby")
+    assert (parse_filename(name).core, target, kind) == ("mutsuki_dress_home", "ch0246", "memorialLobby")
     assert parse_filename(name).date == parse_filename(source.name).date
 
 
 @pytest.mark.parametrize(
     "category, filename_core, core, kind",
     [
-        ("SpineCharacters", "mutsuki_home", "ch0246_spr", "spr"),
-        ("SpineLobbies", "mutsuki_spr", "mutsuki_dress_home", "lobby"),
+        ("SpineCharacters", "mutsuki_home", "ch0246_spr", "portrait"),
+        ("SpineLobbies", "mutsuki_spr", "mutsuki_dress_home", "memorialLobby"),
     ],
 )
 def test_container_kind_overrules_upload_name_and_bare_object_names(
@@ -119,7 +119,7 @@ def test_container_kind_overrules_upload_name_and_bare_object_names(
 ):
     source = game_bundle(tmp_path, filename_core)
     objects(monkeypatch, ["CH0246.skel", "CH0246.atlas"], [f"Assets/_MX/{category}/CH0246/CH0246.skel"])
-    assert content_cores(source) == {f"ch0246_{'spr' if kind == 'spr' else 'home'}"}
+    assert content_cores(source) == {f"ch0246_{'spr' if kind == 'portrait' else 'home'}"}
     name, target, detected_kind = identify(source, source.name, catalog)
     assert (parse_filename(name).core, target, detected_kind) == (core, "ch0246", kind)
 
@@ -135,31 +135,31 @@ def test_matching_variant_alias_is_canonicalized_and_can_be_applied(setup_librar
         objects(patch, names)
         patch.setattr("bmpt.library.identity.content_cores", content_cores)
         (entry,) = env.library.add([source])
-    assert (entry.core, entry.target, entry.kind) == ("mutsuki_dress_home", "ch0246", "lobby")
-    env.library.apply("ch0246", f"mod:{entry.id}", kind="lobby")
+    assert (entry.core, entry.target, entry.resource_type) == ("mutsuki_dress_home", "ch0246", "memorialLobby")
+    env.library.apply("ch0246", f"mod:{entry.id}", resource_type="memorialLobby")
     assert original.read_bytes() == source.read_bytes()
 
 
 def test_aliases_and_character_ids_resolve_to_the_same_student(catalog):
-    assert catalog.variant_for_asset_core("mutsuki_dress_home").key == "ch0246"
-    assert catalog.variant_for_asset_core("CH0246_home").key == "ch0246"
-    assert catalog.variant_for_asset_core("shun_home").key == "shun"
-    assert catalog.variant_for_asset_core("shun_small_home").key == "ch0066"
-    assert catalog.variant_for_asset_core("unknown_home") is None
+    assert catalog.alt_for_asset_core("mutsuki_dress_home").key == "ch0246"
+    assert catalog.alt_for_asset_core("CH0246_home").key == "ch0246"
+    assert catalog.alt_for_asset_core("shun_home").key == "shun"
+    assert catalog.alt_for_asset_core("shun_small_home").key == "ch0066"
+    assert catalog.alt_for_asset_core("unknown_home") is None
 
 
 def test_filename_only_part_uses_catalog_and_keeps_original_spelling(catalog, tmp_path, monkeypatch):
     source = game_bundle(tmp_path, "shun_home")
     objects(monkeypatch, ["generic_mesh"])
-    assert identify(source, source.name, catalog) == (source.name, "shun", "lobby")
+    assert identify(source, source.name, catalog) == (source.name, "shun", "memorialLobby")
 
 
 def test_filename_only_alias_without_an_installed_kind_keeps_its_declared_core(tmp_path, monkeypatch):
     source = game_bundle(tmp_path, "ch0246_home")
-    variant = FakeVariant("ch0246", "ch0246_spr")
-    catalog = SimpleNamespace(variant_for_core=lambda core: variant)
+    variant = FakeAlt("ch0246", "ch0246_spr")
+    catalog = SimpleNamespace(alt_for_core=lambda core: variant)
     objects(monkeypatch, ["generic_mesh"])
-    assert identify(source, source.name, catalog) == (source.name, "ch0246", "lobby")
+    assert identify(source, source.name, catalog) == (source.name, "ch0246", "memorialLobby")
 
 
 @pytest.mark.parametrize(
@@ -180,15 +180,16 @@ def test_unknown_and_conflicting_content_is_refused(catalog, tmp_path, monkeypat
 
 def test_upload_splits_kinds_and_variants_and_reports_files(setup_library, monkeypatch):
     env = setup_library
-    env.catalog.variants["dress"] = FakeVariant("dress", "dress_spr", "dress_home")
+    env.catalog.alts["dress"] = FakeAlt("dress", "dress_spr", "dress_home")
     portrait = game_bundle(env.tmp / "upload", "test_spr")
-    lobby = game_bundle(env.tmp / "upload", "dress_home")
+    memorial_lobby = game_bundle(env.tmp / "upload", "dress_home")
     monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: {parse_filename(path.name).core})
     progress = []
-    entries = env.library.add([portrait, lobby], lambda *p: progress.append(p))
-    assert [(e.target, e.kind) for e in entries] == [("test", "spr"), ("dress", "lobby")]
+    entries = env.library.add([portrait, memorial_lobby], lambda *p: progress.append(p))
+    assert [(e.target, e.resource_type) for e in entries] == [("test", "portrait"), ("dress", "memorialLobby")]
     assert progress == [
-        (i, 2, t("webui.progress.add", name=path.name)) for i, path in [(0, portrait), (1, lobby), (2, lobby)]
+        (i, 2, t("webui.progress.add", name=path.name))
+        for i, path in [(0, portrait), (1, memorial_lobby), (2, memorial_lobby)]
     ]
 
 
@@ -206,28 +207,28 @@ def test_unknown_part_adds_nothing_from_the_entire_upload(setup_library, monkeyp
 
 def test_renamed_upload_is_stored_under_its_content_target(setup_library, monkeypatch):
     env = setup_library
-    env.catalog.variants["dress"] = FakeVariant("dress", "dress_spr", "dress_home")
+    env.catalog.alts["dress"] = FakeAlt("dress", "dress_spr", "dress_home")
     source = game_bundle(env.tmp / "upload", "test_home_gl")
     monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: {"dress_home"})
     (entry,) = env.library.add([source])
-    assert (entry.target, entry.kind, entry.core) == ("dress", "lobby", "dress_home")
+    assert (entry.target, entry.resource_type, entry.core) == ("dress", "memorialLobby", "dress_home")
     assert entry.file.read_bytes() == source.read_bytes()
     assert parse_filename(entry.file.name).core == "dress_home"
 
 
 @pytest.mark.parametrize("apply", [False, True])
-@pytest.mark.parametrize("filename_kind, content_kind", [("spr", "lobby"), ("lobby", "spr")])
+@pytest.mark.parametrize("filename_kind, content_kind", [("portrait", "memorialLobby"), ("memorialLobby", "portrait")])
 def test_add_files_accepts_the_identified_kind_of_a_renamed_upload(
     setup_library, monkeypatch, filename_kind, content_kind, apply
 ):
     env = setup_library
-    targets = {"spr": env.original, "lobby": game_bundle(env.game_dir, "test_home_gl")}
+    targets = {"portrait": env.original, "memorialLobby": game_bundle(env.game_dir, "test_home_gl")}
     before = {kind: path.read_bytes() for kind, path in targets.items()}
     source = make_mod(targets[filename_kind], env.tmp / "upload")
     source = source.rename(
         source.with_name(
             source.name.replace(
-                parse_filename(source.name).core, "renamed_spr" if filename_kind == "spr" else "renamed_home"
+                parse_filename(source.name).core, "renamed_spr" if filename_kind == "portrait" else "renamed_home"
             )
         )
     )
@@ -238,7 +239,7 @@ def test_add_files_accepts_the_identified_kind_of_a_renamed_upload(
     added = env.library.add_files(content_kind, [source], apply=apply)
 
     (entry,) = added
-    assert (entry.target, entry.kind, entry.core) == ("test", content_kind, core)
+    assert (entry.target, entry.resource_type, entry.core) == ("test", content_kind, core)
     assert entry.file.name == target.name
     assert entry.file.read_bytes() == source.read_bytes()
     assert added.failed == []

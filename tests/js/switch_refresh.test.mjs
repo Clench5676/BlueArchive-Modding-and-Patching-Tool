@@ -23,10 +23,10 @@ const code = [
   // detail.js's setters of the state these write
   ...[
     "setFam",
-    "setLobbyStale",
-    "setLobbyShot",
+    "setMemorialLobbyStale",
+    "setMemorialLobbyShot",
     "setShownKey",
-    "setModelShot",
+    "setChibiShot",
     "setExpressionState",
     "setMainPlayer",
   ].map((name) => `function ${name}`),
@@ -40,7 +40,7 @@ async function apply(result, kind, { changedConfiguration = false } = {}) {
     key: "dress",
     portrait: "dress_spr",
     memorialLobby: "dress_home",
-    chibi: "dress_model",
+    chibi: "dress_chibi",
     configured: { [kind]: "mod:old" },
   };
   const next = structuredClone(v);
@@ -55,7 +55,7 @@ async function apply(result, kind, { changedConfiguration = false } = {}) {
     coreOf,
     alt: () => ctx.shownStudent.alts[0],
     sourceOf: (key) => key,
-    ctx: { invalidateRoster: () => calls.push("roster") },
+    ctx: { invalidateStudentList: () => calls.push("studentList") },
     forget: () => calls.push("forget"),
     spinePrefix: (kind, core) => `${kind}/${core}`,
     call: (fn) => fn(),
@@ -78,12 +78,12 @@ async function apply(result, kind, { changedConfiguration = false } = {}) {
     expression: "00",
     blinkTimer: null,
     mainPlayer: {},
-    modelGeneration: 0,
-    modelShot: {},
-    lobbyStale: false,
-    lobbyShot: {},
-    lobbySeq: {},
-    lobbyAll: true,
+    chibiGeneration: 0,
+    chibiShot: {},
+    memorialLobbyStale: false,
+    memorialLobbyShot: {},
+    memorialLobbySeq: {},
+    memorialLobbyAll: true,
     shownKey: "dress",
     job: async (_method, _params, opts) => {
       await opts.onDone(result);
@@ -95,12 +95,12 @@ async function apply(result, kind, { changedConfiguration = false } = {}) {
   return { calls, ctx };
 }
 
-test("unchanged applies and repeated saved choices keep thumbnails and the live portrait or lobby", async () => {
+test("unchanged applies and repeated saved choices keep thumbnails and the live portrait or memorialLobby", async () => {
   for (const kind of ["portrait", "memorialLobby", "chibi"])
     for (const deferred of [false, true]) {
       const { calls, ctx } = await apply({ files: [], unchanged: true, deferred }, kind);
-      assert.deepEqual(calls, ["roster", "cards"]);
-      assert.equal(ctx.lobbyStale, false);
+      assert.deepEqual(calls, ["studentList", "cards"]);
+      assert.equal(ctx.memorialLobbyStale, false);
       assert.ok(ctx.mainPlayer);
     }
 });
@@ -110,12 +110,12 @@ test("saving a different source while mods are off refreshes the configured prev
     const { calls, ctx } = await apply({ files: [], unchanged: true, deferred: true }, kind, {
       changedConfiguration: true,
     });
-    assert.deepEqual(calls, ["roster", "cards", "left"]);
+    assert.deepEqual(calls, ["studentList", "cards", "left"]);
     assert.equal(ctx.shownStudent.alts[0].configured[kind], "mod:new");
-    if (kind === "memorialLobby") assert.equal(ctx.lobbyStale, true);
+    if (kind === "memorialLobby") assert.equal(ctx.memorialLobbyStale, true);
     else if (kind === "chibi") {
-      assert.equal(ctx.modelShot, null);
-      assert.ok(ctx.modelGeneration > 0);
+      assert.equal(ctx.chibiShot, null);
+      assert.ok(ctx.chibiGeneration > 0);
     } else assert.equal(ctx.mainPlayer, null);
   }
 });
@@ -123,16 +123,16 @@ test("saving a different source while mods are off refreshes the configured prev
 test("changed game files still invalidate thumbnails and refresh the shown preview", async () => {
   for (const kind of ["portrait", "memorialLobby", "chibi"]) {
     const { calls, ctx } = await apply({ files: ["changed.bundle"], unchanged: false }, kind);
-    assert.deepEqual(calls, ["forget", "forget", "roster", "cards", "left"]);
-    if (kind === "memorialLobby") assert.equal(ctx.lobbyStale, true);
+    assert.deepEqual(calls, ["forget", "forget", "studentList", "cards", "left"]);
+    if (kind === "memorialLobby") assert.equal(ctx.memorialLobbyStale, true);
     else if (kind === "chibi") {
-      assert.equal(ctx.modelShot, null);
-      assert.ok(ctx.modelGeneration > 0);
+      assert.equal(ctx.chibiShot, null);
+      assert.ok(ctx.chibiGeneration > 0);
     } else assert.equal(ctx.mainPlayer, null);
   }
 });
 
-test("a lobby source event reloads the manifest even if a repack kept every student field unchanged", async () => {
+test("a memorial lobby source event reloads the manifest even if a repack kept every student field unchanged", async () => {
   const calls = [],
     v = { key: "shun", memorialLobby: "shun_home" };
   const ctx = {
@@ -150,9 +150,9 @@ test("a lobby source event reloads the manifest even if a repack kept every stud
     lower: (s) => String(s || "").toLowerCase(),
     filesSig: () => "unchanged",
     previewChanged: () => false,
-    tab: "lobby",
+    tab: "memorialLobby",
     tabKind: () => "memorialLobby",
-    ctx: { invalidateRoster: () => calls.push("roster") },
+    ctx: { invalidateStudentList: () => calls.push("studentList") },
     resetPreview: (kind) => calls.push(kind),
     changeInPlace: (fn) => fn(),
     renderAll: async () => calls.push("panels"),
@@ -160,10 +160,10 @@ test("a lobby source event reloads the manifest even if a repack kept every stud
   };
   vm.createContext(ctx);
   await vm.runInContext(`${setFam}\n${functionSource("async function reloadChanged")}; reloadChanged();`, ctx);
-  assert.deepEqual(calls, ["roster", "memorialLobby", "panels", "preview"]);
+  assert.deepEqual(calls, ["studentList", "memorialLobby", "panels", "preview"]);
 });
 
-test("prefab and dependency source events refresh the model while foreign cores stay outside the student", async () => {
+test("prefab and dependency source events refresh the chibi while foreign cores stay outside the student", async () => {
   for (const core of ["ch0258_02", "ch0258", "ch0258_01_enemy"]) {
     const calls = [],
       v = { key: "ch0258", chibi: "ch0258_02", chibiCores: ["ch0258_02", "ch0258"] };
@@ -183,7 +183,7 @@ test("prefab and dependency source events refresh the model while foreign cores 
       filesSig: () => "unchanged",
       previewChanged: () => false,
       tabKind: () => "chibi",
-      ctx: { invalidateRoster: () => calls.push("roster") },
+      ctx: { invalidateStudentList: () => calls.push("studentList") },
       resetPreview: (kind) => calls.push(kind),
       changeInPlace: (fn) => fn(),
       renderAll: async () => calls.push("panels"),
@@ -198,7 +198,7 @@ test("prefab and dependency source events refresh the model while foreign cores 
       filesChanged({cores: [${JSON.stringify(core)}]}); reloadChanged();`,
       ctx,
     );
-    assert.deepEqual(calls, core === "ch0258_01_enemy" ? [] : ["queued", "roster", "chibi", "panels", "preview"]);
+    assert.deepEqual(calls, core === "ch0258_01_enemy" ? [] : ["queued", "studentList", "chibi", "panels", "preview"]);
   }
 });
 
@@ -254,9 +254,9 @@ test("a student read that finishes after the screen was read anew does not repla
     mergeChange: () => ({ cores: ["shun_home"] }),
     filesSig: () => "unchanged",
     previewChanged: () => false,
-    tab: "lobby",
+    tab: "memorialLobby",
     tabKind: () => "memorialLobby",
-    ctx: { invalidateRoster: () => calls.push("roster") },
+    ctx: { invalidateStudentList: () => calls.push("studentList") },
     resetPreview: (kind) => calls.push(kind),
     changeInPlace: (fn) => fn(),
     renderAll: async () => calls.push("panels"),
@@ -278,7 +278,7 @@ test("a student read that finishes after the screen was read anew does not repla
 
 test("reload and a switch's reload drop a read that finishes after the screen was read anew", async () => {
   const calls = [],
-    v = { key: "dress", portrait: "dress_spr", memorialLobby: "dress_home", chibi: "dress_model", configured: {} };
+    v = { key: "dress", portrait: "dress_spr", memorialLobby: "dress_home", chibi: "dress_chibi", configured: {} };
   for (const entry of ["reload()", 'applyCandidate("mod:test", "portrait")']) {
     const read = deferred(),
       newer = { key: "student", alts: [v], newer: true };
@@ -291,7 +291,7 @@ test("reload and a switch's reload drop a read that finishes after the screen wa
       coreOf,
       alt: () => ctx.shownStudent.alts[0],
       sourceOf: (key) => key,
-      ctx: { invalidateRoster: () => calls.push("roster") },
+      ctx: { invalidateStudentList: () => calls.push("studentList") },
       forget() {},
       spinePrefix: (kind, core) => `${kind}/${core}`,
       call: (fn) => fn(),
@@ -315,12 +315,12 @@ test("reload and a switch's reload drop a read that finishes after the screen wa
       expression: "00",
       blinkTimer: null,
       mainPlayer: {},
-      modelGeneration: 0,
-      modelShot: {},
-      lobbyStale: false,
-      lobbyShot: {},
-      lobbySeq: {},
-      lobbyAll: true,
+      chibiGeneration: 0,
+      chibiShot: {},
+      memorialLobbyStale: false,
+      memorialLobbyShot: {},
+      memorialLobbySeq: {},
+      memorialLobbyAll: true,
       shownKey: "dress",
       previewEnabledNow: true,
       job: async (_method, _params, opts) => {

@@ -1,4 +1,4 @@
-"""Offline roster filtered by installed portraits and special Spine slots."""
+"""Offline student list filtered by installed portraits and special Spine slots."""
 
 from __future__ import annotations
 
@@ -23,10 +23,10 @@ from ._names import (
     csv_names,
     name_head,
 )
-from .models import CoreMap, Family, Variant
+from .records import CoreMap, Student, Alt
 from .special import SPECIAL_PREFIX, describe
 
-__all__ = ["Catalog", "CoreMap", "Family", "Variant"]
+__all__ = ["Catalog", "CoreMap", "Student", "Alt"]
 DEFAULT_DATA = Path(__file__).parent / "data" / "catalog.json"
 logger = logging.getLogger(__name__)
 HOME_SUFFIXES = ("_home", "_home_gl", "_home_teen")
@@ -39,13 +39,13 @@ def _names_list(value: object) -> bool:
 
 
 class GameSource(Protocol):
-    """Supply installed Spine, collection, and optional model assets to the catalog."""
+    """Supply installed Spine, collection, and optional chibi assets to the catalog."""
 
-    def spine_cores(self, kind: str) -> dict[str, list[Path]]:
+    def spine_cores(self, resource_type: str) -> dict[str, list[Path]]:
         """Return installed cores and their bundle parts.
 
         Args:
-            kind: Spine category, either "spr" for portraits or "lobby" for memorial lobbies.
+            resource_type: Portrait or Memorial Lobby resource type.
         """
         ...
 
@@ -53,34 +53,34 @@ class GameSource(Protocol):
         """Return available background and portrait texture names."""
         ...
 
-    def model_cores(self) -> set[str]:
+    def chibi_cores(self) -> set[str]:
         """Return the lower-case dev names of installed 3D chibi prefabs (optional for a game source)."""
         ...
 
-    def field_model_cores(self) -> set[str]:
-        """Return the lower-case dev names of field-mode player models (optional for a game source)."""
+    def field_chibi_cores(self) -> set[str]:
+        """Return the lower-case dev names of field-mode player chibis (optional for a game source)."""
         ...
 
-    def asset_model_cores(self, candidates: set[str]) -> set[str]:
-        """Return candidates whose own bundles hold a model; optional for a game source.
+    def asset_chibi_cores(self, candidates: set[str]) -> set[str]:
+        """Return candidates whose own bundles hold a chibi; optional for a game source.
 
         Args:
-            candidates: Lower-case variant dev names lacking character or field prefabs.
+            candidates: Lower-case alt dev names lacking character or field prefabs.
         """
         ...
 
 
-def model_core(key: str, aliases: list[str], cores: set[str]) -> str | None:
-    """Find a variant's installed 3D chibi core.
+def chibi_core(key: str, aliases: list[str], cores: set[str]) -> str | None:
+    """Find an alt's installed 3D chibi core.
 
-    Try its key, the key + '_original' (base variants, e.g. hoshino_original), then the
+    Try its key, the key + '_original' (base alts, e.g. hoshino_original), then the
     dev aliases, then the aliases + '_original'. Dependencies are never matched by name (the CAB index resolves
     them).
 
     Args:
-        key: Variant key.
+        key: alt key.
         aliases: Alternative dev names, tried in order after the key and its original form.
-        cores: Installed lower-case model cores eligible for a slot.
+        cores: Installed lower-case chibi cores eligible for a slot.
 
     Returns:
         The first matching core, or None when no candidate is installed.
@@ -91,7 +91,7 @@ def model_core(key: str, aliases: list[str], cores: set[str]) -> str | None:
 
 
 class Catalog:
-    """Build and cache a thread-safe roster; reload after the game scan changes.
+    """Build and cache a thread-safe student list; reload after the game scan changes.
 
     Returned records are independent copies so RPC callers cannot mutate the
     cached snapshot. Only the supplied game object performs game asset access.
@@ -100,12 +100,12 @@ class Catalog:
     def __init__(
         self, game: GameSource | None, character_map: Path | None, data: Path = DEFAULT_DATA, server: str = "global"
     ):
-        """Configure lazy roster construction from shipped metadata and installed assets.
+        """Configure lazy student list construction from shipped metadata and installed assets.
 
         Args:
-            game: Installed asset source; None produces an empty installed roster.
+            game: Installed asset source; None produces an empty installed student list.
             character_map: Optional CSV supplement; None or a missing file uses shipped data alone.
-            data: Catalog JSON containing student, variant, and release metadata.
+            data: Catalog JSON containing student, alt, and release metadata.
             server: Release-flag key, "global" or "japan", used when collection portraits are absent.
         """
         self.game = game
@@ -113,7 +113,7 @@ class Catalog:
         self.data = Path(data)
         self.server = server  # whose release flags apply when the install has no collection portrait
         self._lock = threading.RLock()
-        self._snapshot: tuple[dict[str, Family], dict[str, Variant], dict[str, Variant]] | None = None
+        self._snapshot: tuple[dict[str, Student], dict[str, Alt], dict[str, Alt]] | None = None
         # the shipped data and the character map, parsed once and kept; every use works on a copy (_metadata)
         self._parsed: tuple[dict, dict, set[str]] | None = None
 
@@ -130,19 +130,19 @@ class Catalog:
                 self._parsed = parsed
             self._snapshot = snapshot
 
-    def families(self) -> list[Family]:
-        """Return families with installed portraits or special Spine slots, sorted by key."""
+    def students(self) -> list[Student]:
+        """Return students with installed portraits or special Spine slots, sorted by key."""
         with self._lock:
             return copy.deepcopy(list(self._get()[0].values()))
 
-    def family(self, key: str) -> Family:
-        """Return an independent copy of an installed student family.
+    def student(self, key: str) -> Student:
+        """Return an independent copy of an installed student.
 
         Args:
-            key: Base variant key, matched without case sensitivity.
+            key: Base alt key, matched without case sensitivity.
 
         Raises:
-            ServiceError: No installed family has this key (catalog_student_not_found).
+            ServiceError: No installed student has this key (catalog_student_not_found).
         """
         with self._lock:
             result = self._get()[0].get(key.lower())
@@ -150,29 +150,29 @@ class Catalog:
                 raise ServiceError("catalog_student_not_found", key=key)
             return copy.deepcopy(result)
 
-    def assignment_families(self) -> list[Family]:
+    def assignment_students(self) -> list[Student]:
         """List all shipped and character-map students with only installed asset handles.
 
         Ownership selection must include unreleased students without fabricating a local install target.
         """
         with self._lock:
-            entries, students, _ = self._metadata()
-            families = copy.deepcopy(self._get()[0])
+            entries, metadata, _ = self._metadata()
+            students = copy.deepcopy(self._get()[0])
             installed = self._get()[1]
             for key, entry in entries.items():
                 if key in installed:
                     continue
-                student = students[str(entry["student_id"])]
-                family_key = student["base"]
-                family = families.setdefault(
-                    family_key,
-                    Family(family_key, student["names"], student.get("school"), [], list(student.get("aliases", []))),
+                student = metadata[str(entry["student_id"])]
+                student_key = student["base"]
+                student = students.setdefault(
+                    student_key,
+                    Student(student_key, student["names"], student.get("school"), [], list(student.get("aliases", []))),
                 )
-                family.variants.append(
-                    Variant(
+                student.alts.append(
+                    Alt(
                         key,
                         entry["file_id"],
-                        family_key,
+                        student_key,
                         entry["names"],
                         entry["playable"],
                         entry["order"],
@@ -186,42 +186,42 @@ class Catalog:
                         aliases=list(entry.get("aliases", [])),
                     )
                 )
-            for family in families.values():
-                family.variants.sort(
-                    key=lambda variant: (
-                        variant.key != family.key,
-                        not variant.recruitable,
-                        not variant.playable,
-                        variant.order,
-                        variant.key,
+            for student in students.values():
+                student.alts.sort(
+                    key=lambda alt: (
+                        alt.key != student.key,
+                        not alt.released_on_server,
+                        not alt.playable,
+                        alt.order,
+                        alt.key,
                     )
                 )
-            return [families[key] for key in sorted(families)]
+            return [students[key] for key in sorted(students)]
 
-    def assignment_variant(self, key: str) -> Variant:
+    def assignment_alt(self, key: str) -> Alt:
         """Resolve an ownership label independently of local asset availability.
 
         Args:
-            key: Variant key.
+            key: alt key.
 
         Raises:
-            ServiceError: The shipped data and character map have no such variant.
+            ServiceError: The shipped data and character map have no such alt.
         """
         if isinstance(key, str):
-            for family in self.assignment_families():
-                for variant in family.variants:
-                    if variant.key == key.lower():
-                        return variant
+            for student in self.assignment_students():
+                for alt in student.alts:
+                    if alt.key == key.lower():
+                        return alt
         raise ServiceError("catalog_alt_not_found", key=key)
 
-    def variant(self, key: str) -> Variant:
-        """Return an independent copy of an installed variant.
+    def alt(self, key: str) -> Alt:
+        """Return an independent copy of an installed alt.
 
         Args:
-            key: Variant key.
+            key: alt key.
 
         Raises:
-            ServiceError: The variant is absent from the installed roster (catalog_alt_not_found).
+            ServiceError: The alt is absent from the installed student list (catalog_alt_not_found).
         """
         with self._lock:
             result = self._get()[1].get(key.lower())
@@ -229,32 +229,32 @@ class Catalog:
                 raise ServiceError("catalog_alt_not_found", key=key)
             return copy.deepcopy(result)
 
-    def variant_for_core(self, core: str) -> Variant | None:
-        """Resolve an installed portrait or lobby core, ignoring letter case.
+    def alt_for_core(self, core: str) -> Alt | None:
+        """Resolve an installed portrait or memorial lobby core, ignoring letter case.
 
         Args:
             core: Bundle core to look up in the installed snapshot.
 
         Returns:
-            An independent variant record, or None when the core is unknown.
+            An independent alt record, or None when the core is unknown.
         """
         with self._lock:
             return copy.deepcopy(self._get()[2].get(core.lower()))
 
-    def variant_for_asset_core(self, core: str) -> Variant | None:
-        """Resolve installed bundle cores and internal Spine names to variants.
+    def alt_for_asset_core(self, core: str) -> Alt | None:
+        """Resolve installed bundle cores and internal Spine names to alts.
 
         Assets can retain a dev name or character ID while their installed bundle uses
-        the variant's file ID. Direct file IDs take precedence over shared dev aliases.
+        the alt's file ID. Direct file IDs take precedence over shared dev aliases.
 
         Args:
-            core: Bundle core or internal skeleton name ending in _spr or a lobby suffix.
+            core: Bundle core or internal skeleton name ending in _spr or a memorial lobby suffix.
 
         Returns:
-            The installed variant, or None for an unknown or ambiguous alias.
+            The installed alt, or None for an unknown or ambiguous alias.
         """
         with self._lock:
-            _, variants, cores = self._get()
+            _, alts, cores = self._get()
             lower = core.lower()
             if lower in cores:
                 return copy.deepcopy(cores[lower])
@@ -268,19 +268,19 @@ class Catalog:
                 return copy.deepcopy(cores[stem])
             entries, _, _ = self._metadata()
             if stem in entries:
-                return copy.deepcopy(variants.get(stem))
+                return copy.deepcopy(alts.get(stem))
             matches = [
-                variants[key]
+                alts[key]
                 for key, entry in entries.items()
-                if key in variants and stem in (alias.lower() for alias in entry.get("core_aliases", []))
+                if key in alts and stem in (alias.lower() for alias in entry.get("core_aliases", []))
             ]
             return copy.deepcopy(matches[0]) if len(matches) == 1 else None
 
-    def model_map(self, cores: Iterable[str]) -> dict[str, str]:
-        """Map model dev names to variant keys, independently of the selected install's portraits.
+    def chibi_map(self, cores: Iterable[str]) -> dict[str, str]:
+        """Map chibi dev names to alt keys, independently of the selected install's portraits.
 
         Args:
-            cores: Model core names to match, ignoring case; direct file IDs take precedence over aliases.
+            cores: Chibi core names to match, ignoring case; direct file IDs take precedence over aliases.
         """
         available = {core.lower() for core in cores}
         with self._lock:
@@ -301,50 +301,51 @@ class Catalog:
                         result.setdefault(core, key)
             return result
 
-    def variant_for_model_core(self, core: str) -> Variant | None:
-        """Resolve model filenames and internal dev names to an installed variant.
+    def alt_for_chibi_core(self, core: str) -> Alt | None:
+        """Resolve chibi filenames and internal dev names to an installed alt.
 
         Args:
-            core: Parsed model core or internal dev name, matched without case sensitivity.
+            core: Parsed chibi core or internal dev name, matched without case sensitivity.
 
         Returns:
-            The installed variant, or None when the name has no installed owner.
+            The installed alt, or None when the name has no installed owner.
         """
-        key = self.model_map([core]).get(core.lower())
+        key = self.chibi_map([core]).get(core.lower())
         with self._lock:
             return copy.deepcopy(self._get()[1].get(key)) if key else None
 
     def core_map(
-        self, spr_cores: Iterable[str], lobby_cores: Iterable[str], special_cores: Iterable[str] = ()
+        self, portrait_cores: Iterable[str], memorial_lobby_cores: Iterable[str], special_cores: Iterable[str] = ()
     ) -> CoreMap:
-        """Map any install's portrait and memorial lobby cores by the roster's rules.
+        """Map any install's portrait and memorial lobby cores by the student list's rules.
 
-        The snapshot maps only the selected install. A portrait core's key is the core less "_spr"; a lobby
-        core belongs to the installed variant whose key or core alias plus a lobby suffix names it, a direct file-id
-        match first. A lobby core with no portrait of its variant in that install takes the variant the data names
+        The snapshot maps only the selected install. A portrait core's key is the core less "_spr"; a memorial lobby
+        core belongs to the installed alt whose key or core alias plus a memorial lobby suffix names it, a direct
+        file-id
+        match first. A memorial lobby core with no portrait of its alt in that install takes the alt the data names
         for it the same way, else the core less its suffix. Each call works on a copy of the kept parse, so one
         install's unknown portrait keys never enter another install's map. Backgrounds, nonstandard Spine cores
         and explicit special_cores use separate special:<core> keys.
 
         Args:
-            spr_cores: Portrait bundle cores present in the install being mapped.
-            lobby_cores: Memorial lobby cores present in that install, including alternate suffixes.
+            portrait_cores: Portrait bundle cores present in the install being mapped.
+            memorial_lobby_cores: Memorial lobby cores present in that install, including alternate suffixes.
             special_cores: Cores to assign separate special:<core> keys even when they resemble student slots.
         """
-        portraits, lobbies = list(spr_cores), list(lobby_cores)
+        portraits, memorial_lobbies = list(portrait_cores), list(memorial_lobby_cores)
         with self._lock:
             entries, students, added = self._metadata()
             shipped = set(entries)
-            keys, homes, _aliases = self._map(entries, students, added, portraits, lobbies, set(special_cores))
-        spr = {keys[core.lower()]: core for core in sorted(portraits)}
-        lobby = {key: cores[0] for key, cores in homes.items() if cores}
+            keys, homes, _aliases = self._map(entries, students, added, portraits, memorial_lobbies, set(special_cores))
+        portrait = {keys[core.lower()]: core for core in sorted(portraits)}
+        memorial_lobby = {key: cores[0] for key, cores in homes.items() if cores}
         names = {key: entries[key]["names"] for key in set(keys.values()) if key in shipped}
         names.update(
             {key: describe(core, entries, students)[2] for core, key in keys.items() if key.startswith(SPECIAL_PREFIX)}
         )
-        return CoreMap(keys, spr, lobby, names)
+        return CoreMap(keys, portrait, memorial_lobby, names)
 
-    def _get(self) -> tuple[dict[str, Family], dict[str, Variant], dict[str, Variant]]:
+    def _get(self) -> tuple[dict[str, Student], dict[str, Alt], dict[str, Alt]]:
         if self._snapshot is None:
             self._snapshot = self._build()
         return self._snapshot
@@ -362,7 +363,7 @@ class Catalog:
     def _parse(self) -> tuple[dict, dict, set[str]]:
         try:
             data = json.loads(self.data.read_text(encoding="utf-8"))
-            entries = {key.lower(): dict(entry) for key, entry in data["variants"].items()}
+            entries = {key.lower(): dict(entry) for key, entry in data["alts"].items()}
             shipped_keys = set(entries)
             students = {str(key): dict(student) for key, student in data["students"].items()}
             if any("th" not in record["names"] for record in (*entries.values(), *students.values())):
@@ -377,8 +378,8 @@ class Catalog:
                     if not name["full"] or not name["short"]:
                         raise ValueError("Empty catalog name")
                 if not isinstance(entry["order"], int) or not isinstance(entry["playable"], bool):
-                    raise ValueError("Invalid catalog variant")
-                released = entry.get("released")
+                    raise ValueError("Invalid catalog alt")
+                released = entry.get("released_on_server")
                 if released is not None and not (
                     isinstance(released, dict)
                     and all(server in SERVERS and isinstance(flag, bool) for server, flag in released.items())
@@ -430,17 +431,18 @@ class Catalog:
         students: dict,
         added: set[str],
         portraits: list[str],
-        lobbies: list[str],
+        memorial_lobbies: list[str],
         special_cores: set[str] | None = None,
     ) -> tuple[dict[str, str], dict[str, list[str]], dict[str, list[str]]]:
-        """Apply the roster's core rules to one install's core names.
+        """Apply the student list's core rules to one install's core names.
 
-        Return {lower-case core: variant key}, each key's lobby cores in the install (the primary one first) and
+        Return {lower-case core: alt key}, each key's memorial lobby cores in the install (the primary one first) and
         each portrait key's aliases (its key, then the core aliases the rule kept). Unknown portrait keys are added
-        to ``entries``, ``students`` and ``added``, as the roster lists them, in the order the alias rule reads them.
+        to ``entries``, ``students`` and ``added``, as the student list lists them, in the order the alias rule reads
+        them.
         """
         special_cores = {core.lower() for core in special_cores or ()}
-        lobby_names = {core.lower(): core for core in lobbies if core.lower() not in special_cores}
+        memorial_lobby_names = {core.lower(): core for core in memorial_lobbies if core.lower() not in special_cores}
         keys: dict[str, str] = {}
         homes_of: dict[str, list[str]] = {}
         aliases_of: dict[str, list[str]] = {}
@@ -472,10 +474,10 @@ class Catalog:
                 ),
             ]
             homes = [
-                lobby_names[alias.lower() + suffix]
+                memorial_lobby_names[alias.lower() + suffix]
                 for alias in aliases
                 for suffix in HOME_SUFFIXES
-                if alias.lower() + suffix in lobby_names
+                if alias.lower() + suffix in memorial_lobby_names
             ]
             aliases_of[key], homes_of[key] = aliases, homes
             keys[core.lower()] = key
@@ -485,7 +487,7 @@ class Catalog:
                     keys[home.lower()] = key
                 else:
                     keys.setdefault(home.lower(), key)
-        # lobby cores of variants without a portrait in this install: the variant the data names for them (its key,
+        # memorial lobby cores of alts without a portrait in this install: the alt the data names for them (its key,
         # else a core alias), else the core less its suffix, so a core gets one key in every install
         aliased: dict[str, str] = {}
         for key, entry in entries.items():
@@ -493,18 +495,18 @@ class Catalog:
                 if alias.lower() not in entries or alias.lower() == key:
                     aliased.setdefault(alias.lower(), key)
         suffixes = sorted(HOME_SUFFIXES, key=len, reverse=True)
-        lobby_only: dict[str, list[tuple[bool, int, str]]] = {}
-        for lower, core in sorted(lobby_names.items()):
+        memorial_lobby_only: dict[str, list[tuple[bool, int, str]]] = {}
+        for lower, core in sorted(memorial_lobby_names.items()):
             suffix = next((s for s in suffixes if lower.endswith(s)), None)
             if lower in keys or suffix is None:
                 continue
             stem = lower[: -len(suffix)]
             key = stem if stem in entries else aliased.get(stem, stem)
             keys[lower] = key
-            lobby_only.setdefault(key, []).append((stem != key, HOME_SUFFIXES.index(suffix), core))
-        for key, found in lobby_only.items():
+            memorial_lobby_only.setdefault(key, []).append((stem != key, HOME_SUFFIXES.index(suffix), core))
+        for key, found in memorial_lobby_only.items():
             homes_of.setdefault(key, []).extend(core for *_, core in sorted(found))
-        for core in lobbies:
+        for core in memorial_lobbies:
             lower = core.lower()
             if lower in special_cores or not lower.endswith(HOME_SUFFIXES):
                 key = SPECIAL_PREFIX + lower
@@ -513,96 +515,98 @@ class Catalog:
 
     def _build(
         self, parsed: tuple[dict, dict, set[str]] | None = None
-    ) -> tuple[dict[str, Family], dict[str, Variant], dict[str, Variant]]:
+    ) -> tuple[dict[str, Student], dict[str, Alt], dict[str, Alt]]:
         if self.game is None:
             return {}, {}, {}
-        entries, students, added = copy.deepcopy(parsed) if parsed is not None else self._metadata()
-        portraits = self.game.spine_cores("spr")
-        lobbies = self.game.spine_cores("lobby")
+        entries, metadata, added = copy.deepcopy(parsed) if parsed is not None else self._metadata()
+        portraits = self.game.spine_cores("portrait")
+        memorial_lobbies = self.game.spine_cores("memorialLobby")
         art = {kind: {name.lower(): name for name in names} for kind, names in self.game.collection_names().items()}
         collection = art.get("portrait", {})
         if portraits and not collection:
             logger.warning("No collection portraits found; recruitable follows the shipped release flags")
-        models = getattr(self.game, "model_cores", set)()
-        fields = getattr(self.game, "field_model_cores", set)()
+        chibis = getattr(self.game, "chibi_cores", set)()
+        fields = getattr(self.game, "field_chibi_cores", set)()
         # the same mapping core_map gives any install, run on the core lists fetched once for this build
         special_cores = {
             core
-            for core, paths in lobbies.items()
+            for core, paths in memorial_lobbies.items()
             if paths and parse_filename(paths[0].name).category != "spinelobbies"
         }
-        keys, homes_of, aliases_of = self._map(entries, students, added, list(portraits), list(lobbies), special_cores)
-        families, variants, cores = {}, {}, {}
-        unmodelled: dict[str, list[str]] = {}  # variants with neither a character nor a field model: key -> aliases
+        keys, homes_of, aliases_of = self._map(
+            entries, metadata, added, list(portraits), list(memorial_lobbies), special_cores
+        )
+        students, alts, cores = {}, {}, {}
+        unmodelled: dict[str, list[str]] = {}  # alts with neither a character nor a field chibi: key -> aliases
         for core, paths in sorted(portraits.items()):
             key = keys[core.lower()]
             entry = entries[key]
-            student = students[str(entry["student_id"])]
+            student = metadata[str(entry["student_id"])]
             if key in added:
                 portrait = collection.get(f"student_portrait_{key}_collection")
                 if portrait:
-                    entry.update(playable=True, portrait=portrait)
-                entry["bg"] = entries[student["base"]].get("bg")
-            family_key = student["base"]
-            family = families.setdefault(
-                family_key,
-                Family(family_key, student["names"], student.get("school"), [], list(student.get("aliases", []))),
+                    entry.update(playable=True, official_thumbnail=portrait)
+                entry["background"] = entries[student["base"]].get("background")
+            student_key = student["base"]
+            student = students.setdefault(
+                student_key,
+                Student(student_key, student["names"], student.get("school"), [], list(student.get("aliases", []))),
             )
             aliases, homes = aliases_of[key], homes_of[key]
             dates = [parse_filename(path.name).date for path in paths]
-            portrait = collection.get((entry.get("portrait") or "").lower())
-            variant = Variant(
+            portrait = collection.get((entry.get("official_thumbnail") or "").lower())
+            alt = Alt(
                 key,
                 entry["file_id"],
-                family_key,
+                student_key,
                 entry["names"],
                 entry["playable"],
                 entry["order"],
                 core,
                 next(iter(homes), None),
-                art.get("bg", {}).get((entry.get("bg") or "").lower()),
+                art.get("background", {}).get((entry.get("background") or "").lower()),
                 portrait,
                 max(filter(None, dates), default=None),
                 entry.get("page_id") or None,
-                recruitable=self._recruitable(entry, portrait is not None, bool(collection)),
-                model=model_core(key, aliases[1:], models),
+                released_on_server=self._released_on_server(entry, portrait is not None, bool(collection)),
+                chibi=chibi_core(key, aliases[1:], chibis),
                 schale_id=entry.get("schale_id"),
                 aliases=list(entry.get("aliases", [])),
             )
-            if variant.model is None:
-                # an event or story variant with only a field-mode model: shown and offered as a costume, no slot
-                variant.field_model = model_core(key, aliases[1:], fields)
-                if variant.field_model is None:
+            if alt.chibi is None:
+                # an event or story alt with only a field-mode chibi: shown and offered as a costume, no slot
+                alt.field_chibi = chibi_core(key, aliases[1:], fields)
+                if alt.field_chibi is None:
                     unmodelled[key] = aliases[1:]
-            family.variants.append(variant)
-            variants[key] = variant
-        if unmodelled and hasattr(self.game, "asset_model_cores"):
-            # a story-only or UI-only character's model in its own bundles (a cutscene's NP0206, Arona), read for
-            # these variants only. Those bundles are the variant's model slot: a mod of them applies there,
-            # unlike a field-mode model, which shares its bundles with other students' and has no slot
+            student.alts.append(alt)
+            alts[key] = alt
+        if unmodelled and hasattr(self.game, "asset_chibi_cores"):
+            # a story-only or UI-only character's chibi in its own bundles (a cutscene's NP0206, Arona), read for
+            # these alts only. Those bundles are the alt's chibi slot: a mod of them applies there,
+            # unlike a field-mode chibi, which shares its bundles with other students' and has no slot
             names = {
                 name.lower()
                 for key, aliases in unmodelled.items()
                 for name in (key, key + "_original", *aliases, *(alias + "_original" for alias in aliases))
             }
-            owned = self.game.asset_model_cores(names)
+            owned = self.game.asset_chibi_cores(names)
             for key, aliases in unmodelled.items():
-                variants[key].model = model_core(key, aliases, owned)
-        for core, paths in sorted(lobbies.items()):
+                alts[key].chibi = chibi_core(key, aliases, owned)
+        for core, paths in sorted(memorial_lobbies.items()):
             key = keys.get(core.lower(), "")
             if not key.startswith(SPECIAL_PREFIX):
                 continue
-            family_key, base, names = describe(core, entries, students)
-            family = families.setdefault(family_key, Family(family_key, base, None, []))
+            student_key, base, names = describe(core, entries, metadata)
+            student = students.setdefault(student_key, Student(student_key, base, None, []))
             dates = [parse_filename(path.name).date for path in paths]
             category = parse_filename(paths[0].name).category if paths else "spinebackground"
-            variant = Variant(
+            alt = Alt(
                 key,
                 core,
-                family_key,
+                student_key,
                 names,
                 False,
-                len(family.variants),
+                len(student.alts),
                 None,
                 core,
                 None,
@@ -610,27 +614,27 @@ class Catalog:
                 max(filter(None, dates), default=None),
                 spine_category=category,
             )
-            family.variants.append(variant)
-            variants[key] = variant
-        cores = {lower: variants[key] for lower, key in keys.items() if key in variants}
-        for variant in variants.values():
-            if variant.model:
-                cores.setdefault(variant.model.lower(), variant)
-        for family in families.values():
-            # recruitable here first, then playable on another server, then story and NPC variants
-            family.variants.sort(
-                key=lambda variant: (
-                    variant.key != family.key,
-                    not variant.recruitable,
-                    not variant.playable,
-                    variant.order,
-                    variant.key,
+            student.alts.append(alt)
+            alts[key] = alt
+        cores = {lower: alts[key] for lower, key in keys.items() if key in alts}
+        for alt in alts.values():
+            if alt.chibi:
+                cores.setdefault(alt.chibi.lower(), alt)
+        for student in students.values():
+            # recruitable here first, then playable on another server, then story and NPC alts
+            student.alts.sort(
+                key=lambda alt: (
+                    alt.key != student.key,
+                    not alt.released_on_server,
+                    not alt.playable,
+                    alt.order,
+                    alt.key,
                 )
             )
-        return dict(sorted(families.items())), variants, cores
+        return dict(sorted(students.items())), alts, cores
 
-    def _recruitable(self, entry: dict, installed: bool, indexed: bool) -> bool:
-        """Whether a playable variant can be recruited on the selected server.
+    def _released_on_server(self, entry: dict, installed: bool, indexed: bool) -> bool:
+        """Whether a playable alt can be recruited on the selected server.
 
         Each server builds its collection bundles with the students it has released, so an installed collection
         portrait decides. Without one, the shipped flag tells a portrait-name gap (True) from a student not on this
@@ -640,5 +644,5 @@ class Catalog:
             return False
         if installed:
             return True
-        flag = (entry.get("released") or {}).get(self.server)
+        flag = (entry.get("released_on_server") or {}).get(self.server)
         return flag if flag is not None else not indexed

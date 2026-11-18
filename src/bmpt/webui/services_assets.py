@@ -13,15 +13,15 @@ from ..core.errors import ServiceError
 from bmpt.engine import parse_filename
 from ..core.openfiles import temporary_directory
 from .jobs import Cancelled
-from .contract import SPINE_TYPES
-from ..host.store_formats import source_value
 from .server import MIME, AssetResponse
 
 
 logger = logging.getLogger("bmpt.webui.services")  # the services log under one name
 
-# /asset/ kinds the shown page draws as previews (portraits, lobbies, backgrounds, 3D models): class 1 of the ordering
+# /asset/ kinds the shown page draws as previews (portraits, memorial lobbies, backgrounds, 3D chibis): class 1 of
+# the ordering
 PREVIEW_ASSETS = frozenset({"spine", "art", "office", "chibi"})
+SPINE_ROUTES = ("portrait", "memorialLobby", "official-portrait", "official-memorialLobby", "mod", "import")
 
 
 class AssetsMixin:
@@ -30,13 +30,13 @@ class AssetsMixin:
     def asset(self, path: str, query: dict[str, str]) -> AssetResponse:
         """Answer an ``/asset/...`` request.
 
-        The first segment is the kind: ``photography``, ``ui``, ``office``, ``art``, ``spine``, ``model`` or
+        The first segment selects a route: ``thumbnails``, ``ui``, ``office``, ``art``, ``spine``, ``chibi`` or
         ``voice``. Previews the page draws (``PREVIEW_ASSETS``) are class 1: scans and background work step aside
         until they are answered.
 
         Args:
             path: The path after ``/asset/``.
-            query: The request's query parameters, such as a model's ``source`` and ``clip``.
+            query: The request's query parameters, such as a chibi's ``source`` and ``clip``.
 
         Returns:
             The asset.
@@ -70,58 +70,58 @@ class AssetsMixin:
                 return AssetResponse(data, mime, light=False)
             if parts[1] == "officialThumbnail":
                 return AssetResponse(self.game.collection_portrait(_stem(parts[2])), "image/png", light=False)
-        if kind == "spine" and len(parts) >= 5:
-            return self._spine_asset(SPINE_TYPES[parts[1]], parts[2], "/".join(parts[4:]), revision=parts[3])
-        if kind == "spine" and len(parts) == 4:
-            return self._spine_asset(SPINE_TYPES[parts[1]], parts[2], parts[3])
+        if kind == "spine" and len(parts) >= 5 and parts[1] in SPINE_ROUTES:
+            return self._spine_asset(parts[1], parts[2], "/".join(parts[4:]), revision=parts[3])
+        if kind == "spine" and len(parts) == 4 and parts[1] in SPINE_ROUTES:
+            return self._spine_asset(parts[1], parts[2], parts[3])
         if kind == "chibi" and len(parts) == 2 and parts[1].endswith(".glb"):
-            # A variant's 3D chibi, exported losslessly and cached only with separate preview consent.
+            # An alt's 3D chibi, exported losslessly and cached only with separate preview consent.
             key = _stem(parts[1])
             field_only = False
             try:
-                variant = self.catalog.variant(key)
-                core, target = variant.model, variant.key
-                if not core and getattr(variant, "field_model", None):
-                    core, field_only = variant.field_model, True
+                alt = self.catalog.alt(key)
+                core, target = alt.chibi, alt.key
+                if not core and getattr(alt, "field_chibi", None):
+                    core, field_only = alt.field_chibi, True
             except (ServiceError, KeyError) as error:
                 if isinstance(error, ServiceError) and error.code != "catalog_alt_not_found":
                     raise
-                # NPC models can exist without a student-list entry. Resolve only
+                # NPC chibis can exist without a student-list entry. Resolve only
                 # cores indexed from this game's own files, never arbitrary names.
-                if key not in getattr(self.game, "model_cores", lambda: set())():
+                if key not in getattr(self.game, "chibi_cores", lambda: set())():
                     raise KeyError(path) from None
                 core = target = key
             if not core:
                 raise KeyError(path)
-            source = source_value(query.get("source", "live"), forward=False)
+            source = query.get("source", "live")
             kind = source.split(":", 1)[0]
-            # ?clip=<name>: one clip of the model, read from the same source as the model, for an action whose clips
-            # the model's GLB does not carry. Class 1 (what the user is looking at): foreground like the model (asset
-            # above), one step of about 0.5 s under the model lock, cached afterwards; a request the page gave up on
+            # ?clip=<name>: one clip of the chibi, read from the same source as the chibi, for an action whose clips
+            # the chibi's GLB does not carry. Class 1 (what the user is looking at): foreground like the chibi (asset
+            # above), one step of about 0.5 s under the chibi lock, cached afterwards; a request the page gave up on
             # (the 3D tab left) lets its step finish and keeps the result.
             clip = query.get("clip") or None
             extra = {"clip": clip} if clip else {}
             # How long each preview source takes end to end: lock waits, CRC checks and the export.
             with spans.span(
-                "asset.model."
+                "asset.chibi."
                 + ("clip." if clip else "")
-                + (kind if kind in ("live", "official", "mod", "import", "variant") else "other")
+                + (kind if kind in ("live", "official", "mod", "import", "alt") else "other")
             ):
                 if field_only:  # no slot: its own files only, never a mod or another costume
                     if source not in ("live", "official"):
                         raise KeyError(path)
-                    data = self.game.model_glb(core, **extra)
+                    data = self.game.chibi_glb(core, **extra)
                 else:
-                    data = self._model_asset(core, target, source, path, clip)
+                    data = self._chibi_asset(core, target, source, path, clip)
             return AssetResponse(data, MIME[".glb"], light=False)
         if kind == "voice" and len(parts) == 3:
             # a memorial lobby voice clip from Kivo, relayed so it is never cached
-            variant = self.catalog.variant(parts[1])
-            return AssetResponse(self.kivo.audio(variant.page_id or "", _stem(parts[2])), "audio/ogg", light=False)
+            alt = self.catalog.alt(parts[1])
+            return AssetResponse(self.kivo.audio(alt.page_id or "", _stem(parts[2])), "audio/ogg", light=False)
         raise KeyError(path)
 
     def costume_check(self, target: str, other: str, cancelled: Callable[[], bool] | None = None) -> dict[str, Any]:
-        """Check another variant's costume on a variant's model to its end, as the Switch 3D Model card shows it.
+        """Check another alt's costume on an alt's chibi to its end, as the Switch Chibi card shows it.
 
         The slot is built (``library.costume_preview``) and its preview exported. The verdict is saved for the
         pair, keyed by the build signature: the rule's refusals, program errors and export failures, so the pair
@@ -129,8 +129,8 @@ class AssetsMixin:
         checked again.
 
         Args:
-            target: The variant whose model wears the costume.
-            other: The variant whose costume it is.
+            target: The alt whose chibi wears the costume.
+            other: The alt whose costume it is.
             cancelled: The job's flag (``jobs.cancel``), checked between the phases (before the build, after it,
                 before the export and before any verdict is saved); the build stops at its next step
                 (``costume_preview``).
@@ -151,7 +151,7 @@ class AssetsMixin:
         verdict = library.costume_verdict(target, other)
         if verdict is not None:
             return verdict
-        core = self.catalog.variant(target).model
+        core = self.catalog.alt(target).chibi
         stop()
         try:
             bundles = library.costume_preview(target, other, cancelled=cancelled)
@@ -162,11 +162,11 @@ class AssetsMixin:
             if error.code == "library_operation_failed":  # a program error, the same for these files every time
                 return library.record_costume_verdict(target, other, False, error.code)
             return {"ok": False, "reason": error.code, "transient": True}
-        # its export is one step under the model lock (about 1 s); it starts once no foreground preview waits
+        # its export is one step under the chibi lock (about 1 s); it starts once no foreground preview waits
         preview_gate.step(cancelled)
         stop()
         try:
-            self.game.model_glb(core, overrides=bundles, reads=library.preview_reads("official"))
+            self.game.chibi_glb(core, overrides=bundles, reads=library.preview_reads("official"))
         except ServiceError as error:
             return {"ok": False, "reason": error.code, "transient": True}
         except Exception as error:  # the preview cannot be drawn: a program error, kept in the log
@@ -177,66 +177,66 @@ class AssetsMixin:
         # a costume past the stretch limit was saved by the preview as shown only
         return library.costume_verdict(target, other) or library.record_costume_verdict(target, other, True)
 
-    def _model_asset(self, core: str, target: str, source: str, path: str, clip: str | None = None) -> bytes:
-        """Export a variant's 3D chibi as GLB from one source.
+    def _chibi_asset(self, core: str, target: str, source: str, path: str, clip: str | None = None) -> bytes:
+        """Export an alt's 3D chibi as GLB from one source.
 
         The source is the live game files, official copies, a library mod or an import candidate (KeyError, a 404,
         for anything else). Every source but ``live`` reads the files outside its own parts by the library's rule
         (``preview_reads``), never as the game folder holds them now.
 
         Args:
-            core: The model's core.
-            target: The variant the model belongs to.
-            source: ``live``, ``official``, ``mod:<id>``, ``variant:<key>`` or ``import:<key>``.
+            core: The chibi's core.
+            target: The alt the chibi belongs to.
+            source: ``live``, ``official``, ``mod:<id>``, ``alt:<key>`` or ``import:<key>``.
             path: The asset path, for the KeyError.
-            clip: One clip of that model instead, from the same files (a costume's adapted bundles included).
+            clip: One clip of that chibi instead, from the same files (a costume's adapted bundles included).
         """
         extra = {"clip": clip} if clip else {}
         if source == "live":
-            return self.game.model_glb(core, **extra)
+            return self.game.chibi_glb(core, **extra)
         if source == "official":
-            return self.game.model_glb(
+            return self.game.chibi_glb(
                 core,
                 overrides=self.library.official_bundles(core, current_fallback=True),
                 reads=self.library.preview_reads("official"),
                 **extra,
             )
-        from ..library.judge import core_of, kind_of_file
+        from ..library.judge import core_of, resource_type_of_file
 
         try:
-            cores = set(getattr(self.library, "model_cores", lambda key: [core])(target))
+            cores = set(getattr(self.library, "chibi_cores", lambda key: [core])(target))
         except ServiceError as error:
             if error.code != "catalog_alt_not_found" or target != core:
                 raise
-            cores = {core}  # An indexed NPC prefab can have no catalog variant.
+            cores = {core}  # An indexed NPC prefab can have no catalog alt.
 
         def fits(bundles: list[Path]) -> bool:
             return bool(bundles) and all(
-                kind_of_file(bundle.name) == "model" and core_of(bundle.name) in cores for bundle in bundles
+                resource_type_of_file(bundle.name) == "chibi" and core_of(bundle.name) in cores for bundle in bundles
             )
 
         if source.startswith("mod:"):
             mod_id = source[4:]
             entry = next((mod for mod in self.library.mods() if mod.id == mod_id), None)
-            if entry is None or entry.kind != "model" or entry.target != target:
+            if entry is None or entry.resource_type != "chibi" or entry.target != target:
                 raise KeyError(path)
             bundles = self.library.preview_bundles(mod_id)
             if not fits(bundles):
                 raise KeyError(path)
-            return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"), **extra)
-        if source.startswith("variant:"):
-            verdict = self.library.costume_verdict(target, source[8:])
+            return self.game.chibi_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"), **extra)
+        if source.startswith("alt:"):
+            verdict = self.library.costume_verdict(target, source[4:])
             if verdict is not None and not verdict["ok"] and not verdict.get("preview"):
                 raise KeyError(path)  # checked to its end and refused: never offered (costume_check)
-            bundles = self.library.costume_preview(target, source[8:])
+            bundles = self.library.costume_preview(target, source[4:])
             if not fits(bundles):
                 raise KeyError(path)
-            return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("official"), **extra)
+            return self.game.chibi_glb(core, overrides=bundles, reads=self.library.preview_reads("official"), **extra)
         if source.startswith("import:"):
             preview_core, bundles = self.batch_import.preview(source[7:])
             if preview_core not in cores or not fits(bundles):
                 raise KeyError(path)
-            return self.game.model_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"), **extra)
+            return self.game.chibi_glb(core, overrides=bundles, reads=self.library.preview_reads("configured"), **extra)
         raise KeyError(path)
 
     def _ui_asset(self, parts: list[str], query: dict[str, str]) -> AssetResponse:
@@ -279,138 +279,148 @@ class AssetsMixin:
                 game = self._other_games[pin.key] = self._make_game(list(pin.dirs), private=True)
             return game
 
-    def _spine_bundles(self, kind: str, key: str) -> list[Path]:
+    def _spine_bundles(self, route_type: str, key: str) -> list[Path]:
         core, pin, game = key, None, self.game
-        if "@" in key and kind not in ("mod", "import"):
+        if "@" in key and route_type not in ("mod", "import"):
             core, _, install_id = key.rpartition("@")
             game = self._install_game(install_id)
             pin = next(p for p in self.library.installs() if p.id == install_id)
-        if kind.startswith("official-") and kind[9:] in ("spr", "lobby"):
+        if route_type.startswith("official-") and route_type[9:] in ("portrait", "memorialLobby"):
             return self.library.official_bundles(core, pin=pin)
-        if kind in ("spr", "lobby"):
+        if route_type in ("portrait", "memorialLobby"):
             try:
                 # the game files with the mod-carrying parts last, the order a mod preview merges in
                 return self.library.live_bundles(core, pin=pin)
             except ServiceError as error:
                 if error.code != "game_file_not_found":
-                    logger.warning("Cannot resolve live Spine bundles for %s/%s: %r", kind, key, error)
+                    logger.warning("Cannot resolve live Spine bundles for %s/%s: %r", route_type, key, error)
                     raise
-                return game.spine_cores(kind)[core.lower()]
-        if kind == "mod":
+                return game.spine_cores(route_type)[core.lower()]
+        if route_type == "mod":
             return self.library.preview_bundles(key)
-        if kind == "import":
+        if route_type == "import":
             return self.batch_import.preview(key)[1]
-        raise KeyError(kind)
+        raise KeyError(route_type)
 
-    def _spine_asset(self, kind: str, key: str, name: str, revision: str | None = None) -> AssetResponse:
-        # How long each Spine request takes, by source and file kind; names never reach the timings.
-        what = name if name in ("skeleton", "manifest.json", "framing.json", "lobby.json") else "file"
-        source = kind if kind in ("spr", "lobby", "official-spr", "official-lobby", "mod", "import") else "other"
+    def _spine_asset(self, route_type: str, key: str, name: str, revision: str | None = None) -> AssetResponse:
+        # How long each Spine request takes, by source and file type; names never reach the timings.
+        what = name if name in ("skeleton", "manifest.json", "framing.json", "memorial-lobby.json") else "file"
+        source = (
+            route_type
+            if route_type
+            in ("portrait", "memorialLobby", "official-portrait", "official-memorialLobby", "mod", "import")
+            else "other"
+        )
         with spans.span(f"asset.spine.{source}.{what}"):
-            return self._spine_response(kind, key, name, revision)
+            return self._spine_response(route_type, key, name, revision)
 
-    def _spine_response(self, kind: str, key: str, name: str, revision: str | None = None) -> AssetResponse:
+    def _spine_response(self, route_type: str, key: str, name: str, revision: str | None = None) -> AssetResponse:
         bundles = None
-        if name == "manifest.json" or revision is not None or kind.startswith("official-"):
-            bundles = self._spine_bundles(kind, key)
-            current = self._revision(kind, key, bundles)
+        if name == "manifest.json" or revision is not None or route_type.startswith("official-"):
+            bundles = self._spine_bundles(route_type, key)
+            current = self._revision(route_type, key, bundles)
             if revision is not None and revision != current:
                 raise KeyError(f"Spine revision changed: requested {revision}, current {current}")
             if name == "manifest.json":
                 return _json({"revision": current}, light=False)
-        response = self._spine_file(kind, key, name, bundles)
+        response = self._spine_file(route_type, key, name, bundles)
         # A switch between the skeleton and page requests must fail the load, never mix revisions. Also reject
         # changes during extraction, before any bytes from the changed composition reach the player.
         if bundles is not None and (
-            self._revision(kind, key, bundles) != current or self._spine_bundles(kind, key) != bundles
+            self._revision(route_type, key, bundles) != current or self._spine_bundles(route_type, key) != bundles
         ):
-            raise KeyError(f"Spine source changed during extraction: {kind}/{key}")
+            raise KeyError(f"Spine source changed during extraction: {route_type}/{key}")
         return response
 
-    def _spine_file(self, kind: str, key: str, name: str, bundles: list[Path] | None = None) -> AssetResponse:
+    def _spine_file(self, route_type: str, key: str, name: str, bundles: list[Path] | None = None) -> AssetResponse:
         game, core, pin = self.game, key, None
-        if kind in ("spr", "lobby", "official-spr", "official-lobby") and "@" in key:
+        if route_type in ("portrait", "memorialLobby", "official-portrait", "official-memorialLobby") and "@" in key:
             # <core>@<id>: the core in another known install (its id in mods.state.installs)
             core, _, install_id = key.rpartition("@")
             game = self._install_game(install_id)
             pin = next(p for p in self.library.installs() if p.id == install_id)
         if name == "framing.json":
-            from ..gameassets import AssetNotFound, lobby
+            from ..gameassets import AssetNotFound, memorial_lobby
 
             camera = False
-            if kind == "import":
+            if route_type == "import":
                 core = self.batch_import.preview(key)[0]
-            elif kind == "mod":
+            elif route_type == "mod":
                 sources = bundles if bundles is not None else self.library.preview_bundles(key)
                 core = parse_filename(sources[-1].name).core
                 camera = getattr(self.library, "camera_prefab", lambda _id: None)(key) is not None
             try:
-                # a lobby camera's still is framed as its lobby shows it: by its own prefab (its lobby.json), whose
-                # layers the camera scaled and moved; any other mod by the official prefab
-                info = self._camera_layout(game, key) if camera else game.lobby_info(core)
+                # a memorial lobby camera's still is framed as its memorial lobby shows it: by its own prefab (its
+                # memorial-lobby.json), whose layers the camera scaled and moved; any other mod by the official prefab
+                info = self._camera_layout(game, key) if camera else game.memorial_lobby_info(core)
                 layer = next((layer for layer in info["layers"] if layer["name"] == info.get("main")), None)
-                layer = layer or next(iter(info["layers"]), lobby.STANDARD)
+                layer = layer or next(iter(info["layers"]), memorial_lobby.STANDARD)
                 return _json(
                     {"view": info["view"], "layer": {k: layer[k] for k in ("name", "x", "y", "scale") if k in layer}},
                     light=False,
                 )
             except AssetNotFound:
-                return _json({"view": lobby.GAME_VIEW, "layer": lobby.STANDARD}, light=False)
-        if kind == "lobby" and name == "lobby.json":
-            # the lobby's layout and interaction from its prefab and clip assets; no skeleton file has this name, and
-            # it is answered without extracting (and PNG-encoding) the lobby's textures. While one of its cameras holds
+                return _json({"view": memorial_lobby.GAME_VIEW, "layer": memorial_lobby.STANDARD}, light=False)
+        if route_type == "memorialLobby" and name == "memorial-lobby.json":
+            # the memorial lobby's layout and interaction from its prefab and clip assets; no skeleton file has this
+            # name, and
+            # it is answered without extracting (and PNG-encoding) the memorial lobby's textures. While one of its
+            # cameras holds
             # the prefab in the game, from the official prefab: no other choice's preview shows a camera's framing
-            base = getattr(self.library, "lobby_prefab_base", lambda *_args, **_kw: None)(core, pin=pin)
-            return _json(game.lobby_info(core, prefab=base) if base is not None else game.lobby_info(core), light=False)
-        if kind == "mod" and name == "lobby.json":
-            # a lobby camera's layout: its own prefab; any other mod has none of its own
+            base = getattr(self.library, "memorial_lobby_prefab_base", lambda *_args, **_kw: None)(core, pin=pin)
+            return _json(
+                game.memorial_lobby_info(core, prefab=base) if base is not None else game.memorial_lobby_info(core),
+                light=False,
+            )
+        if route_type == "mod" and name == "memorial-lobby.json":
+            # a memorial lobby camera's layout: its own prefab; any other mod has none of its own
             return _json(self._camera_layout(game, key), light=False)
-        if kind == "mod" and (
+        if route_type == "mod" and (
             name.startswith("fx_") and name.endswith(".png") or name.startswith("sfx_") and name.endswith(".wav")
         ):
-            # A lobby camera's layout route is its own, so the lobby asks it for the effect textures and sounds its
-            # lobby.json names: those of the lobby it frames, read from the game files like the lobby's own
+            # The camera's own layout names effects and sounds from the memorial lobby it frames.
             found = getattr(self.library, "camera_prefab", lambda _id: None)(key)
             if found is not None:
-                return self._spine_file("lobby", found[0]["core"], name)
-        if kind == "lobby" and name.startswith("fx_") and name.endswith(".png"):
-            # a texture of the lobby's particle effects (lobby.json fx.textures), read from the game files; any other
-            # name is one of the skeletons' own files
+                return self._spine_file("memorialLobby", found[0]["core"], name)
+        if route_type == "memorialLobby" and name.startswith("fx_") and name.endswith(".png"):
+            # a texture of the memorial lobby's particle effects (memorial-lobby.json fx.textures), read from the game
+            # files; any other name is one of the skeletons' own files
             from ..gameassets import AssetNotFound
 
             try:
-                return AssetResponse(game.lobby_fx_texture(core, name[3:-4]), "image/png", light=False)
+                return AssetResponse(game.memorial_lobby_fx_texture(core, name[3:-4]), "image/png", light=False)
             except AssetNotFound:
                 pass
-        if kind == "lobby" and name.startswith("sfx_") and name.endswith(".wav"):
-            # a sound the lobby's clips play (lobby.json sounds), decoded from the game files in memory; any other
-            # name is one of the skeletons' own files
+        if route_type == "memorialLobby" and name.startswith("sfx_") and name.endswith(".wav"):
+            # a sound the memorial lobby's clips play (memorial-lobby.json sounds), decoded from the game files in
+            # memory; any other name is one of the skeletons' own files
             from ..gameassets import AssetNotFound
 
             try:
-                return AssetResponse(game.lobby_sound(core, name[4:-4]), "audio/wav", light=False)
+                return AssetResponse(game.memorial_lobby_sound(core, name[4:-4]), "audio/wav", light=False)
             except AssetNotFound:
                 pass
-        if kind.startswith("official-"):
+        if route_type.startswith("official-"):
             files = game.spine_files_from(bundles)
-        elif kind in ("spr", "lobby"):
+        elif route_type in ("portrait", "memorialLobby"):
             if bundles is None:
                 try:
                     bundles = self.library.live_bundles(core, pin=pin)
                 except ServiceError as error:
                     if error.code != "game_file_not_found":
                         raise
-            files = game.spine_files_from(bundles) if bundles is not None else game.spine_files(kind, core)
-        elif kind == "mod":
+            files = game.spine_files_from(bundles) if bundles is not None else game.spine_files(route_type, core)
+        elif route_type == "mod":
             bundles = bundles if bundles is not None else self.library.preview_bundles(key)
             files = self._drawn_as_made(key, game.spine_files_from(bundles))
-            # the mod's own core names its skeleton (a lobby has more than one: the character and its background)
+            # the mod's own core names its skeleton (a memorial lobby has more than one: the character and its
+            # background)
             core = parse_filename(bundles[-1].name).core
-        elif kind == "import":
+        elif route_type == "import":
             core, sources = self.batch_import.preview(key)
             files = game.spine_files_from(bundles if bundles is not None else sources)
         else:
-            raise KeyError(kind)
+            raise KeyError(route_type)
         if name == "files.json":
             return _json(sorted(files), light=False)
         data = files.get(name)
@@ -476,14 +486,14 @@ class AssetsMixin:
         return result
 
     def _camera_layout(self, game: Any, mod_id: str) -> dict:
-        from ..library.lobby_camera import patch_prefab
+        from ..library.memorial_lobby_camera import patch_prefab
 
         found = getattr(self.library, "camera_prefab", lambda _id: None)(mod_id)
         if found is None:
-            raise KeyError("lobby.json")
+            raise KeyError("memorial-lobby.json")
         meta, own, official, timeline = found
         if official is None:
-            return game.lobby_info(meta["core"], prefab=own)
+            return game.memorial_lobby_info(meta["core"], prefab=own)
         # the game replaced the prefab the camera was made on and the camera is not rebuilt yet: framed on the fly,
         # from the stored parameters
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
@@ -491,7 +501,7 @@ class AssetsMixin:
             patch_prefab(
                 official, output, meta["root"], meta["scale"], tuple(meta["offset"]), timeline=timeline, crc=False
             )
-            return game.lobby_info(meta["core"], prefab=output)
+            return game.memorial_lobby_info(meta["core"], prefab=output)
 
 
 def skeleton_file(files: Mapping[str, Any], core: str, suffix: str) -> str | None:

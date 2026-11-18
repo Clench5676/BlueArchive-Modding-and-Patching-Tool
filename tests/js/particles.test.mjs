@@ -1,11 +1,11 @@
-// Tests for web/js/lobby/particles.js and particles-geometry.js (the lobby particle simulation and its geometry) and
-// web/js/lobby/particles-gl.js (drawing into a player's context and freeing it again, against a recording stand-in
-// for WebGL2). Run by tests/test_particles_player.py with Node's test runner.
+// Tests for web/js/memorial-lobby/particles.js and particles-geometry.js (the memorial lobby particle simulation and
+// its geometry) and web/js/memorial-lobby/particles-gl.js (drawing into a player's context and freeing it again,
+// against a recording stand-in for WebGL2). Run by tests/test_particles_player.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const P = await import("../../src/bmpt/web/js/lobby/particles.js");
-const G = await import("../../src/bmpt/web/js/lobby/particles-geometry.js");
+const P = await import("../../src/bmpt/web/js/memorial-lobby/particles.js");
+const G = await import("../../src/bmpt/web/js/memorial-lobby/particles-geometry.js");
 const { Effects, value, colorAt, shapePoint, drawOrder, WORLD, IDENTITY } = P;
 const { geometry, vertexColor, STRIDE } = G;
 // where a system draws among stacked skeletons, each drawing its own parts (particles-gl.js layers by default): after
@@ -771,7 +771,7 @@ test("geometry: billboard size, the view's max size, stretch and meshes; vertex 
   near(vertexColor([1, 0.5, 0, 1], true)[1], 0.2158605, 1e-6, "linear");
 });
 
-test("geometry3d: the lobby's quads for a camera looking along +z, facing any other camera, with depth kept", () => {
+test("geometry3d: the memorial lobby's quads for a camera looking along +z, facing any other camera, with depth kept", () => {
   const { geometry3d, STRIDE3 } = G;
   const one = { bursts: [{ t: 0, n: 1, cycles: 1, interval: 0.01, p: 1 }] };
   const placed = [100, 0, 0, 10, 0, 100, 0, 20, 0, 0, 100, 30];
@@ -962,7 +962,7 @@ test("the sorting fudge pushes a system back (above 0) or forward (below 0) amon
     drawOrder(systems).map((s) => s.index),
     [3, 1, 2, 0],
   );
-  // in world units: a fudge of 1 outweighs a z of WORLD / 2 lobby units nearer
+  // in world units: a fudge of 1 outweighs a z of WORLD / 2 memorial lobby units nearer
   const pushed = { def: { order: 0, queue: 3000, z: -WORLD / 2, fudge: 1 }, index: 0 },
     flat = { def: { order: 0, queue: 3000, z: 0 }, index: 1 };
   assert.deepEqual(
@@ -1359,7 +1359,7 @@ globalThis.spine = {
 };
 globalThis.performance ??= { now: () => Date.now() };
 const Linear = await import("../../src/bmpt/web/js/core/linear.js");
-const GL = await import("../../src/bmpt/web/js/lobby/particles-gl.js");
+const GL = await import("../../src/bmpt/web/js/memorial-lobby/particles-gl.js");
 
 function player(gl, layer) {
   const page = Object.assign(new Texture(), { texture: {}, useMipMaps: false });
@@ -1794,7 +1794,7 @@ test("a skeleton draws one part per queue of its pages, each with its own slots,
     ["empty", null],
   ].map(([name, attachment]) => ({ name, attachment }));
   const skeleton = { drawOrder: slots };
-  // every part in turn, as lobby-stage.js draws a skeleton's steps
+  // every part in turn, as memorial-lobby-stage.js draws a skeleton's steps
   const inParts = (ps, draw, between = () => {}) => {
     for (let k = 0; k < ps.count; k++) {
       Parts.drawPart(skeleton, ps, k, () => draw(k));

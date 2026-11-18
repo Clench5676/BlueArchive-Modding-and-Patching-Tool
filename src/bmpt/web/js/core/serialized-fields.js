@@ -1,7 +1,7 @@
-// The game-data JSON the server exports (/asset/ui/layout/<root>.json, office layouts, a memorial lobby's lobby.json)
+// The game-data JSON the server exports (/asset/ui/layout/<root>.json, office layouts, a memorial lobby's memorial-lobby.json)
 // names its serialized fields in full (localPosition, className, introMix, ...). The page draws from one shared node
-// model that its own trees use as well, with the short field names below; this module reads the exported names into
-// that model where the documents are fetched. Fields that are not listed keep their names and values.
+// chibi that its own trees use as well, with the short field names below; this module reads the exported names into
+// that chibi where the documents are fetched. Fields that are not listed keep their names and values.
 
 const NODE = Object.freeze({ localPosition: "pos", localRotationZDegrees: "rotZ" });
 const WIDGET = Object.freeze({
@@ -30,7 +30,7 @@ function renamed(object, names) {
 }
 
 /**
- * Read an exported game-data document into the page's node model: NGUI nodes and widgets, lobby clips and hit
+ * Read an exported game-data document into the page's node chibi: NGUI nodes and widgets, memorial lobby clips and hit
  * boxes. A widget is an object with className; a clip one with finishMode or introMix; a hit box one with rect and
  * rotation. A document with no exported names is returned as it is.
  * @param {*} value The parsed JSON.

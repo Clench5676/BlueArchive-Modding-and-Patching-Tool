@@ -53,7 +53,7 @@ function portraitHarness(portrait, confirm = async () => false, decode = () => P
     Loading: { covering: () => true },
     commit: (fn) => fn(),
     alt: () => ({ officialThumbnail: portrait }),
-    Lobby: { licenseRequired: (layer, retry) => status.push({ layer, retry }) },
+    MemorialLobby: { licenseRequired: (layer, retry) => status.push({ layer, retry }) },
     renderLeft: () => {
       retries++;
     },

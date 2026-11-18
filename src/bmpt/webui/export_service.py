@@ -19,7 +19,7 @@ from ..core import devmode
 from ..core.errors import ServiceError
 from ..core.openfiles import temporary_directory
 from ..library import ba_mod, integrity, mod_progress
-from ..library.judge import core_of, kind_of_file
+from ..library.judge import core_of, resource_type_of_file
 from ..library.storage import sync_directory
 from .batch_import import BatchImport, Candidate, ImportSettings
 
@@ -116,7 +116,7 @@ def _target_pin(library: Any, settings: Any, server: str, platform: str) -> Any:
 
 def _sources(library: Any, scope: str, target: str | None) -> list[str]:
     if scope == "single":
-        if not isinstance(target, str) or not target.startswith(("mod:", "variant:")):
+        if not isinstance(target, str) or not target.startswith(("mod:", "alt:")):
             raise ServiceError("bad_params", key="target")
         return [target]
     if scope == "library":
@@ -142,14 +142,14 @@ def _prepare(
     work: Path,
     log: Any,
     progress: Any,
-    kind: str | None = None,
+    resource_type: str | None = None,
 ) -> list[Path]:
-    if source.startswith("variant:"):
-        variant = source[8:]
-        targets = library._game_files(variant, kind, pin)
+    if source.startswith("alt:"):
+        alt = source[4:]
+        targets = library._game_files(alt, resource_type, pin)
         paths = [library._official_for(path, pin) for path in targets]
         if not paths:
-            raise ServiceError("game_file_not_found", target=variant)
+            raise ServiceError("game_file_not_found", target=alt)
         contents = integrity.Contents()
         for path in paths:
             contents.merge(integrity.inspect(path))
@@ -168,8 +168,8 @@ def _prepare(
     entry = {
         "id": _safe_name(source),
         "core": core_of(paths[0].name),
-        "kind": record["kind"],
-        "variant": library._target_of(record),
+        "resource_type": record["resource_type"],
+        "alt": library._target_of(record),
         "files": [{"path": str(path)} for path in paths],
     }
     candidate = Candidate({path.name: path for path in paths}, entry)
@@ -189,7 +189,7 @@ def _prepare(
         raise ServiceError("mod_update_failed")
     # Recheck complete prepared bundles against the requested install, including dependencies.
     library._check_group(
-        {path.name: path for path in prepared}, pin, compatibility=False, variant_key=library._target_of(record)
+        {path.name: path for path in prepared}, pin, compatibility=False, alt_id=library._target_of(record)
     )
     return prepared
 
@@ -204,14 +204,14 @@ def _contents(path: Path) -> integrity.Contents:
 
 
 def _generated(library: Any, record: dict | None) -> bool:
-    """Tell whether the App made a library mod (an Optimize Physics copy, a lobby camera, a roster photograph).
+    """Tell whether the App generated the library mod.
 
     Its changed files are ``generated`` in the package manifest.
     """
-    from ..library import lobby_camera, portrait_edit
+    from ..library import memorial_lobby_camera, portrait_edit
 
     return bool(record) and bool(
-        library._optimized_from(record) or lobby_camera.meta_of(record) or record.get(portrait_edit.TAG)
+        library._optimized_from(record) or memorial_lobby_camera.meta_of(record) or record.get(portrait_edit.TAG)
     )
 
 
@@ -225,15 +225,23 @@ class _Package:
     """
 
     def __init__(
-        self, library: Any, pin: Any, live: dict[str, Path], record: dict | None, paths: list[Path], kind: str | None
+        self,
+        library: Any,
+        pin: Any,
+        live: dict[str, Path],
+        record: dict | None,
+        paths: list[Path],
+        resource_type: str | None,
     ):
-        from ..library import lobby_camera
+        from ..library import memorial_lobby_camera
 
         self.library, self.pin, self.live = library, pin, live
-        camera = lobby_camera.meta_of(record)
+        camera = memorial_lobby_camera.meta_of(record)
         names = [path.name for path in paths]
-        library_kind = record["kind"] if record else (kind or kind_of_file(names[0]) or "other")
-        self.kind = "lobby" if camera else ba_mod.kind_of(library_kind, names)
+        resource_type = (
+            record["resource_type"] if record else (resource_type or resource_type_of_file(names[0]) or "other")
+        )
+        self.kind = "lobby" if camera else ba_mod.resource_type_of(resource_type, names)
         self.core = camera["core"] if camera else core_of(names[0])
         self.generated = _generated(library, record)
         self.camera = camera is not None
@@ -269,8 +277,8 @@ class _Package:
         """List the official bundles of a Spine core that hold the .skel and .atlas files the mod lacks.
 
         These are the files of the pages the mod paints, as (copy, member name); a Spine package carries them. A
-        core with several scenes (Spine backgrounds) carries only the rigs of the scenes the mod paints; a lobby
-        camera carries only its prefab.
+        core with several scenes carries only the rigs of the scenes the mod paints. A memorial lobby camera
+        carries only its prefab.
         """
         if self.kind not in ba_mod.SPINE_KINDS or self.camera:
             return []
@@ -358,7 +366,7 @@ def export_zip(
     folder: Path,
     server: str,
     platform: str,
-    kind: str | None,
+    resource_type: str | None,
     log: Any,
     progress: Any,
 ) -> dict:
@@ -375,13 +383,12 @@ def export_zip(
         pin: The game install and server the operation is fixed to; the mods must fit this install.
         scope: ``single`` (the one mod in ``target``), ``library`` (every mod) or ``applied`` (the mods currently
             applied to the game).
-        target: With ``single``, ``mod:<library id>`` for a library mod or ``variant:<key>`` for a variant's
+        target: With ``single``, ``mod:<library id>`` for a library mod or ``alt:<key>`` for an alt's
             official game files.
         folder: Where the archive is written, as ``mods-<scope>-<server>-<platform>-<id>.zip``.
         server: The game server the mods are for.
         platform: The game platform the mods are for.
-        kind: With a ``variant:`` target, the asset kind (``spr``, ``lobby``, ``model`` or ``other``) of the
-            official files to export; None for all of them.
+        resource_type: For an alt target, select its official files by resource type. None exports all of them.
         log: Receives user-facing messages of the job.
         progress: Receives the progress lines of the job.
 
@@ -421,8 +428,8 @@ def export_zip(
                         record = library._records.get(source[4:]) if source.startswith("mod:") else None
                         line.item(
                             i,
-                            variant=library._target_of(record) if record else "",
-                            kind=record["kind"] if record else "",
+                            alt=library._target_of(record) if record else "",
+                            resource_type=record["resource_type"] if record else "",
                             name=library._progress_name(record) if record else "",
                             core=core_of(record["files"][0]) if record and record.get("files") else "",
                             step=mod_progress.STEP_EXPORT,
@@ -436,12 +443,12 @@ def export_zip(
                             Path(staging),
                             log,
                             lambda p: line.step(p["step"]),
-                            kind,
+                            resource_type,
                         )
                         line.done()
                         directory = "" if scope == "single" else _safe_name(source)
                         names = [_member_name(path) for path in paths]
-                        package = _Package(library, pin, live, record, paths, kind)
+                        package = _Package(library, pin, live, record, paths, resource_type)
                         companions = package.companions(paths)
                         names += [name for _, name in companions]
                         sources_ = [*paths, *(path for path, _ in companions)]
@@ -535,7 +542,7 @@ def register_api(rpc: Any, services: Any) -> None:
         if (
             not isinstance(folder, str)
             or not folder.strip()
-            or resource_type not in (None, "spr", "lobby", "model", "other")
+            or resource_type not in (None, "portrait", "memorialLobby", "chibi", "other")
         ):
             raise ServiceError("bad_params", key="folder")
         destination = Path(folder).expanduser().resolve()
@@ -554,7 +561,7 @@ def register_api(rpc: Any, services: Any) -> None:
                 folder=destination,
                 server=server,
                 platform=platform,
-                kind=resource_type,
+                resource_type=resource_type,
                 log=log,
                 progress=progress,
             ),

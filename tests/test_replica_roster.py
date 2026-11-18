@@ -50,7 +50,7 @@ def analyze(env, paths):
 
 
 def run(env, entries, **options):
-    options = {**call(env, "import.options"), "output": None, **options}
+    options = {**call(env, "import.options"), "outputFolder": None, **options}
     return finish(
         env,
         call(
@@ -211,12 +211,12 @@ def chosen_cores(library, catalog, pin) -> list[str]:
     wanted = {core.strip().lower() for core in os.environ.get("BAMT_REPLICA_CORES", "").split(",") if core.strip()}
     full = os.environ.get("BAMT_REPLICA_FULL") == "1"
     cores = []
-    for family in catalog.families():
-        for variant in family.variants:
-            variant = catalog.variant(variant.key)
+    for family in catalog.students():
+        for variant in family.alts:
+            variant = catalog.alt(variant.key)
             if not variant.playable:
                 continue
-            for core in (variant.spr, variant.lobby):
+            for core in (variant.portrait, variant.memorial_lobby):
                 if not core or core.lower() in cores:
                     continue
                 core = core.lower()
@@ -255,8 +255,8 @@ def roster(tmp_path_factory):
     companions = {
         other.lower()
         for core in cores
-        if (variant := catalog.variant_for_asset_core(core))
-        for other in (variant.spr, variant.lobby)
+        if (variant := catalog.alt_for_asset_core(core))
+        for other in (variant.portrait, variant.memorial_lobby)
         if other
     }
     inspection = integrity.Inspection()

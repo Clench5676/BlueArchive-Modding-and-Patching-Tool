@@ -33,7 +33,7 @@ from bmpt.webui.services import Services
 from bmpt.webui.state import UiState, data_path
 
 from test_classic_handoff import FakePopen, FakeProcesses, WsgiOpener, wait_for
-from test_library import FakeCatalog, FakeVariant, game_bundle, header_bundle, make_mod
+from test_library import FakeCatalog, FakeAlt, game_bundle, header_bundle, make_mod
 from test_webui import call, rpc
 from module_patches import patch_everywhere
 
@@ -46,9 +46,9 @@ class Env:
     def __init__(self, tmp: Path):
         self.tmp = tmp
         self.game = tmp / "game"
-        self.spr = game_bundle(self.game)
+        self.portrait = game_bundle(self.game)
         self.catalog = FakeCatalog(
-            FakeVariant("test", "test_spr", "test_home"), FakeVariant("other", "other_spr", family="other")
+            FakeAlt("test", "test_spr", "test_home"), FakeAlt("other", "other_spr", student="other")
         )
         self.settings = self.make_settings(tmp / "config.toml", self.game)
         self.data = tmp / "data"
@@ -173,25 +173,25 @@ def events_named(events, name):
 
 @pytest.mark.parametrize("enabled", [False, True])
 def test_preview_save_is_persistent_and_independent_of_game_intent(env, enabled):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     if not enabled:
         env.s.library.toggle(False, True)
-    before = env.spr.read_bytes()
+    before = env.portrait.read_bytes()
     intent = env.s.library.configured("test")
     source = f"mod:{mod.id}"
     result = rpc(env.app, "ui.preview", alt="test", resourceType="portrait", source=source)
     assert result["result"] == {"portrait": source}
-    assert env.spr.read_bytes() == before
+    assert env.portrait.read_bytes() == before
     assert env.s.library.configured("test") == intent
     state = UiState(env.data / "webui.json")
     pin = env.s.library.current_pin()
-    assert state.preview_sources(pin.key, "test") == {"spr": source}
+    assert state.preview_sources(pin.key, "test") == {"portrait": source}
     assert state.preview_sources("another-install", "test") == {}
     assert rpc(env.app, "ui.preview", alt="test", resourceType="portrait", source="official")["result"] == {
         "portrait": "official"
     }
     assert env.s.library.configured("test") == intent
-    assert env.spr.read_bytes() == before
+    assert env.portrait.read_bytes() == before
 
 
 def test_preview_save_refuses_foreign_missing_or_wrong_kind_sources(env):
@@ -402,7 +402,9 @@ def test_the_scan_consent_and_the_preferences(env):
 
 def test_the_start_scan_lists_a_mod_outside_the_library(env):
     env.s.state.set_scan_consent(True)
-    env.spr.write_bytes(CRCUtils.apply_crc_fix(header_bundle(b"modded!!"), int(parse_filename(env.spr.name).crc)))
+    env.portrait.write_bytes(
+        CRCUtils.apply_crc_fix(header_bundle(b"modded!!"), int(parse_filename(env.portrait.name).crc))
+    )
     assert env.s.library is not None  # built: its prune job, then the start scan
     assert wait_for(lambda: events_named(env.drain(), "library.scanned"))
     entries = rpc(env.app, "mods.entries")["result"]
@@ -425,7 +427,7 @@ def test_off_suppresses_every_scan_trigger_and_survives_restart(env, monkeypatch
     assert requests == [], "Off must not start a scan"
     assert rpc(app, "mods.scan")["error"]["code"] == "scan_off"
     assert s.request_scan() is None
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     s.after_classic()
     s.reload_game()
@@ -499,7 +501,7 @@ def test_two_installs_of_one_server_are_labelled_by_their_folders(env):
 
 
 def test_without_a_current_install_the_switch_toggles_the_known_ones(env):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     library = env.s.library
     library.apply("test", f"mod:{mod.id}")
     env.settings.set("file_source", "adb_global")  # ADB mode: no current install, the Global folder still known
@@ -513,12 +515,12 @@ def test_without_a_current_install_the_switch_toggles_the_known_ones(env):
     assert timings["mods.toggle.queue_wait"]["count"] == timings["mods.toggle.follow_up"]["count"] == 1
     assert timings["mods.toggle.off.progress"]["count"] == 3
     assert timings["mods.toggle.off.state_publish"]["count"] >= 1
-    assert env.spr.read_bytes() == OFFICIAL
+    assert env.portrait.read_bytes() == OFFICIAL
     assert rpc(app, "actions.apply", alt="test", source=f"mod:{mod.id}")["error"]["code"] == "game_not_found"
 
 
 def test_the_data_directory_id_and_a_shared_library(env):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     a = env.s
     assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     data_id = a.state.get("data_id")
@@ -570,14 +572,14 @@ def test_another_data_directorys_toggle_shows_within_one_poll(env, monkeypatch):
 
 
 def test_the_toggle_job_its_events_and_the_snapshot(env):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     applied = env.job("actions.apply", alt="test", source=f"mod:{mod.id}")
-    assert applied.state == "done" and env.spr.read_bytes() == mod.file.read_bytes()
+    assert applied.state == "done" and env.portrait.read_bytes() == mod.file.read_bytes()
     assert events_named(env.drain(), "library.changed")[-1] == {"cores": ["test_spr"], "resourceTypes": ["portrait"]}
     job = env.job("mods.toggle", enabled=False, expect=True)
     assert job.state == "done", job.error
     assert [item["core"] for item in job.result["done"]] == ["test_spr"]
-    assert env.spr.read_bytes() == OFFICIAL
+    assert env.portrait.read_bytes() == OFFICIAL
     events = env.drain()
     assert {"cores": ["test_spr"], "resourceTypes": ["portrait"]} in events_named(events, "library.changed")
     states = events_named(events, "mods.state")
@@ -589,7 +591,7 @@ def test_the_toggle_job_its_events_and_the_snapshot(env):
     assert rpc(env.app, "mods.toggle", enabled="no", expect=False)["error"]["code"] == "bad_params"
     # apply while off is saved, not written
     deferred = env.job("actions.apply", alt="test", source=f"mod:{mod.id}")
-    assert deferred.result["deferred"] is True and env.spr.read_bytes() == OFFICIAL
+    assert deferred.result["deferred"] is True and env.portrait.read_bytes() == OFFICIAL
 
 
 def test_a_second_toggle_while_one_is_queued_is_busy(env):
@@ -605,7 +607,9 @@ def test_a_second_toggle_while_one_is_queued_is_busy(env):
 
 def test_adding_mods_already_in_use_runs_while_the_game_runs(env, monkeypatch):
     env.s.state.set_scan_consent(True)
-    env.spr.write_bytes(CRCUtils.apply_crc_fix(header_bundle(b"modded!!"), int(parse_filename(env.spr.name).crc)))
+    env.portrait.write_bytes(
+        CRCUtils.apply_crc_fix(header_bundle(b"modded!!"), int(parse_filename(env.portrait.name).crc))
+    )
     env.s.library
     assert wait_for(lambda: events_named(env.drain(), "library.scanned"))
     (entry,) = rpc(env.app, "mods.entries")["result"]
@@ -621,7 +625,7 @@ def test_adding_mods_already_in_use_runs_while_the_game_runs(env, monkeypatch):
 
 
 def test_every_writer_job_publishes_library_changed(env):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     for method, params in (
         ("actions.apply", {"alt": "test", "source": f"mod:{mod.id}"}),
         ("actions.restore", {"alt": "test"}),
@@ -663,7 +667,7 @@ def test_moving_the_library_takes_its_configuration_and_built_copies(env):
 
 
 def test_writes_are_refused_while_a_classic_window_is_open_and_can_be_queued(env):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     env.orphan()
     assert rpc(env.app, "actions.apply", alt="test", source=f"mod:{mod.id}")["error"]["code"] == "classic_open"
     assert rpc(env.app, "mods.toggle", enabled=False, expect=True)["error"]["code"] == "classic_open"
@@ -696,7 +700,7 @@ def test_installing_an_update_is_refused_while_a_classic_window_is_open(env, tmp
 
 @pytest.mark.parametrize("table", [{}, {5555: (78, True)}, {5555: (77, False)}], ids=["dead", "reused", "other"])
 def test_a_stale_classic_json_after_a_restart_is_removed_and_refuses_nothing(env, table):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     env.orphan()
     env.processes.table = dict(table)
     assert "result" in rpc(env.app, "actions.apply", alt="test", source=f"mod:{mod.id}")
@@ -711,7 +715,7 @@ def test_classic_json_naming_this_process_is_stale(env):
 
 
 def test_a_queued_toggle_runs_once_the_watched_classic_window_closes(env):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     s = env.s
     s.start_watch(run=False)
@@ -729,19 +733,19 @@ def test_a_queued_toggle_runs_once_the_watched_classic_window_closes(env):
     assert "classic.closed" in names and "library.changed" in names
     done = events_named(events, "classic.queueDone")
     assert done and len(done[0]["submitted"]) == 1 and done[0]["dropped"] == []
-    assert wait_for(lambda: env.spr.read_bytes() == OFFICIAL)
+    assert wait_for(lambda: env.portrait.read_bytes() == OFFICIAL)
     assert wait_for(lambda: not s.jobs.busy())
     assert rpc(env.app, "mods.state")["result"]["enabled"] is False
 
 
 def test_the_queue_drops_what_no_longer_holds(env):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     s = env.s
     env.orphan()
     queue(env, "actions.apply", {"alt": "test", "source": f"mod:{mod.id}"})
     queue(env, "mods.toggle", {"enabled": False, "expect": True})
     # meanwhile the classic window changes the entry's file, and another place turns mods off
-    env.spr.write_bytes(header_bundle(b"classic!"))
+    env.portrait.write_bytes(header_bundle(b"classic!"))
     s.library.profiles.update(lambda data: data.update(enabled=False))
     env.processes.table.clear()
     env.drain()
@@ -756,7 +760,7 @@ def test_the_queue_drops_what_no_longer_holds(env):
 
 
 def test_the_queue_reports_a_toggle_it_cannot_check_against_unreadable_mod_settings(env):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     s = env.s
     env.orphan()
     queue(env, "mods.toggle", {"enabled": False, "expect": True})
@@ -810,7 +814,7 @@ def test_the_queue_runs_when_the_scan_it_waits_for_is_dropped_with_the_consent(e
 
 
 def test_a_queued_apply_survives_a_change_to_the_other_install(env):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     s = env.s
     env.orphan()
     queue(env, "actions.apply", {"alt": "test", "source": f"mod:{mod.id}"})
@@ -824,18 +828,18 @@ def test_a_queued_apply_survives_a_change_to_the_other_install(env):
     done = events_named(env.drain(), "classic.queueDone")[0]
     assert done["dropped"] == [] and len(done["submitted"]) == 1
     assert s.jobs.wait(done["submitted"][0]["job"], 10)
-    assert env.spr.read_bytes() == mod.file.read_bytes()
+    assert env.portrait.read_bytes() == mod.file.read_bytes()
 
 
 def test_a_restore_while_off_that_writes_nothing_runs_while_the_classic_window_is_open(env):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     assert env.job("mods.toggle", enabled=False, expect=True).state == "done"
     env.orphan()
     # the files are official already: only the configuration is dropped
     job = env.job("actions.restore", alt="test")
     assert job.state == "done", job.error
-    assert env.s.library.configured("test")["spr"] is None
+    assert env.s.library.configured("test")["portrait"] is None
     # one that would write official bytes (a mod still in the game) is refused and can be queued
     env.processes.table.clear()
     assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"  # configured again
@@ -850,15 +854,15 @@ def test_a_restore_while_off_that_writes_nothing_runs_while_the_classic_window_i
 def test_a_restore_that_turns_out_to_write_is_refused_at_write_time(env):
     """The cheap judgement takes an unfixed outside change of the official size for official, so the restore is
     allowed at submit; the write's full judgement finds it changed, and the write is refused."""
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     assert env.job("mods.toggle", enabled=False, expect=True).state == "done"
     outside = header_bundle(b"external")  # the official size, no trailing bytes
-    env.spr.write_bytes(outside)
+    env.portrait.write_bytes(outside)
     env.orphan()
     job = env.job("actions.restore", alt="test")
     assert job.state == "failed" and job.error["code"] == "classic_open"
-    assert env.spr.read_bytes() == outside
+    assert env.portrait.read_bytes() == outside
 
 
 def test_open_classic_always_asks_for_the_classic_gui(env, monkeypatch):
@@ -928,7 +932,7 @@ def test_the_classic_window_waits_for_a_job_writing_the_game_folder(env):
 
 
 def test_a_toggle_cannot_start_between_the_classic_busy_check_and_child_registration(env, monkeypatch):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     s, app = env.s, env.app
     library = s.library
@@ -987,7 +991,7 @@ def test_a_toggle_cannot_start_between_the_classic_busy_check_and_child_registra
     if "error" in toggling:
         assert toggling["error"]["code"] == "classic_open"
         assert library.profiles.path.read_bytes() == before
-        assert env.spr.read_bytes() == mod.file.read_bytes()
+        assert env.portrait.read_bytes() == mod.file.read_bytes()
         assert opening["result"] == {"started": True}
     else:
         assert s.jobs.wait(toggling["result"], 10)
@@ -999,7 +1003,7 @@ def test_a_toggle_cannot_start_between_the_classic_busy_check_and_child_registra
 
 @pytest.mark.parametrize("method", ["mods.toggle", "mods.restoreDrift", "actions.apply", "actions.restore"])
 def test_game_writers_answer_while_the_classic_window_waits_for_ready(env, monkeypatch, method):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     waiting, release, answered = threading.Event(), threading.Event(), threading.Event()
     opening, submitting = {}, {}
@@ -1098,7 +1102,7 @@ def test_a_second_start_brings_the_first_window_to_the_front_and_exits(tmp_path,
 @pytest.mark.parametrize("enabled", [True, False])
 def test_a_lobby_from_another_core_fails_and_the_next_switch_still_runs(env, enabled):
     base = game_bundle(env.game, "test_home", payload=b"base lobby")
-    env.catalog.variants["dress"] = FakeVariant("dress", "dress_spr", "dress_home")
+    env.catalog.alts["dress"] = FakeAlt("dress", "dress_spr", "dress_home")
     dress = game_bundle(env.game, "dress_home", payload=b"dress lobby")
     mod = env.add(dress)
     before = base.read_bytes(), dress.read_bytes()
@@ -1110,7 +1114,7 @@ def test_a_lobby_from_another_core_fails_and_the_next_switch_still_runs(env, ena
     assert not env.s.jobs.busy()
     assert not rpc(env.app, "mods.state")["result"]["busy"]
     assert (base.read_bytes(), dress.read_bytes()) == before
-    assert not env.s.library.configured("test")["lobby"]
+    assert not env.s.library.configured("test")["memorialLobby"]
     # A different worker thread can acquire the library lock after failure.
     assert env.job("actions.restore", alt="test", resourceType="memorialLobby").state == "done"
     assert env.job("actions.apply", alt="dress", source=f"mod:{mod.id}", resourceType="memorialLobby").state == "done"
@@ -1120,8 +1124,8 @@ def test_a_lobby_from_another_core_fails_and_the_next_switch_still_runs(env, ena
 def test_failed_build_finishes_the_apply_and_releases_its_locks(env, monkeypatch, failure):
     from bmpt.library import service
 
-    mod = env.add(env.spr)
-    original = env.spr.read_bytes()
+    mod = env.add(env.portrait)
+    original = env.portrait.read_bytes()
     execute = service.install_staged
     needs_fix = env.s.library._needs_crc_fix
 
@@ -1135,7 +1139,7 @@ def test_failed_build_finishes_the_apply_and_releases_its_locks(env, monkeypatch
     job = env.job("actions.apply", alt="test", source=f"mod:{mod.id}")
     assert job.state == "failed"
     assert job.error["code"] in ("mod_apply_failed", "library_operation_failed")
-    assert env.spr.read_bytes() == original and not env.s.jobs.busy()
+    assert env.portrait.read_bytes() == original and not env.s.jobs.busy()
     patch_everywhere(monkeypatch, [service], "install_staged", execute)
     monkeypatch.setattr(env.s.library, "_needs_crc_fix", needs_fix)
     assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
@@ -1144,7 +1148,7 @@ def test_failed_build_finishes_the_apply_and_releases_its_locks(env, monkeypatch
 
 def test_background_add_switches_and_rescans_with_durable_file_progress(env, monkeypatch):
     env.s.state.set_scan_consent(True)
-    path = make_mod(env.spr, env.tmp / "picker")
+    path = make_mod(env.portrait, env.tmp / "picker")
     env.s.library
     assert env.s.jobs.wait(env.s._prune_job, 5)
     assert env.s.scanner.wait_idle(5)
@@ -1152,7 +1156,7 @@ def test_background_add_switches_and_rescans_with_durable_file_progress(env, mon
     monkeypatch.setattr(env.s.scanner, "request", lambda **kw: scans.append(kw))
     job = env.job("mods.add", paths=[str(path)], background=True)
     assert job.state == "done" and job.writes == "game"
-    assert [(m["target"], m["kind"]) for m in job.result["added"]] == [("test", "spr")]
+    assert [(m["target"], m["resource_type"]) for m in job.result["added"]] == [("test", "portrait")]
     assert job.to_json()["progress"] == {
         "id": job.id,
         "current": 1,
@@ -1161,8 +1165,8 @@ def test_background_add_switches_and_rescans_with_durable_file_progress(env, mon
         "label": t("webui.progress.apply", name=path.name),
     }
     assert job.result["applied"] == job.result["added"] and not job.result["failed"]
-    assert env.spr.read_bytes() == path.read_bytes()
-    assert env.s.library.configured("test")["spr"] == f"mod:{job.result['added'][0]['id']}"
+    assert env.portrait.read_bytes() == path.read_bytes()
+    assert env.s.library.configured("test")["portrait"] == f"mod:{job.result['added'][0]['id']}"
     assert scans
     changed = events_named(env.drain(), "library.changed")
     assert changed[-1] == {"cores": ["test_spr"], "resourceTypes": ["portrait"], "mods": True}
@@ -1216,7 +1220,7 @@ def test_background_add_replaces_a_scan_it_invalidates(env, monkeypatch, scan_fi
     env.s.request_scan()
     assert entered.wait(5)
     try:
-        path = make_mod(env.spr, env.tmp / "picker")
+        path = make_mod(env.portrait, env.tmp / "picker")
         job = env.job("mods.add", paths=[str(path)], background=True)
         assert job.state == "done"
     finally:
@@ -1245,7 +1249,7 @@ def test_apply_rescans_other_cores_changed_by_global_pruning(env, monkeypatch):
         return scan(*args, **kwargs)
 
     monkeypatch.setattr(env.s.library, "scan", measured)
-    mod_a = env.add(env.spr)
+    mod_a = env.add(env.portrait)
     assert env.job("actions.apply", alt="test", source=f"mod:{mod_a.id}").state == "done"
     assert env.s.scanner.wait_idle(5)
     assert scopes == [{"test_spr", "other_spr"}]
@@ -1273,7 +1277,7 @@ def test_switch_rescans_only_changed_cores_and_preserves_other_snapshot_entries(
         return scan(*args, **kwargs)
 
     monkeypatch.setattr(env.s.library, "scan", measured)
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     job = env.job("actions.apply", alt="test", source=f"mod:{mod.id}")
     assert job.state == "done"
     assert env.s.scanner.wait_idle(5)
@@ -1286,7 +1290,7 @@ def test_switch_rescans_only_changed_cores_and_preserves_other_snapshot_entries(
 def test_unchanged_apply_rescans_only_the_variants_cores(env, monkeypatch):
     env.s.set_scan_consent(True)
     assert env.s.scanner.wait_idle(5)
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     assert env.s.scanner.wait_idle(5)
     scopes = []
@@ -1304,21 +1308,21 @@ def test_unchanged_apply_rescans_only_the_variants_cores(env, monkeypatch):
 
 
 def test_delete_rpc_is_a_library_writer_and_retains_source_when_classic_is_open(env):
-    mod = env.add(env.spr)
+    mod = env.add(env.portrait)
     assert env.job("actions.apply", alt="test", source=f"mod:{mod.id}").state == "done"
     env.s.library._write_check = lambda pin: (_ for _ in ()).throw(ServiceError("classic_open"))
     info = rpc(env.app, "mods.removalInfo", id=mod.id)["result"]
-    assert info == {"name": mod.label, "used": True}
+    assert info == {"name": mod.name, "used": True}
     job = env.job("mods.remove", id=mod.id, confirm=True)
     assert job.state == "failed" and job.writes == "library"
     assert job.error["code"] == "classic_open"
     assert env.s.library.mods() == [mod] and mod.file.exists()
-    assert env.s.library.configured("test")["spr"] == f"mod:{mod.id}"
+    assert env.s.library.configured("test")["portrait"] == f"mod:{mod.id}"
     assert env.s.mods_state()["unfinished"]["pending"] == 0
 
 
 def test_add_rpc_reports_duplicate_content(env):
-    path = make_mod(env.spr, env.tmp / "picker")
+    path = make_mod(env.portrait, env.tmp / "picker")
     first = env.job("mods.add", paths=[str(path)], background=True)
     second = env.job("mods.add", paths=[str(path)], background=True)
     assert second.result["added"] == []
@@ -1327,14 +1331,14 @@ def test_add_rpc_reports_duplicate_content(env):
 
 @pytest.mark.parametrize("method", ["add", "background", "adopt", "toggle", "acceptRemap"])
 def test_first_add_baselines_existing_mods_before_storing_new_ones(env, monkeypatch, method):
-    old = env.add(env.spr)
+    old = env.add(env.portrait)
     env.s.close(wait=5)
     path = env.data / "webui.json"
     stored = json.loads(path.read_text(encoding="utf-8"))
     stored.pop("seen_mods")  # simulate a saved state without the seen_mods record
     path.write_text(json.dumps(stored), encoding="utf-8")
     env.s, env.app = env.services()
-    source = make_mod(env.spr, env.tmp / "picker", payload=b"new mod", fixed=True)
+    source = make_mod(env.portrait, env.tmp / "picker", payload=b"new mod", fixed=True)
     if method == "background":
         job = env.job("mods.add", paths=[str(source)], background=True)
         assert job.state == "done", job.error
@@ -1343,7 +1347,7 @@ def test_first_add_baselines_existing_mods_before_storing_new_ones(env, monkeypa
         result = rpc(env.app, "mods.add", paths=[str(source)])["result"]
         assert len(result["added"]) == 1
     elif method in ("adopt", "toggle"):
-        env.spr.write_bytes(source.read_bytes())
+        env.portrait.write_bytes(source.read_bytes())
         if method == "adopt":
             job = env.job("mods.adopt", entries=[{"install": env.key(), "core": "test_spr"}])
         else:
@@ -1351,7 +1355,7 @@ def test_first_add_baselines_existing_mods_before_storing_new_ones(env, monkeypa
             job = env.job("mods.toggle", enabled=False, expect=True)
         assert job.state == "done", job.error
     else:
-        from bmpt.library.models import CompareResult, RemapResult
+        from bmpt.library.records import CompareResult, RemapResult
 
         def accept_remap(library, preview):
             # Use synthetic output instead of rebuilding Unity assets; retain the real library write.
@@ -1376,7 +1380,7 @@ def test_migrated_legacy_library_is_baselined_before_new_adds(env, state):
     legacy, _ = env.services(data=old)
     ids = set()
     for i in range(20):
-        (mod,) = legacy.library.add([make_mod(env.spr, env.tmp / "legacy-input", payload=f"old-{i}".encode())])
+        (mod,) = legacy.library.add([make_mod(env.portrait, env.tmp / "legacy-input", payload=f"old-{i}".encode())])
         ids.add(mod.id)
     legacy.close(wait=5)
     library_state = old / "library" / "state.json"
@@ -1398,7 +1402,7 @@ def test_migrated_legacy_library_is_baselined_before_new_adds(env, state):
     assert {m.id for m in mods} == ids
     assert all(not m.user_added for m in mods)
     assert UiState(migrated / "webui.json").seen_mods() == ids
-    source = make_mod(env.spr, env.tmp / "new-input", payload=b"added after takeover")
+    source = make_mod(env.portrait, env.tmp / "new-input", payload=b"added after takeover")
     result = rpc(env.app, "mods.add", paths=[str(source)])["result"]
     (new,) = result["added"]
     assert new["user_added"] and new["id"] not in env.s.state.seen_mods()
@@ -1406,7 +1410,7 @@ def test_migrated_legacy_library_is_baselined_before_new_adds(env, state):
 
 
 def test_seen_rpc_writes_only_ui_state_and_preserves_seen_duplicates(env, monkeypatch):
-    path = make_mod(env.spr, env.tmp / "picker")
+    path = make_mod(env.portrait, env.tmp / "picker")
     (mod,) = rpc(env.app, "mods.add", paths=[str(path)])["result"]["added"]
     library = env.s.library
     # Startup pruning publishes its own change event; settle it before isolating the seen RPC.
@@ -1427,11 +1431,13 @@ def test_seen_rpc_writes_only_ui_state_and_preserves_seen_duplicates(env, monkey
 @pytest.mark.parametrize("background", [False, True])
 @pytest.mark.parametrize("enabled", [False, True])
 def test_add_rpc_uses_the_normal_switch_for_both_kinds_and_respects_mods_off(env, background, enabled):
-    lobby = game_bundle(env.game, "test_home", part="textassets")
+    memorial_lobby = game_bundle(env.game, "test_home", part="textassets")
     if not enabled:
         env.s.library.toggle(False, expect=True)
-    before = [path.read_bytes() for path in (env.spr, lobby)]
-    sources = [make_mod(path, env.tmp / "upload", payload=path.name.encode()) for path in (env.spr, lobby)]
+    before = [path.read_bytes() for path in (env.portrait, memorial_lobby)]
+    sources = [
+        make_mod(path, env.tmp / "upload", payload=path.name.encode()) for path in (env.portrait, memorial_lobby)
+    ]
     params = {"paths": [str(path) for path in sources], "background": background}
     if background:
         job = env.job("mods.add", **params)
@@ -1443,17 +1449,16 @@ def test_add_rpc_uses_the_normal_switch_for_both_kinds_and_respects_mods_off(env
     assert env.s.state.seen_mods() == set(), "both add modes establish an empty baseline before adding"
     assert result["applied" if enabled else "configured"] == result["added"]
     configured = env.s.library.configured("test")
-    library_kind = {"portrait": "spr", "memorialLobby": "lobby"}
     for entry in result["added"]:
-        assert configured[library_kind[entry["resourceType"]]] == f"mod:{entry['id']}"
-    assert [path.read_bytes() for path in (env.spr, lobby)] == (
+        assert configured[entry["resourceType"]] == f"mod:{entry['id']}"
+    assert [path.read_bytes() for path in (env.portrait, memorial_lobby)] == (
         [path.read_bytes() for path in sources] if enabled else before
     )
 
 
 def test_compatibility_rpc_is_a_read_only_job_and_uses_the_current_install(env, monkeypatch):
-    entry = env.add(env.spr)
-    before = entry.file.read_bytes(), env.spr.read_bytes()
+    entry = env.add(env.portrait)
+    before = entry.file.read_bytes(), env.portrait.read_bytes()
     calls = []
     report = {"official": {}, "mod": {}, "unavailable": False, "outdated": True}
 
@@ -1467,13 +1472,13 @@ def test_compatibility_rpc_is_a_read_only_job_and_uses_the_current_install(env, 
     assert job.state == "done" and job.writes is None and job.result == report
     assert calls == [(entry.id, env.s.library.current_pin())]
     assert job.progress["step"] == "import.step.check"
-    assert (entry.file.read_bytes(), env.spr.read_bytes()) == before
+    assert (entry.file.read_bytes(), env.portrait.read_bytes()) == before
 
 
 @pytest.mark.parametrize("background", [False, True])
 def test_add_rpc_adopts_installed_content_and_refreshes_the_snapshot(env, background):
-    path = make_mod(env.spr, env.tmp / "picker", fixed=True)
-    env.spr.write_bytes(path.read_bytes())
+    path = make_mod(env.portrait, env.tmp / "picker", fixed=True)
+    env.portrait.write_bytes(path.read_bytes())
     if background:
         result = env.job("mods.add", paths=[str(path)], background=True).result
     else:
@@ -1486,14 +1491,14 @@ def test_add_rpc_adopts_installed_content_and_refreshes_the_snapshot(env, backgr
 
 
 def test_mod_alias_rpc_returns_the_saved_name_and_publishes_metadata_change(env):
-    entry = env.add(env.spr)
-    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (env.spr, entry.file)}
+    entry = env.add(env.portrait)
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (env.portrait, entry.file)}
     env.drain()
     for alias in ("My portrait", ""):
         saved = rpc(env.app, "mods.setAlias", id=entry.id, alias=alias)["result"]
         assert saved["id"] == entry.id
         assert saved["alias"] == alias
-        assert saved["name"] == (alias or entry.label)
+        assert saved["name"] == (alias or entry.name)
         assert saved["file"] == str(entry.file)
         assert events_named(env.drain(), "library.changed") == [{"cores": [], "resourceTypes": [], "mods": True}]
     assert all((path.read_bytes(), path.stat().st_mtime_ns) == stamp for path, stamp in before.items())
@@ -1503,10 +1508,10 @@ def test_mod_alias_rpc_returns_the_saved_name_and_publishes_metadata_change(env)
 
 def test_remap_rpc_is_read_only_and_accept_publishes_a_new_library_mod(env, monkeypatch):
     from dataclasses import replace
-    from bmpt.library.models import CompareResult, RemapResult
+    from bmpt.library.records import CompareResult, RemapResult
 
-    entry = env.add(env.spr)
-    rebuilt = replace(entry, id="repacked", label="Repacked")
+    entry = env.add(env.portrait)
+    rebuilt = replace(entry, id="repacked", name="Repacked")
     result = RemapResult(rebuilt, {"partial": False}, CompareResult(rebuilt.id, []))
     calls = []
 
@@ -1536,11 +1541,11 @@ def test_remap_rpc_is_read_only_and_accept_publishes_a_new_library_mod(env, monk
     assert job.result == result.to_json()
     from bmpt.webui.services_jobs import _changed_of
 
-    assert _changed_of(result) == {"cores": [entry.core], "kinds": [entry.kind], "mods": True}
+    assert _changed_of(result) == {"cores": [entry.core], "resource_types": [entry.resource_type], "mods": True}
 
 
 def test_compatibility_stamp_rpc_is_read_only_and_uses_the_current_install(env, monkeypatch):
-    entry = env.add(env.spr)
+    entry = env.add(env.portrait)
     calls = []
     monkeypatch.setattr(env.s.library, "compatibility_stamp", lambda mod, pin=None: calls.append((mod, pin)) or "stamp")
     assert rpc(env.app, "actions.compatibilityStamp", mod=entry.id)["result"] == "stamp"

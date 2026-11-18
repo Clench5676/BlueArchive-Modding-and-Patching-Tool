@@ -58,32 +58,32 @@ def test_reapply_reuses_only_a_referenced_build_after_restart(setup_library, mon
     assert not list((env.root / "built").iterdir())
 
 
-@pytest.mark.parametrize("core, kind", [("test_spr", "spr"), ("test_home_gl", "lobby")])
+@pytest.mark.parametrize("core, kind", [("test_spr", "portrait"), ("test_home_gl", "memorialLobby")])
 def test_restore_removes_the_only_retained_build_and_reapply_rebuilds(setup_library, monkeypatch, core, kind):
     env = setup_library
-    target = env.original if kind == "spr" else game_bundle(env.game_dir, core)
+    target = env.original if kind == "portrait" else game_bundle(env.game_dir, core)
     official = target.read_bytes()
     (mod,) = env.library.add([make_mod(target, env.tmp / "upload")])
     builder(env, monkeypatch)
-    env.library.apply("test", f"mod:{mod.id}", kind=kind)
+    env.library.apply("test", f"mod:{mod.id}", resource_type=kind)
     env.library.toggle(False, True)
     env.library.toggle(True, False)
     assert env.library.sizes("built")["builtSize"] > 0
-    env.library.restore("test", kind=kind)
+    env.library.restore("test", resource_type=kind)
     assert target.read_bytes() == official
     assert not list((env.root / "built").rglob("*.bundle"))
     assert env.library.sizes("built")["builtSize"] == 0
     env.library = reload_library(env)
     calls = builder(env, monkeypatch)
-    env.library.apply("test", f"mod:{mod.id}", kind=kind)
+    env.library.apply("test", f"mod:{mod.id}", resource_type=kind)
     assert calls == [mod.id]
     assert not list((env.root / "built").iterdir())
 
 
-@pytest.mark.parametrize("kind", ["spr", "lobby"])
+@pytest.mark.parametrize("kind", ["portrait", "memorialLobby"])
 def test_refused_apply_leaves_no_persistent_build(setup_library, monkeypatch, kind):
     env = setup_library
-    target = env.original if kind == "spr" else game_bundle(env.game_dir, "test_home_gl")
+    target = env.original if kind == "portrait" else game_bundle(env.game_dir, "test_home_gl")
     official = target.read_bytes()
     (mod,) = env.library.add([make_mod(target, env.tmp / "upload")])
     calls = builder(env, monkeypatch)
@@ -93,7 +93,7 @@ def test_refused_apply_leaves_no_persistent_build(setup_library, monkeypatch, ki
 
     monkeypatch.setattr(env.library, "_write_check", refuse)
     with pytest.raises(ServiceError, match="game_running"):
-        env.library.apply("test", f"mod:{mod.id}", kind=kind)
+        env.library.apply("test", f"mod:{mod.id}", resource_type=kind)
     # a refusal of the moment comes before anything is built
     assert calls == [] and target.read_bytes() == official
     assert not (env.root / "built").exists()

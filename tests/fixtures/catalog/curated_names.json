@@ -107,8 +107,8 @@
     "tsurugi_swimsuit": "ch0060"
   },
   "rules": {
-    "full": "base name; variant part in brackets. zh/ja full-width （）, en ' (...)' with a space before. Parts joined by '，' (zh), ', ' (en), '、' (ja). Never a middle dot (U+00B7 or U+30FB). Terror forms use the official '＊' pattern (en '*').",
-    "short": "chip label: the bracket content only; the base variant uses 原皮 (zh-CN), 原皮 (zh-TW), Original (en), 通常 (ja); Terror forms use the part after ＊."
+    "full": "base name; alt part in brackets. zh/ja full-width （）, en ' (...)' with a space before. Parts joined by '，' (zh), ', ' (en), '、' (ja). Never a middle dot (U+00B7 or U+30FB). Terror forms use the official '＊' pattern (en '*').",
+    "short": "chip label: the bracket content only; the base alt uses 原皮 (zh-CN), 原皮 (zh-TW), Original (en), 通常 (ja); Terror forms use the part after ＊."
   },
   "variants": {
     "aris": {

@@ -180,7 +180,7 @@ class ImportResult:
 
     results: list[dict]
     cores: set[str] = field(default_factory=set)
-    kinds: set[str] = field(default_factory=set)
+    resource_types: set[str] = field(default_factory=set)
     added: list[Any] = field(default_factory=list)
     mods_changed: bool = True
 

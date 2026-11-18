@@ -90,7 +90,8 @@ def rig(value, atlas: Atlas, max_poses: int | None = None) -> Rig:
     Args:
         value: The geometry the page posted (``slots`` and ``poses``).
         atlas: The atlas the rig draws from.
-        max_poses: The most poses taken; None allows ``MAX_POSES`` (a graft's test rig asks for one per candidate).
+        max_poses: The most poses taken; None allows ``MAX_POSES`` (an animation transfer's test rig asks for one per
+        candidate).
 
     Raises:
         RemapError: ``bad_params`` for geometry that fails a check.

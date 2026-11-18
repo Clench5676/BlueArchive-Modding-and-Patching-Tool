@@ -1,5 +1,5 @@
 // The percentage after a job's progress line (job-progress.js): its wording in every locale, how it moves within an
-// item and from one item to the next, and that the widest 3D model line still fits the loading label.
+// item and from one item to the next, and that the widest chibi line still fits the loading label.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -38,7 +38,7 @@ for (const locale of LOCALES)
         names: { en: { full: "Hina", short: "Original" } },
         student: { key: "hina", studentNames: { en: "Hina" } },
       },
-      T("tab.model"),
+      T("tab.chibi"),
     );
     const line = jobProgress({ action: "progress.actionApply", name, current: 1, total: 3 });
     assert.equal(
@@ -91,14 +91,14 @@ test("the shown fraction only grows within an item and starts again with the nex
 
 // The loading label (loading.js, ngui-label.js loadingLabel): 1000 stage px wide, in the font of UICharacterDetail's
 // Inventory_ListControl/LeftInfo/CharInfo/Char_Target/Text_Lv/Text_Lv_Exp (fontSize 32, scale 1.001), which ellipsizes
-// what does not fit. The widest 3D model line of the catalog, with the percentage, keeps it whole.
+// what does not fit. The widest chibi line of the catalog, with the percentage, keeps it whole.
 const LABEL_WIDTH = 1000,
   LABEL_FONT = 32 * 1.001;
 for (const locale of LOCALES)
-  test(`the widest 3D model progress line with its percentage fits the loading label in ${locale}`, () => {
+  test(`the widest chibi progress line with its percentage fits the loading label in ${locale}`, () => {
     use(locale);
     let widest = { width: 0, line: "" };
-    for (const [key, entry] of Object.entries(catalog.variants)) {
+    for (const [key, entry] of Object.entries(catalog.alts)) {
       const student = catalog.students[entry.student_id];
       const alt = { key, names: entry.names, student: { key: student.base, studentNames: student.names } };
       for (const action of [
@@ -109,7 +109,7 @@ for (const locale of LOCALES)
       ]) {
         const line = jobProgress({
           action,
-          name: progressName(alt, T("tab.model")),
+          name: progressName(alt, T("tab.chibi")),
           current: 10,
           total: 10,
           fraction: 0.99,

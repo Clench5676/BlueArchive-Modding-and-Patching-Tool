@@ -1,5 +1,5 @@
-// Tests for web/js/roster/roster-order.js (the student list's cards and their order), run by tests/test_roster_order.py
-// with Node's test runner: node --test tests/js/roster_order.test.mjs
+// Tests for web/js/student-list/student-list-order.js (the student list's cards and their order), run by
+// tests/test_roster_order.py with Node's test runner: node --test tests/js/roster_order.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -16,7 +16,7 @@ import {
   normalizeView,
   order,
   visit,
-} from "../../src/bmpt/web/js/roster/roster-order.js";
+} from "../../src/bmpt/web/js/student-list/student-list-order.js";
 
 const v = (key, extra = {}) => ({
   key,
@@ -83,7 +83,7 @@ const label = (x) => x?.["zh-CN"] ?? x?.en;
 const keys = (list) => list.map((c) => c.key);
 const view = (extra = {}) => ({ ...normalizeView(DEFAULT_VIEW), ...extra });
 
-test("roster cards keep unseen mod marks per alt and across a merged student until all are seen", () => {
+test("studentList cards keep unseen mod marks per alt and across a merged student until all are seen", () => {
   const d = data(),
     alts = d.students[0].alts;
   alts[0].fresh = true;
@@ -216,7 +216,7 @@ test("a visit moves the alt to the front of the recently viewed, like the server
   visit(d, "citizen_borot2");
   assert.equal(order(d, view({ groupAlts: true }), { label }).find((c) => c.student === "hoshino").recent, 1);
   // the indexes the server gives after UiState.visit ([key, *others][:RECENT_MAX]), with keys of another install
-  // (not in this roster) among them; an alt viewed for the first time pushes the last one out
+  // (not in this student list) among them; an alt viewed for the first time pushes the last one out
   const server = Array.from({ length: RECENT_MAX }, (_, i) => `k${i}`);
   const many = {
     students: [
@@ -507,7 +507,7 @@ test("the arrows step through the shown cards in order and wrap", () => {
   assert.equal(neighbour(list, full, at("hoshino_swimsuit", "hoshino"), 1).key, "hoshino");
   assert.equal(neighbour(list, full, at("hoshino", "hoshino"), 1).key, "aru"); // wraps
   assert.equal(neighbour(list, full, at("aru", "aru"), -1).key, "hoshino"); // wraps back
-  // an alt the list hides steps from its place in the whole roster: np0045 comes after hoshino there
+  // an alt the list hides steps from its place in the whole student list: np0045 comes after hoshino there
   assert.equal(neighbour(list, full, at("np0045", "hoshino"), 1).key, "aru");
   assert.equal(neighbour(list, full, at("np0045", "hoshino"), -1).key, "hoshino");
   // the only card: nowhere to go

@@ -204,12 +204,12 @@ def test_blocked_sources_still_serve_renderable_preview_assets(env, monkeypatch,
 def test_blocked_model_source_has_an_import_preview_route(batch_model_env, monkeypatch):
     env = batch_model_env
     source = make_mod(env.parts[0], env.tmp / "input")
-    monkeypatch.setattr(env.library, "supports_kind", lambda kind: False)
+    monkeypatch.setattr(env.library, "supports_resource_type", lambda kind: False)
     (entry,) = analyze(env, [source])["entries"]
     assert entry["state"] == "blocked" and entry["resourceType"] == "chibi" and entry["preview"]
     seen = []
     env.services._game = SimpleNamespace(
-        model_glb=lambda core, **kwargs: seen.append((core, kwargs)) or b"model preview"
+        chibi_glb=lambda core, **kwargs: seen.append((core, kwargs)) or b"model preview"
     )
     response = env.services.asset("chibi/hoshino.glb", {"source": "import:" + entry["preview"]["key"]})
     assert response.body == b"model preview"
@@ -226,7 +226,7 @@ def test_import_lobby_still_route_supplies_the_identified_game_camera(env):
         "layers": [{"name": "test_home", "x": 37.5, "y": -880, "scale": 0.72}],
     }
     requested = []
-    env.services._game = SimpleNamespace(lobby_info=lambda core: requested.append(core) or info)
+    env.services._game = SimpleNamespace(memorial_lobby_info=lambda core: requested.append(core) or info)
     app, prefix = preview_route(env, entry)
     status, _, manifest = call(app, prefix + "/manifest.json")
     revision = json.loads(manifest)["revision"]

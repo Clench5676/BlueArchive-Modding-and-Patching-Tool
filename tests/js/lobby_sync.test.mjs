@@ -1,11 +1,11 @@
-// Tests for the memorial lobby's random-timing clips and sound keys (web/js/lobby/lobby-sync.js) and the clips a
-// skeleton's idle starts (web/js/lobby/lobby-measure.js idleClips), against a stand-in for spine's AnimationState. Run
-// by tests/test_lobby_view.py with Node's test runner.
+// Tests for the memorial lobby's random-timing clips and sound keys (web/js/memorial-lobby/memorial-lobby-sync.js) and
+// the clips a skeleton's idle starts (web/js/memorial-lobby/memorial-lobby-measure.js idleClips), against a stand-in
+// for spine's AnimationState. Run by tests/test_lobby_view.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const Sync = await import("../../src/bmpt/web/js/lobby/lobby-sync.js");
-const Lobby = await import("../../src/bmpt/web/js/lobby/lobby.js");
+const Sync = await import("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-sync.js");
+const MemorialLobby = await import("../../src/bmpt/web/js/memorial-lobby/memorial-lobby.js");
 
 // an AnimationState that records what is set and queued; entries carry a listener like spine-ts's
 class State {
@@ -239,13 +239,13 @@ test("listen adds to the handlers an entry already has", () => {
 test("the idle starts its sync clips and the rest of its pool", () => {
   const clip = (name) => ({ Idle_01: { sync: ["Train_00_R", "Train_00_R"] } })[name] || { sync: [] };
   const info = { idles: { Shigure_home: ["Idle_01"], CH0336_home: ["Idle_01", "Idle_BG_B_01_R", "Idle_Cloud_01_R"] } };
-  assert.deepEqual(Lobby.idleClips(info, "Shigure_home", "Idle_01", clip), ["Train_00_R"]);
-  assert.deepEqual(Lobby.idleClips(info, "CH0336_home", "Idle_01", clip), [
+  assert.deepEqual(MemorialLobby.idleClips(info, "Shigure_home", "Idle_01", clip), ["Train_00_R"]);
+  assert.deepEqual(MemorialLobby.idleClips(info, "CH0336_home", "Idle_01", clip), [
     "Train_00_R",
     "Idle_BG_B_01_R",
     "Idle_Cloud_01_R",
   ]);
   // a looping animation the pool does not start with (a mod, a fallback idle), or no data: nothing more
-  assert.deepEqual(Lobby.idleClips(info, "CH0336_home", "Idle_02", clip), []);
-  assert.deepEqual(Lobby.idleClips(null, "Shigure_home", "Idle_01", clip), []);
+  assert.deepEqual(MemorialLobby.idleClips(info, "CH0336_home", "Idle_02", clip), []);
+  assert.deepEqual(MemorialLobby.idleClips(null, "Shigure_home", "Idle_01", clip), []);
 });

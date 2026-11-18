@@ -1,10 +1,11 @@
-// The roster band's two library counts: portraits and memorial lobbies, each a game icon plus "x n". When an icon is
-// missing from the loaded atlases the count falls back to a short word (locale keys band.portrait, band.lobby).
+// The student list band's two library counts: portraits and memorial lobbies, each a game icon plus "x n". When an icon
+// is missing from the loaded atlases the count falls back to a short word (locale keys band.portrait,
+// band.memorialLobby).
 import { label, node, sprite, textWidth } from "../ui/ngui.js";
 
 // The game sprites drawn as the count icons, both already drawn elsewhere in the UI: the Students entry of the
-// bottom navigation (nav-items.js) and the play button of the lobby tab (detail.js). Change a name here to swap
-// an icon.
+// bottom navigation (nav-items.js) and the play button of the memorial lobby tab (detail.js). Change a name here to
+// swap an icon.
 export const COUNT_ICONS = Object.freeze({
   portrait: "Common_Icon_Student",
   memorialLobby: "Common_Icon_Play",
@@ -13,7 +14,12 @@ export const COUNT_ICONS = Object.freeze({
 });
 
 const KINDS = ["portrait", "memorialLobby", "chibi", "other"];
-const WORD = { portrait: "band.portrait", memorialLobby: "band.lobby", chibi: "tab.model", other: "import.other" };
+const WORD = {
+  portrait: "band.portrait",
+  memorialLobby: "band.memorialLobby",
+  chibi: "tab.chibi",
+  other: "import.other",
+};
 
 /**
  * The count icons the loaded atlas index has, by kind: { atlas, name, ratio }; a kind without its sprite is
@@ -37,7 +43,7 @@ export function iconsOf(index = {}) {
  * The accessible text of a card's mod counts.
  */
 export const countText = (counts, T) =>
-  T("band.modCounts", { portraits: counts?.portrait || 0, lobbies: counts?.memorialLobby || 0 });
+  T("band.modCounts", { portraits: counts?.portrait || 0, memorialLobbies: counts?.memorialLobby || 0 });
 
 /**
  * The portrait band's count nodes: one half per kind, both always shown (zero too); long text shrinks in place.

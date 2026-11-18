@@ -6,8 +6,8 @@ import { emptyBlock } from "../../src/bmpt/web/js/ui/empty-block.js";
 import { CONTROL, SPACE } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 import { row } from "../../src/bmpt/web/js/ui/ui-grid.js";
 const text = {
-  "roster.title": "Student List",
-  "roster.merge": "Group Alts",
+  "studentList.title": "Student List",
+  "studentList.merge": "Group Alts",
   "seg.all": "All",
   "seg.mods": "Modded",
   "seg.noMods": "No Mod",
@@ -25,7 +25,10 @@ const fit = (value, size, min, width) => ({
   fs: Math.max(min, Math.min(size, width / (value.length * 0.45))),
   lines: 1,
 });
-let source = await readFile(new URL("../../src/bmpt/web/js/roster/roster-widgets.js", import.meta.url), "utf8");
+let source = await readFile(
+  new URL("../../src/bmpt/web/js/student-list/student-list-widgets.js", import.meta.url),
+  "utf8",
+);
 source = source.replace(/^import [^;]*;$/gm, "");
 // ink as the page font draws it: 0.72 em above the baseline, 0.2 below for a letter with a descender, in a box
 // 1.15 em a line
@@ -67,7 +70,7 @@ globalThis.toolbarFixture = {
 const { toolbarLayout, toolbarTree, toggleHits, emptyListY, EMPTY_LIST } = await import(
   `data:text/javascript;base64,${Buffer.from("const {clone,filtering,CONTROL,SPACE,row,NGUI,T,S,emptyBlock,advanceOf,glyphsOf,SORTS}=globalThis.toolbarFixture;\n" + source).toString("base64")}`
 );
-test("shared roster toolbar fits every control in one row and keeps anchors fixed when sort changes", () => {
+test("shared student list toolbar fits every control in one row and keeps anchors fixed when sort changes", () => {
   let anchors;
   for (const sort of globalThis.toolbarFixture.SORTS) {
     const lay = toolbarLayout({ sort });
@@ -79,7 +82,7 @@ test("shared roster toolbar fits every control in one row and keeps anchors fixe
       [lay.sort - lay.sortW / 2, lay.sortW],
       [lay.order - 75, 150],
     ];
-    assert.ok(boxes[0][0] >= -1270 + measure(text["roster.title"], lay.titleFs) + SPACE.l);
+    assert.ok(boxes[0][0] >= -1270 + measure(text["studentList.title"], lay.titleFs) + SPACE.l);
     for (let i = 1; i < boxes.length; i++)
       assert.ok(boxes[i][0] >= boxes[i - 1][0] + boxes[i - 1][1] + (i < 4 ? SPACE.l : SPACE.m));
     assert.equal(boxes.at(-1)[0] + boxes.at(-1)[1], 1412);
@@ -140,12 +143,12 @@ test("every shipped language names the segments and Group Alts with its own capt
       ).webui;
       globalThis.toolbarFixture.table = Object.fromEntries([
         ...Object.entries(ui.seg).map(([k, v]) => [`seg.${k}`, v]),
-        ["roster.merge", ui.roster.merge],
+        ["studentList.merge", ui.studentList.merge],
       ]);
       const names = toggleHits({ mods: "all", releaseStatus: "all", groupAlts: false }, lay).map((h) => h.name);
       assert.deepEqual(
         names,
-        [ui.seg.all, ui.seg.mods, ui.seg.noMods, ui.seg.all, ui.seg.recruit, ui.seg.noRecruit, ui.roster.merge],
+        [ui.seg.all, ui.seg.mods, ui.seg.noMods, ui.seg.all, ui.seg.recruit, ui.seg.noRecruit, ui.studentList.merge],
         lang,
       );
       assert.ok(names.every(Boolean));
@@ -158,7 +161,7 @@ test("every shipped language names the segments and Group Alts with its own capt
 // the empty list's picture and message sit on the middle of the paper the eye sees
 const PAPER_TOP = 334.5,
   PAPER_BOTTOM = -714.5,
-  SEARCH_LIST_TOP = 314 - 112 - 20; // roster.js: the whole paper, and what the open search box leaves
+  SEARCH_LIST_TOP = 314 - 112 - 20; // student-list.js: the whole paper, and what the open search box leaves
 const inkOf = (root, label) => {
   // [top, bottom] of the block's ink in units (y up), the root at `root`
   const { picture } = EMPTY_LIST,
@@ -170,7 +173,7 @@ for (const [name, top] of [
   ["without search", PAPER_TOP],
   ["with the search box open", SEARCH_LIST_TOP],
 ])
-  test(`the roster's empty block is centred on the visible paper, ${name}`, () => {
+  test(`the student list's empty block is centred on the visible paper, ${name}`, () => {
     const centre = (top + PAPER_BOTTOM) / 2;
     for (const text of [
       "No Results",
@@ -200,7 +203,8 @@ test("the search box moves the empty block up by half of what it covers, and the
   const open = emptyListY((SEARCH_LIST_TOP + PAPER_BOTTOM) / 2, label),
     closed = emptyListY((PAPER_TOP + PAPER_BOTTOM) / 2, label);
   assert.ok(Math.abs(closed - open - (PAPER_TOP - SEARCH_LIST_TOP) / 2) < 1e-6);
-  // roster.js before: the prefab's root (53) shifted by the box's whole height, so the label ended below the paper
+  // student-list.js before: the prefab's root (53) shifted by the box's whole height, so the label ended below the
+  // paper
   const old = 53 - (PAPER_TOP - SEARCH_LIST_TOP),
     oldBottom = old + EMPTY_LIST.label - 28; // the label box is 56 high: its bottom at -716.5
   assert.ok(oldBottom < PAPER_BOTTOM, "the old label reached past the paper's bottom with the search open");
@@ -208,7 +212,7 @@ test("the search box moves the empty block up by half of what it covers, and the
 });
 
 for (const locale of ["en-US", "zh-CN"])
-  test(`roster toolbar uses centred shared icon bodies and design-system gaps in ${locale}`, () => {
+  test(`studentList toolbar uses centred shared icon bodies and design-system gaps in ${locale}`, () => {
     const ui = JSON.parse(
       readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"),
     ).webui;
@@ -291,7 +295,7 @@ function toolbarPrefab() {
   };
 }
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
-  test(`roster clones draw the layout boxes and fit captions in ${locale}`, async () => {
+  test(`studentList clones draw the layout boxes and fit captions in ${locale}`, async () => {
     const ctx = {
       font: "",
       measureText(value) {
@@ -323,7 +327,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
     fixture.real = real;
     fixture.NGUI.fitGroup = real.fitGroup;
     fixture.table = Object.fromEntries([
-      ...["seg", "sort", "roster"].flatMap((group) =>
+      ...["seg", "sort", "studentList"].flatMap((group) =>
         Object.entries(ui[group]).map(([key, value]) => [group + "." + key, value]),
       ),
     ]);

@@ -62,7 +62,7 @@ function assertBreaks(text, lang, maxW, maxLines = 4) {
   return lines;
 }
 
-test("an ellipsis or a question mark never starts a line (zh-TW lobby line)", () => {
+test("an ellipsis or a question mark never starts a line (zh-TW memorial lobby line)", () => {
   assertBreaks("我一個人這麼開心是可以的嗎… 你說這擔心是多餘的？…是…", "zh-TW", 7 * 32);
 });
 

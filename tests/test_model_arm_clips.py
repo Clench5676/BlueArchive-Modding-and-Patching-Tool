@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from bmpt.gameassets import model_arm_clips as ac, model_skirts as ms
-from bmpt.gameassets.model_glb import decode_clip, read_streamed
+from bmpt.gameassets import chibi_arm_clips as ac, chibi_skirts as ms
+from bmpt.gameassets.chibi_glb import decode_clip, read_streamed
 from module_patches import patch_everywhere
 
 
@@ -160,9 +160,9 @@ def test_official_copies_leave_originals_and_other_consumers_unchanged_and_expor
 ):
     import time
     from bmpt.engine import Bundle, SaveOptions
-    from bmpt.gameassets import model_adapt as ma, model_arm_frames as arf, model_arm_solve as ars, model_arms as ar
+    from bmpt.gameassets import chibi_adapt as ma, chibi_arm_frames as arf, chibi_arm_solve as ars, chibi_arms as ar
     from bmpt.gameassets.discovery import cab_names
-    from bmpt.gameassets.model import BundleGraph, _prefabs, _key, _Exporter, export_chibi
+    from bmpt.gameassets.chibi import BundleGraph, _prefabs, _key, _Exporter, export_chibi
     from test_model_adapt import _slot
 
     files, index = view
@@ -246,7 +246,7 @@ def test_official_copies_leave_originals_and_other_consumers_unchanged_and_expor
 
 def test_synthetic_copy_and_repoint_keeps_original_clip_enemy_and_timeline_bytes(monkeypatch):
     import json
-    from bmpt.gameassets import model_adapt as ma
+    from bmpt.gameassets import chibi_adapt as ma
 
     class Obj:
         def __init__(self, sf, pid, kind, tree):
@@ -331,13 +331,13 @@ def test_duplicate_bindings_and_keys_keep_their_original_order():
 @official
 def test_official_repeated_binding_readback_remains_value_exact(view):
     import zlib
-    from bmpt.gameassets import model_adapt as ma
-    from bmpt.gameassets.model import BundleGraph
+    from bmpt.gameassets import chibi_adapt as ma
+    from bmpt.gameassets.chibi import BundleGraph
     from test_model_adapt import _slot
 
     files, index = view
     with BundleGraph(index) as graph:
-        prefabs = ma._model_prefabs(graph, [p for p in _slot(files, "ch0266") if p.name.startswith("character-")])
+        prefabs = ma._chibi_prefabs(graph, [p for p in _slot(files, "ch0266") if p.name.startswith("character-")])
         sk = ma.Skeleton.of(graph, prefabs[ma.choose_prefab(prefabs, "ch0266")].deref())
         clips = ma.prefab_clips(graph, sk, ma.own_prefabs(prefabs, "ch0266"))
         clip = ma.pick(clips, ["Move_End_Kneel"])[0]
@@ -362,7 +362,7 @@ def test_official_ungated_pair_build_is_byte_identical_to_the_previous_path(view
     import hashlib
     import time
     from bmpt.engine import Bundle
-    from bmpt.gameassets import model_adapt as ma, model_arm_frames as arf, model_arm_solve as ars, model_arms as ar
+    from bmpt.gameassets import chibi_adapt as ma, chibi_arm_frames as arf, chibi_arm_solve as ars, chibi_arms as ar
     from test_model_adapt import _slot
 
     files, index = view

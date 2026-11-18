@@ -1,6 +1,6 @@
 """Serialize read-only Unity bundle access with process-wide path locks.
 
-open_bundle holds each lock through object reads, allowing exports under the model lock
+open_bundle holds each lock through object reads, allowing exports under the chibi lock
 to hold several bundles. load_bundle holds it only for loading, then reads from memory.
 """
 
@@ -53,7 +53,7 @@ def load_bundle(path: Path) -> Iterator[Environment]:
     Bundle.load reads a
     bundle's blocks into memory and closes the file, so its objects are read afterwards without it. A reader that
     opens several bundles this way holds at most one path lock at a time, for one load, so it never waits on a
-    reader that holds many (an export) while holding one itself, and needs no model lock (a costume build).
+    reader that holds many (an export) while holding one itself, and needs no chibi lock (a costume build).
 
     Args:
         path: Bundle file, resolved to select the shared path lock.

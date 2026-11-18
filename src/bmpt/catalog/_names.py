@@ -5,7 +5,7 @@ character map's Kivo columns (name_kivo, skin_kivo), and the CN server's (name_c
 only fill in where Kivo has none. Japanese, English, Traditional Chinese and Korean use their
 own columns. Thai uses the official playable names derived from SchaleDB, with English
 fallbacks for missing names and story sprites. The CN server's
-names stay findable: they are the aliases the roster search matches (cn_words, cn_base,
+names stay findable: they are the aliases the student list search matches (cn_words, cn_base,
 cn_name).
 """
 
@@ -26,7 +26,7 @@ SEPARATORS: dict[str, str] = NAMING["separators"]
 # Curated base names keyed by the zh-CN base the character map yields; each lists only the
 # languages the map lacks or gets wrong, plus whether that wording is official or translated.
 NAMES: dict[str, dict[str, str]] = NAMING["names"]
-# Variant words for sprites whose Kivo remark would leave them named like another sprite,
+# alt words for sprites whose Kivo remark would leave them named like another sprite,
 # keyed by file id; Kivo's own remark wins once it has one.
 TWINS: dict[str, dict[str, str]] = NAMING["twins"]
 PART_SEPARATORS = r"[,\uff0c\u3001\u00b7\u30fb]"
@@ -76,14 +76,14 @@ def given_name(value: str) -> str:
 
 
 def bracketed(base: str, inner: str, lang: str) -> str:
-    """Enclose variant words using the language's bracket and spacing conventions.
+    """Enclose alt words using the language's bracket and spacing conventions.
 
     English and Thai use a space before half-width brackets, Korean omits the space,
     and Chinese and Japanese use full-width brackets.
 
     Args:
-        base: Student name preceding the variant label.
-        inner: Already joined variant words to enclose, including an empty label.
+        base: Student name preceding the alt label.
+        inner: Already joined alt words to enclose, including an empty label.
         lang: Catalog language code selecting brackets and spacing.
     """
     if lang in ("en", "th"):
@@ -94,23 +94,23 @@ def bracketed(base: str, inner: str, lang: str) -> str:
 
 
 def short_name(full: str, lang: str) -> str:
-    """Return the variant part, including the official Terror suffix convention.
+    """Return the alt part, including the official Terror suffix convention.
 
     Args:
         full: Display name with optional trailing brackets or a Terror asterisk suffix.
-        lang: Catalog language code selecting the base label when no variant part exists.
+        lang: Catalog language code selecting the base label when no alt part exists.
     """
     match = re.search(r"[\uff08(](.*)[\uff09)]$|[\uff0a*](.+)$", full)
     return next(part for part in match.groups() if part is not None) if match else BASE_SHORT[lang]
 
 
 def compose(base: str, parts: list[str], lang: str) -> dict[str, str]:
-    """Compose a full display name and its variant chip label.
+    """Compose a full display name and its alt chip label.
 
     Args:
-        base: Localized student name to retain before any variant words.
+        base: Localized student name to retain before any alt words.
         parts: Costume or story labels, normalized and deduplicated in their existing order.
-        lang: Catalog language code selecting separators, brackets, and the base-variant label.
+        lang: Catalog language code selecting separators, brackets, and the base-alt label.
     """
     inner = SEPARATORS[lang].join(dict.fromkeys(clean(part, lang) for part in parts if part))
     full = bracketed(base, inner, lang)
@@ -140,7 +140,7 @@ def _glossary_wins(raw: str, localized: str, lang: str) -> bool:
 
 
 def _parts(row: dict[str, str], lang: str) -> list[tuple[str, dict | str | None]]:
-    """Return the variant words of a row with their origin.
+    """Return the alt words of a row with their origin.
 
     The origin is "csv" for a localized character map skin, the glossary entry that
     supplied the word, or None when the raw Kivo text had to be kept. Glossary keys are
@@ -187,14 +187,14 @@ def csv_names(row: dict[str, str], bases: dict[str, str]) -> tuple[dict, dict]:
         if not usable(column(row, "name", lang)):
             fallbacks.setdefault(lang, "missing_csv_name")
         if story:
-            fallbacks.setdefault(lang, "story_variant")
+            fallbacks.setdefault(lang, "story_alt")
     names["th"] = thai_fallback(names["en"])
     fallbacks["th"] = "missing_thai_name"
     return names, fallbacks
 
 
 def _origin(origin: dict | str | None, lang: str) -> str:
-    """Classify one variant word as official, translated or fallback wording."""
+    """Classify one alt word as official, translated or fallback wording."""
     if origin is None:
         return "fallback"
     if origin == "csv":
@@ -270,14 +270,14 @@ def csv_bases(row: dict[str, str]) -> dict[str, str]:
 
 
 def thai_fallback(english: dict[str, str]) -> dict[str, str]:
-    """Keep English names until official Thai wording is available; localize the base-variant label."""
+    """Keep English names until official Thai wording is available; localize the base-alt label."""
     return {
         "full": english["full"],
         "short": BASE_SHORT["th"] if english["short"] == BASE_SHORT["en"] else english["short"],
     }
 
 
-def apply_thai_names(students: dict, variants: dict, rows: dict | None = None) -> None:
+def apply_thai_names(students: dict, alts: dict, rows: dict | None = None) -> None:
     """Add official Global Thai playable names, otherwise explicit English fallbacks.
 
     The shipped values are derived from SchaleDB's existing Thai student table, keyed
@@ -286,7 +286,7 @@ def apply_thai_names(students: dict, variants: dict, rows: dict | None = None) -
 
     Args:
         students: Student records to update in place with Thai personal names or English fallbacks.
-        variants: Variant records to update with Thai full names, short labels, and provenance.
+        alts: Alt records to update with Thai full names, short labels, and provenance.
         rows: SchaleDB Thai records by character ID; None uses the shipped naming table.
     """
     rows = NAMING["thai"]["students"] if rows is None else rows
@@ -297,12 +297,12 @@ def apply_thai_names(students: dict, variants: dict, rows: dict | None = None) -
         and ("IsReleased" not in row or len(row["IsReleased"]) > 1 and row["IsReleased"][1])
     }
     for student in students.values():
-        source = rows.get(str(variants[student["base"]].get("schale_id")), {})
+        source = rows.get(str(alts[student["base"]].get("schale_id")), {})
         personal = source.get("PersonalName", "")
         student["names"]["th"] = (
             clean(personal, "th") if re.search(r"[\u0e00-\u0e7f]", personal) else student["names"]["en"]
         )
-    for entry in variants.values():
+    for entry in alts.values():
         source = rows.get(str(entry.get("schale_id")), {}) if entry["playable"] else {}
         if source:
             full = clean(source["Name"], "th")
@@ -315,7 +315,7 @@ def apply_thai_names(students: dict, variants: dict, rows: dict | None = None) -
             entry.setdefault("fallbacks", {})["th"] = "missing_thai_name"
 
 
-# --- aliases: the CN server's wording, which the roster search matches although zh-CN shows Kivo's ---
+# --- aliases: the CN server's wording, which the student list search matches although zh-CN shows Kivo's ---
 
 
 def cn_words(rows: Iterable[dict[str, str]]) -> dict[str, str]:
@@ -350,7 +350,7 @@ def cn_base(row: dict[str, str]) -> str:
 
 
 def name_head(full: str) -> str:
-    """Return a zh-CN full name without its bracketed variant words."""
+    """Return a zh-CN full name without its bracketed alt words."""
     match = re.fullmatch(r"(.*?)\uff08(.*)\uff09", full)
     return match.group(1) if match else full
 
@@ -358,11 +358,11 @@ def name_head(full: str) -> str:
 def cn_name(full: str, base: str, server_base: str, words: dict[str, str]) -> str:
     """Return a zh-CN full name in the CN server's wording.
 
-    The base name it starts with becomes ``server_base`` and each variant word in its
+    The base name it starts with becomes ``server_base`` and each alt word in its
     brackets the server's word (``words``, from cn_words); the rest is kept.
 
     Args:
-        full: Kivo display name, optionally ending in full-width variant brackets.
+        full: Kivo display name, optionally ending in full-width alt brackets.
         base: Leading student name eligible for replacement.
         server_base: CN-server spelling to substitute for that leading name.
         words: Kivo-to-CN costume word translations from cn_words.
@@ -383,19 +383,19 @@ def cn_aliases(
     heads: Iterable[str] = (),
     extra: Iterable[str] = (),
 ) -> list[str]:
-    """Return a variant's aliases, its zh-CN name in the CN server's wording, without the shown name.
+    """Return an alt's aliases, its zh-CN name in the CN server's wording, without the shown name.
 
     ``server_bases`` are the server's names of the student (the base when it has none), each
     put in place of the base the name starts with; ``heads`` are the server's names of this
-    variant's character, put in place of all the name before its brackets; ``extra`` names
-    are the server's own and kept as they are. The variant words become the server's words.
+    alt's character, put in place of all the name before its brackets; ``extra`` names
+    are the server's own and kept as they are. The alt words become the server's words.
 
     Args:
         full: Shown Kivo display name to omit from the resulting aliases.
         base: Leading student name eligible for substitution.
         server_bases: CN-server student spellings; an empty collection retains the base.
         words: Kivo-to-CN costume word translations from cn_words.
-        heads: CN-server names replacing the entire name before the variant brackets.
+        heads: CN-server names replacing the entire name before the alt brackets.
         extra: Additional CN-server aliases to keep verbatim.
     """
     found = {cn_name(full, base, server_base, words) for server_base in (set(server_bases) or {base})}

@@ -126,8 +126,12 @@ def test_mixed_folders_with_two_cores_and_a_lobby_make_one_row_per_core(env):
         game_bundle(env.game_dir, "other_spr", date=TEXTURE_DATE),
         game_bundle(env.game_dir, "other_spr", part="textassets", date=TEXT_DATE),
     ]
-    lobby = game_bundle(env.game_dir, "test_home_gl", date="2025-12-01")
-    sources = [*dated_sources(env, dated_targets(env)), *dated_sources(env, other), *dated_sources(env, [lobby])]
+    memorial_lobby = game_bundle(env.game_dir, "test_home_gl", date="2025-12-01")
+    sources = [
+        *dated_sources(env, dated_targets(env)),
+        *dated_sources(env, other),
+        *dated_sources(env, [memorial_lobby]),
+    ]
     rows = analyze(env, [sources[0].parent])["entries"]
     assert sorted((row["core"], row["resourceType"], len(row["paths"])) for row in rows) == [
         ("other_spr", "portrait", 2),
@@ -186,11 +190,11 @@ def test_drag_and_drop_groups_like_the_batch_import(env):
         game_bundle(env.game_dir, "other_spr", date=TEXTURE_DATE),
         game_bundle(env.game_dir, "other_spr", part="textassets", date=TEXT_DATE),
     ]
-    lobby = game_bundle(env.game_dir, "test_home_gl", date="2025-12-01")
+    memorial_lobby = game_bundle(env.game_dir, "test_home_gl", date="2025-12-01")
     sources = [
         *dated_sources(env, dated_targets(env)),
         *dated_sources(env, other),
-        *dated_sources(env, [lobby]),
+        *dated_sources(env, [memorial_lobby]),
         make_mod(older, env.tmp / "input", payload=b"old texture mod"),
     ]
     batch = row_names(analyze(env, [sources[0].parent])["entries"])
@@ -218,7 +222,7 @@ def test_model_prefab_and_dependencies_with_other_dates_are_one_row_and_one_mod(
     (result,) = run(env, [entry], createBackup=False)
     assert (result["outcome"], result["applied"]) == ("imported", True)
     (mod,) = env.library.mods()
-    assert mod.kind == "model" and mod.date == "2026-02-01" and len(stored_names(env.library, mod)) == 3
+    assert mod.resource_type == "chibi" and mod.date == "2026-02-01" and len(stored_names(env.library, mod)) == 3
     assert [path.read_bytes() for path in env.parts] == [source.read_bytes() for source in sources]
     assert len(env.library.add(sources).duplicates) == 1 and len(env.library.mods()) == 1
 

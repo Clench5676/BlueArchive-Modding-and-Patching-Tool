@@ -16,7 +16,7 @@ test("a core's skeleton base and its prefix", () => {
   // the base of the current install's core starts with the prefix the handler forgets
   for (const [kind, core] of [
     ["portrait", "airi_spr"],
-    ["lobby", "ch0251_home"],
+    ["memorialLobby", "ch0251_home"],
     ["portrait", "odd core/name"],
   ]) {
     assert.ok(spineBase(kind, core).startsWith(spinePrefix(kind, core)), core);

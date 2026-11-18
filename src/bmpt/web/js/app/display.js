@@ -7,7 +7,7 @@ import { resizeButton } from "../ui/button-layout.js";
 import { scrollbar } from "../ui/scrollbar.js";
 import * as NGUI from "../ui/ngui.js";
 import { T } from "../core/i18n.js";
-import { FILTERS, NATURAL, SORTS } from "../roster/roster-order.js";
+import { FILTERS, NATURAL, SORTS } from "../student-list/student-list-order.js";
 import { BACKDROP, POPUP_FRAME, POPUP_TYPE } from "../ui/ui-tokens.js";
 import { $, S, clone, glyphsOf, hitButton } from "../core/util.js";
 
@@ -95,14 +95,14 @@ let sortKeys = SORTS,
 const optionLabel = {
   favorite: { yes: () => T("fav.on"), no: () => T("display.fav.off") },
   portrait: { official: () => T("status.original"), replaced: () => T("status.replaced") },
-  memorialLobby: { yes: () => T("model.has"), no: () => T("model.none") },
-  chibi: { yes: () => T("model.has"), no: () => T("model.none") },
+  memorialLobby: { yes: () => T("chibi.has"), no: () => T("chibi.none") },
+  chibi: { yes: () => T("chibi.has"), no: () => T("chibi.none") },
 };
 const groupTitle = {
   favorite: () => T("fav.label"),
   portrait: () => T("tab.portrait"),
-  memorialLobby: () => T("tab.lobby"),
-  chibi: () => T("tab.model"),
+  memorialLobby: () => T("tab.memorialLobby"),
+  chibi: () => T("tab.chibi"),
 };
 
 const setText = (n, text, fsMax, fsMin, w) =>
@@ -439,11 +439,11 @@ function finish(result) {
 }
 
 /**
- * Open the display settings of the roster.
+ * Open the display settings of the student list.
  * @param {object} options What it shows and answers.
- * @param {RosterView} options.view The roster's view: sort, order and filters.
- * @param {(draft: RosterView) => number} options.count The number of cards the draft shows.
- * @param {(draft: RosterView|null) => void} options.onDone Called with the confirmed draft, or null when
+ * @param {StudentListView} options.view The student list's view: sort, order and filters.
+ * @param {(draft: StudentListView) => number} options.count The number of cards the draft shows.
+ * @param {(draft: StudentListView|null) => void} options.onDone Called with the confirmed draft, or null when
  *     cancelled.
  * @param {string[]} [options.sorts] The sort keys offered.
  * @param {boolean} [options.sortOnly] Show the sort tab only.

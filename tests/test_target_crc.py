@@ -139,7 +139,7 @@ def test_generic_mod_after_a_crc_only_game_update_writes_the_part_with_its_own_c
     part.unlink()
     part = game_bundle(env.game_dir, "common", category="ui", part="textures", payload=b"official UI, rebuilt")
     library = ModLibrary(env.root, env.catalog, object(), env.settings, scan_allowed=lambda: True)
-    library.apply(mod.target, f"mod:{mod.id}", kind="other")
+    library.apply(mod.target, f"mod:{mod.id}", resource_type="other")
     assert part.read_bytes() != (mod.file.parent / mod.file.name).read_bytes()
     assert matches_name(part)
 
@@ -152,7 +152,14 @@ def test_start_finds_a_bad_built_copy_and_the_repair_drops_it(updated):
     found = env.library.crc_repair_due()
     assert found["due"]
     assert found["entries"] == [
-        {"install": pin.key, "core": "test_spr", "variant": "test", "kind": "spr", "built": True, "game": False}
+        {
+            "install": pin.key,
+            "core": "test_spr",
+            "alt": "test",
+            "resource_type": "portrait",
+            "built": True,
+            "game": False,
+        }
     ]
     result = env.library.repair_crc()
     assert [item["core"] for item in result.dropped] == ["test_spr"] and not result.rewritten and not result.failed
@@ -184,7 +191,7 @@ def test_repair_writes_again_a_game_file_left_without_its_crc(updated, monkeypat
     assert found["due"] and found["entries"][0]["game"] and found["entries"][0]["core"] == "test_spr"
     result = env.library.repair_crc()
     assert [item["core"] for item in result.rewritten] == ["test_spr"] and not result.failed
-    assert result.cores == ["test_spr"] and result.kinds == ["spr"]
+    assert result.cores == ["test_spr"] and result.resource_types == ["portrait"]
     assert matches_name(env.part)
     assert env.library.state("test").crc == "fixed"
     assert env.library.state("test").applied == f"mod:{env.mod.id}"

@@ -70,9 +70,9 @@ def test_toolbar_height_is_the_lobby_clone(tokens, record_property):
     for name in ("UILobby", "UICharacterCollection"):
         with open_bundle(bundle_of(name)) as env:
             roots[name] = export_layout(env, name, {})
-    lobby = roots["UILobby"]
+    memorial_lobby = roots["UILobby"]
     clone = "Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count"
-    assert sprite(subtree(lobby, f"{clone}/Bg"))["height"] == tokens["CONTROL"]["toolbar"]["h"] == 104
+    assert sprite(subtree(memorial_lobby, f"{clone}/Bg"))["height"] == tokens["CONTROL"]["toolbar"]["h"] == 104
     # Derived widget geometry only, kept in the test report for a before/after comparison.
     geometry = {}
     for root, path in (
@@ -248,7 +248,7 @@ def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
     # UILobby's root plays its legacy Animation clip as the lobby opens: the top bar and bottom menu keys, as offsets
     # from where the clip leaves the nodes (chrome-motion.js plays them on the App's bars).
     from bmpt.gameassets import AssetCache, GameAssets
-    from bmpt.gameassets.model import BundleGraph
+    from bmpt.gameassets.chibi import BundleGraph
     from ba_modding_toolkit.searching import get_search_dirs
 
     game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path_factory.mktemp("lobby-entry"), allowed=False))
@@ -270,7 +270,7 @@ def test_lobby_entry_is_uiani_lobby(tokens, tmp_path_factory):
         got = [[k["time"], k["value"]["y"] - rest, k["outSlope"]["y"]] for k in keys]
         assert all(k["inSlope"]["y"] == k["outSlope"]["y"] for k in keys)
         flat = lambda rows: [v for row in rows for v in row]
-        assert flat(got) == pytest.approx(flat(tokens["LOBBY_ENTRY"][edge]), abs=1e-3)
+        assert flat(got) == pytest.approx(flat(tokens["HOME_ENTRY"][edge]), abs=1e-3)
 
 
 # --- the design system's scales (ui-tokens.js SPACE, TYPE, CONTROL, POPUP_FRAME, PANEL, LIST_ROW;

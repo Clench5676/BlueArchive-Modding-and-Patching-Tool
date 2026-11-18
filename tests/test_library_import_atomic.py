@@ -36,7 +36,7 @@ def journals(env):
 
 def baseline(env):
     path = make_mod(env.original, env.tmp / "previous", payload=b"previous independent mod")
-    (old,) = env.library.add_files("spr", [path])
+    (old,) = env.library.add_files("portrait", [path])
     return (
         old,
         (env.root / "state.json").read_bytes(),
@@ -69,7 +69,7 @@ def test_file_copy_failure_preserves_previously_completed_mod(setup_library, mon
     with monkeypatch.context() as patch:
         patch_everywhere(patch, [service], "atomic_copy", fail_second)
         with pytest.raises(ServiceError, match="library_io_error"):
-            env.library.add_files("spr", paths)
+            env.library.add_files("portrait", paths)
     assert len(attempts) == fail_at
     assert_previous(env, old, metadata, files)
 
@@ -94,7 +94,7 @@ def test_each_staged_file_is_verified_before_group_publication(setup_library, mo
     with monkeypatch.context() as patch:
         patch_everywhere(patch, [service], "atomic_copy", corrupt_copy)
         with pytest.raises((OSError, ServiceError)):
-            env.library.add_files("spr", paths)
+            env.library.add_files("portrait", paths)
     assert count == corrupt_at
     assert_previous(env, old, metadata, files)
 
@@ -121,7 +121,7 @@ def test_metadata_failure_before_or_after_publication_rolls_back_exact_prior_sta
     with monkeypatch.context() as patch:
         patch_everywhere(patch, [service], "atomic_json", fail_metadata)
         with pytest.raises(ServiceError, match="library_io_error"):
-            env.library.add_files("spr", paths)
+            env.library.add_files("portrait", paths)
     assert failed
     assert_previous(env, old, metadata, files)
 
@@ -159,7 +159,7 @@ def test_restart_recovers_interrupted_multi_file_import_at_commit_boundaries(set
         patch.setattr(os, "replace", replacing)
         patch_everywhere(patch, [service], "atomic_json", writing)
         with pytest.raises(SystemExit):
-            env.library.add_files("spr", paths)
+            env.library.add_files("portrait", paths)
     (journal,) = journals(env)
     transaction = json.loads(journal.read_text())
     new_id = transaction["id"]
@@ -197,7 +197,7 @@ def test_rollback_failure_retains_journal_and_retries_after_lock_is_released(set
         patch_everywhere(patch, [service], "atomic_json", fail_metadata)
         patch.setattr(shutil, "rmtree", locked_directory)
         with pytest.raises(ServiceError, match="library_recovery_pending"):
-            env.library.add_files("spr", paths)
+            env.library.add_files("portrait", paths)
         (journal,) = journals(env)
         assert json.loads(journal.read_text())["phase"] == "rollback"
         env.library.mods()  # reads go on while the journal is pending (tests/test_library_state_safety.py)
@@ -221,7 +221,7 @@ def test_recovery_does_not_finalize_committed_group_with_changed_bytes(setup_lib
     with monkeypatch.context() as patch:
         patch_everywhere(patch, [service], "atomic_json", committed_crash)
         with pytest.raises(SystemExit):
-            env.library.add_files("spr", paths)
+            env.library.add_files("portrait", paths)
     (journal,) = journals(env)
     data = json.loads(journal.read_text())
     target = env.root / "mods" / data["id"] / paths[0].name
@@ -238,7 +238,7 @@ def test_failed_repair_restores_existing_repaired_id(setup_library, monkeypatch)
     env = setup_library
     old, _, _ = baseline(env)
     previous_id = "e" * 32
-    env.library._records[old.id]["repaired_id"] = previous_id
+    env.library._records[old.id]["repaired_copy_id"] = previous_id
     env.library._save()
     metadata = (env.root / "state.json").read_bytes()
     paths = upload(env)
@@ -257,8 +257,10 @@ def test_failed_repair_restores_existing_repaired_id(setup_library, monkeypatch)
         patch_everywhere(patch, [service], "atomic_json", fail_metadata)
         with env.library._transaction_lock():
             with pytest.raises(OSError):
-                env.library._store({path.name: path for path in paths}, "repair", "test", "spr", repaired_from=old.id)
-    assert env.library._records[old.id]["repaired_id"] == previous_id
+                env.library._store(
+                    {path.name: path for path in paths}, "repair", "test", "portrait", repair_source_id=old.id
+                )
+    assert env.library._records[old.id]["repaired_copy_id"] == previous_id
     assert (env.root / "state.json").read_bytes() == metadata
     assert not journals(env)
 
@@ -372,7 +374,7 @@ def test_rollback_retry_syncs_already_removed_metadata_before_deleting_files(set
         patch.setattr(storage, "sync_directory", failed_state_sync)
         patch_everywhere(patch, [service], "sync_directory", failed_state_sync)
         with pytest.raises(ServiceError, match="library_recovery_pending"):
-            env.library.add_files("spr", paths)
+            env.library.add_files("portrait", paths)
         (journal,) = journals(env)
         data = json.loads(journal.read_text())
         directory = env.root / "mods" / data["id"]
@@ -415,7 +417,7 @@ def test_committed_recovery_retains_journal_until_metadata_sync_succeeds(setup_l
         patch.setattr(storage, "sync_directory", failed_state_sync)
         patch_everywhere(patch, [service], "sync_directory", failed_state_sync)
         with pytest.raises(ServiceError, match="library_recovery_pending"):
-            env.library.add_files("spr", paths)
+            env.library.add_files("portrait", paths)
     (journal,) = journals(env)
     data = json.loads(journal.read_text())
     new_id = data["id"]

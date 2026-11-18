@@ -809,8 +809,8 @@ def test_accept_stores_reviewed_bytes_once_and_persists_both_markers(repair_revi
     competing = other.remap(entry.id, geometry=rig_geometry(other, entry.id))
     result = env.library.accept_remap(preview["preview"])
     assert {path.name: path.read_bytes() for path in result.mod.file.parent.glob("*.bundle")} == reviewed
-    assert result.mod.repaired_from == entry.id
-    assert result.mod.label == t("webui.remap.name", name=entry.label)
+    assert result.mod.repair_source_id == entry.id
+    assert result.mod.name == t("webui.remap.name", name=entry.name)
     assert all(path.read_bytes() == data for path, data in before.items())
     with pytest.raises(ServiceError, match="entry_changed"):
         env.library.accept_remap(preview["preview"])
@@ -819,21 +819,21 @@ def test_accept_stores_reviewed_bytes_once_and_persists_both_markers(repair_revi
     reloaded = ModLibrary(env.library.root, env.catalog, settings=env.settings)
     mods = {mod.id: mod for mod in reloaded.mods()}
     assert len(mods) == 2
-    assert mods[entry.id].repaired_id == result.mod.id
-    assert mods[result.mod.id].repaired_from == entry.id
+    assert mods[entry.id].repaired_copy_id == result.mod.id
+    assert mods[result.mod.id].repair_source_id == entry.id
     assert mods[entry.id].user_added is (not legacy)
     assert not result.mod.user_added and not mods[result.mod.id].user_added
     for mod_id in mods:
         with pytest.raises(ServiceError, match="entry_changed"):
             reloaded.remap(mod_id, geometry=rig_geometry(reloaded, mod_id))
         assert not reloaded.compatibility(mod_id)["remappable"]
-    assert len({mod.repaired_from or mod.id for mod in reloaded.mods()}) == 1
+    assert len({mod.repair_source_id or mod.id for mod in reloaded.mods()}) == 1
     for mod_id in mods:
         reloaded.apply("test", f"mod:{mod_id}")
         assert reloaded.status()["configured"] == 1
 
     reloaded.remove(result.mod.id, confirm=True)
-    assert not reloaded.mods()[0].repaired_id  # the link goes with the repaired copy
+    assert not reloaded.mods()[0].repaired_copy_id  # the link goes with the repaired copy
     assert reloaded.remap(entry.id, geometry=rig_geometry(reloaded, entry.id))[
         "preview"
     ]  # and the original can be repaired again
@@ -852,19 +852,19 @@ def test_accept_keeps_alias_names_and_repair_metadata_together(repair_review, mo
     env.library.rename(entry.id, "Reviewed painting")
     result = env.library.accept_remap(preview["preview"])
     expected = translate("webui.remap.name", name="Reviewed painting")
-    assert result.mod.label == expected
-    assert result.mod.alias == "" and result.mod.repaired_from == entry.id
+    assert result.mod.name == expected
+    assert result.mod.alias == "" and result.mod.repair_source_id == entry.id
     assert not result.mod.user_added
     library = reload_library(env)
     mods = {mod.id: mod for mod in library.mods()}
     assert mods[entry.id].alias == "Reviewed painting"
-    assert mods[entry.id].user_added and mods[entry.id].repaired_id == result.mod.id
+    assert mods[entry.id].user_added and mods[entry.id].repaired_copy_id == result.mod.id
     assert mods[result.mod.id] == result.mod
-    assert len({mod.repaired_from or mod.id for mod in mods.values()}) == 1
-    assert library.rename(result.mod.id, "Own alias").label == "Own alias"
-    assert library.rename(result.mod.id, "").label == expected
+    assert len({mod.repair_source_id or mod.id for mod in mods.values()}) == 1
+    assert library.rename(result.mod.id, "Own alias").name == "Own alias"
+    assert library.rename(result.mod.id, "").name == expected
     library.rename(entry.id, "Updated painting")
-    assert next(mod for mod in library.mods() if mod.id == result.mod.id).label == translate(
+    assert next(mod for mod in library.mods() if mod.id == result.mod.id).name == translate(
         "webui.remap.name", name="Updated painting"
     )
     for mod_id in mods:
@@ -872,7 +872,7 @@ def test_accept_keeps_alias_names_and_repair_metadata_together(repair_review, mo
             library.remap(mod_id, geometry=rig_geometry(library, mod_id))
     assert all((path.read_bytes(), path.stat().st_mtime_ns) == stamp for path, stamp in before.items())
     library.remove(entry.id)
-    assert reload_library(env).mods()[0].label == expected
+    assert reload_library(env).mods()[0].name == expected
 
 
 def test_accept_refuses_changed_or_removed_original_and_expired_preview(repair_review):
@@ -946,12 +946,12 @@ def test_accept_failure_rolls_back_both_markers_and_the_new_directory(repair_rev
 
     with pytest.raises(ServiceError, match="library_io_error"):
         env.library.accept_remap(preview)
-    assert not env.library.mods()[0].repaired_id
+    assert not env.library.mods()[0].repaired_copy_id
     assert len(env.library.mods()) == 1
     assert [path.name for path in (env.library.root / "mods").iterdir()] == [entry.id]
     assert (env.library.root / "state.json").read_bytes() == before
     monkeypatch.setattr(env.library, "_save", save)
-    assert env.library.accept_remap(preview).mod.repaired_from == entry.id
+    assert env.library.accept_remap(preview).mod.repair_source_id == entry.id
 
 
 def test_source_changed_during_remapping_never_becomes_an_acceptable_preview(repair_review, monkeypatch):
@@ -1083,7 +1083,7 @@ def _repair(env, entry):
 
 
 def _links(library):
-    return {mod.id: mod.repaired_id for mod in library.mods()}
+    return {mod.id: mod.repaired_copy_id for mod in library.mods()}
 
 
 def test_deleting_the_repaired_copy_clears_the_link_in_the_same_state_write(repair_review, monkeypatch):
@@ -1103,8 +1103,8 @@ def test_deleting_the_repaired_copy_clears_the_link_in_the_same_state_write(repa
     env.library.remove(child.id, confirm=True)
     parent = lambda data: next(record for record in data["mods"] if record["id"] == entry.id)
     without_child = [data for data in writes if child.id not in {record["id"] for record in data["mods"]}]
-    assert without_child and all("repaired_id" not in parent(data) for data in without_child)
-    assert all(parent(data).get("repaired_id") == child.id for data in writes if data not in without_child)
+    assert without_child and all("repaired_copy_id" not in parent(data) for data in without_child)
+    assert all(parent(data).get("repaired_copy_id") == child.id for data in writes if data not in without_child)
     assert _links(env.library) == _links(reload_library(env)) == {entry.id: ""}
     assert env.library.remap(entry.id, geometry=rig_geometry(env.library, entry.id))["preview"]  # repairable again
 
@@ -1141,7 +1141,7 @@ def test_recovering_an_interrupted_deletion_of_the_repaired_copy_restores_the_li
     deletion.remember_mods([child.id])
     # the process died after the copy and the link were saved away and its folder deleted
     del env.library._records[child.id]
-    env.library._records[entry.id].pop("repaired_id")
+    env.library._records[entry.id].pop("repaired_copy_id")
     env.library._save()
     shutil.rmtree(child.file.parent)
     assert _links(reload_library(env)) == {entry.id: child.id, child.id: ""}
@@ -1151,16 +1151,16 @@ def test_a_repaired_id_pointing_at_no_record_counts_as_none_without_a_migration(
     from bmpt.core.errors import ServiceError
 
     env, entry, _, _ = repair_review
-    env.library._records[entry.id]["repaired_id"] = "d" * 32  # an old library that deleted the copy
+    env.library._records[entry.id]["repaired_copy_id"] = "d" * 32  # an old library that deleted the copy
     env.library._save()
     stored = (env.root / "state.json").read_bytes()
     library = reload_library(env)
     (mod,) = library.mods()
-    assert mod.repaired_id == "" and mod.to_json()["repaired_id"] == ""
+    assert mod.repaired_copy_id == "" and mod.to_json()["repaired_copy_id"] == ""
     assert (env.root / "state.json").read_bytes() == stored  # read as none, nothing rewritten
     monkeypatch.setattr(library, "_check_group", lambda *args, **kwargs: {"remappable": True})
     report = library.compatibility(entry.id)
-    assert report["repaired_id"] == "" and report["remappable"] is True
+    assert report["repaired_copy_id"] == "" and report["remappable"] is True
     child = library.accept_remap(library.remap(entry.id, geometry=rig_geometry(library, entry.id))["preview"]).mod
     assert _links(library) == _links(reload_library(env)) == {entry.id: child.id, child.id: ""}
     with pytest.raises(ServiceError, match="entry_changed"):
@@ -1178,10 +1178,10 @@ def test_a_repaired_id_held_by_a_missing_folder_stays_and_repair_stays_refused(r
     library = reload_library(env)
     assert library._held_ids() == {child.id}
     (mod,) = library.mods()
-    assert (mod.id, mod.repaired_id) == (entry.id, child.id)  # held is not dead
+    assert (mod.id, mod.repaired_copy_id) == (entry.id, child.id)  # held is not dead
     monkeypatch.setattr(library, "_check_group", lambda *args, **kwargs: {"remappable": True})
     report = library.compatibility(entry.id)
-    assert report["repaired_id"] == child.id and report["remappable"] is False
+    assert report["repaired_copy_id"] == child.id and report["remappable"] is False
     with pytest.raises(ServiceError, match="entry_changed"):
         library.remap(entry.id, geometry=rig_geometry(library, entry.id))
     library.set_favorite("test", True)  # a save writes the held record and the link back unchanged

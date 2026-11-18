@@ -25,10 +25,10 @@ from bmpt.engine import t
 from ..core.errors import ServiceError
 from . import profiles as profiles_mod
 from .judge import now
-from .models import ToggleResult
+from .records import ToggleResult
 
 if TYPE_CHECKING:
-    from .models import Pin
+    from .records import Pin
     from .service import ModLibrary
 
 logger = logging.getLogger(__name__)
@@ -166,8 +166,10 @@ def restore(
             if key not in by_key:
                 continue
             for core, entry in sorted((folder.get("configured") or {}).items()):
-                if core not in before and isinstance(entry, dict) and isinstance(entry.get("variant"), str):
-                    library.apply(entry["variant"], "official", log=log, kind=entry.get("kind"), pin=by_key[key])
+                if core not in before and isinstance(entry, dict) and isinstance(entry.get("alt"), str):
+                    library.apply(
+                        entry["alt"], "official", log=log, resource_type=entry.get("resource_type"), pin=by_key[key]
+                    )
 
     def put(data: dict) -> bool:
         for key, folder in (data.get("folders") or {}).items():

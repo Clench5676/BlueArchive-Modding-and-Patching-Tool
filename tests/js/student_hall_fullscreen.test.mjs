@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createFullscreen } from "../../src/bmpt/web/js/hall/student-hall-fullscreen.js";
+import { createFullscreen } from "../../src/bmpt/web/js/student-hall/student-hall-fullscreen.js";
 class Element {
   constructor(doc) {
     this.doc = doc;
@@ -119,7 +119,7 @@ function fixture() {
     },
   };
 }
-test("immersive entry holds only Hall and global chrome, keeps a visible focusable exit and restores original inert and focus", async () => {
+test("immersive entry holds only Student Hall and global chrome, keeps a visible focusable exit and restores original inert and focus", async () => {
   const h = fixture();
   h.nav.inert = true;
   await h.api.enter();
@@ -127,7 +127,7 @@ test("immersive entry holds only Hall and global chrome, keeps a visible focusab
   assert.equal(h.top.inert, true);
   assert.equal(h.chrome.inert, true);
   assert.equal(h.doc.activeElement, h.built[0].button);
-  assert.equal(h.stage.classes.has("hall-fullscreen"), true);
+  assert.equal(h.stage.classes.has("student-hall-fullscreen"), true);
   assert.equal(h.stage.classes.has("fullscreen"), true);
   assert.equal(h.detailExit.inert, false);
   h.built[0].close();
@@ -139,7 +139,7 @@ test("immersive entry holds only Hall and global chrome, keeps a visible focusab
   assert.equal(h.stage.classes.has("fullscreen"), true);
   assert.equal(h.built[0].host.isConnected, false);
 });
-test("Escape exits Hall, respects popup ownership and composition, and never propagates an exit key", async () => {
+test("Escape exits Student Hall, respects popup ownership and composition, and never propagates an exit key", async () => {
   const h = fixture();
   await h.api.enter();
   h.popup(true);
@@ -166,7 +166,7 @@ test("navigation during asynchronous exit preparation cannot hide the destinatio
   h.api.dispose();
   ready();
   assert.equal(await entry, false);
-  assert.equal(h.stage.classes.has("hall-fullscreen"), false);
+  assert.equal(h.stage.classes.has("student-hall-fullscreen"), false);
   assert.equal(h.built[0].host.isConnected, false);
   assert.equal(h.handlers.size, 0);
   assert.deepEqual(h.changes, []);
@@ -203,10 +203,10 @@ test("cleanup restores UI without refocusing the departing route, and relabel af
   h.api.dispose();
   assert.equal(h.doc.activeElement, destination);
   assert.equal(h.chrome.inert, false);
-  assert.equal(h.stage.classes.has("hall-fullscreen"), false);
+  assert.equal(h.stage.classes.has("student-hall-fullscreen"), false);
 });
 
-test("Hall immersion holds a window-anchored toolbar outside the stage and restores its focus", async () => {
+test("StudentHall immersion holds a window-anchored toolbar outside the stage and restores its focus", async () => {
   const f = fixture(),
     top = new Element(f.doc);
   // The real header is a document sibling of the scaled stage.

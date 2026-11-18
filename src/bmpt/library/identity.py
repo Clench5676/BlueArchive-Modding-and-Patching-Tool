@@ -7,20 +7,20 @@ from pathlib import Path
 
 from bmpt.engine import Bundle, parse_filename
 from ..core.errors import ServiceError
-from .judge import MODEL_CATEGORIES, kind_of, kind_of_file, other_target
+from .judge import CHIBI_CATEGORIES, resource_type_of, resource_type_of_file, other_target
 
 # Match complete Spine core names, including asset names followed by a page or role.
 CORE = re.compile(r"(?<![a-z0-9_])([a-z][a-z0-9_]*?_(?:spr|home(?:_gl|_teen)?))(?=$|[^a-z0-9])", re.I)
 CONTAINER = re.compile(r"(?:^|/)(spinebackground|spinelobbies|spinecharacters)/([a-z0-9_]+)(?:/|\.)", re.I)
 
 # Meshes, textures and clips live under characters/ or npcs/, prefabs and controllers under addressableasset/character/.
-MODEL_CONTAINER = re.compile(r"(?:^|/)(?:characters|npcs|addressableasset/character)/([a-z0-9_]+)(?:/|\.)", re.I)
-MODEL_ROLE = (
+CHIBI_CONTAINER = re.compile(r"(?:^|/)(?:characters|npcs|addressableasset/character)/([a-z0-9_]+)(?:/|\.)", re.I)
+CHIBI_ROLE = (
     r"(?:(?:cut_?in)_)?(?:body|face|hair|head|eyemouth|eyesmouth|eyebrow|halo|weapon|"
     r"formation|cafe|victory|normal|stand|idle)(?:_[a-z0-9_]+)?(?:\.[a-z0-9]+)?"
 )
-MODEL_ASSET = re.compile(r"^([a-z][a-z0-9_]*?)_" + MODEL_ROLE + r"$", re.I)
-MODEL_PREFAB = re.compile(r"^(?:echelon|cafe|strategy)_([a-z0-9_]+)(?:\.prefab)?$", re.I)
+CHIBI_ASSET = re.compile(r"^([a-z][a-z0-9_]*?)_" + CHIBI_ROLE + r"$", re.I)
+CHIBI_PREFAB = re.compile(r"^(?:echelon|cafe|strategy)_([a-z0-9_]+)(?:\.prefab)?$", re.I)
 
 
 def content_cores(path: Path) -> set[str]:
@@ -30,7 +30,7 @@ def content_cores(path: Path) -> set[str]:
         path: Uploaded bundle whose containers and object names establish its character identity.
 
     Returns:
-        Lower-case Spine cores and model cores prefixed with model:.
+        Lower-case Spine cores and chibi cores prefixed with chibi:.
 
     Raises:
         ServiceError: The bundle cannot be loaded (bundle_invalid).
@@ -47,8 +47,8 @@ def content_cores(path: Path) -> set[str]:
             names.add(obj.container)
     names = {name.replace("\\", "/").lower() for name in names}
     parsed = parse_filename(path.name.removesuffix(".backup"))
-    special_file = kind_of(parsed.core, parsed.category) == "lobby" and (
-        parsed.category != "spinelobbies" or kind_of(parsed.core) != "lobby"
+    special_file = resource_type_of(parsed.core, parsed.category) == "memorialLobby" and (
+        parsed.category != "spinelobbies" or resource_type_of(parsed.core) != "memorialLobby"
     )
     special = {}
     for name in names:
@@ -57,15 +57,16 @@ def content_cores(path: Path) -> set[str]:
             match[1] == "spinebackground"
             or (
                 match[2] == parsed.core.lower()
-                and kind_of(parsed.core, match[1]) == "lobby"
-                and (match[1] != "spinelobbies" or kind_of(parsed.core) != "lobby")
+                and resource_type_of(parsed.core, match[1]) == "memorialLobby"
+                and (match[1] != "spinelobbies" or resource_type_of(parsed.core) != "memorialLobby")
             )
         ):
             special[name] = match[2]
-    container_kinds: dict[str, set[str]] = {}
+    container_suffixes: dict[str, set[str]] = {}
     # Asset paths in a Spine folder named by a core (spinelobbies/aru_home/...) belong to that core, whatever the names
     # inside it: the game's own files keep layers, effects and misspellings there that look like other cores (Aru's
-    # Aru_scene, CH0060's CH0060BG_home, CH9996's CH0996_home, FX_Wakamo_home, a Hanako_home skeleton in Hare's lobby).
+    # Aru_scene, CH0060's CH0060BG_home, CH9996's CH0996_home, FX_Wakamo_home, a Hanako_home skeleton in Hare's
+    # memorial lobby).
     owners = {
         name: folder[2]
         for name in names
@@ -74,35 +75,35 @@ def content_cores(path: Path) -> set[str]:
         and folder[1] != "spinebackground"
         and CORE.fullmatch(folder[2])
     }
-    model_names = {name: model[1].lower() for name in names if (model := MODEL_CONTAINER.search(name))}
-    # Asset paths name the model a bundle replaces; only without them do prefab and object names identify it.
-    contained = bool(model_names)
+    chibi_names = {name: chibi[1].lower() for name in names if (chibi := CHIBI_CONTAINER.search(name))}
+    # Asset paths name the chibi a bundle replaces; only without them do prefab and object names identify it.
+    contained = bool(chibi_names)
     for name in names:
-        if not contained and (model := MODEL_PREFAB.fullmatch(Path(name).name)):
-            model_names[name] = model[1].lower()
-        kind = "home" if "spinelobbies/" in name else "spr" if "spinecharacters/" in name else None
-        if kind and name.endswith((".skel", ".atlas")):
-            container_kinds.setdefault(Path(name).stem, set()).add(kind)
+        if not contained and (chibi := CHIBI_PREFAB.fullmatch(Path(name).name)):
+            chibi_names[name] = chibi[1].lower()
+        suffix = "home" if "spinelobbies/" in name else "spr" if "spinecharacters/" in name else None
+        if suffix and name.endswith((".skel", ".atlas")):
+            container_suffixes.setdefault(Path(name).stem, set()).add(suffix)
     cores = set(special.values())
-    model_cores = set(model_names.values())
-    if not model_cores and kind_of(parsed.core, parsed.category) == "model":
-        model_cores.add(parsed.core.lower())
+    chibi_cores = set(chibi_names.values())
+    if not chibi_cores and resource_type_of(parsed.core, parsed.category) == "chibi":
+        chibi_cores.add(parsed.core.lower())
     for normalized in names:
-        if normalized in model_names:
-            cores.add("model:" + model_names[normalized])
+        if normalized in chibi_names:
+            cores.add("chibi:" + chibi_names[normalized])
             continue
-        if model_cores:
+        if chibi_cores:
             bare = Path(normalized).name
             # Prefabs and containers own the core; cut-in bodies and animation slots add roles to it.
-            matches = {core for core in model_cores if re.fullmatch(re.escape(core) + "_" + MODEL_ROLE, bare, re.I)}
-            if not matches and (model := MODEL_ASSET.fullmatch(bare)):
+            matches = {core for core in chibi_cores if re.fullmatch(re.escape(core) + "_" + CHIBI_ROLE, bare, re.I)}
+            if not matches and (chibi := CHIBI_ASSET.fullmatch(bare)):
                 if contained:
                     # Object names beside asset paths are free-form in the game's own files (bones, clips, props,
-                    # misspelt meshes) and claim no other model.
+                    # misspelt meshes) and claim no other chibi.
                     continue
-                matches.add(model[1].lower())
+                matches.add(chibi[1].lower())
             if matches:
-                cores.update("model:" + core for core in matches)
+                cores.update("chibi:" + core for core in matches)
                 continue
         if normalized in special or (special and "/" not in normalized):
             continue
@@ -121,7 +122,7 @@ def content_cores(path: Path) -> set[str]:
         if not found and normalized.lower().endswith((".skel", ".atlas")):
             stem = Path(normalized).stem.lower()
             if contained:
-                # A model's own Spine effects (Kotama's skill bear, emoji) sit under its asset paths, not a portrait's.
+                # A chibi's own Spine effects (Kotama's skill bear, emoji) sit under its asset paths, not a portrait's.
                 continue
             if special:
                 # Special scenes often use several unrelated skeleton names. Their containers own those layers.
@@ -132,13 +133,13 @@ def content_cores(path: Path) -> set[str]:
                     cores.add(stem)
                 continue
             if re.fullmatch(r"[a-z][a-z0-9_]*", stem):
-                if stem == parsed.core.lower() and kind_of(parsed.core, parsed.category) == "lobby":
+                if stem == parsed.core.lower() and resource_type_of(parsed.core, parsed.category) == "memorialLobby":
                     cores.add(stem)
                     continue
-                kinds = container_kinds.get(stem) or {
-                    "home" if kind_of(parsed.core, parsed.category) == "lobby" else "spr"
+                suffixes = container_suffixes.get(stem) or {
+                    "home" if resource_type_of(parsed.core, parsed.category) == "memorialLobby" else "spr"
                 }
-                cores.update(f"{stem}_{kind}" for kind in kinds)
+                cores.update(f"{stem}_{suffix}" for suffix in suffixes)
     return cores
 
 
@@ -148,66 +149,70 @@ def identify(path: Path, name: str, catalog, *, filename_only: bool = False) -> 
     Args:
         path: Uploaded bundle to inspect for character identity.
         name: Proposed bundle filename to normalize to the detected core and category.
-        catalog: Character catalog resolving Spine and model cores to variants.
+        catalog: Character catalog resolving Spine and chibi cores to alts.
         filename_only: Whether a verified current slot permits trusting the filename without asset inspection.
 
     Returns:
-        Normalized filename, variant or generic-set target, and library kind.
+        Normalized filename, alt or generic-set target, and library kind.
 
     Raises:
         ServiceError: The bundle is invalid, its character is unknown, or several targets are detected.
     """
     parsed = parse_filename(name)
-    resolve = getattr(catalog, "variant_for_asset_core", catalog.variant_for_core)
-    resolve_model = getattr(catalog, "variant_for_model_core", catalog.variant_for_core)
-    declared_kind = kind_of(parsed.core, parsed.category)
-    if declared_kind is None and kind_of_file(name) == "other":
+    resolve = getattr(catalog, "alt_for_asset_core", catalog.alt_for_core)
+    resolve_chibi = getattr(catalog, "alt_for_chibi_core", catalog.alt_for_core)
+    declared_kind = resource_type_of(parsed.core, parsed.category)
+    if declared_kind is None and resource_type_of_file(name) == "other":
         return name, other_target([name]), "other"
-    declared = (resolve_model if declared_kind == "model" else resolve)(parsed.core.lower())
+    declared = (resolve_chibi if declared_kind == "chibi" else resolve)(parsed.core.lower())
     if filename_only:
-        if declared_kind == "model" and declared is None:
+        if declared_kind == "chibi" and declared is None:
             return name, parsed.core.lower(), declared_kind
         if declared is None or declared_kind is None:
             raise ServiceError("mod_target_unknown", file=path)
         return name, declared.key, declared_kind
     cores = content_cores(path)
     resolved = [
-        (core, (resolve_model(core[6:]) if core.startswith("model:") else resolve(core))) for core in sorted(cores)
+        (core, (resolve_chibi(core[6:]) if core.startswith("chibi:") else resolve(core))) for core in sorted(cores)
     ]
-    if any(variant is None for _, variant in resolved):
+    if any(alt is None for _, alt in resolved):
         raise ServiceError("mod_target_unknown", file=path)
     targets = {
         (
-            variant.key,
-            "model"
-            if core.startswith("model:")
-            else "lobby"
-            if getattr(variant, "spine_category", None)
-            else kind_of(core),
+            alt.key,
+            "chibi"
+            if core.startswith("chibi:")
+            else "memorialLobby"
+            if getattr(alt, "spine_category", None)
+            else resource_type_of(core),
         )
-        for core, variant in resolved
+        for core, alt in resolved
     }
     if len(targets) > 1:
         raise ServiceError("mod_target_ambiguous", file=path)
     if not targets:
-        kind = kind_of(parsed.core, parsed.category)
-        if declared is None or kind is None:
+        resource_type = resource_type_of(parsed.core, parsed.category)
+        if declared is None or resource_type is None:
             raise ServiceError("mod_target_unknown", file=path)
-        target, variant = declared.key, declared
+        target, alt = declared.key, declared
     else:
-        target, kind = targets.pop()
-        variant = resolved[0][1]
-    if kind == "model":
-        # Keep prefab/dependency categories: their separate slots share the same model dev name.
-        model_cores = {core[6:] for core, _ in resolved if core.startswith("model:")}
-        if len(model_cores) > 1:
+        target, resource_type = targets.pop()
+        alt = resolved[0][1]
+    if resource_type == "chibi":
+        # Keep prefab/dependency categories: their separate slots share the same chibi dev name.
+        chibi_cores = {core[6:] for core, _ in resolved if core.startswith("chibi:")}
+        if len(chibi_cores) > 1:
             raise ServiceError("mod_target_ambiguous", file=path)
-        core = next(iter(model_cores)) if model_cores else parsed.core
-        category = parsed.category if parsed.category in MODEL_CATEGORIES else "characters"
+        core = next(iter(chibi_cores)) if chibi_cores else parsed.core
+        category = parsed.category if parsed.category in CHIBI_CATEGORIES else "characters"
     else:
-        core = (variant.spr if kind == "spr" else variant.lobby) or (resolved[0][0] if resolved else parsed.core)
-        category = getattr(variant, "spine_category", None) or ("spinecharacters" if kind == "spr" else "spinelobbies")
+        core = (alt.portrait if resource_type == "portrait" else alt.memorial_lobby) or (
+            resolved[0][0] if resolved else parsed.core
+        )
+        category = getattr(alt, "spine_category", None) or (
+            "spinecharacters" if resource_type == "portrait" else "spinelobbies"
+        )
     prefix = parsed.prefix.replace(f"-{parsed.core}-", f"-{core}-", 1)
     if parsed.category:
         prefix = prefix.replace(f"-{parsed.category}-", f"-{category}-", 1)
-    return prefix + name[len(parsed.prefix) :], target, kind
+    return prefix + name[len(parsed.prefix) :], target, resource_type

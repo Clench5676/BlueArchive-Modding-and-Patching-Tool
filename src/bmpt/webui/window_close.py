@@ -80,7 +80,7 @@ class CloseCoordinator:
 
         def evaluate():
             try:
-                # Before the module loads there is no Hall editor. Always return a Promise:
+                # Before the module loads there is no Student Hall editor. Always return a Promise:
                 # pywebview invokes the callback only for a promise, not an immediate value.
                 self.services.window.evaluate_js("Promise.resolve(" + expression + ")", answer)
             except Exception:

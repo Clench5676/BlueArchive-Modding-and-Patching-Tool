@@ -1,10 +1,10 @@
-// The slot colours of a lobby skeleton as the shaders of its atlas pages take them (lobby.json layer "shaders", each
-// page's shader by the page's name). spine-unity hands every shader the slot colour as a premultiplied vertex colour in
-// gamma space (an additive slot with alpha 0). Spine/Skeleton and the blend-mode shaders decode it with a cubic fit of
-// the sRGB curve (divided by the alpha, decoded, multiplied by the alpha again; alpha 0 decoded as a whole);
-// Spine/Skeleton MX Portrait with the exact sRGB curve; the MX Standard pages (97 lobbies) and NoiseFlowAnimation pass
-// it on as it is; MX Portrait Noise reads only the colour's alpha. Without the page's shader a slot is decoded with the
-// exact curve.
+// The slot colours of a memorial lobby skeleton as the shaders of its atlas pages take them (memorial-lobby.json layer
+// "shaders", each page's shader by the page's name). spine-unity hands every shader the slot colour as a premultiplied
+// vertex colour in gamma space (an additive slot with alpha 0). Spine/Skeleton and the blend-mode shaders decode it
+// with a cubic fit of the sRGB curve (divided by the alpha, decoded, multiplied by the alpha again; alpha 0 decoded as
+// a whole); Spine/Skeleton MX Portrait with the exact sRGB curve; the MX Standard pages (97 memorial lobbies) and
+// NoiseFlowAnimation pass it on as it is; MX Portrait Noise reads only the colour's alpha. Without the page's shader a
+// slot is decoded with the exact curve.
 import { pageOf } from "./skeleton-parts.js";
 
 const exact = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
@@ -38,7 +38,7 @@ export const setByShader = (on) => {
 
 /**
  * A layer's curve for an attachment, by the page it lies on (linear.js setCurves).
- * @param {object} layer The lobby's layer.
+ * @param {object} layer The memorial lobby's layer.
  * @returns {((attachment: object) => Function)|null} Gives an attachment's curve; null when the layer has no
  *     page shaders, which keeps every slot decoded.
  */

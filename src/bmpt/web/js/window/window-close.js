@@ -1,5 +1,5 @@
 /**
- * Guard the native window's close: input is frozen only after the Hall's permission has saved or discarded its
+ * Guard the native window's close: input is frozen only after the Student Hall's permission has saved or discarded its
  * draft, and a cancelled or timed out native request cannot consume a later page approval.
  * @param {object} options
  * @param {() => Promise<boolean|void>} options.prepare Asks the page whether it may close; false refuses.

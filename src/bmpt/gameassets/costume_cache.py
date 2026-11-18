@@ -73,12 +73,12 @@ _clips = ArrayLRU(CLIP_BYTES)
 
 
 class PoseStore:
-    """Cache caller-supplied poses by schema, model, game revision, and input digest.
+    """Cache caller-supplied poses by schema, chibi, game revision, and input digest.
 
     Disk entries hold only sampled matrices and animated node indices, never
     readers or asset data. Atomic replacement permits concurrent builds; an
     unreadable entry is a miss. Cache locks cover memory bookkeeping alone;
-    copies and disk IO run without them. No library or model lock is added.
+    copies and disk IO run without them. No library or chibi lock is added.
     Class 1 previews and class 2 checks retain their caller's cancellation and
     yield steps.
     """
@@ -88,7 +88,7 @@ class PoseStore:
 
         Args:
             root: Optional folder for validated numerical .npz entries; None uses memory alone.
-            revisions: Model dev names mapped to resource revisions; missing revisions disable caching.
+            revisions: Chibi dev names mapped to resource revisions; missing revisions disable caching.
             memory: Shared array LRU; None uses the module's bounded pose cache.
         """
         self.root, self.revisions = root, dict(revisions)
@@ -120,7 +120,7 @@ class PoseStore:
         """Read a pose sample from memory or validated disk storage.
 
         Args:
-            dev: Model dev name whose revision is registered in this store.
+            dev: Chibi dev name whose revision is registered in this store.
             token: Digest identifying the sampled hierarchy, bindings, and clip inputs.
 
         Returns:
@@ -153,7 +153,7 @@ class PoseStore:
         """Cache validated pose arrays, suppressing disk failures so builds can continue.
 
         Args:
-            dev: Model dev name whose revision is registered in this store.
+            dev: Chibi dev name whose revision is registered in this store.
             token: Digest identifying the sampled hierarchy, bindings, and clip inputs.
             poses: Finite float64 matrices shaped as one to three frames by nodes by 4 by 4.
             animated: One-dimensional int64 indices into the sampled nodes, within the entry byte limit.
@@ -237,12 +237,12 @@ def clip_digest(tree: Mapping) -> str:
 def memoize_pose(pose, token: str, indices: tuple[int, ...] | None = None, count: int = 0):
     """Share sampled frames in the existing bounded pose memory, never on disk.
 
-    The caller identifies the model revision, hierarchy, bindings and clip
+    The caller identifies the chibi revision, hierarchy, bindings and clip
     content. Copies keep solvers independent; the lock covers bookkeeping only.
 
     Args:
         pose: Frame-index callback returning node world matrices on a cache miss.
-        token: Identity covering model revision, hierarchy, bindings, and clip content.
+        token: Identity covering chibi revision, hierarchy, bindings, and clip content.
         indices: Node indices to retain; None caches every returned matrix.
         count: Length of the reconstructed node list when indices is supplied; other entries become None.
 
@@ -283,8 +283,8 @@ def decode_clip(tree: Mapping):
     Returns:
         A DecodedClip with second-based duration and times, sampled curves, and single-value constants.
     """
-    from .model_glb import DecodedClip
-    from .model_arm_clips import sample_curves
+    from .chibi_glb import DecodedClip
+    from .chibi_arm_clips import sample_curves
 
     muscle = tree["m_MuscleClip"]
     data = muscle["m_Clip"]["data"]

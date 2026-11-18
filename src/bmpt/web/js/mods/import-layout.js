@@ -417,7 +417,7 @@ export function importArtwork(ui, layouts) {
       }
       return t;
     },
-    // UIPopup_GachaCharList.Btn_Checkbox, as the roster's alt grouping toggle: its own caption, the body sized
+    // UIPopup_GachaCharList.Btn_Checkbox, as the student list's alt grouping toggle: its own caption, the body sized
     // to it.
     toggle(caption, on) {
       const t = at(get("UIPopup_GachaCharList.Btn_Checkbox")),
@@ -431,7 +431,7 @@ export function importArtwork(ui, layouts) {
         }
       return t;
     },
-    // UIPopup_FilterSort's actual UIFilter_CheckBox, also used by the roster's display settings.
+    // UIPopup_FilterSort's actual UIFilter_CheckBox, also used by the student list's display settings.
     checkbox(checked, disabled = false) {
       const t = at(filter(`${FILTER}/Table_Align/Table_ListUnit/UIFilterObjectListUnit_1/UIFilter_CheckBox`));
       ui.find(t, "CheckBoxIcon").active = checked && !disabled;

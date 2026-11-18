@@ -1,12 +1,12 @@
 // The detail screen's static screen: background, arrows, tabs, the right panel and the nameplate frame, drawn from
 // the game's prefabs, with the switch captions and the screen's hit areas.
-import * as Photo from "../photography/controller.js";
+import * as ThumbnailCapture from "../thumbnail-capture/controller.js";
 import { isSpecial } from "./special-view.js";
 import * as NGUI from "../ui/ngui.js";
 import { resizeButton } from "../ui/button-layout.js";
 import { explorerLayout } from "../ui/explorer-button.js";
 import { attachHint } from "../ui/hover-hint.js";
-import * as Lobby from "../lobby/lobby.js";
+import * as MemorialLobby from "../memorial-lobby/memorial-lobby.js";
 import { listSep } from "../mods/mod-switch.js";
 import { T, platform } from "../core/i18n.js";
 import { colourSwitchCard } from "../mods/switch-card.js";
@@ -38,7 +38,7 @@ import {
   showGen,
   thumbnailWork,
   thumb,
-  modelPicture,
+  chibiPicture,
   picturesReady,
   fillPictures,
   originalName,
@@ -47,8 +47,8 @@ import {
   aliasList,
   alt,
   isFav,
-  hasLobby,
-  hasModel,
+  hasMemorialLobby,
+  hasChibi,
   repairedId,
   repairAction,
   currentBase,
@@ -91,9 +91,9 @@ import { PLATE_PATH } from "./detail-chips.js";
 import { modsOn, openPopup } from "./detail-switchers.js";
 import { openAliases } from "./detail-aliases.js";
 import { showDetails } from "./detail-files.js";
-import { lobbyCard } from "./detail-lobby-tab.js";
+import { memorialLobbyCard } from "./detail-memorial-lobby-tab.js";
 import { setFullscreen } from "./detail-fullscreen.js";
-import { photoBridge } from "./detail-photo.js";
+import { thumbnailBridge } from "./detail-thumbnail.js";
 
 let renderToken = 0;
 
@@ -122,14 +122,14 @@ function screenTree() {
   // layer 1 of the panel: measured on the game screenshots it lets about 55 % of the background through
   widget(t, "RightInfo/Target/Active/Bg").color = "#0c284b/0.45";
 
-  // tabs: portrait / memorial lobby / 3D model (disabled where unavailable)
+  // tabs: portrait / memorial lobby / chibi (disabled where unavailable)
   const tabs = [
     ["Tab_1", "tab.portrait", "portrait", hasKind(v, "portrait")],
-    ["Tab_2", "tab.lobby", "lobby", hasLobby(v)],
-    ["Tab_3", "tab.model", "model", hasModel(v)],
+    ["Tab_2", "tab.memorialLobby", "memorialLobby", hasMemorialLobby(v)],
+    ["Tab_3", "tab.chibi", "chibi", hasChibi(v)],
   ];
   // the three captions share one size: the largest at which every one fits its tab on one line
-  const tabLabels = tabs.map(([, key, id]) => T(isSpecial(v) && id === "lobby" ? "special.background" : key));
+  const tabLabels = tabs.map(([, key, id]) => T(isSpecial(v) && id === "memorialLobby" ? "special.background" : key));
   const tabSize = NGUI.fitGroup(tabLabels, 52, 36, 360, 1)[0].fs;
   for (const [index, [node_, _key, id, enabled]] of tabs.entries()) {
     const base = `RightInfo/Target/Active/CharacterTab/${node_}`;
@@ -138,13 +138,13 @@ function screenTree() {
     if (!enabled) widget(t, `${base}/Tab_Off/Label`).color = "#ffffff/0.35";
     at(t, `${base}/Tab_On`).active = id === tab;
     at(t, `${base}/Tab_Off`).active = id !== tab;
-    const dot = find(t, `${base}/${id === "portrait" ? "Dot" : id === "lobby" ? "Dot (1)" : "Dot (2)"}`);
+    const dot = find(t, `${base}/${id === "portrait" ? "Dot" : id === "memorialLobby" ? "Dot (1)" : "Dot (2)"}`);
     if (dot) dot.active = hasFresh(v, switchKindOf(id));
   }
   // the separator on a tab's right edge goes when either neighbour is active
   if (tab !== "portrait") {
     const l = find(t, "RightInfo/Target/Active/CharacterTab/Tab_1/Tab_Off/Line");
-    if (l) l.active = tab !== "lobby";
+    if (l) l.active = tab !== "memorialLobby";
   }
   {
     const l = find(t, "RightInfo/Target/Active/CharacterTab/Tab_2/Tab_Off/Line (1)");
@@ -154,7 +154,7 @@ function screenTree() {
   text(
     t,
     `${INFO}/Title_Bg/Label_Locale`,
-    T(isSpecial(v) && tab === "lobby" ? "special.background" : `info.title.${tab}`),
+    T(isSpecial(v) && tab === "memorialLobby" ? "special.background" : `info.title.${tab}`),
     { w_: 600 },
   );
   text(t, `${INFO}/Detail_Btn/Label_Locale`, T("info.details"));
@@ -341,7 +341,12 @@ function screenTree() {
   // row 3: portrait box, the switch card (the game's light weapon card), add portrait. The box's visible body (its
   // straight left side, its slanted right edge) has its centre at mid-height 3 units left of the box's; the title is
   // centred there.
-  const boxTitle = fitIn(T(isSpecial(v) && tab === "lobby" ? "special.background" : `row.box.${tab}`), 48, 42, 160);
+  const boxTitle = fitIn(
+    T(isSpecial(v) && tab === "memorialLobby" ? "special.background" : `row.box.${tab}`),
+    48,
+    42,
+    160,
+  );
   text(t, `${INFO}/Weapon/WeaponType/Label_WeaponType`, boxTitle.text, {
     fontSize: boxTitle.fs,
     w_: 200,
@@ -378,18 +383,18 @@ function screenTree() {
           { dx: -383 + 202 - 40, dy: -67.5, w: 404, h: 404 },
           { depth: 10, mask: "linear-gradient(90deg, #000 70%, transparent 98%)" },
         )
-      : // wider than the window's slanted left edge; the lobby fades out before the labels so their contrast is known
+      : // wider than the window's slanted left edge; the memorial lobby fades out before the labels so their contrast is known
         clipped(
           "Bust",
           [1, 6],
-          tab === "model" ? modelPicture(current("chibi")) : lobbyCard(v),
+          tab === "chibi" ? chibiPicture(current("chibi")) : memorialLobbyCard(v),
           win,
-          { dx: -383 + 216, dy: 0, w: tab === "model" ? 253 : 450, h: 253 },
+          { dx: -383 + 216, dy: 0, w: tab === "chibi" ? 253 : 450, h: 253 },
           {
             depth: 10,
             placeholder: T("import.previewUnavailable"),
             edge: 0.7,
-            mask: `linear-gradient(90deg, transparent 0, #000 10%, #000 70%, transparent ${tab === "model" ? 96 : 82}%)`,
+            mask: `linear-gradient(90deg, transparent 0, #000 10%, #000 70%, transparent ${tab === "chibi" ? 96 : 82}%)`,
           },
         ),
   );
@@ -399,7 +404,7 @@ function screenTree() {
   let bodies = 0,
     labels = 0;
   // the cyan body is 205 wide, slanted
-  const add = fitIn(T(isSpecial(v) && tab === "lobby" ? "special.add" : `row.add.${tab}`), 52, 30, 160, 3);
+  const add = fitIn(T(isSpecial(v) && tab === "memorialLobby" ? "special.add" : `row.add.${tab}`), 52, 30, 160, 3);
   for (const k of at(t, `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up`).children) {
     if (k.name === "BG (1)") {
       resizeButton(k);
@@ -509,10 +514,10 @@ function screenTree() {
       ),
     );
   }
-  // square buttons: fullscreen (the portrait's visual mode with the game's own icon, the lobby, the 3D model), copy the
-  // file name, and on the lobby tab play all dialogue
+  // square buttons: fullscreen (the portrait's visual mode with the game's own icon, the memorial lobby, the chibi),
+  // copy the file name, and on the memorial lobby tab play all dialogue
   at(t, `${np}/Char_CVCollectionBtn`).pos[0] = 1208.8;
-  if (tab === "lobby" || tab === "model")
+  if (tab === "memorialLobby" || tab === "chibi")
     Object.assign(widget(t, `${np}/Char_ZoomBtn/Sprite`), {
       sprite: "Common_UIHide_Icon",
       w_: 74,
@@ -525,12 +530,12 @@ function screenTree() {
     h_: 76,
     color: "#2b496e/1.00",
   });
-  if (tab === "lobby") {
+  if (tab === "memorialLobby") {
     const play = clone(find(t, `${np}/Char_ZoomBtn`));
     play.name = "Char_PlayBtn";
     play.pos[0] = 1362;
     const w = play.children[0].widgets[0];
-    if (Lobby.playingAll()) {
+    if (MemorialLobby.playingAll()) {
       Object.assign(w, { texture: "svg:stop", w_: 54, h_: 54, color: "#2b496e/1.00" });
       delete w.sprite;
     } else Object.assign(w, { sprite: "Common_Icon_Play", w_: 64, h_: 64, color: "#2b496e/1.00" });
@@ -623,7 +628,7 @@ async function drawScreen() {
     const incline =
       rv.nodes.get("Inventory_ListControl/RightInfo/Target/Active/Bg").node.widgets.find((w) => "sprite" in w)
         ?.incline || 0;
-    Lobby.setDialogueBounds({
+    MemorialLobby.setDialogueBounds({
       left: 0,
       top: 0,
       right: left - (Math.abs(Math.tan((incline * Math.PI) / 180)) * height) / 2,
@@ -635,7 +640,7 @@ async function drawScreen() {
     setScreenPics([picturesReady([...lv.images, ...rv.images, ...bg.images], leftHost, rightHost, frag)]);
     fillPictures([...lv.thumbnails, ...rv.thumbnails, ...bg.thumbnails, cardReady], leftHost, rightHost, frag);
   }
-  Photo.attach(photoBridge);
+  ThumbnailCapture.attach(thumbnailBridge);
   hits(view, leftHost, rightHost);
   commit(() => {
     if (!ok()) return;
@@ -647,7 +652,7 @@ async function drawScreen() {
     if (had) [...host.querySelectorAll(".hit")].find((b) => b.dataset.part === had)?.focus({ preventScroll: true });
     bgHost.replaceChildren(frag);
     bgHost.classList.toggle("dim", shown !== "portrait");
-    bgHost.hidden = shown === "lobby"; // the lobby extends its own edges instead
+    bgHost.hidden = shown === "memorialLobby"; // the memorial lobby extends its own edges instead
   });
 }
 
@@ -704,7 +709,7 @@ function addSwitchText(host, view) {
   ]
     .filter(Boolean)
     .join(" - ");
-  const title = T(isSpecial(alt()) && tab === "lobby" ? "special.switch" : `row.switch.${tab}`);
+  const title = T(isSpecial(alt()) && tab === "memorialLobby" ? "special.switch" : `row.switch.${tab}`);
   const layout = switchTextLayout(w / S, h / S, title, sub, !!switchKind());
   const b = document.createElement("b"),
     span = document.createElement("span"),
@@ -805,11 +810,11 @@ function hits(view, leftHost, rightHost) {
     if (!coreOf(alt(), sk)) apply.setAttribute("aria-description", T("import.reason.no_target"));
     if (applyChecking(alt(), sk)) apply.setAttribute("aria-busy", "true");
     // a refused costume: greyed, the reason on hover (the click does nothing, applyCandidate); another
-    // student's model waits for its check
+    // student's chibi waits for its check
     if (unfit) {
       apply.setAttribute("aria-disabled", "true");
-      apply.setAttribute("aria-description", T("model.unfit"));
-      attachHint(apply, T("model.unfit"));
+      apply.setAttribute("aria-description", T("chibi.unfit"));
+      attachHint(apply, T("chibi.unfit"));
     }
   }
   add(leftHost, "LeftInfo/CharInfo/Char_Target/Pin/Pin_On/Bg", toggleFav, T("fav.label"));
@@ -841,28 +846,28 @@ function hits(view, leftHost, rightHost) {
     );
   }
   // the previous or next card of the student list, within its filters and in its order
-  add(leftHost, "Arrow_L/Left", () => ctx.step(-1, shownStudent.key, altId), T("hall.previous"));
-  add(rightHost, "Arrow_R/Right", () => ctx.step(1, shownStudent.key, altId), T("hall.next"));
-  add(leftHost, "LeftInfo/CharInfo/Char_Target/Char_ZoomBtn", () => setFullscreen(true), T("lobby.fullscreen"));
-  if (tab === "lobby")
+  add(leftHost, "Arrow_L/Left", () => ctx.step(-1, shownStudent.key, altId), T("studentHall.previous"));
+  add(rightHost, "Arrow_R/Right", () => ctx.step(1, shownStudent.key, altId), T("studentHall.next"));
+  add(leftHost, "LeftInfo/CharInfo/Char_Target/Char_ZoomBtn", () => setFullscreen(true), T("memorialLobby.fullscreen"));
+  if (tab === "memorialLobby")
     add(
       leftHost,
       "LeftInfo/CharInfo/Char_Target/Char_PlayBtn",
       togglePlayAll,
-      T(Lobby.playingAll() ? "lobby.stop" : "lobby.playAll"),
+      T(MemorialLobby.playingAll() ? "memorialLobby.stop" : "memorialLobby.playAll"),
     );
   const v = alt();
   [
     ["Tab_1", "portrait", hasKind(v, "portrait")],
-    ["Tab_2", "lobby", hasLobby(v)],
-    ["Tab_3", "model", hasModel(v)],
+    ["Tab_2", "memorialLobby", hasMemorialLobby(v)],
+    ["Tab_3", "chibi", hasChibi(v)],
   ].forEach(([n, id, ok]) => {
     if (ok && id !== tab)
       add(
         rightHost,
         `RightInfo/Target/Active/CharacterTab/${n}/Tab_Off/Label`,
         () => showTab(id),
-        T(isSpecial(v) && id === "lobby" ? "special.background" : `tab.${id}`),
+        T(isSpecial(v) && id === "memorialLobby" ? "special.background" : `tab.${id}`),
       );
   });
 }

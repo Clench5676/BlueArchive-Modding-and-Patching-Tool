@@ -182,7 +182,7 @@ for (const locale of LOCALES)
   test(`detail switch texts fit their half of the prefab card in ${locale}`, () => {
     const { text } = use(locale),
       { SPACE, TYPE, CONTROL } = Tokens;
-    for (const tab of ["portrait", "lobby", "model"])
+    for (const tab of ["portrait", "memorialLobby", "chibi"])
       for (const arrow of [true, false]) {
         const title = text(`row.switch.${tab}`),
           sub = `Ibuki - ${text("status.applied")}`;
@@ -332,13 +332,13 @@ for (const locale of LOCALES)
         [text("field.file"), FILE],
         [text("info.gameFile"), "2026-10-30"],
         [text("info.status"), text("status.replaced")],
-        [text("tab.lobby"), text("model.has")],
+        [text("tab.memorialLobby"), text("chibi.has")],
       ],
       [
         [text("field.file"), FILE],
         [text("info.gameFile"), "2026-10-30"],
         [text("info.status"), text("status.original")],
-        [text("special.background"), text("model.none")],
+        [text("special.background"), text("chibi.none")],
       ],
       // the Add to Library prompts
       [

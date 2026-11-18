@@ -39,8 +39,8 @@ def csv_entry(row: dict[str, str]) -> dict:
         "name_sources": {lang: "fallback" if lang in fallbacks else "derived" for lang in names},
         "playable": False,
         "order": 0,
-        "bg": None,
-        "portrait": None,
+        "background": None,
+        "official_thumbnail": None,
         "school": row.get("school_name") or None,
         "kind": "npc",
         "spine_remark": row.get("spine_remark", ""),
@@ -48,10 +48,10 @@ def csv_entry(row: dict[str, str]) -> dict:
 
 
 def base_rank(entry: dict) -> tuple:
-    """Rank unskinned, playable variants ahead of story-only representations.
+    """Rank unskinned, playable alts ahead of story-only representations.
 
     Args:
-        entry: Variant metadata with localized short labels, playability, and display order.
+        entry: Alt metadata with localized short labels, playability, and display order.
 
     Returns:
         A sorting key preferring base labels, then playable entries, then lower display order.

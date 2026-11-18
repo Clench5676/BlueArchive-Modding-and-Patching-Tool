@@ -84,7 +84,7 @@ function detailsInfo() {
     return [baseName(p.file), sizeText(p.size), p.date || "—", [crc[0], crc[1]], carriedLabel(p.applied)];
   });
   return {
-    title: T(isSpecial(v) && tab === "lobby" ? "special.background" : `info.title.${tab}`),
+    title: T(isSpecial(v) && tab === "memorialLobby" ? "special.background" : `info.title.${tab}`),
     fields,
     rows,
     reveal: first,

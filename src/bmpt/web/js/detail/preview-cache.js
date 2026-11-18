@@ -1,6 +1,6 @@
 // Revision-addressed PNG persistence for stills, on by default with an explicit opt-out. Only the authenticated
 // backend writes user-space files; browser HTTP/storage caches never retain heavy art. Every ticket names the
-// renderer that draws its still ("model", "spine"): the backend keys the entry by that renderer's code too
+// renderer that draws its still ("chibi", "spine"): the backend keys the entry by that renderer's code too
 // (webui/stills.py).
 import { rpc } from "../core/api.js";
 import { withTimeout } from "../core/async.js";
@@ -79,8 +79,8 @@ export function createPreviewCache({
         return null;
       }
     },
-    async modelTicket(key, alt, source) {
-      const current = ticket(key, "model");
+    async chibiTicket(key, alt, source) {
+      const current = ticket(key, "chibi");
       if (!current) return null;
       try {
         const reply = await call("preview.chibiRevision", { alt, source });
@@ -88,9 +88,9 @@ export function createPreviewCache({
         observe(reply);
         if (!valid(current) || !/^[a-f0-9]{64}$/.test(reply?.revision || "")) return null;
         return {
-          ...ticket(JSON.stringify([key, reply.revision]), "model"),
+          ...ticket(JSON.stringify([key, reply.revision]), "chibi"),
           chibi: { alt, source },
-          modelRevision: reply.revision,
+          chibiRevision: reply.revision,
         };
       } catch {
         return null;
@@ -138,7 +138,7 @@ export function createPreviewCache({
           if (
             !valid(current) ||
             reply?.generation !== current.generation ||
-            reply?.revision !== (current.modelRevision || current.dependencyRevision)
+            reply?.revision !== (current.chibiRevision || current.dependencyRevision)
           )
             return false;
         }

@@ -8,6 +8,8 @@ from typing import Any
 
 from ..host import updater
 from ..core import devmode
+from ..catalog.records import alt_resource_core
+from ..library.judge import sorted_resource_types
 from ..core.errors import ServiceError
 from bmpt.engine import get_version_info
 from .rpc import RpcRegistry
@@ -107,7 +109,11 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         changed = [*added.applied, *added.configured, *added.installed]
         s.events.publish(
             "library.changed",
-            {"cores": sorted({m.core for m in changed}), "kinds": sorted({m.kind for m in changed}), "mods": True},
+            {
+                "cores": sorted({m.core for m in changed}),
+                "resource_types": sorted_resource_types({m.resource_type for m in changed}),
+                "mods": True,
+            },
         )
         if added or added.installed:
             s.refresh_status(library)
@@ -139,24 +145,28 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         if id == "official":
             raise ServiceError("asset_official")
 
-        def fallback(variant, kind):
+        def fallback(alt, resource_type):
             try:
-                value = variants[variant]
-                if getattr(value, kind, None):
+                value = alts[alt]
+                if alt_resource_core(value, resource_type):
                     return "official"
             except (KeyError, ServiceError):
                 pass
             return next(
-                ("mod:" + mod.id for mod in remaining if mod.id != id and mod.target == variant and mod.kind == kind),
+                (
+                    "mod:" + mod.id
+                    for mod in remaining
+                    if mod.id != id and mod.target == alt and mod.resource_type == resource_type
+                ),
                 None,
             )
 
         remaining = []
-        variants = {}
+        alts = {}
 
         def remove(log, progress):
             remaining[:] = library.mods()
-            variants.update((v.key, v) for family in s.catalog.families() for v in family.variants)
+            alts.update((v.key, v) for student in s.catalog.students() for v in student.alts)
             result = library.remove(
                 id,
                 confirm=bool(confirm),
@@ -173,7 +183,7 @@ def register(rpc: RpcRegistry, s: Services) -> None:
     @rpc.method("mods.setAlias")
     def mods_set_alias(id: str, alias: str) -> dict[str, Any]:
         entry = s.library.rename(id, alias)
-        s.events.publish("library.changed", {"cores": [], "kinds": [], "mods": True})
+        s.events.publish("library.changed", {"cores": [], "resource_types": [], "mods": True})
         return entry.to_json()
 
     @rpc.method("mods.seen")
@@ -185,7 +195,7 @@ def register(rpc: RpcRegistry, s: Services) -> None:
             raise ServiceError("bad_params", key="ids")
         if chosen:
             s.state.mark_mods_seen(chosen)
-            s.events.publish("library.changed", {"cores": [], "kinds": [], "mods": True})
+            s.events.publish("library.changed", {"cores": [], "resource_types": [], "mods": True})
 
     # --- the Enable Mods switch, mods already in use, drift ---
 
@@ -403,17 +413,16 @@ def register(rpc: RpcRegistry, s: Services) -> None:
     # --- actions (jobs) ---
 
     @rpc.method("actions.apply")
-    def actions_apply(alt: str, source: str, resource_type: str = "spr") -> str:
-        """Switch what the game shows: write a source into the variant's game files, and configure it.
+    def actions_apply(alt: str, source: str, resource_type: str = "portrait") -> str:
+        """Switch what the game shows: write a source into the alt's game files, and configure it.
 
-        The files are the portrait ("spr") or memorial lobby ("lobby") ones of the current install, pinned at
-        submit. The library keeps what it replaces (``ModLibrary._commit``). While mods are off it only configures
-        the source (``deferred``).
+        Pin the install's portrait or memorial lobby files at submit time. The library keeps what it replaces
+        (``ModLibrary._commit``). While mods are off it only configures the source (``deferred``).
         """
         return s.submit_apply(alt, source, resource_type)
 
     @rpc.method("actions.restore")
-    def actions_restore(alt: str, resource_type: str = "spr") -> str:
+    def actions_restore(alt: str, resource_type: str = "portrait") -> str:
         return s.submit_restore(alt, resource_type)
 
     @rpc.method("actions.update")
@@ -462,20 +471,21 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         return s.submit("remap", lambda log, progress: library.old_rig(mod, log=log, progress=progress, pin=pin))
 
     def spine_licensed() -> None:
-        # the graft writes skeletons with code derived from the Spine runtime: only after the user's licence answer
+        # the animation transfer writes skeletons with code derived from the Spine runtime: only after the user's
+        # licence answer
         if s.state.spine_consent is not True:
             raise ServiceError("add_animations_spine_licence")
 
     @rpc.method("actions.addAnimations")
     def actions_add_animations(mod: str) -> str:
-        """Start the first step of a graft of the official rig's new animations into a mod's own rig.
+        """Start the first step of an animation transfer of the official rig's new animations into a mod's own rig.
 
-        See ``ModLibrary.graft``; the result is the rigs for the page to pose.
+        See ``ModLibrary.animation transfer``; the result is the rigs for the page to pose.
         """
         spine_licensed()
         library = s.library
         pin = s._current_pin(library)
-        return s.submit("remap", lambda log, progress: library.graft(mod, log=log, progress=progress, pin=pin))
+        return s.submit("remap", lambda log, progress: library.add_animations(mod, log=log, progress=progress, pin=pin))
 
     @rpc.method("actions.addAnimationsBuild")
     def actions_add_animations_build(token: str, geometry: Any = None) -> str:
@@ -484,25 +494,26 @@ def register(rpc: RpcRegistry, s: Services) -> None:
 
         def build(log: Any, progress: Any) -> Any:
             progress({"current": 1, "total": 1, "step": "import.step.extract"})
-            return library.graft_build(token, geometry)
+            return library.add_animations_build(token, geometry)
 
         return s.submit("remap", build)
 
     @rpc.method("actions.addAnimationsCheck")
     def actions_add_animations_check(token: str, geometry: Any = None) -> str:
-        """The last step: the review of the grafted copy, accepted or discarded as a remap's."""
+        """The last step: the review of the added copy, accepted or discarded as a remap's."""
         spine_licensed()
         library = s.library
         pin = s._current_pin(library)
         return s.submit(
-            "remap", lambda log, progress: library.graft_check(token, geometry, log=log, progress=progress, pin=pin)
+            "remap",
+            lambda log, progress: library.add_animations_check(token, geometry, log=log, progress=progress, pin=pin),
         )
 
     @rpc.method("actions.discardAddAnimations")
     def actions_discard_add_animations(token: str) -> None:
-        s.library.discard_graft(token)
+        s.library.discard_add_animations(token)
 
-    # the converter route (bmpt.spine.converter): the optional helper for what the graft refuses
+    # the converter route (bmpt.spine.converter): the optional helper for what the animation transfer refuses
     @rpc.method("actions.converterStatus")
     def actions_converter_status() -> dict:
         """Whether the converter is in place, whether the App can fetch it here, and what its consent names."""
@@ -527,7 +538,7 @@ def register(rpc: RpcRegistry, s: Services) -> None:
 
         def convert(log: Any, progress: Any) -> Any:
             progress({"current": 1, "total": 1, "step": "import.step.extract"})
-            return library.graft_convert(token, geometry)
+            return library.add_animations_convert(token, geometry)
 
         return s.submit("remap", convert)
 
@@ -539,7 +550,9 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         pin = s._current_pin(library)
         return s.submit(
             "remap",
-            lambda log, progress: library.graft_convert_check(token, geometry, log=log, progress=progress, pin=pin),
+            lambda log, progress: library.add_animations_convert_check(
+                token, geometry, log=log, progress=progress, pin=pin
+            ),
         )
 
     @rpc.method("app.openConverterPage")

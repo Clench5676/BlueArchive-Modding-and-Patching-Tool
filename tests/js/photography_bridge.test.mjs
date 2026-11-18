@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { photograph } from "../../src/bmpt/web/js/photography/shoot.js";
-const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-photo.js", import.meta.url), "utf8");
+import { thumbnail } from "../../src/bmpt/web/js/thumbnail-capture/shoot.js";
+const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-thumbnail.js", import.meta.url), "utf8");
 const code = source.slice(source.search(/^ {2}async redraw\(\) ?\{/m), source.search(/^ {2}pan\(dx, ?dy\)/m));
-function setup(tab = "portrait", mainPlayer = null, Lobby = { prepareFrame: async () => false }) {
-  return new Function("env", `let {tab,mainPlayer,Lobby}=env;return {${code} setPlayer(value){mainPlayer=value;}};`)({
+function setup(tab = "portrait", mainPlayer = null, MemorialLobby = { prepareFrame: async () => false }) {
+  return new Function(
+    "env",
+    `let {tab,mainPlayer,MemorialLobby}=env;return {${code} setPlayer(value){mainPlayer=value;}};`,
+  )({
     tab,
     mainPlayer,
-    Lobby,
+    MemorialLobby,
   });
 }
 test("the real portrait bridge distinguishes renderer handoff from permanent errors", async () => {
@@ -45,7 +48,7 @@ test("a renderer replaced during recovery is frozen and captured once through th
     action: () => "",
     info: () => ({ source: "same source" }),
   });
-  await photograph({
+  await thumbnail({
     bridge,
     mode: "portrait",
     paused: false,
@@ -65,12 +68,12 @@ test("a renderer replaced during recovery is frozen and captured once through th
   assert.equal(player.paused, false);
 });
 test("the real Memorial bridge retries unavailable composites and preserves permanent failures", async () => {
-  const Lobby = { prepareFrame: async () => false },
-    bridge = setup("lobby", null, Lobby);
+  const MemorialLobby = { prepareFrame: async () => false },
+    bridge = setup("memorialLobby", null, MemorialLobby);
   await assert.rejects(() => bridge.redraw(), { code: "capture_not_ready" });
-  Lobby.prepareFrame = async () => true;
+  MemorialLobby.prepareFrame = async () => true;
   await bridge.redraw();
-  Lobby.prepareFrame = async () => {
+  MemorialLobby.prepareFrame = async () => {
     throw new Error("Permanent material failure");
   };
   await assert.rejects(() => bridge.redraw(), /Permanent material failure/);

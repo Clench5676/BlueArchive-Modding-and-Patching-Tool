@@ -29,7 +29,7 @@ function spreadPitch(count, w, span) {
 // and name band kept) until they fit the paper less its inset, the vertical scrollbar's band (SCROLL_BAND) and
 // the inclined edges' overhang; a portrait strip (horizontal) at PORTRAIT_SCALE, its names clear of the
 // scrollbar under it.
-export const MIN_COLUMNS = Object.freeze({ memorialLobby: 2, chibi: 3, photo: 3 });
+export const MIN_COLUMNS = Object.freeze({ memorialLobby: 2, chibi: 3, thumbnail: 3 });
 export const PORTRAIT_SCALE = 0.875; // 280 x 616: whole units
 export const SCROLL_BAND = SPACE.m;
 /**
@@ -55,10 +55,10 @@ export function switchGrid(kind, width = GRID_WIDTH) {
       ? { w: 320 * PORTRAIT_SCALE, h: 704 * PORTRAIT_SCALE, bar: 104 }
       : kind === "memorialLobby"
         ? { w: 790, h: 444.375, bar: 104 }
-        : kind === "chibi" || kind === "photo"
+        : kind === "chibi" || kind === "thumbnail"
           ? { w: 360, h: 360, bar: 104 }
           : { w: 250, h: 226, bar: 68 };
-  const max = kind === "memorialLobby" ? 2 : kind === "portrait" || kind === "chibi" || kind === "photo" ? 4 : 6;
+  const max = kind === "memorialLobby" ? 2 : kind === "portrait" || kind === "chibi" || kind === "thumbnail" ? 4 : 6;
   // the paper less its inset and, for a list that scrolls down, the scrollbar's band at its right
   const area = container({ w: width - (kind === "portrait" ? 0 : SCROLL_BAND), h: 0, padding: [0, INSET] }).inner;
   const least = MIN_COLUMNS[kind];

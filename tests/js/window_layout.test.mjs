@@ -32,7 +32,9 @@ const prefabs = cornerPrefabs.UICharacterCollection,
 const cssSource = flat(readFileSync(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8"));
 const borderLeft = Number(/border-width: 0 11px 0 (\d+)px/.exec(cssSource)[1]);
 const marginLeft = Number(/\.mod-switch \{[^}]*margin-left: (-?[\d.]+)px/.exec(cssSource)[1]);
-const hallMargin = Number(/\.topbar\.hall-home \.mod-switch \{ margin-left: (-?[\d.]+)px/.exec(cssSource)[1]);
+const studentHallMargin = Number(
+  /\.topbar\.student-hall-home \.mod-switch \{ margin-left: (-?[\d.]+)px/.exec(cssSource)[1],
+);
 const home = prefabs[right + "Lobby"];
 const boxes = Object.fromEntries(
   [
@@ -54,11 +56,11 @@ const boxes = Object.fromEntries(
   }),
 );
 const pages = [
-  { name: "Hall", hall: true, modsVisible: true },
-  { name: "roster", hall: false, modsVisible: true },
-  { name: "detail", hall: false, modsVisible: true },
-  { name: "import", hall: false, modsVisible: true },
-  { name: "message", hall: false, modsVisible: false },
+  { name: "StudentHall", studentHall: true, modsVisible: true },
+  { name: "studentList", studentHall: false, modsVisible: true },
+  { name: "detail", studentHall: false, modsVisible: true },
+  { name: "import", studentHall: false, modsVisible: true },
+  { name: "message", studentHall: false, modsVisible: false },
 ];
 for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
   test(`title-free rows for every page and native bounds in ${locale}`, () => {
@@ -72,7 +74,7 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
     const captionWidth = textWidth(strings.mods.switch, 26) + 12;
     for (const [width, height] of sizes)
       for (const density of [1, 2, 3])
-        for (const { hall, modsVisible } of pages) {
+        for (const { studentHall, modsVisible } of pages) {
           for (const [platform, hasBounds] of [
             ["darwin", true],
             ["win32", true],
@@ -93,14 +95,14 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
             assert.ok(g.rowHeight >= 44);
             near(g.centre, barCentre(undefined, g.rowHeight));
             assert.ok(g.contentScale <= k);
-            const base = topActionLayout(boxes, hall),
+            const base = topActionLayout(boxes, studentHall),
               safe = nativeRightClearance(
                 { left: 0, top: 0, right: width, width },
                 platform === "win32" ? css : null,
                 base.option,
                 k,
               );
-            const actions = topActionLayout(boxes, hall, safe);
+            const actions = topActionLayout(boxes, studentHall, safe);
             const rightStart = width - (actions.option[0] + actions.option[2]) * k;
             const row = rowLayout({
               scale: k,
@@ -108,26 +110,26 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
               rightStart,
               modsWidth: (fixedMods + captionWidth) * k,
               captionWidth: captionWidth * k,
-              hall,
+              studentHall,
               modsVisible,
             });
             if (platform === "darwin" && css) assert.ok(38 * k + row.shift >= css.right + 8);
             else if (platform === "win32" && css)
-              assert.ok(width - actions[hall ? "option" : "home"][0] * k <= css.left - 8 + 1e-7);
+              assert.ok(width - actions[studentHall ? "option" : "home"][0] * k <= css.left - 8 + 1e-7);
             assert.ok(row.modsLeft + row.modsWidth <= rightStart - 64 + 1e-7);
-            near(row.modsLeft, (hall ? 38 : 160) * k + row.shift);
-            near(row.modsLeft, (borderLeft + (hall ? hallMargin : marginLeft)) * k + row.shift);
+            near(row.modsLeft, (studentHall ? 38 : 160) * k + row.shift);
+            near(row.modsLeft, (borderLeft + (studentHall ? studentHallMargin : marginLeft)) * k + row.shift);
             assert.equal(row.compact, false, "the real caption fits in all supported windows after title removal");
             near(row.modsWidth, modsVisible ? (fixedMods + captionWidth) * k : 0);
-            if (modsVisible && !hall) {
+            if (modsVisible && !studentHall) {
               const backRight =
                 (CORNER_MARGIN + prefabs["SeletControl/Top/BG_W/Bg/Btn/Btn"].size[0] * S) * k + row.shift;
               assert.ok(row.modsLeft >= backRight, "the group clears the prefab Back hit box");
             }
-            // Hall retains Settings in Home's former safe slot; all sprite sizes stay.
+            // Student Hall retains Settings in Home's former safe slot; all sprite sizes stay.
             for (const name of ["home", "option", "line"])
               assert.deepEqual(actions[name].slice(2), boxes[name].slice(2));
-            if (hall) near(actions.option[0] + actions.option[2] / 2, actions.home[0] + actions.home[2] / 2);
+            if (studentHall) near(actions.option[0] + actions.option[2] / 2, actions.home[0] + actions.home[2] / 2);
             else near(actions.option[0] - actions.home[0] + (actions.option[2] - actions.home[2]) / 2, 174 * S);
           }
         }
@@ -135,8 +137,8 @@ for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
 
 test("compact row hides only the caption and restores with sixteen CSS pixels spare", () => {
   for (const scale of [0.5, 1, 2])
-    for (const hall of [false, true]) {
-      const input = { scale, hall, nativeLeft: 80, modsWidth: 460 * scale, captionWidth: 220 * scale };
+    for (const studentHall of [false, true]) {
+      const input = { scale, studentHall, nativeLeft: 80, modsWidth: 460 * scale, captionWidth: 220 * scale };
       const full = rowLayout({ ...input, rightStart: 2000 });
       const threshold = full.modsLeft + input.modsWidth + 64;
       const compact = rowLayout({ ...input, rightStart: threshold - 1 });
@@ -180,7 +182,7 @@ function guardFixture(prepare) {
   installCloseGuard({ prepare, root: () => elements, focus: () => previous, target });
   return { target, elements, focused };
 }
-test("clean, Save and Discard use the same Hall permission; cancel restores exact inert state and focus", async () => {
+test("clean, Save and Discard use the same Student Hall permission; cancel restores exact inert state and focus", async () => {
   for (const outcome of ["clean", "save", "discard"]) {
     const calls = [];
     const f = guardFixture(async () => {
@@ -237,7 +239,7 @@ test("late page replies cannot freeze or approve a later request after cancellat
   assert.equal(await f.target.bamtPrepareClose("not-started-yet"), false);
 });
 
-test("a new Hall draft revision invalidates an earlier approval", async () => {
+test("a new Student Hall draft revision invalidates an earlier approval", async () => {
   const target = {},
     element = { inert: false };
   let revision = "one";
@@ -256,16 +258,16 @@ test("a new Hall draft revision invalidates an earlier approval", async () => {
   assert.equal(element.inert, false);
 });
 
-test("Hall uses the Back slot and restores the other rows without losing native clearance", () => {
+test("StudentHall uses the Back slot and restores the other rows without losing native clearance", () => {
   for (const scale of [0.5, 1, 2])
     for (const nativeLeft of [0, 80]) {
       const input = { scale, nativeLeft, rightStart: 2000 * scale, modsWidth: 400 * scale, captionWidth: 160 * scale };
       const before = rowLayout(input),
-        hall = rowLayout({ ...input, hall: true }),
+        studentHall = rowLayout({ ...input, studentHall: true }),
         after = rowLayout(input);
-      near(before.modsLeft - hall.modsLeft, 122 * scale);
+      near(before.modsLeft - studentHall.modsLeft, 122 * scale);
       assert.deepEqual(after, before);
-      if (nativeLeft) near(hall.modsLeft, nativeLeft + 8);
+      if (nativeLeft) near(studentHall.modsLeft, nativeLeft + 8);
     }
 });
 

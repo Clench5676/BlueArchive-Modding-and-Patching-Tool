@@ -15,7 +15,7 @@ from ba_modding_toolkit.bundle import get_cab_names
 from bmpt.gameassets.cache import PreviewCache
 from bmpt.gameassets.cabs import CabIndex
 from bmpt.gameassets.discovery import cab_names
-from bmpt.gameassets.model import BundleGraph
+from bmpt.gameassets.chibi import BundleGraph
 
 
 def bundle(root, name, cab, *, at_end=False, padding=4, engine="2022.3.55f1", flags=2):

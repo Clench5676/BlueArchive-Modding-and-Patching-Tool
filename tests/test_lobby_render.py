@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from bmpt.gameassets import meshfx, particles, pins, spine_materials
-from bmpt.gameassets.model_glb import DecodedClip
+from bmpt.gameassets.chibi_glb import DecodedClip
 
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 NODE = shutil.which("node")
@@ -209,14 +209,14 @@ def test_real_lobby_mesh_renderers(real_game):
         "utaha_home": 1,
     }
     for core, n in counts.items():
-        fx = real_game.lobby_info(core)["fx"]
+        fx = real_game.memorial_lobby_info(core)["fx"]
         assert len(fx["renderers"]) == n, core
         for r in fx["renderers"]:
             mat = fx["materials"][r["material"]]
-            assert mat["program"] in {"lobbyOrder", "additive", "distort"} and (
+            assert mat["program"] in {"memorialLobbyOrder", "additive", "distort"} and (
                 r["mesh"] == "quad" or r["mesh"] in fx["meshes"]
             )
-    akane = real_game.lobby_info("akane_home")["fx"]
+    akane = real_game.memorial_lobby_info("akane_home")["fx"]
     # the lens dirt and its light between her page (2800) and the light shafts over everything (3100)
     assert sorted((r["path"].rsplit("/", 2)[-2], r["name"], r["queue"]) for r in akane["renderers"]) == [
         ("LensDirt", "LensDirt_02", 2950),
@@ -228,7 +228,7 @@ def test_real_lobby_mesh_renderers(real_game):
     assert {t.get("attr") or t["prop"] for t in tracks} == {"s", "_Color0"} and all(
         len(c["tracks"][0]["v"]) == 201 for c in akane["clips"]
     )
-    hanako = real_game.lobby_info("hanako_home")["fx"]["renderers"][0]
+    hanako = real_game.memorial_lobby_info("hanako_home")["fx"]["renderers"][0]
     assert hanako["name"] == "water" and hanako["anchor"]["bone"] == "All_Layer"
 
 
@@ -350,7 +350,7 @@ def test_skeleton_pages_and_blend_mode_materials():
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_lobby_page_materials(real_game):
-    layer = lambda core: next(l for l in real_game.lobby_info(core)["layers"] if l["active"])  # noqa: E731
+    layer = lambda core: next(l for l in real_game.memorial_lobby_info(core)["layers"] if l["active"])  # noqa: E731
     # Aru's third page multiplies (its material's shader), whatever its slots say
     aru = layer("aru_home")["materials"]
     assert aru["pages"]["Aru_home3"]["program"] == "pma"
@@ -371,19 +371,19 @@ def test_real_lobby_page_materials(real_game):
         ("ch0326_home", {"CH0326_home_2"}),
         ("ch0355_home", {"CH0355_home_4", "CH0355_home_5"}),
     ):
-        info = real_game.lobby_info(core)
+        info = real_game.memorial_lobby_info(core)
         mats = layer(core)["materials"]
         assert set(mats["pages"]) == pages and {m["program"] for m in mats["pages"].values()} == {"noiseFlow"}
         tex = next(iter(mats["pages"].values()))["tex"]["_NoiseTex"]
         assert tex["id"] in info["fx"]["textures"]
-        assert real_game.lobby_fx_texture(core, tex["id"])[:8] == b"\x89PNG\r\n\x1a\n"
+        assert real_game.memorial_lobby_fx_texture(core, tex["id"])[:8] == b"\x89PNG\r\n\x1a\n"
     ch0310 = layer("ch0310_home")["materials"]["pages"]["CH0310_home_3"]
     assert ch0310["program"] == "portraitNoise" and ch0310["floats"]["_GlitchFreq"] == pytest.approx(0.98)
     # no lobby renderer writes the dark colour
     assert not any(
         l["materials"]["tintBlack"]
         for core in ("ch0205_home", "neru_home")
-        for l in real_game.lobby_info(core)["layers"]
+        for l in real_game.memorial_lobby_info(core)["layers"]
     )
 
 
@@ -449,9 +449,9 @@ def test_pinned_bones():
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_lobby_pins(real_game):
     # the bones no drag moves stay where the prefab put them
-    assert real_game.lobby_info("hihumi_home")["pins"] == [
+    assert real_game.memorial_lobby_info("hihumi_home")["pins"] == [
         {"skeleton": "Hihumi_home", "bone": "Hip", "alpha": 1.0, "x": 218.834, "y": 650.908}
     ]
-    assert real_game.lobby_info("ch0242_home")["pins"] == [
+    assert real_game.memorial_lobby_info("ch0242_home")["pins"] == [
         {"skeleton": "CH0242_home", "bone": "cheek_02", "alpha": 1.0, "x": 195.11, "y": -392.786}
     ]

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..records import stored_target
+
 import contextlib
 import copy
 import hashlib
@@ -23,13 +25,14 @@ from ...core.openfiles import remove_tree
 from .. import profiles as profiles_mod
 from .. import mod_progress, safety, toggle_timing
 from ..judge import (
+    sorted_resource_types,
     LIBRARY_SOURCES,
     core_of,
     crc_state,
-    kind_of_file,
+    resource_type_of_file,
     now,
 )
-from ..models import (
+from ..records import (
     AdoptResult,
     EntryState,
     Pin,
@@ -238,13 +241,13 @@ class CopiesMixin:
             except (OSError, ServiceError):
                 return None
 
-        if record["kind"] == "other":
+        if record["resource_type"] == "other":
             # a switch signs one slot's files, an apply the files of the whole mod: either may have written a part
             signatures = {
                 sign(lambda: self._paths(record), lambda: targets),
-                sign(lambda: self._paths(record), lambda: self._game_files(record["target"], "other", pin)),
+                sign(lambda: self._paths(record), lambda: self._game_files(stored_target(record), "other", pin)),
             }
-        elif record["kind"] == "model" or core_of(record["files"][0]) == core:
+        elif record["resource_type"] == "chibi" or core_of(record["files"][0]) == core:
             signatures = {sign(lambda: self._paths(record), lambda: targets)}
         else:
             signatures = {sign(lambda: self._preview(record, pin), lambda: targets)}
@@ -324,25 +327,25 @@ class CopiesMixin:
     def _inputs(self, pin: Pin, core: str, source: str) -> list[str]:
         """List the other game files a build of a source reads.
 
-        They are an adapted mod's official parts of its own core, another variant's files of the kind; none for a mod
+        They are an adapted mod's official parts of its own core, another alt's files of the kind; none for a mod
         made for the core.
         """
         index = self._index(pin)
         if source.startswith("mod:") and source[4:] in self._records:
             record = self._records[source[4:]]
             own = core_of(record["files"][0])
-            if record["kind"] == "model" or own == core:
+            if record["resource_type"] == "chibi" or own == core:
                 return []
             targets = index.get(own, [])
             replaced = self._replaced_parts({path.name: path for path in self._paths(record)}, targets, pin)
             return sorted(path.name for path in targets if path not in replaced)
-        if source.startswith("variant:") and self._kind(core, pin) == "model":
+        if source.startswith("alt:") and self._resource_type(core, pin) == "chibi":
             try:
-                return sorted(path.name for path in self._costume_files(source[8:], pin)[2])
+                return sorted(path.name for path in self._costume_files(source[4:], pin)[2])
             except ServiceError:
                 return []
-        if source.startswith("variant:"):
-            other = self._core_map(pin).core(source[8:], self._kind(core, pin) or "spr")
+        if source.startswith("alt:"):
+            other = self._core_map(pin).core(source[4:], self._resource_type(core, pin) or "portrait")
             return sorted(path.name for path in index.get(other.lower(), [])) if other else []
         return []
 
@@ -486,8 +489,8 @@ class CopiesMixin:
     def _configure(
         self,
         pin: Pin,
-        variant_key: str,
-        kinds: dict[str, str],
+        alt_id: str,
+        resource_types: dict[str, str],
         source: str | None,
         *,
         dropped: list[dict] | None = None,
@@ -498,7 +501,10 @@ class CopiesMixin:
         dropped built keys go there and their files stay until the caller deletes them (``_ChoiceChange.close``), else
         they are deleted at once.
         """
-        kinds = {kind: self._core_map(pin).slot(core) if kind == "model" else core for kind, core in kinds.items()}
+        resource_types = {
+            resource_type: self._core_map(pin).slot(core) if resource_type == "chibi" else core
+            for resource_type, core in resource_types.items()
+        }
         stamp = now()
         dropped_keys: list[dict] = []
         named = any(other.key == pin.key for other in self._named_pins())
@@ -510,9 +516,9 @@ class CopiesMixin:
                     return False
                 folder = self._new_folder(data, pin, named)
             changed = False
-            for kind, core_name in kinds.items():
+            for resource_type, core_name in resource_types.items():
                 if core_name.startswith("other:"):
-                    kind = "other"
+                    resource_type = "other"
                 current = folder["configured"].get(core_name)
                 if source is None:
                     if current is None:
@@ -522,8 +528,8 @@ class CopiesMixin:
                     continue
                 else:
                     folder["configured"][core_name] = {
-                        "variant": variant_key,
-                        "kind": kind,
+                        "alt": alt_id,
+                        "resource_type": resource_type,
                         "source": source,
                         "since": stamp,
                     }
@@ -550,13 +556,16 @@ class CopiesMixin:
         self._check_idle([pin])
         safety.check_game_for(list(pin.dirs))
 
-    def _saved_choices(self, pin: Pin, kinds: dict[str, str]) -> dict[str, dict[str, Any]]:
+    def _saved_choices(self, pin: Pin, resource_types: dict[str, str]) -> dict[str, dict[str, Any]]:
         """Give the saved entries of an entry's cores (configured, updated marker, built key).
 
         ``_put_back_choices`` restores them.
         """
         folder = ((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {}
-        cores = [self._core_map(pin).slot(core) if kind == "model" else core for kind, core in kinds.items()]
+        cores = [
+            self._core_map(pin).slot(core) if resource_type == "chibi" else core
+            for resource_type, core in resource_types.items()
+        ]
         return {
             core: {
                 part: copy.deepcopy((folder.get(part) or {}).get(core)) for part in ("configured", "updated", "built")
@@ -705,15 +714,15 @@ class CopiesMixin:
         for folder in pin.dirs:
             for path, record in view.by_folder.get(folder, []):
                 core = view.maps[pin.key].slot(core_of(path.name))
-                if kind_of_file(path.name):
+                if resource_type_of_file(path.name):
                     by_core.setdefault(core, []).append((path, record))
         for core, records in sorted(by_core.items()):
-            kind = self._kind(core, pin)
+            resource_type = self._resource_type(core, pin)
             parts = []
             for path in self._spine_parts(core, pin):
                 if str(path.resolve()) in view.applied:
                     with contextlib.suppress(OSError, _Unread):
-                        parts.append(view.part(path, pin, kind))
+                        parts.append(view.part(path, pin, resource_type))
             nonofficial = [part for part in parts if not part.official]
             sources = {part.carried for part in nonofficial}
             source = None
@@ -738,7 +747,7 @@ class CopiesMixin:
                     if (
                         candidate
                         and candidate.startswith(LIBRARY_SOURCES)
-                        and view.source_exists(candidate, pin.key, kind)
+                        and view.source_exists(candidate, pin.key, resource_type)
                     ):
                         source = candidate
             if source is None:
@@ -754,13 +763,13 @@ class CopiesMixin:
                     if (
                         candidate
                         and candidate.startswith(LIBRARY_SOURCES)
-                        and view.source_exists(candidate, pin.key, kind)
+                        and view.source_exists(candidate, pin.key, resource_type)
                     ):
                         source = candidate
             if source:
                 configured[core] = {
-                    "variant": view.maps[pin.key].key(core) or core,
-                    "kind": kind,
+                    "alt": view.maps[pin.key].key(core) or core,
+                    "resource_type": resource_type,
                     "source": source,
                     "since": stamp,
                 }
@@ -768,15 +777,15 @@ class CopiesMixin:
 
     def _entry_state(self, view: _View, entry: _Entry) -> EntryState:
         names = None
-        if self.catalog.variant_for_core(entry.core) is None:
-            names = view.maps[entry.pin.key].names.get(entry.variant)
+        if self.catalog.alt_for_core(entry.core) is None:
+            names = view.maps[entry.pin.key].names.get(entry.alt)
         unknown = [part for part in entry.parts if part.carried == "unknown"]
         return EntryState(
             entry.pin.key,
             entry.core,
-            entry.variant,
+            entry.alt,
             names,
-            entry.kind,
+            entry.resource_type,
             entry.carried,
             entry.configured,
             entry.state,
@@ -887,8 +896,8 @@ class CopiesMixin:
                     continue
                 logger.info("Configured %s in %s with %s (taken over)", entry.core, entry.pin.key, entry.takeover)
                 folder["configured"][entry.core] = {
-                    "variant": entry.variant,
-                    "kind": entry.kind,
+                    "alt": entry.alt,
+                    "resource_type": entry.resource_type,
                     "source": entry.takeover,
                     "since": stamp,
                 }
@@ -949,7 +958,7 @@ class CopiesMixin:
                 for item in entries
                 if isinstance(item, dict) and item.get("install") in by_key and isinstance(item.get("core"), str)
             ]
-            view = self._view(pins, "family")
+            view = self._view(pins, "student")
             need = 0
             for pin, core in wanted:
                 with contextlib.suppress(OSError, _Unread):
@@ -961,7 +970,7 @@ class CopiesMixin:
                         if not part.official and entry.copies.get(str(part.path)) in ("backup", "elsewhere")
                     )
             self._check_space(need)
-        added, failed, skipped, cores, kinds = [], [], [], set(), set()
+        added, failed, skipped, cores, resource_types = [], [], [], set(), set()
         line = mod_progress.ItemProgress(progress, len(wanted), "add")
         config = self.profiles.read() if progress else None
         for i, (pin, core) in enumerate(wanted, 1):
@@ -987,9 +996,9 @@ class CopiesMixin:
                     continue
                 added.append(self._entry(self._records[mod_id]))
                 cores.add(core)
-                kinds.add(self._kind(core, pin) or "spr")
+                resource_types.add(self._resource_type(core, pin) or "portrait")
             line.done()
-        return AdoptResult(added, failed, skipped, sorted(cores), sorted(kinds))
+        return AdoptResult(added, failed, skipped, sorted(cores), sorted_resource_types(resource_types))
 
     def _check_space(self, need: int) -> None:
         if need <= 0:
@@ -1066,13 +1075,18 @@ class CopiesMixin:
                     for part in nonofficial
                 },
             }
-            variant = entry.variant
+            alt = entry.alt
             named = any(other.key == pin.key for other in self._named_pins())
             replaced: list[dict] = []
 
             def change(data: dict) -> None:
                 folder = data["folders"].get(pin.key) or self._new_folder(data, pin, named)
-                folder["configured"][core] = {"variant": variant, "kind": entry.kind, "source": source, "since": stamp}
+                folder["configured"][core] = {
+                    "alt": alt,
+                    "resource_type": entry.resource_type,
+                    "source": source,
+                    "since": stamp,
+                }
                 folder["updated"].pop(core, None)
                 if core in folder["built"]:
                     replaced.append(folder["built"][core])
@@ -1094,7 +1108,7 @@ class CopiesMixin:
 
         Returns:
             enabled, toggled, unfinished counts for pending/left/stuck/held, and held
-            entries with install, core, variant, kind, source, and any stored mod label.
+            entries with install, core, alt, resource type, source, and any stored mod name.
 
         Raises:
             ServiceError: The configuration cannot be read (mod_configuration_unreadable).
@@ -1118,10 +1132,10 @@ class CopiesMixin:
                         {
                             "install": item["install"],
                             "core": item["core"],
-                            "variant": entry.get("variant"),
-                            "kind": entry.get("kind"),
+                            "alt": entry.get("alt"),
+                            "resource_type": entry.get("resource_type"),
                             "source": source,
-                            **({"label": self._label(record)} if record else {}),
+                            **({"name": self._label(record)} if record else {}),
                         }
                     )
         return {

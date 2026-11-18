@@ -1,4 +1,4 @@
-"""Skirts and hems of a switched-in costume (gameassets.model_hems)."""
+"""Skirts and hems of a switched-in costume (gameassets.chibi_hems)."""
 
 import struct
 from types import SimpleNamespace
@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 from UnityPy.helpers.PackedBitVector import unpack_ints
 
-from bmpt.gameassets import model_hems as hm
-from bmpt.gameassets.model_glb import compressed_skin
+from bmpt.gameassets import chibi_hems as hm
+from bmpt.gameassets.chibi_glb import compressed_skin
 
 
 def _rotation(axis, angle):

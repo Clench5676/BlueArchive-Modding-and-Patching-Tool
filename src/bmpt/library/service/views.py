@@ -1,4 +1,4 @@
-"""What the game shows: the state, the roster, the selection, the bundles and the previews' reads."""
+"""What the game shows: the state, the student list, the selection, the bundles and the previews' reads."""
 
 from __future__ import annotations
 
@@ -22,19 +22,19 @@ from .. import profiles as profiles_mod
 from .. import targets as resolver
 from ..judge import (
     core_of,
-    kind_of_file,
+    resource_type_of_file,
 )
-from ..models import (
+from ..records import (
     GameFileState,
     Pin,
-    VariantState,
+    AltState,
 )
 from ..safety import check_resource_path
 from .base import _Entry, _Part, _Unread, _View, _serialized
 
 
 class ViewsMixin:
-    """What the game shows: the state, the roster, the selection, the bundles and the previews' reads."""
+    """What the game shows: the state, the student list, the selection, the bundles and the previews' reads."""
 
     def _file_state(self, view: _View, entry: _Entry, part: _Part) -> GameFileState:
         parsed = parse_filename(part.path.name)
@@ -47,8 +47,8 @@ class ViewsMixin:
         )
         return GameFileState(
             part.path,
-            entry.core if entry.kind == "other" else parsed.core,
-            entry.kind,
+            entry.core if entry.resource_type == "other" else parsed.core,
+            entry.resource_type,
             applied,
             part.crc,
             part.path.name in view.originals,
@@ -61,23 +61,23 @@ class ViewsMixin:
         )
 
     @_serialized
-    def state(self, variant_key: str, pin: Pin | None = None) -> VariantState:
-        """Inspect a variant's game parts using size, date, and headers without hashing whole files.
+    def state(self, alt_id: str, pin: Pin | None = None) -> AltState:
+        """Inspect an alt's game parts using size, date, and headers without hashing whole files.
 
         Needs Fix comes from the recorded write while the file remains unchanged.
 
         Args:
-            variant_key: Variant key, or generic other:/other-set: target whose parts are inspected.
+            alt_id: alt key, or generic other:/other-set: target whose parts are inspected.
             pin: Game install and server the operation is fixed to; None uses the current install.
         """
         pin = self._current(pin)
-        view = self._view(self._view_pins(pin), "family")
+        view = self._view(self._view_pins(pin), "student")
         files = []
-        if variant_key.startswith(("other:", "other-set:")):
-            values = {core_of(path.name) for path in self._game_files(variant_key, "other", pin)}
+        if alt_id.startswith(("other:", "other-set:")):
+            values = {core_of(path.name) for path in self._game_files(alt_id, "other", pin)}
         else:
-            variant = self._variant(variant_key)
-            values = (variant.spr, variant.lobby, getattr(variant, "model", None))
+            alt = self._alt(alt_id)
+            values = (alt.portrait, alt.memorial_lobby, getattr(alt, "chibi", None))
         for value in values:
             if not value:
                 continue
@@ -90,8 +90,12 @@ class ViewsMixin:
             if any(f.crc == "needs_fix" for f in files)
             else ("fixed" if any(f.crc == "fixed" for f in files) else "ok")
         )
-        return VariantState(
-            variant_key, files, sources.pop() if len(sources) == 1 else "unknown", crc, any(f.original for f in files)
+        return AltState(
+            alt_id,
+            files,
+            sources.pop() if len(sources) == 1 else "unknown",
+            crc,
+            any(f.has_kept_official for f in files),
         )
 
     def _view_pins(self, pin: Pin) -> list[Pin]:
@@ -100,47 +104,47 @@ class ViewsMixin:
         return pins
 
     @_serialized
-    def configured(self, variant_key: str, pin: Pin | None = None) -> dict[str, str | None]:
+    def configured(self, alt_id: str, pin: Pin | None = None) -> dict[str, str | None]:
         """Read configured sources by asset kind, combining camera art and prefab choices.
 
         Args:
-            variant_key: Variant key whose portrait, lobby, and model choices are requested.
+            alt_id: alt key whose portrait, memorial lobby, and chibi choices are requested.
             pin: Game install and server the operation is fixed to; None uses the current install.
 
         Returns:
             Sources by kind, with None for official or unconfigured choices.
         """
-        variant = self._variant(variant_key)
+        alt = self._alt(alt_id)
         pin = self._current(pin)
         folder = (((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}
-        from .. import lobby_camera
+        from .. import memorial_lobby_camera
 
-        return lobby_camera.overlay(
-            lobby_camera.cameras(self, variant_key), folder, self._configured_sources(variant, folder)
+        return memorial_lobby_camera.overlay(
+            memorial_lobby_camera.cameras(self, alt_id), folder, self._configured_sources(alt, folder)
         )
 
     @staticmethod
-    def _configured_sources(variant: Any, folder: dict) -> dict[str, str | None]:
+    def _configured_sources(alt: Any, folder: dict) -> dict[str, str | None]:
         return {
-            kind: (folder.get(value.lower()) or {}).get("source") if value else None
-            for kind, value in (
-                ("spr", variant.spr),
-                ("lobby", variant.lobby),
-                ("model", getattr(variant, "model", None)),
+            resource_type: (folder.get(value.lower()) or {}).get("source") if value else None
+            for resource_type, value in (
+                ("portrait", alt.portrait),
+                ("memorialLobby", alt.memorial_lobby),
+                ("chibi", getattr(alt, "chibi", None)),
             )
-            if kind != "model" or hasattr(variant, "model")
+            if resource_type != "chibi" or hasattr(alt, "chibi")
         }
 
     @_serialized
-    def roster_snapshot(self, variant_keys: list[str]) -> dict[str, Any]:
-        """Read one install and configuration for the whole roster under the library lock.
+    def student_list_snapshot(self, alt_ids: list[str]) -> dict[str, Any]:
+        """Read one install and configuration for the whole student list under the library lock.
 
-        The roster needs manifest intent and cheap replacement checks, not physical
+        The student list needs manifest intent and cheap replacement checks, not physical
         installation verification. Detailed selection errors and byte verification
         remain in ``selection`` for the detail screen and write operations.
 
         Args:
-            variant_keys: Roster variant keys to include; stored explicit ownership targets are added too.
+            alt_ids: student list alt keys to include; stored explicit ownership targets are added too.
 
         Returns:
             Current install, mods, favorites, configured sources, cheap modified-source flags,
@@ -150,24 +154,24 @@ class ViewsMixin:
         config = self.profiles.read() if pin is not None else None
         folder = ((config or {}).get("folders") or {}).get(pin.key) if pin else None
         choices = (folder or {}).get("configured") or {}
-        assigned = {record["assignment"] for record in self._records.values() if record.get("assignment")}
+        assigned = {record["assigned_alt"] for record in self._records.values() if record.get("assigned_alt")}
         configured = {}
-        from .. import lobby_camera
+        from .. import memorial_lobby_camera
 
         made = {}
-        for record in lobby_camera.cameras(self):
-            made.setdefault(lobby_camera.meta_of(record)["variant"], []).append(record)
-        for key in dict.fromkeys([*variant_keys, *sorted(assigned)]):
+        for record in memorial_lobby_camera.cameras(self):
+            made.setdefault(memorial_lobby_camera.meta_of(record)["alt"], []).append(record)
+        for key in dict.fromkeys([*alt_ids, *sorted(assigned)]):
             try:
                 configured[key] = (
-                    lobby_camera.overlay(
-                        made.get(key, []), choices, self._configured_sources(self._variant(key), choices)
+                    memorial_lobby_camera.overlay(
+                        made.get(key, []), choices, self._configured_sources(self._alt(key), choices)
                     )
                     if pin
-                    else {"spr": None, "lobby": None}
+                    else {"portrait": None, "memorialLobby": None}
                 )
             except ServiceError:
-                configured[key] = {"spr": None, "lobby": None}
+                configured[key] = {"portrait": None, "memorialLobby": None}
         modified = {}
         if pin is not None:
             allow = "scan" if self._scan_allowed() else "recorded"
@@ -182,36 +186,36 @@ class ViewsMixin:
         }
 
     @_serialized
-    def selection(self, variant_key: str, pin: Pin | None = None) -> dict[str, dict]:
+    def selection(self, alt_id: str, pin: Pin | None = None) -> dict[str, dict]:
         """Read saved choices and verified installation status using the master switch as intent.
 
         Every current part must match the recorded write of this source. Fingerprints are
         cached by size, mtime and ctime; an unchanged tail is not proof of installation.
 
         Args:
-            variant_key: Variant key whose configured choices need byte-verified installation status.
+            alt_id: alt key whose configured choices need byte-verified installation status.
             pin: Game install and server the operation is fixed to; None uses the current install.
 
         Returns:
             Configured kinds mapped to source, installed status, error, and any incomplete-preview flag.
         """
         pin = self._current(pin)
-        variant = self._variant(variant_key)
+        alt = self._alt(alt_id)
         config = self.profiles.read()
         folder = (((config or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}
         result = {}
-        for kind, core_name in (
-            ("spr", variant.spr),
-            ("lobby", variant.lobby),
-            ("model", getattr(variant, "model", None)),
+        for resource_type, core_name in (
+            ("portrait", alt.portrait),
+            ("memorialLobby", alt.memorial_lobby),
+            ("chibi", getattr(alt, "chibi", None)),
         ):
             choice = folder.get(core_name.lower()) if core_name else None
             if not choice:
                 continue
-            result[kind] = self._selection_of(pin, config, core_name, choice)
-        from .. import lobby_camera
+            result[resource_type] = self._selection_of(pin, config, core_name, choice)
+        from .. import memorial_lobby_camera
 
-        return lobby_camera.overlay_selection(self, variant_key, pin, config, folder, result)
+        return memorial_lobby_camera.overlay_selection(self, alt_id, pin, config, folder, result)
 
     def _selection_of(self, pin: Pin, config: dict | None, core: str, choice: dict) -> dict:
         """One configured entry's saved choice and whether it is verified installed (``selection``)."""
@@ -253,7 +257,7 @@ class ViewsMixin:
         return entry
 
     def _swap_outdated(self, paths: list[Path], choice: dict) -> bool:
-        """Tell whether the game files of a model slot hold another variant's costume built under an outdated rule.
+        """Tell whether the game files of a chibi slot hold another alt's costume built under an outdated rule.
 
         ``choice`` is its configured entry. A costume is outdated when it was built under an older costume rule than the
         program's, or under one not recorded (every swap applied before the rule was recorded): applying it again builds
@@ -261,7 +265,7 @@ class ViewsMixin:
         """
         from ...gameassets.costume_rule import COSTUME_RULE
 
-        if choice.get("kind") != "model" or not str(choice.get("source") or "").startswith("variant:"):
+        if choice.get("resource_type") != "chibi" or not str(choice.get("source") or "").startswith("alt:"):
             return False
         return any((self._applied.get(str(path.resolve())) or {}).get("costume_rule") != COSTUME_RULE for path in paths)
 
@@ -283,7 +287,7 @@ class ViewsMixin:
 
     @_serialized
     def modified(self, pin: Pin | None = None) -> dict[str, str]:
-        """Find variants with non-official portrait or special-slot files using cheap checks.
+        """Find alts with non-official portrait or special-slot files using cheap checks.
 
         Trust unchanged write records, excluding parts recorded as official. With
         scan consent, check other slot headers for trailing bytes or a size that
@@ -293,7 +297,7 @@ class ViewsMixin:
             pin: Game install and server the operation is fixed to; None uses the current install if available.
 
         Returns:
-            Variant keys mapped to mod:<id>, variant:<key>, or unknown; empty without an install.
+            alt keys mapped to mod:<id>, alt:<key>, or unknown; empty without an install.
         """
         pin = self.current_pin() if pin is None else pin
         if pin is None:
@@ -305,33 +309,36 @@ class ViewsMixin:
     def _modified(self, pin: Pin, view: _View) -> dict[str, str]:
         out: dict[str, str] = {}
         for core_name, paths in view.indexes[pin.key].items():
-            variant = self.catalog.variant_for_core(core_name)
-            if variant is None or (not core_name.endswith("_spr") and not getattr(variant, "spine_category", None)):
+            alt = self.catalog.alt_for_core(core_name)
+            if alt is None or (not core_name.endswith("_spr") and not getattr(alt, "spine_category", None)):
                 continue
-            kind = next((kind for path in paths if (kind := kind_of_file(path.name))), None) or "spr"
+            resource_type = (
+                next((resource_type for path in paths if (resource_type := resource_type_of_file(path.name))), None)
+                or "portrait"
+            )
             sources = set()
             for path in paths:
                 try:
-                    part = view.part(path, pin, kind)
+                    part = view.part(path, pin, resource_type)
                 except (_Unread, OSError):
                     continue
                 if not part.official and part.carried != "damaged":
                     sources.add(part.carried)
             if sources:
-                out[variant.key] = sources.pop() if len(sources) == 1 else "unknown"
+                out[alt.key] = sources.pop() if len(sources) == 1 else "unknown"
         return out
 
     @_serialized
     def official_bundles(self, core: str, pin: Pin | None = None, *, current_fallback: bool = False) -> list[Path]:
         """Resolve official parts of a core, including kept originals of overwritten game files.
 
-        Resolve the whole set or fail. Model previews can explicitly request current files where
+        Resolve the whole set or fail. Chibi previews can explicitly request current files where
         no official copy remains; callers rebuilding mods always require verified official bytes.
 
         Args:
-            core: Bundle core; model slots include their own installed dependency cores.
+            core: Bundle core; chibi slots include their own installed dependency cores.
             pin: Game install and server the operation is fixed to; None uses the current install.
-            current_fallback: Whether a missing official copy may use current bytes for a model preview.
+            current_fallback: Whether a missing official copy may use current bytes for a chibi preview.
 
         Raises:
             ServiceError: No target parts exist or a required verified official copy is unavailable.
@@ -339,20 +346,20 @@ class ViewsMixin:
         pin = self._current(pin)
         paths = self._spine_parts(core, pin)
         if not paths:
-            raise ServiceError("game_file_not_found", variant=core)
+            raise ServiceError("game_file_not_found", alt=core)
         resolve = self._official_or_current if current_fallback else self._official_for
         return [resolve(path, pin) for path in paths]
 
     def _spine_parts(self, core: str, pin: Pin) -> list[Path]:
         """The supported character bundle parts of a core, in game folder order.
 
-        Model parts include the prefab and its own meshes, materials, textures and clips; shared dependencies
+        Chibi parts include the prefab and its own meshes, materials, textures and clips; shared dependencies
         remain supplied by the install's CAB graph.
         """
         core = core.lower()
         index = self._index(pin)
         paths = [path for value in self._core_map(pin).slot_cores(core) for path in index.get(value, [])]
-        return [path for path in paths if kind_of_file(path.name)]
+        return [path for path in paths if resource_type_of_file(path.name)]
 
     @_serialized
     def live_bundles(self, core: str, pin: Pin | None = None) -> list[Path]:
@@ -371,10 +378,10 @@ class ViewsMixin:
         pin = self._current(pin)
         paths = self._spine_parts(core, pin)
         if not paths:
-            raise ServiceError("game_file_not_found", variant=core)
-        view = self._view([pin], "family")
-        kind = self._kind(core, pin) or "spr"
-        parts = [view.part(path, pin, kind) for path in paths]
+            raise ServiceError("game_file_not_found", alt=core)
+        view = self._view([pin], "student")
+        resource_type = self._resource_type(core, pin) or "portrait"
+        parts = [view.part(path, pin, resource_type) for path in paths]
         return [part.path for part in sorted(parts, key=lambda part: not part.official)]
 
     @_serialized
@@ -386,15 +393,15 @@ class ViewsMixin:
         ``GameAssets.spine_files_from`` so mod assets win.
 
         Args:
-            mod_id: Stored mod ID to preview; a camera resolves its source's lobby art.
+            mod_id: Stored mod ID to preview; a camera resolves its source's memorial lobby art.
             pin: Game install and server the operation is fixed to; None uses the current install.
         """
-        from ..lobby_camera import meta_of
+        from ..memorial_lobby_camera import meta_of
 
         pin = self._current(pin)
         record = self._record(mod_id)
         camera = meta_of(record)
-        if camera is not None:  # a lobby camera shows its source's art
+        if camera is not None:  # a memorial lobby camera shows its source's art
             source = camera["source"]
             return (
                 self._preview(self._record(source[4:]), pin)
@@ -406,7 +413,7 @@ class ViewsMixin:
     @_serialized
     def save_camera(
         self,
-        variant_key: str,
+        alt_id: str,
         source: str,
         scale: float,
         offset: list[float],
@@ -415,24 +422,24 @@ class ViewsMixin:
         pin: Pin | None = None,
         log: LogFunc = no_log,
     ) -> dict[str, Any]:
-        """Store a memorial-lobby camera as a new lobby choice for a variant.
+        """Store a memorial-lobby camera as a new memorial lobby choice for an alt.
 
         Args:
-            variant_key: Variant key whose memorial lobby is framed.
-            source: official, lobby mod:<id>, or camera mod:<id> to compose with the new framing.
-            scale: Additional zoom multiplier validated by lobby_camera.check_params.
+            alt_id: alt key whose memorial lobby is framed.
+            source: official, memorial lobby mod:<id>, or camera mod:<id> to compose with the new framing.
+            scale: Additional zoom multiplier validated by memorial_lobby_camera.check_params.
             offset: Horizontal and vertical NGUI-unit translation for the new framing.
             prefab: Current ui-uilobbyelement bundle filename used as the camera's base.
-            root: Name of the lobby's root GameObject to frame inside that prefab.
+            root: Name of the memorial lobby's root GameObject to frame inside that prefab.
             pin: Game install and server the operation is fixed to; None uses the current install.
             log: Receives user-facing operation messages.
 
         Returns:
             The stored generic camera record with source-art and framing metadata.
         """
-        from .. import lobby_camera
+        from .. import memorial_lobby_camera
 
-        return lobby_camera.save(self, variant_key, source, scale, offset, prefab, root, self._current(pin), log)
+        return memorial_lobby_camera.save(self, alt_id, source, scale, offset, prefab, root, self._current(pin), log)
 
     @_serialized
     def camera_prefab(self, mod_id: str, pin: Pin | None = None) -> tuple[dict, Path, Path | None, Path | None] | None:
@@ -446,31 +453,35 @@ class ViewsMixin:
             Copied metadata, stored prefab, optional updated official prefab, and optional
             intro timeline; None for a noncamera mod.
         """
-        from .. import lobby_camera
+        from .. import memorial_lobby_camera
 
         record = self._record(mod_id)
-        meta = lobby_camera.meta_of(record)
+        meta = memorial_lobby_camera.meta_of(record)
         return (
             None
             if meta is None
-            else (copy.deepcopy(meta), *lobby_camera.preview_files(self, record, self._current(pin)))
+            else (copy.deepcopy(meta), *memorial_lobby_camera.preview_files(self, record, self._current(pin)))
         )
 
     @_serialized
-    def lobby_prefab_base(self, core: str, pin: Pin | None = None) -> Path | None:
-        """Find an unframed official prefab for other lobby previews when a camera is installed.
+    def memorial_lobby_prefab_base(self, core: str, pin: Pin | None = None) -> Path | None:
+        """Find an unframed official prefab for other memorial lobby previews when a camera is installed.
 
         Args:
-            core: Lobby bundle core whose preview must avoid the installed camera's framing.
+            core: Memorial Lobby bundle core whose preview must avoid the installed camera's framing.
             pin: Game install and server the operation is fixed to; None uses the current install if available.
 
         Returns:
             Official prefab path, or None without an install or an installed camera for this core.
         """
-        from .. import lobby_camera
+        from .. import memorial_lobby_camera
 
         pin = pin or self.current_pin()
-        return lobby_camera.live_base(self, core, pin) if pin is not None and lobby_camera.cameras(self) else None
+        return (
+            memorial_lobby_camera.live_base(self, core, pin)
+            if pin is not None and memorial_lobby_camera.cameras(self)
+            else None
+        )
 
     def _preview(self, record: dict[str, Any], pin: Pin) -> list[Path]:
         paths = self._paths(record)
@@ -503,7 +514,7 @@ class ViewsMixin:
     def preview_reads(self, policy: str, pin: Pin | None = None) -> PreviewReads:
         """Choose dependency bytes for a 3D preview independently of the mods switch and live state.
 
-        A model export also loads shared bundles and textures stored under other cores (ch0263's materials take
+        A chibi export also loads shared bundles and textures stored under other cores (ch0263's materials take
         theirs from the NPC en0002), which other mods replace; a preview never reads them as the game folder holds
         them now, so it
         follows neither the mods switch nor the game's state:
@@ -514,7 +525,7 @@ class ViewsMixin:
           built copy, else the mod's own file of that name, else the game file while it carries that source), else
           as ``official``.
 
-        Not serialized, like ``official_bundles``: the export calls ``resolve`` under the model lock.
+        Not serialized, like ``official_bundles``: the export calls ``resolve`` under the chibi lock.
 
         Args:
             policy: official for verified baselines with a current-file fallback, or configured
@@ -549,11 +560,13 @@ class ViewsMixin:
             return self._official_or_current(path, pin)
 
         def configured_file(path: Path) -> Path | None:
-            kind = kind_of_file(path.name)
-            if not kind:
+            resource_type = resource_type_of_file(path.name)
+            if not resource_type:
                 return None
             core = core_of(path.name)
-            slot = core_map.slot(core) if kind == "model" else core  # the key _configure and the built copies use
+            slot = (
+                core_map.slot(core) if resource_type == "chibi" else core
+            )  # the key _configure and the built copies use
             source = (configured.get(slot) or {}).get("source") or ""
             record = self._records.get(source[4:]) if source.startswith("mod:") else None
             if record is None:
@@ -616,12 +629,12 @@ class ViewsMixin:
             mod_id: Stored mod ID; a camera inherits its art source's completeness.
             pin: Game install and server the operation is fixed to; None uses the current install if available.
         """
-        from ..lobby_camera import meta_of
+        from ..memorial_lobby_camera import meta_of
 
         pin = pin or self.current_pin()
         record = self._record(mod_id)
         camera = meta_of(record)
-        if camera is not None:  # a lobby camera is as complete as its source's art
+        if camera is not None:  # a memorial lobby camera is as complete as its source's art
             source = camera["source"]
             record = self._records.get(source[4:]) if source.startswith("mod:") else None
             if record is None:

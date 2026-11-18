@@ -29,7 +29,8 @@ export const WIDTH = 2098;
 // label to its own decoration, SPACE.xs, instead of the lines' SPACE.l)
 export const DETAIL = Object.freeze({ fontSize: TYPE.dense.fs, minFontSize: TYPE.dense.fs, gap: SPACE.xs - SPACE.l });
 
-const kindKey = (kind) => (kind === "chibi" ? "tab.model" : kind === "memorialLobby" ? "tab.lobby" : "tab.portrait");
+const kindKey = (kind) =>
+  kind === "chibi" ? "tab.chibi" : kind === "memorialLobby" ? "tab.memorialLobby" : "tab.portrait";
 
 /**
  * What the update changed in a mod's official parts ("Official Portrait: atlas repacked, 1 new animation", from
@@ -184,7 +185,7 @@ async function scanned(step) {
 // repair. force: whatever was seen (Check Update Impact). Resolves with {result, reapplied, failed}; throws what
 // the jobs refuse.
 async function run({ force = false, scan = true } = {}) {
-  await names().catch(() => undefined); // the roster in, for the names on the progress line
+  await names().catch(() => undefined); // the student list in, for the names on the progress line
   return Loading.task(
     async (update) => {
       const step = stepper(update);
@@ -211,7 +212,7 @@ async function run({ force = false, scan = true } = {}) {
 // refresh(): the costume builds of an older costume rule built again under the loading screen, with the plain progress
 // of a writer task and nothing to answer: what cannot be built again is kept or left for the next start, never told
 async function refresh() {
-  await names().catch(() => undefined); // the roster in, for the names on the progress line
+  await names().catch(() => undefined); // the student list in, for the names on the progress line
   await Loading.task(async (update) => waitJob(await rpc("mods.refreshCostumes"), update), {
     label: T("progress.modsProcess"),
   });
@@ -220,7 +221,7 @@ async function refresh() {
 // retry(): the entries whose last write failed written again under the loading screen, nothing to answer: one that
 // fails again keeps its fresh error on its row; a refusal of the moment leaves them for the next start
 async function retry() {
-  await names().catch(() => undefined); // the roster in, for the names on the progress line
+  await names().catch(() => undefined); // the student list in, for the names on the progress line
   await Loading.task(async (update) => waitJob(await rpc("mods.retryFailed"), update), {
     label: T("progress.modsApply"),
   });
@@ -288,14 +289,14 @@ export const heldOf = (result) =>
 export const modKey = (mod) => mod?.id || `${mod?.core || ""}`;
 
 /**
- * A mod's card: the student's name, its own picture (none for a 3D model), the kind and Applied as chips, the
+ * A mod's card: the student's name, its own picture (none for a chibi), the kind and Applied as chips, the
  * Outdated badge.
  */
 export function card(mod, nameOf = (e) => e?.alt || e?.core || "") {
   const entry = { alt: mod.targetAlt, core: mod.core, resourceType: mod.resourceType };
   const base =
     mod.resourceType === "chibi" || mod.resourceType === "other" || !mod.id ? null : spineBase("mod", mod.id);
-  const lobby = mod.resourceType === "memorialLobby";
+  const memorialLobby = mod.resourceType === "memorialLobby";
   // an Official chip over the details' one line of the official changes
   const chips = [
     T(kindKey(mod.resourceType)),
@@ -314,8 +315,8 @@ export function card(mod, nameOf = (e) => e?.alt || e?.core || "") {
     chips,
     badge,
     mod,
-    thumb: base ? thumb(base, "card", null, lobby) : null,
-    big: base ? () => thumb(base, mod.resourceType === "portrait" ? "portrait" : "bust", null, lobby) : null,
+    thumb: base ? thumb(base, "card", null, memorialLobby) : null,
+    big: base ? () => thumb(base, mod.resourceType === "portrait" ? "portrait" : "bust", null, memorialLobby) : null,
   };
 }
 
@@ -336,9 +337,9 @@ export function details(mod) {
   return {
     title: T(
       mod.resourceType === "memorialLobby"
-        ? "info.title.lobby"
+        ? "info.title.memorialLobby"
         : mod.resourceType === "chibi"
-          ? "info.title.model"
+          ? "info.title.chibi"
           : "info.title.portrait",
     ),
     fields,
@@ -558,7 +559,7 @@ async function fix(mods, nameOf, { review = false } = {}) {
           const answer = await Popup.message({
             title: T("mods.impact.preview"),
             lines: [T("mods.impact.noPreview")],
-            cancel: T("photo.back"),
+            cancel: T("thumbnail.back"),
             ok: T("mods.impact.fix"),
           });
           if (answer.button !== "ok") continue;
@@ -583,7 +584,7 @@ async function fix(mods, nameOf, { review = false } = {}) {
               label: subject,
               resourceType: mod.resourceType,
               accept: T("mods.impact.fix"),
-              discard: T("photo.back"),
+              discard: T("thumbnail.back"),
             }))
           )
             continue;

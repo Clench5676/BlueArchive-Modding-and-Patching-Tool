@@ -49,7 +49,7 @@ test("files dropped on Import Mod reach the import list", async () => {
 });
 
 test("every other page refuses dropped files", async () => {
-  for (const hash of ["#/roster", "#/student/hoshino/ch0258", "#/hall", ""]) {
+  for (const hash of ["#/student-list", "#/student/hoshino/ch0258", "#/student-hall", ""]) {
     const env = harness(hash);
     await env.handlers.drop({ paths: ["a.bundle"] });
     assert.deepEqual(env.dropped, []);

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { portraitScale } from "../../src/bmpt/web/js/hall/student-hall-framing.js";
+import { portraitScale } from "../../src/bmpt/web/js/student-hall/student-hall-framing.js";
 
-const file = new URL("../../src/bmpt/web/js/hall/student-hall-portraits.js", import.meta.url);
+const file = new URL("../../src/bmpt/web/js/student-hall/student-hall-portraits.js", import.meta.url);
 let source = await readFile(file, "utf8");
 source = source.replace(/^import [^;]*;$/gm, "");
-source = `import { APPLIED_SELECTION_GOLD } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";\nimport { pickPortrait, preparePickPages, visibleSlot, VISIBLE_ALPHA } from "${new URL("../../src/bmpt/web/js/hall/student-hall-framing.js", import.meta.url).href}";\nconst {loadSpineAssets, spineBase, loadPlayer, ensureSpine, idleAnimation, Stage, portraitScale} = globalThis.hallHarness;\n${source}`;
+source = `import { APPLIED_SELECTION_GOLD } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";\nimport { pickPortrait, preparePickPages, visibleSlot, VISIBLE_ALPHA } from "${new URL("../../src/bmpt/web/js/student-hall/student-hall-framing.js", import.meta.url).href}";\nconst {loadSpineAssets, spineBase, loadPlayer, ensureSpine, idleAnimation, Stage, portraitScale} = globalThis.studentHallHarness;\n${source}`;
 let calls, disposed, shared, hooks, delay, drawn, players;
 class Skeleton {
   constructor(data) {
@@ -80,7 +80,7 @@ globalThis.document = {
     },
   }),
 };
-globalThis.hallHarness = {
+globalThis.studentHallHarness = {
   portraitScale,
   spineBase: (kind, key) => `${kind}/${key}`,
   loadSpineAssets: async (base, fn, { signal }) => {
@@ -113,7 +113,7 @@ globalThis.hallHarness = {
     hostOf: () => null,
   },
 };
-const Hall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+const StudentHall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 function setup() {
   calls = [];
   disposed = [];
@@ -139,7 +139,7 @@ test("the low-level shared asset cache retains independent poses while draft val
   const host = setup(),
     controller = new AbortController(),
     list = entries(25);
-  const result = await Hall.createPortraits(host, list, choice, { signal: controller.signal });
+  const result = await StudentHall.createPortraits(host, list, choice, { signal: controller.signal });
   assert.equal(result.actors.size, 25);
   assert.deepEqual(calls, ["mod/one"]);
   const actors = [...result.actors.values()];
@@ -149,7 +149,7 @@ test("the low-level shared asset cache retains independent poses while draft val
   assert.equal(actors[0].player.skeleton.skin.name, "custom");
   assert.deepEqual(actors[24].player.skeleton.attachments, ["mod-only"]);
   list[0].x = 900;
-  Hall.pose(list[0], actors[0].player.skeleton);
+  StudentHall.pose(list[0], actors[0].player.skeleton);
   assert.equal(actors[0].player.skeleton.x, 900);
   assert.equal(actors[1].player.skeleton.x, 40);
   controller.abort();
@@ -160,7 +160,7 @@ test("the low-level shared asset cache retains independent poses while draft val
 test("unique portrait sources share the first GPU context and dispose guests before owner", async () => {
   const host = setup(),
     controller = new AbortController();
-  const result = await Hall.createPortraits(host, entries(2), (e) => ({ source: `mod:${e.id}` }), {
+  const result = await StudentHall.createPortraits(host, entries(2), (e) => ({ source: `mod:${e.id}` }), {
     signal: controller.signal,
   });
   assert.equal(calls.length, 2);
@@ -178,7 +178,7 @@ test("navigation cancellation during extraction creates no late player", async (
   delay = new Promise((resolve) => {
     release = resolve;
   });
-  const pending = Hall.createPortraits(host, entries(2), choice, { signal: controller.signal });
+  const pending = StudentHall.createPortraits(host, entries(2), choice, { signal: controller.signal });
   await Promise.resolve();
   controller.abort();
   release();
@@ -192,7 +192,7 @@ test("global scale updates existing actors without loading sources or replacing 
     controller = new AbortController(),
     list = entries(2);
   list[1].scale = 0.6;
-  const result = await Hall.createPortraits(host, list, (e) => ({ source: `mod:${e.id}` }), {
+  const result = await StudentHall.createPortraits(host, list, (e) => ({ source: `mod:${e.id}` }), {
     signal: controller.signal,
     globalScale: 0.8,
   });
@@ -222,7 +222,7 @@ test("edit save cancel reconciliation preserves canvas, actors, pose tracks and 
   const host = setup(),
     controller = new AbortController(),
     original = entries(3);
-  const result = await Hall.createPortraits(host, original, (entry) => ({ source: `mod:${entry.id}` }), {
+  const result = await StudentHall.createPortraits(host, original, (entry) => ({ source: `mod:${entry.id}` }), {
     signal: controller.signal,
   });
   const before = [...result.actors.values()],
@@ -267,7 +267,7 @@ test("additional sources stay staged until all are ready and a superseding cance
   const host = setup(),
     controller = new AbortController(),
     original = entries(1);
-  const result = await Hall.createPortraits(host, original, (entry) => ({ source: `mod:${entry.id}` }), {
+  const result = await StudentHall.createPortraits(host, original, (entry) => ({ source: `mod:${entry.id}` }), {
     signal: controller.signal,
   });
   const retained = result.actors.get(original[0].id),
@@ -281,7 +281,7 @@ test("additional sources stay staged until all are ready and a superseding cance
   await new Promise(setImmediate);
   assert.deepEqual([...result.actors.keys()], [original[0].id]);
   assert.equal(drawn.length, 0);
-  assert.equal(players[0].hallLayer.style.visibility, "hidden");
+  assert.equal(players[0].studentHallLayer.style.visibility, "hidden");
   assert.equal(
     host.children.find((child) => child.width === 1920)?.height,
     1080,
@@ -292,7 +292,7 @@ test("additional sources stay staged until all are ready and a superseding cance
   await Promise.all([pending, cancelled]);
   assert.deepEqual([...result.actors.keys()], [original[0].id]);
   assert.equal(result.actors.get(original[0].id), retained);
-  assert.equal(players[0].hallLayer.style.visibility, "");
+  assert.equal(players[0].studentHallLayer.style.visibility, "");
   delay = null;
   drawn = [];
   await result.update(next);
@@ -308,7 +308,7 @@ test("unused actors and guest resources are bounded to current and saved layouts
   const host = setup(),
     controller = new AbortController(),
     original = entries(3);
-  const result = await Hall.createPortraits(host, original, (entry) => ({ source: `mod:${entry.id}` }), {
+  const result = await StudentHall.createPortraits(host, original, (entry) => ({ source: `mod:${entry.id}` }), {
     signal: controller.signal,
   });
   const savedActor = result.actors.get(original[1].id);
@@ -329,7 +329,7 @@ test("inactive portrait sessions pause their actor clocks and resume the same GP
   const host = setup(),
     controller = new AbortController(),
     list = entries(2);
-  const result = await Hall.createPortraits(host, list, choice, { signal: controller.signal }),
+  const result = await StudentHall.createPortraits(host, list, choice, { signal: controller.signal }),
     actor = result.actors.get(list[0].id),
     owner = players[0],
     fetches = calls.length;
@@ -353,7 +353,7 @@ test("scene zoom updates the shared projection while retaining every skeleton, a
   const host = setup(),
     controller = new AbortController(),
     list = entries(2);
-  const result = await Hall.createPortraits(host, list, choice, { signal: controller.signal });
+  const result = await StudentHall.createPortraits(host, list, choice, { signal: controller.signal });
   const actors = [...result.actors.values()],
     before = actors.map((actor) => ({
       player: actor.player,
@@ -383,7 +383,7 @@ test("gold outline uses the public renderer mask immediately below its actor and
   const host = setup(),
     signal = new AbortController().signal,
     list = entries(3);
-  const result = await Hall.createPortraits(host, list, choice, { signal }),
+  const result = await StudentHall.createPortraits(host, list, choice, { signal }),
     owner = players[0],
     events = [];
   const savedShader = globalThis.spine.Shader;
@@ -477,7 +477,7 @@ test("gold outline uses the public renderer mask immediately below its actor and
   drawn = [];
   owner.drawFrame();
   assert.deepEqual(drawn, [...Array(16).fill("outline"), ...skeletons]);
-  assert.match(Hall.OUTLINE_FRAGMENT, /texture2D\(u_texture, v_uv\).a \* v_alpha < 0.1/);
+  assert.match(StudentHall.OUTLINE_FRAGMENT, /texture2D\(u_texture, v_uv\).a \* v_alpha < 0.1/);
   result.setSelection(null);
   drawn = [];
   owner.drawFrame();
@@ -491,7 +491,7 @@ test("swapping one portrait loads only its new art; Cancel restores its cached s
   const host = setup(),
     signal = new AbortController().signal,
     original = entries(3).map((e, i) => ({ ...e, source: `mod:source${i}` }));
-  const result = await Hall.createPortraits(host, original, (e) => ({ source: e.source }), { signal });
+  const result = await StudentHall.createPortraits(host, original, (e) => ({ source: e.source }), { signal });
   const before = [...result.actors.values()];
   before.forEach((a, i) => (a.player.animationState.trackTime = 80 + i));
   const next = structuredClone(original);

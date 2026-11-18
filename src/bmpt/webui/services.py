@@ -278,7 +278,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
             "resourceVersion": None,
         }
         self.events = events or EventBus()
-        # the page pauses its preview deadlines while a preview waits for a job (the model lock, a costume build)
+        # the page pauses its preview deadlines while a preview waits for a job (the chibi lock, a costume build)
         events_bus = self.events
         preview_gate.on_wait = lambda busy: events_bus.publish("preview.waiting", {"busy": busy})
         self.jobs = jobs or JobRunner(self.events)
@@ -303,8 +303,8 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         self.tray_supported = False  # a tray or menu bar icon can be shown (the tray sets it)
         self.tray_shown = False  # the tray or menu bar icon is shown (the game watch then polls fast)
         self._lock = threading.RLock()
-        # Held by photograph saves and selections and by a library move, so a save never lands in the folder a move is
-        # leaving. Taken before ``_lock`` and before the photograph store's own lock, never while holding either.
+        # Held by thumbnail saves and selections and by a library move, so a save never lands in the folder a move is
+        # leaving. Taken before ``_lock`` and before the thumbnail store's own lock, never while holding either.
         self.thumbnail_writes = threading.RLock()
         self._thumbnail_catalog: Any = None
         self._cache, self._game, self._catalog, self._library = cache, game, catalog, library
@@ -420,7 +420,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         """Build the storage key of a persisted still.
 
         The client hashes all renderer inputs, the revision of every source a still was drawn from included (the
-        stamps of its Spine bundles, the bytes of its background and framing, its model's export). The server
+        stamps of its Spine bundles, the bytes of its background and framing, its chibi's export). The server
         isolates the installation and the renderer's own code (``stills.revision``): a release that draws a still
         differently never reuses the earlier still. The install's resource version is not part of the key, so a game
         update redraws only the stills whose sources it changed.
@@ -629,31 +629,31 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
 
     @property
     def thumbnail_store(self):
-        """The photograph store of the library folder in use.
+        """The thumbnail store of the library folder in use.
 
-        Its family lookup is bound to the catalog resolved here, never reached through the services lock: the
-        store's own lock is held while it looks families up, and no code path may hold that lock while it waits for
-        ``self._lock``. A new catalog (a new game folder) makes a new store. Call it with the photograph lock free.
+        Its student lookup is bound to the catalog resolved here, never reached through the services lock: the
+        store's own lock is held while it looks students up, and no code path may hold that lock while it waits for
+        ``self._lock``. A new catalog (a new game folder) makes a new store. Call it with the thumbnail lock free.
         """
-        from ..library.photographs import Photographs, student_family
+        from ..library.thumbnails import Thumbnails, student_of
 
         catalog = self.catalog
         root = self.library_dir()
         with self._lock:
-            store = getattr(self, "_photographs", None)
+            store = getattr(self, "_thumbnails", None)
             if store is None or store.root.parent != root or self._thumbnail_catalog is not catalog:
                 self._thumbnail_catalog = catalog
-                self._photographs = store = Photographs(root, lambda key: student_family(catalog, key))
+                self._thumbnails = store = Thumbnails(root, lambda key: student_of(catalog, key))
             return store
 
     @property
     def thumbnails(self):
-        """The student photography operations, made on first use."""
+        """The student thumbnails operations, made on first use."""
         from .thumbnails import Thumbnails
 
-        if not hasattr(self, "_photography"):
-            self._photography = Thumbnails(self)
-        return self._photography
+        if not hasattr(self, "_thumbnail_service"):
+            self._thumbnail_service = Thumbnails(self)
+        return self._thumbnail_service
 
     def _start_prune(self, library: Any) -> None:
         def prune(log: Any, progress: Any) -> list[str]:
@@ -821,7 +821,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
 
         self.scanner.cancel()  # a running scan reads the current library
         self.scanner.wait_idle(5.0)
-        with self.thumbnail_writes, self._lock:  # a photograph save or selection waits, then uses the new folder
+        with self.thumbnail_writes, self._lock:  # a thumbnail save or selection waits, then uses the new folder
             if has_library(current) and not has_library(target):
                 clashes = [item for item in LIBRARY_ITEMS if (target / item).exists()]
                 if clashes:

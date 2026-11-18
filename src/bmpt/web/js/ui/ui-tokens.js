@@ -88,14 +88,14 @@ export const XS_BUTTON = Object.freeze({
   wideW: 520,
 });
 
-// Approved wording exceptions, scoped to a single Hall site and locale. The prefab minima above stay unchanged.
+// Approved wording exceptions, scoped to a single Student Hall site and locale. The prefab minima above stay unchanged.
 export const CAPTION_EXCEPTIONS = Object.freeze({
-  "hall.doneAdding": Object.freeze({ "th-TH": 44 }),
-  "hall.unsavedChanges": Object.freeze({ "th-TH": 36 }),
-  "hall.scaleReset": Object.freeze({ "th-TH": 30 }),
+  "studentHall.doneAdding": Object.freeze({ "th-TH": 44 }),
+  "studentHall.unsavedChanges": Object.freeze({ "th-TH": 36 }),
+  "studentHall.scaleReset": Object.freeze({ "th-TH": 30 }),
   // the picker's compact Add, Added and Select (a body half an XS body high holds one line): Thai "Added" is nine
   // code points
-  "hall.add": Object.freeze({ "th-TH": 16 }),
+  "studentHall.add": Object.freeze({ "th-TH": 16 }),
 });
 /**
  * The smallest font size a caption may shrink to at a site and locale: the prefab minimum, or a lower approved
@@ -206,10 +206,10 @@ export const FALLBACK_BUTTON = Object.freeze({ fill: "#8de4ff", ink: "#314665", 
 // UIPopup_Mulligan/Center/Popup/01/UIMulliganSlot/SelectLine, the applied selection UISprite.
 export const APPLIED_SELECTION_GOLD = "#ffe900";
 
-// UILobby's legacy Animation clip UIAni_Lobby (on the prefab's root), played as the lobby opens: the top bar
+// UILobby's legacy Animation clip UIAni_Lobby (on the prefab's root), played as the home screen opens: the top bar
 // (Front/NUITop/Top/Right, at rest y 702) drops from 333.7 units above and the bottom menu (Front/Bottom/Menu, left at
 // y -678) rises from 1045 below. Unweighted Hermite keys, [time s, y offset from the rest position, slope].
-export const LOBBY_ENTRY = Object.freeze({
+export const HOME_ENTRY = Object.freeze({
   top: Object.freeze([
     Object.freeze([0, 333.7, 0]),
     Object.freeze([0.2, 28.55, -271.9047]),
@@ -270,9 +270,9 @@ export const CONTROL = Object.freeze({
   toolbar: Object.freeze({ h: 104 }), // UILobby/Front/Right/Btn_RotateSpine/ConditionRoot/Able_Count/Bg
 });
 
-// Every button of the fullscreen views (portrait, memorial lobby, 3D model) and of the photography and camera
+// Every button of the fullscreen views (portrait, memorial lobby, chibi) and of the thumbnail capture and camera
 // framing opened from them, one size (the larger one): UICharacterVisualMode's Btn_Back body width (171) and the
-// photography toolbar's height (82 px, 126 units). NGUI units; a caption-sized button keeps its own width.
+// thumbnail capture toolbar's height (82 px, 126 units). NGUI units; a caption-sized button keeps its own width.
 export const FULLSCREEN_BUTTON = Object.freeze({ w: 171, h: 126 });
 
 // The grid inside any container: 12 columns, a gutter of SPACE.xl. A page's container keeps SPACE.xxl from the stage's
@@ -314,7 +314,7 @@ export const POPUP_FRAME = Object.freeze({
   // button, UIPopup_ClientVersion's 1115 x 786, kept far more padding than the App wants)
   minH: 170 + POPUP_FOOTER.clearance,
   maxH: 1560,
-  // the panel popups' height: the Hall's editors and the list popups share one outline
+  // the panel popups' height: the Student Hall's editors and the list popups share one outline
   panelH: 1450,
   S: Object.freeze({ w: 1300, h: 1050 }),
   M: Object.freeze({ w: 1540, h: 1073 }),

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..records import stored_target
+
 import hashlib
 import json
 import logging
@@ -22,7 +24,7 @@ from ..judge import (
     core_of,
     now,
 )
-from ..models import (
+from ..records import (
     Pin,
     ToggleResult,
 )
@@ -107,7 +109,7 @@ class ImpactMixin:
                     if error.code not in ("official_unavailable", "official_invalid"):
                         raise
             gains = atlas_remap.rig_gains(mod.atlases, mod.skeletons, official.atlases, official.skeletons)
-            return {kind: names for kind, names in gains.items() if names}
+            return {resource_type: names for resource_type, names in gains.items() if names}
         except Exception as error:  # noqa: BLE001 - a notice is never worth the operation
             log_failure(logger, logging.DEBUG, "No comparison with the official rig", error)
             return {}
@@ -195,10 +197,10 @@ class ImpactMixin:
             if known is not None:
                 return known
             if not targets:
-                # a variant whose core moved since (the catalog maps it elsewhere) is no target gone
+                # an alt whose core moved since (the catalog maps it elsewhere) is no target gone
                 mapped = (
-                    self._core_map(pin).core(self._target_of(record), record["kind"])
-                    if record["kind"] != "other"
+                    self._core_map(pin).core(self._target_of(record), record["resource_type"])
+                    if record["resource_type"] != "other"
                     else None
                 )
                 moved = bool(mapped) and mapped.lower() != core_of(next(iter(files)))
@@ -295,8 +297,8 @@ class ImpactMixin:
                 entry = entries[record["id"]]
                 line.item(
                     i,
-                    variant=entry.target,
-                    kind=entry.kind,
+                    alt=entry.target,
+                    resource_type=entry.resource_type,
                     name=self._progress_name(record),
                     core=entry.core,
                     step=mod_progress.STEP_CHECK,
@@ -324,14 +326,14 @@ class ImpactMixin:
         """A mod as the impact summary names it."""
         return {
             "id": entry.id,
-            "label": entry.label,
+            "name": entry.name,
             "target": entry.target,
-            "kind": entry.kind,
+            "resource_type": entry.resource_type,
             "core": entry.core,
             "impact": found,
             "changes": changes,
             "configured": f"mod:{entry.id}" in configured,
-            "repaired_id": entry.repaired_id,
+            "repaired_copy_id": entry.repaired_copy_id,
         }
 
     def _impact_mark(self, record: dict[str, Any]) -> str:
@@ -458,14 +460,14 @@ class ImpactMixin:
                     {
                         "id": entry.id,
                         "target": entry.target,
-                        "kind": entry.kind,
+                        "resource_type": entry.resource_type,
                         "core": entry.core,
                         "source": f"mod:{entry.id}",
                         "installed": held,
                     }
                 )
             for core, choice in sorted(choices.items()):
-                if choice.get("kind") != "model" or not str(choice.get("source") or "").startswith("variant:"):
+                if choice.get("resource_type") != "chibi" or not str(choice.get("source") or "").startswith("alt:"):
                     continue
                 if not holds(core, choice):
                     continue
@@ -478,8 +480,8 @@ class ImpactMixin:
                 out.append(
                     {
                         "id": "",
-                        "target": choice.get("variant"),
-                        "kind": "model",
+                        "target": choice.get("alt"),
+                        "resource_type": "chibi",
                         "core": core,
                         "source": choice["source"],
                         "installed": True,
@@ -523,7 +525,7 @@ class ImpactMixin:
         line = mod_progress.ItemProgress(progress, len(items), "process")
         for i, item in enumerate(items, 1):
             line.item(
-                i, **self._progress_identity(item["target"], "model", item["source"]), step=mod_progress.STEP_CHECK
+                i, **self._progress_identity(item["target"], "chibi", item["source"]), step=mod_progress.STEP_CHECK
             )
             if item["id"]:
                 rebuilt = line.part(0.0, 0.9 if item["installed"] else 1.0)
@@ -538,7 +540,7 @@ class ImpactMixin:
                         raise ServiceError("state_changed")
                     with self._lock:
                         self._check_stopping(pin)
-                        self._untested_apply(item["target"], item["source"], "model", pin, None)
+                        self._untested_apply(item["target"], item["source"], "chibi", pin, None)
                 except (ServiceError, OSError) as error:
                     log_failure(logger, logging.INFO, "Left a costume build for the next start", error)
                     result["left"].append(named)
@@ -556,7 +558,7 @@ class ImpactMixin:
                     continue
             if item["installed"]:
                 try:
-                    self.apply(item["target"], item["source"], log, kind="model", pin=pin, fraction=written)
+                    self.apply(item["target"], item["source"], log, resource_type="chibi", pin=pin, fraction=written)
                 except (ServiceError, OSError) as error:
                     log_failure(logger, logging.INFO, "Left a costume build for the next start", error)
                     result["left"].append(named)
@@ -572,29 +574,29 @@ class ImpactMixin:
         return result
 
     def _entry_identity(self, pin: Pin, core: str, config: dict[str, Any] | None) -> dict[str, str]:
-        """Who a toggle's entry is (``_progress_identity``): its core's variant and kind, and its configured source."""
+        """Who a toggle's entry is (``_progress_identity``): its core's alt and kind, and its configured source."""
         try:
-            variant = self._core_map(pin).key(core) or ""
-            kind = self._kind(core, pin) or ""
+            alt = self._core_map(pin).key(core) or ""
+            resource_type = self._resource_type(core, pin) or ""
         except (OSError, ServiceError):
-            variant, kind = "", ""
+            alt, resource_type = "", ""
         folder = (((config or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}
         source = (folder.get(core.lower()) or {}).get("source")
-        return {**self._progress_identity(variant, kind, source), "core": core}
+        return {**self._progress_identity(alt, resource_type, source), "core": core}
 
-    def _progress_identity(self, variant: str, kind: str, source: str | None) -> dict[str, str]:
+    def _progress_identity(self, alt: str, resource_type: str, source: str | None) -> dict[str, str]:
         """Say who an item of a job over mods is, for its progress line (``mod_progress``).
 
-        That is the variant and kind it writes, and the mod's own name (``_progress_name``) or the variant whose files
+        That is the alt and kind it writes, and the mod's own name (``_progress_name``) or the alt whose files
         it takes.
         """
-        identity = {"variant": variant or "", "kind": kind or ""}
+        identity = {"alt": alt or "", "resource_type": resource_type or ""}
         if isinstance(source, str) and source.startswith("mod:"):
             record = self._records.get(source[4:])
             if record is not None:
                 identity["name"] = self._progress_name(record)
-        elif isinstance(source, str) and source.startswith("variant:"):
-            identity["source"] = source[8:]
+        elif isinstance(source, str) and source.startswith("alt:"):
+            identity["source"] = source[4:]
         return identity
 
     def _progress_name(self, record: dict[str, Any]) -> str:
@@ -608,7 +610,7 @@ class ImpactMixin:
             return ""
         if not isinstance(label, str) or not label:
             return ""
-        plain = {str(record.get("target") or "").lower()}
+        plain = {str(stored_target(record) or "").lower()}
         for name in record.get("files") or []:
             plain.update({str(name).lower(), Path(str(name)).stem.lower(), core_of(str(name))})
         return "" if label.lower() in plain else label
@@ -637,7 +639,7 @@ class ImpactMixin:
             return [
                 core
                 for core, choice in sorted((folder.get("configured") or {}).items())
-                if isinstance(choice, dict) and choice.get("error") and self._kind(core, pin)
+                if isinstance(choice, dict) and choice.get("error") and self._resource_type(core, pin)
             ]
 
     def retry_failed(
@@ -691,7 +693,7 @@ class ImpactMixin:
                 mark = baseline.stat().st_mtime_ns
             except OSError:
                 mark = None
-            parts.append([record["id"], sorted(record.get("files") or []), record.get("label"), mark])
+            parts.append([record["id"], sorted(record.get("files") or []), record.get("name"), mark])
         return hashlib.sha1(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()
 
     def update_due(self, pin: Pin | None = None) -> dict[str, Any]:
@@ -820,20 +822,20 @@ class ImpactMixin:
         return changed
 
     def _untested_entry(
-        self, pin: Pin, core: str, targets: Sequence[Path], variant: str | None = None, kind: str | None = None
+        self, pin: Pin, core: str, targets: Sequence[Path], alt: str | None = None, resource_type: str | None = None
     ) -> dict[str, Any]:
         """Name an entry of an untested build's confirmation.
 
-        It is {install, core, variant, kind}, with its file names for a generic part.
+        It is {install, core, alt, kind}, with its file names for a generic part.
         """
-        kind = kind or self._kind(core, pin) or "spr"
+        resource_type = resource_type or self._resource_type(core, pin) or "portrait"
         entry = {
             "install": pin.key,
             "core": core,
-            "variant": variant or self._core_map(pin).key(core) or core,
-            "kind": kind,
+            "alt": alt or self._core_map(pin).key(core) or core,
+            "resource_type": resource_type,
         }
-        if kind == "other":
+        if resource_type == "other":
             entry["files"] = [{"file": path.name} for path in targets]
         return entry
 
@@ -915,7 +917,7 @@ class ImpactMixin:
                     except ServiceError as error:
                         if error.code not in ("official_unavailable", "official_invalid"):
                             raise
-            generic = record["kind"] == "other"
+            generic = record["resource_type"] == "other"
             cores = {core_of(name) for name in files}
             keys = {integrity.replacement_key(name) for name in files}
             for name in sorted(self._originals()):
@@ -957,7 +959,7 @@ class ImpactMixin:
             key, core = integrity.replacement_key(name), core_of(name)
             for record in list(self._records.values()):
                 names = record.get("files") or []
-                if record["kind"] == "other":
+                if record["resource_type"] == "other":
                     if key not in {integrity.replacement_key(file) for file in names}:
                         continue
                 elif core not in {core_of(file) for file in names}:

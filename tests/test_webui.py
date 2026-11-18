@@ -26,29 +26,29 @@ from bmpt.webui.timing import Timings
 
 
 @dataclass
-class FakeVariant:
+class FakeAlt:
     key: str
-    family: str
+    student: str
     file_id: str = ""
     names: dict = field(default_factory=dict)
     playable: bool = True
     order: int = 0
-    spr: str | None = None
-    lobby: str | None = None
-    bg: str | None = "BG_Test_Collection"
     portrait: str | None = None
+    memorial_lobby: str | None = None
+    background: str | None = "BG_Test_Collection"
+    official_thumbnail: str | None = None
     date: str | None = None
-    recruitable: bool = True
-    model: str | None = None
+    released_on_server: bool = True
+    chibi: str | None = None
     aliases: list = field(default_factory=list)
 
 
 @dataclass
-class FakeFamily:
+class FakeStudent:
     key: str
     names: dict
     school: str | None
-    variants: list
+    alts: list
     aliases: list = field(default_factory=list)
 
 
@@ -78,29 +78,29 @@ class FakeGame:
     def collection_portrait(self, name):
         return b"\x89PNG portrait"
 
-    def spine_files(self, kind, core):
+    def spine_files(self, resource_type, core):
         return {f"{core}.skel": b"skel", f"{core}.atlas": b"atlas", f"{core}.png": b"png"}
 
 
 class FakeCatalog:
     def __init__(self):
-        self.v = FakeVariant(
-            "hoshino", "hoshino", "hoshino", {"zh-CN": {"full": "星野", "short": "原皮"}}, spr="hoshino_spr"
+        self.v = FakeAlt(
+            "hoshino", "hoshino", "hoshino", {"zh-CN": {"full": "星野", "short": "原皮"}}, portrait="hoshino_spr"
         )
-        self.f = FakeFamily("hoshino", {"zh-CN": "星野"}, "Abydos", [self.v])
+        self.f = FakeStudent("hoshino", {"zh-CN": "星野"}, "Abydos", [self.v])
 
-    def families(self):
+    def students(self):
         return [self.f]
 
-    def family(self, key):
+    def student(self, key):
         if key != "hoshino":
             raise ServiceError("student_not_found", key=key)
         return self.f
 
-    def variant(self, key):
-        for variant in self.f.variants:
-            if variant.key == key:
-                return variant
+    def alt(self, key):
+        for alt in self.f.alts:
+            if alt.key == key:
+                return alt
         raise ServiceError("catalog_alt_not_found", key=key)
 
 
@@ -110,7 +110,7 @@ class FakeMod:
     target: str
     fresh: bool = True
     added: str = "2026-10-01T08:00:00+00:00"
-    kind: str = "spr"
+    resource_type: str = "portrait"
     user_added: bool = True
 
     def to_json(self):
@@ -137,7 +137,7 @@ class FakeLibrary:
         return [FakeMod("m1", "hoshino")]
 
     def modified(self):
-        return {"hoshino": "variant:hoshino_swimsuit"}
+        return {"hoshino": "alt:hoshino_swimsuit"}
 
     def favorites(self):
         return set(self.favs)
@@ -152,9 +152,9 @@ class FakeLibrary:
         return {}
 
     def configured(self, key, pin=None):
-        return {"spr": None, "lobby": None}
+        return {"portrait": None, "memorialLobby": None}
 
-    def roster_snapshot(self, keys):
+    def student_list_snapshot(self, keys):
         pin = self.current_pin()
         return {
             "install": pin.key if pin else None,
@@ -164,22 +164,22 @@ class FakeLibrary:
             "configured": {key: self.configured(key) for key in keys},
         }
 
-    def apply(self, variant_key, source, log, progress, kind="spr", pin=None):
+    def apply(self, alt_id, source, log, progress, resource_type="portrait", pin=None):
         log("applying")
-        progress(1, 1, variant_key)
-        self.applied.append((variant_key, source))
+        progress(1, 1, alt_id)
+        self.applied.append((alt_id, source))
         return {"applied": source}
 
-    def restore(self, variant_key, log, kind="spr", pin=None, progress=None):
-        self.applied.append((variant_key, "official"))
+    def restore(self, alt_id, log, resource_type="portrait", pin=None, progress=None):
+        self.applied.append((alt_id, "official"))
         return {"applied": "official"}
 
-    def would_write(self, variant_key, source, kind="spr", pin=None, *, setting=False):
+    def would_write(self, alt_id, source, resource_type="portrait", pin=None, *, setting=False):
         return self.writes
 
     def live_bundles(self, core, pin=None):
         if core not in self.live:
-            raise ServiceError("game_file_not_found", variant=core)
+            raise ServiceError("game_file_not_found", alt=core)
         return self.live[core]
 
     def installs(self):
@@ -350,16 +350,16 @@ def test_rpc_errors_are_codes(app):
     assert rpc(app, "student.get", key="x")["error"] == {"code": "student_not_found", "params": {"key": "x"}}
 
 
-def test_roster_and_family(app, services):
-    roster = rpc(app, "students.list")["result"]
-    v = roster["students"][0]["alts"][0]
+def test_student_list_and_student(app, services):
+    student_list = rpc(app, "students.list")["result"]
+    v = student_list["students"][0]["alts"][0]
     assert v["key"] == "hoshino" and v["mods"] == 1 and v["fresh"] is False
     assert v["added"] == "2026-10-01T08:00:00+00:00"  # the newest own mod, for the "recently added" sort
     assert v["replaced"] == "alt:hoshino_swimsuit"
     assert v["background"] == "/asset/art/background/BG_Test_Collection"
     assert v["playable"] is True and v["releasedOnServer"] is True
     rpc(app, "favorites.set", alt="hoshino", on=True)
-    services.catalog.v.recruitable = False  # playable on another server only
+    services.catalog.v.released_on_server = False  # playable on another server only
     fam = rpc(app, "student.get", key="hoshino")["result"]
     assert fam["alts"][0]["playable"] is True and fam["alts"][0]["releasedOnServer"] is False
     assert fam["alts"][0]["favorite"] is True
@@ -368,15 +368,15 @@ def test_roster_and_family(app, services):
     assert fam["version"] == "rv1"  # the install the parts come from
 
 
-def test_mod_search_keeps_alias_core_and_file_names_in_roster_and_family(app, services, monkeypatch):
+def test_mod_search_keeps_alias_core_and_file_names_in_student_list_and_student(app, services, monkeypatch):
     mod = FakeMod("p1", "hoshino")
-    mod.alias = mod.label = "Painted <summer>"
+    mod.alias = mod.name = "Painted <summer>"
     mod.core = "hoshino_swimsuit_spr"
     mod.file = Path("mods/p1/2026-10-01_hoshino_swimsuit_spr.bundle")
     monkeypatch.setattr(services.library, "mods", lambda: [mod])
     for alias in ("Painted <summer>", "Evening", ""):
         mod.alias = alias
-        mod.label = alias or mod.core
+        mod.name = alias or mod.core
         for result in (
             rpc(app, "students.list")["result"]["students"][0],
             rpc(app, "student.get", key="hoshino")["result"],
@@ -386,37 +386,43 @@ def test_mod_search_keeps_alias_core_and_file_names_in_roster_and_family(app, se
             )
 
 
-def test_library_counts_and_configured_sources_reach_roster_and_family(app, services, monkeypatch):
-    mods = [FakeMod(f"p{i}", "hoshino") for i in range(3)] + [FakeMod("l1", "hoshino", kind="lobby")]
+def test_library_counts_and_configured_sources_reach_student_list_and_student(app, services, monkeypatch):
+    mods = [FakeMod(f"p{i}", "hoshino") for i in range(3)] + [FakeMod("l1", "hoshino", resource_type="memorialLobby")]
     monkeypatch.setattr(services.library, "mods", lambda: mods)
-    configured = {"spr": "mod:p1", "lobby": "mod:l1"}
+    configured = {"portrait": "mod:p1", "memorialLobby": "mod:l1"}
     monkeypatch.setattr(services.library, "configured", lambda key: configured)
     for enabled in (True, False):
         services.library.enabled = enabled
-        selection = {"spr": {"source": "mod:p1", "installed": enabled, "error": None}}
+        selection = {"portrait": {"source": "mod:p1", "installed": enabled, "error": None}}
         monkeypatch.setattr(services.library, "selection", lambda key: selection)
-        roster = rpc(app, "students.list")["result"]["students"][0]
-        family = rpc(app, "student.get", key="hoshino")["result"]
-        for data in (roster, family):
+        student_list = rpc(app, "students.list")["result"]["students"][0]
+        student = rpc(app, "student.get", key="hoshino")["result"]
+        for data in (student_list, student):
             v = data["alts"][0]
             assert v["mods"] == 4
             assert v["modCounts"] == {"portrait": 3, "memorialLobby": 1}
             assert v["configured"] == {"portrait": "mod:p1", "memorialLobby": "mod:l1"}
-        assert "selection" not in roster["alts"][0]
-        assert family["alts"][0]["selection"] == {"portrait": {"source": "mod:p1", "installed": enabled, "error": None}}
+        assert "selection" not in student_list["alts"][0]
+        assert student["alts"][0]["selection"] == {
+            "portrait": {"source": "mod:p1", "installed": enabled, "error": None}
+        }
     monkeypatch.setattr(services.library, "mods", lambda: [])
     v = rpc(app, "students.list")["result"]["students"][0]["alts"][0]
     assert v["mods"] == 0 and v["modCounts"] == {"portrait": 0, "memorialLobby": 0}
 
 
-def test_roster_uses_one_snapshot_and_validates_saved_previews_without_library_reads(app, services, monkeypatch):
-    variants = [
-        FakeVariant(f"v{i}", "hoshino", spr=f"v{i}_spr", lobby=f"v{i}_home", model=f"ch{i:04}") for i in range(100)
+def test_student_list_uses_one_snapshot_and_validates_saved_previews_without_library_reads(app, services, monkeypatch):
+    alts = [
+        FakeAlt(f"v{i}", "hoshino", portrait=f"v{i}_spr", memorial_lobby=f"v{i}_home", chibi=f"ch{i:04}")
+        for i in range(100)
     ]
-    services.catalog.f.variants = variants
-    mods = [FakeMod(f"m{i}", v.key) for i, v in enumerate(variants)]
-    mods += [FakeMod("lobby", "v0", kind="lobby"), FakeMod("model", "v0", kind="model")]
-    choices = {v.key: {"spr": "mod:m0", "lobby": None, "model": None} for v in variants}
+    services.catalog.f.alts = alts
+    mods = [FakeMod(f"m{i}", v.key) for i, v in enumerate(alts)]
+    mods += [
+        FakeMod("lobby", "v0", resource_type="memorialLobby"),
+        FakeMod("model", "v0", resource_type="chibi"),
+    ]
+    choices = {v.key: {"portrait": "mod:m0", "memorialLobby": None, "chibi": None} for v in alts}
     calls = []
 
     def snapshot(keys):
@@ -432,21 +438,21 @@ def test_roster_uses_one_snapshot_and_validates_saved_previews_without_library_r
     def forbidden(*args, **kwargs):
         pytest.fail("The roster must use its snapshot instead of per-variant library or UI-state reads")
 
-    monkeypatch.setattr(services.library, "roster_snapshot", snapshot)
+    monkeypatch.setattr(services.library, "student_list_snapshot", snapshot)
     for name in ("current_pin", "mods", "configured", "selection", "modified", "favorites"):
         monkeypatch.setattr(services.library, name, forbidden)
     monkeypatch.setattr(services.state, "preview_sources", forbidden)
-    services.state.set_preview_source("another-install", "v0", "spr", "official")
-    for i, v in enumerate(variants):
-        services.state.set_preview_source("current", v.key, "spr", f"mod:m{i}")
-    services.state.set_preview_source("current", "v0", "lobby", "mod:lobby")
-    services.state.set_preview_source("current", "v0", "model", "mod:model")
-    services.state.set_preview_source("current", "v1", "lobby", "mod:lobby")
-    services.state.set_preview_source("current", "v1", "model", "mod:m1")
-    services.state.set_preview_source("current", "v2", "spr", "variant:v3")
-    services.state.set_preview_source("current", "v3", "spr", "mod:deleted")
-    services.state.set_preview_source("current", "v4", "spr", "official")
-    services.state.set_preview_source("current", "removed-variant", "spr", "official")
+    services.state.set_preview_source("another-install", "v0", "portrait", "official")
+    for i, v in enumerate(alts):
+        services.state.set_preview_source("current", v.key, "portrait", f"mod:m{i}")
+    services.state.set_preview_source("current", "v0", "memorialLobby", "mod:lobby")
+    services.state.set_preview_source("current", "v0", "chibi", "mod:model")
+    services.state.set_preview_source("current", "v1", "memorialLobby", "mod:lobby")
+    services.state.set_preview_source("current", "v1", "chibi", "mod:m1")
+    services.state.set_preview_source("current", "v2", "portrait", "alt:v3")
+    services.state.set_preview_source("current", "v3", "portrait", "mod:deleted")
+    services.state.set_preview_source("current", "v4", "portrait", "official")
+    services.state.set_preview_source("current", "removed-variant", "portrait", "official")
     reads = []
     preview_snapshot = services.state.preview_snapshot
 
@@ -456,13 +462,13 @@ def test_roster_uses_one_snapshot_and_validates_saved_previews_without_library_r
 
     monkeypatch.setattr(services.state, "preview_snapshot", previews)
     result = rpc(app, "students.list")["result"]["students"][0]["alts"]
-    assert calls == [[v.key for v in variants]] and reads == ["current"]
-    resource_types = {"spr": "portrait", "lobby": "memorialLobby", "model": "chibi"}
-    for variant in result:
-        assert variant["configured"] == {
-            resource_types[kind]: source for kind, source in choices[variant["key"]].items()
+    assert calls == [[v.key for v in alts]] and reads == ["current"]
+    resource_types = {"portrait": "portrait", "memorialLobby": "memorialLobby", "chibi": "chibi"}
+    for alt in result:
+        assert alt["configured"] == {
+            resource_types[resource_type]: source for resource_type, source in choices[alt["key"]].items()
         }
-        assert "selection" not in variant
+        assert "selection" not in alt
     assert result[0]["previewSources"] == {"portrait": "mod:m0", "memorialLobby": "mod:lobby", "chibi": "mod:model"}
     assert result[1]["previewSources"] == {"portrait": "mod:m1"} and result[1]["favorite"]
     assert result[2]["previewSources"] == {"portrait": "alt:v3"} and result[2]["replaced"] == "mod:m2"
@@ -477,8 +483,13 @@ def test_preview_snapshot_filters_malformed_choices_and_does_not_share_state(tmp
             {
                 "asset_previews": {
                     "current": {
-                        "valid": {"spr": "official", "lobby": "mod:one", "model": "mod:two", "future": "ignored"},
-                        "bad-sources": {"spr": None, "lobby": False, "model": 1},
+                        "valid": {
+                            "portrait": "official",
+                            "memorialLobby": "mod:one",
+                            "chibi": "mod:two",
+                            "future": "ignored",
+                        },
+                        "bad-sources": {"portrait": None, "memorialLobby": False, "chibi": 1},
                         "bad-variant": [],
                     },
                     "bad-folder": [],
@@ -488,19 +499,22 @@ def test_preview_snapshot_filters_malformed_choices_and_does_not_share_state(tmp
     )
     state = UiState(path)
     snapshot = state.preview_snapshot("current")
-    assert snapshot == {"valid": {"spr": "official", "lobby": "mod:one", "model": "mod:two"}, "bad-sources": {}}
-    snapshot["valid"]["spr"] = "mod:changed"
-    assert state.preview_sources("current", "valid")["spr"] == "official"
+    assert snapshot == {
+        "valid": {"portrait": "official", "memorialLobby": "mod:one", "chibi": "mod:two"},
+        "bad-sources": {},
+    }
+    snapshot["valid"]["portrait"] = "mod:changed"
+    assert state.preview_sources("current", "valid")["portrait"] == "official"
     assert state.preview_snapshot("missing") == state.preview_snapshot("bad-folder") == {}
-    UiState(path).set_preview_source("current", "valid", "spr", "mod:external")
-    assert state.preview_snapshot("current")["valid"]["spr"] == "mod:external"
+    UiState(path).set_preview_source("current", "valid", "portrait", "mod:external")
+    assert state.preview_snapshot("current")["valid"]["portrait"] == "mod:external"
 
 
 def mod_marks(app):
-    roster = rpc(app, "students.list")["result"]["students"][0]["alts"][0]
-    variant = rpc(app, "student.get", key="hoshino")["result"]["alts"][0]
-    assert roster["fresh"] == variant["fresh"]
-    return roster["fresh"], {m["id"]: m["fresh"] for m in variant["modList"]}
+    student_list = rpc(app, "students.list")["result"]["students"][0]["alts"][0]
+    alt = rpc(app, "student.get", key="hoshino")["result"]["alts"][0]
+    assert student_list["fresh"] == alt["fresh"]
+    return student_list["fresh"], {m["id"]: m["fresh"] for m in alt["modList"]}
 
 
 @pytest.mark.parametrize("first", ["students.list", "student.get"])
@@ -508,7 +522,7 @@ def mod_marks(app):
 def test_mod_marks_first_run_baselines_the_whole_library(app, services, monkeypatch, first, state):
     mods = [
         FakeMod("portrait", "hoshino"),
-        FakeMod("lobby", "hoshino", kind="lobby"),
+        FakeMod("memorialLobby", "hoshino", resource_type="memorialLobby"),
         *[FakeMod(f"other-{i}", f"student-{i}", user_added=i % 2 == 0) for i in range(80)],
     ]
     monkeypatch.setattr(services._library, "mods", lambda: mods)
@@ -518,7 +532,7 @@ def test_mod_marks_first_run_baselines_the_whole_library(app, services, monkeypa
         services.state.path.unlink(missing_ok=True)
     params = {"key": "hoshino"} if first == "student.get" else {}
     assert "result" in rpc(app, first, **params)
-    assert mod_marks(app) == (False, {"portrait": False, "lobby": False})
+    assert mod_marks(app) == (False, {"portrait": False, "memorialLobby": False})
     assert UiState(services.state.path).seen_mods() == {m.id for m in mods}
     if state == "older":
         assert services.state.get("voice_volume") == 20
@@ -559,7 +573,7 @@ def test_mod_marks_reset_baselines_again_then_only_new_additions_get_dots(app, s
 @pytest.mark.parametrize("seen", [[], ["m1"]])
 def test_mod_marks_update_preserves_existing_seen_state_and_pending_dots(app, services, monkeypatch, seen):
     services.state.mark_mods_seen(seen)
-    mods = [FakeMod("m1", "hoshino"), FakeMod("pending", "hoshino", kind="lobby")]
+    mods = [FakeMod("m1", "hoshino"), FakeMod("pending", "hoshino", resource_type="memorialLobby")]
     monkeypatch.setattr(services._library, "mods", lambda: mods)
     expected = (True, {"m1": "m1" not in seen, "pending": True})
     assert mod_marks(app) == expected
@@ -614,20 +628,23 @@ def test_mod_marks_unreadable_state_shows_no_dots(app, services, monkeypatch, fa
 
 def test_mod_marks_follow_ui_state_per_mod_and_survive_restart(app, services, monkeypatch):
     services.state.mark_mods_seen([])  # an existing baseline, before these two mods were added
-    mods = [FakeMod("portrait", "hoshino", fresh=False), FakeMod("lobby", "hoshino", kind="lobby")]
+    mods = [
+        FakeMod("portrait", "hoshino", fresh=False),
+        FakeMod("memorialLobby", "hoshino", resource_type="memorialLobby"),
+    ]
     monkeypatch.setattr(services.library, "mods", lambda: mods)
-    assert mod_marks(app) == (True, {"portrait": True, "lobby": True})
+    assert mod_marks(app) == (True, {"portrait": True, "memorialLobby": True})
     rpc(app, "ui.visit", alt="hoshino")
-    assert mod_marks(app) == (True, {"portrait": True, "lobby": True})
+    assert mod_marks(app) == (True, {"portrait": True, "memorialLobby": True})
     assert rpc(app, "mods.seen", id="portrait") == {"result": None}
-    assert mod_marks(app) == (True, {"portrait": False, "lobby": True})
-    assert rpc(app, "mods.seen", ids=["lobby", "portrait", "lobby"]) == {"result": None}
+    assert mod_marks(app) == (True, {"portrait": False, "memorialLobby": True})
+    assert rpc(app, "mods.seen", ids=["memorialLobby", "portrait", "memorialLobby"]) == {"result": None}
     services.state = UiState(services.state.path)
-    assert mod_marks(app) == (False, {"portrait": False, "lobby": False})
-    assert services.state.seen_mods() == {"portrait", "lobby"}
+    assert mod_marks(app) == (False, {"portrait": False, "memorialLobby": False})
+    assert services.state.seen_mods() == {"portrait", "memorialLobby"}
     assert [m.fresh for m in mods] == [False, True], "the UI never changes the library's flags"
     mods.append(FakeMod("new", "hoshino"))
-    assert mod_marks(app) == (True, {"portrait": False, "lobby": False, "new": True})
+    assert mod_marks(app) == (True, {"portrait": False, "memorialLobby": False, "new": True})
     mods.pop()
     assert mod_marks(app)[0] is False
 
@@ -640,7 +657,7 @@ def test_mods_seen_rejects_invalid_ids(app, services, params):
     assert services.state.seen_mods() is None
 
 
-def test_roster_and_family_carry_the_aliases_the_search_matches(app, services):
+def test_student_list_and_student_carry_the_aliases_the_search_matches(app, services):
     services.catalog.f.aliases = ["\u5c0f\u661f"]
     services.catalog.v.aliases = ["\u5c0f\u661f\uff08x\uff09"]
     for result in (
@@ -676,19 +693,19 @@ def test_own_aliases_are_kept_and_listed(app, services, tmp_path):
     assert UiState(tmp_path / "webui.json").aliases() == {}
 
 
-def test_legacy_family_aliases_migrate_to_original_only_and_skins_save_independently(app, services, tmp_path):
+def test_legacy_student_aliases_migrate_to_original_only_and_skins_save_independently(app, services, tmp_path):
     path = tmp_path / "webui.json"
     legacy = {"aliases": {"hoshino": ["Original nickname"]}, "prefs": {"voice_volume": 40}, "seen_mods": []}
     path.write_text(json.dumps(legacy), encoding="utf-8")
     before = path.read_bytes()
     skin = replace(services.catalog.v, key="hoshino_swimsuit", file_id="hoshino_swimsuit")
-    services.catalog.f.variants.append(skin)
+    services.catalog.f.alts.append(skin)
 
     def names(method):
         result = rpc(app, method, **({"key": "hoshino"} if method == "student.get" else {}))["result"]
-        family = result["students"][0] if method == "students.list" else result
-        assert "custom" not in family
-        return {v["key"]: v["customAliases"] for v in family["alts"]}
+        student = result["students"][0] if method == "students.list" else result
+        assert "custom" not in student
+        return {v["key"]: v["customAliases"] for v in student["alts"]}
 
     for method in ("students.list", "student.get"):
         assert names(method) == {"hoshino": ["Original nickname"], skin.key: []}
@@ -698,7 +715,7 @@ def test_legacy_family_aliases_migrate_to_original_only_and_skins_save_independe
         assert names(method) == {"hoshino": ["Original nickname"], skin.key: ["Skin nickname"]}
     assert rpc(app, "aliases.set", alt="hoshino", aliases=[])["result"] == []
     assert UiState(path).aliases() == {skin.key: ["Skin nickname"]}
-    services.catalog.f.variants = [skin]  # A missing original must not transfer its alias to an installed skin.
+    services.catalog.f.alts = [skin]  # A missing original must not transfer its alias to an installed skin.
     path.write_text(json.dumps(legacy), encoding="utf-8")
     assert names("students.list") == {skin.key: []}
     assert rpc(app, "aliases.set", alt="missing", aliases=["x"])["error"]["code"] == "catalog_alt_not_found"
@@ -706,39 +723,41 @@ def test_legacy_family_aliases_migrate_to_original_only_and_skins_save_independe
 
 
 @pytest.mark.parametrize("explicit", [False, True])
-@pytest.mark.parametrize("family_key", ["special", "arona"])
-def test_special_only_family_alias_migrates_once_to_one_scene(
-    app, services, tmp_path, monkeypatch, explicit, family_key
+@pytest.mark.parametrize("student_key", ["special", "arona"])
+def test_special_only_student_alias_migrates_once_to_one_scene(
+    app, services, tmp_path, monkeypatch, explicit, student_key
 ):
     path = tmp_path / "webui.json"
-    scene = replace(services.catalog.v, key="special:alpha", family=family_key, spr=None, lobby="alpha", order=0)
-    sibling = replace(scene, key="special:beta", lobby="beta", order=1)
-    services.catalog.f = FakeFamily(family_key, {"en": "Special"}, None, [sibling, scene])
-    monkeypatch.setattr(services.catalog, "family", lambda key: services.catalog.f)
-    aliases = {family_key: ["Legacy scene name"]}
+    scene = replace(
+        services.catalog.v, key="special:alpha", student=student_key, portrait=None, memorial_lobby="alpha", order=0
+    )
+    sibling = replace(scene, key="special:beta", memorial_lobby="beta", order=1)
+    services.catalog.f = FakeStudent(student_key, {"en": "Special"}, None, [sibling, scene])
+    monkeypatch.setattr(services.catalog, "student", lambda key: services.catalog.f)
+    aliases = {student_key: ["Legacy scene name"]}
     if explicit:
         aliases[scene.key] = ["Explicit scene name"]
     legacy = {"aliases": aliases, "prefs": {"voice_volume": 40}, "seen_mods": []}
     path.write_text(json.dumps(legacy), encoding="utf-8")
 
     def names(method):
-        result = rpc(app, method, **({"key": family_key} if method == "student.get" else {}))["result"]
-        family = result["students"][0] if method == "students.list" else result
-        return {v["key"]: v["customAliases"] for v in family["alts"]}
+        result = rpc(app, method, **({"key": student_key} if method == "student.get" else {}))["result"]
+        student = result["students"][0] if method == "students.list" else result
+        return {v["key"]: v["customAliases"] for v in student["alts"]}
 
-    kept = aliases.get(scene.key, aliases[family_key])
+    kept = aliases.get(scene.key, aliases[student_key])
     for method in ("students.list", "student.get"):
         assert names(method) == {scene.key: kept, sibling.key: []}
     assert UiState(path).aliases() == {scene.key: kept}
     assert json.loads(path.read_text())["prefs"] == legacy["prefs"]
     # A new earlier scene or a different install's ordering cannot move a migrated name.
     earlier = replace(scene, key="special:aardvark", order=-1)
-    services.catalog.f.variants.insert(0, earlier)
+    services.catalog.f.alts.insert(0, earlier)
     assert names("students.list") == {earlier.key: [], scene.key: kept, sibling.key: []}
     assert rpc(app, "aliases.set", alt=scene.key, aliases=[])["result"] == []
     assert names("student.get") == {earlier.key: [], scene.key: [], sibling.key: []}
     # Older callers using the family argument also write a usable variant key.
-    assert rpc(app, "aliases.set", student=family_key, aliases=["New name"])["result"] == ["New name"]
+    assert rpc(app, "aliases.set", student=student_key, aliases=["New name"])["result"] == ["New name"]
     assert UiState(path).aliases() == {earlier.key: ["New name"]}
 
 
@@ -752,15 +771,15 @@ def _bundle(folder: Path, stem: str, trailing: bytes = b"") -> Path:
     return path
 
 
-def test_family_lists_the_model_prefab_bundles(app, services, monkeypatch, tmp_path):
+def test_student_lists_the_model_prefab_bundles(app, services, monkeypatch, tmp_path):
     old = _bundle(tmp_path, "character-hoshino_original-_mxload-2024-11-18_000_assets_all")
     new = _bundle(tmp_path, "character-hoshino_original-_mxload-2025-07-25_assets_all", trailing=b"\x01\x02\x03\x04")
     broken = tmp_path / "character-hoshino_original-_mxload-2025-08-01_assets_all_12345.bundle"
     broken.write_bytes(old.read_bytes())
     monkeypatch.setattr(
-        FakeGame, "_model_index", lambda self: {"hoshino_original": [str(old), str(new), str(broken)]}, raising=False
+        FakeGame, "_chibi_index", lambda self: {"hoshino_original": [str(old), str(new), str(broken)]}, raising=False
     )
-    services.catalog.v.model = "hoshino_original"
+    services.catalog.v.chibi = "hoshino_original"
     files = rpc(app, "student.get", key="hoshino")["result"]["alts"][0]["chibiFiles"]
     # newest first, each with the date and CRC state the info panel shows, judged from the header only:
     # no switch writes model bundles, so a name whose CRC does not match without trailing bytes shows ok
@@ -770,7 +789,7 @@ def test_family_lists_the_model_prefab_bundles(app, services, monkeypatch, tmp_p
         (old, "2024-11-18", "ok", "chibi"),
     ]
     assert files[2]["size"] == old.stat().st_size
-    services.catalog.v.model = None
+    services.catalog.v.chibi = None
     assert rpc(app, "student.get", key="hoshino")["result"]["alts"][0]["chibiFiles"] == []
 
 
@@ -829,7 +848,7 @@ def test_preview_failures_are_logged_in_release_sessions(app, services, caplog):
 
 
 def test_another_installs_skeleton_is_read_from_its_own_files(app, services, monkeypatch, tmp_path):
-    from bmpt.library.models import Pin
+    from bmpt.library.records import Pin
 
     current = Pin("/games/global", tmp_path / "global", (tmp_path / "global",), "global")
     other = Pin("/games/japan", tmp_path / "japan", (tmp_path / "japan",), "japan")
@@ -842,7 +861,7 @@ def test_another_installs_skeleton_is_read_from_its_own_files(app, services, mon
             assert private
             made.append(dirs)
 
-        def spine_files(self, kind, core):
+        def spine_files(self, resource_type, core):
             return {f"{core}.skel": b"japan skel"}
 
     monkeypatch.setattr(services, "_make_game", OtherGame)
@@ -911,10 +930,12 @@ def test_official_skeleton_route_reads_the_librarys_official_parts(app, services
     assert call(app, "/asset/spine/official/hoshino_spr/skeleton.skel")[0] == "404 Not Found"
 
 
-@pytest.mark.parametrize("kind", ["portrait", "memorialLobby", "mod", "official-portrait", "official-memorialLobby"])
-def test_spine_revision_routes_reject_switched_files(app, services, monkeypatch, tmp_path, kind, caplog):
+@pytest.mark.parametrize(
+    "resource_type", ["portrait", "memorialLobby", "mod", "official-portrait", "official-memorialLobby"]
+)
+def test_spine_revision_routes_reject_switched_files(app, services, monkeypatch, tmp_path, resource_type, caplog):
     bundle = _bundle(tmp_path, "assets-_mx-spinecharacters-hoshino_spr-_mxdependency-2026-01-01_assets_all")
-    monkeypatch.setattr(services.game, "spine_cores", lambda kind: {"hoshino_spr": [bundle]}, raising=False)
+    monkeypatch.setattr(services.game, "spine_cores", lambda resource_type: {"hoshino_spr": [bundle]}, raising=False)
     monkeypatch.setattr(
         services.game,
         "spine_files_from",
@@ -925,15 +946,17 @@ def test_spine_revision_routes_reject_switched_files(app, services, monkeypatch,
         },
         raising=False,
     )
-    monkeypatch.setattr(services.game, "lobby_info", lambda core: {"content": bundle.read_bytes().hex()}, raising=False)
+    monkeypatch.setattr(
+        services.game, "memorial_lobby_info", lambda core: {"content": bundle.read_bytes().hex()}, raising=False
+    )
     monkeypatch.setattr(services.library, "preview_bundles", lambda mod: [bundle], raising=False)
     monkeypatch.setattr(services.library, "official_bundles", lambda core, pin=None: [bundle], raising=False)
-    prefix = f"/asset/spine/{kind}/hoshino_spr"
+    prefix = f"/asset/spine/{resource_type}/hoshino_spr"
     before = json.loads(call(app, prefix + "/manifest.json")[2])["revision"]
     expected = bundle.read_bytes()
     assert call(app, f"{prefix}/{before}/skeleton.skel")[2] == expected
     bundle.write_bytes(expected + b"changed")
-    for name in ("skeleton.skel", "skeleton.atlas", "Pages/portrait.png", "files.json", "lobby.json"):
+    for name in ("skeleton.skel", "skeleton.atlas", "Pages/portrait.png", "files.json", "memorial-lobby.json"):
         assert call(app, f"{prefix}/{before}/{name}")[0] == "404 Not Found"
     after = json.loads(call(app, prefix + "/manifest.json")[2])["revision"]
     assert after != before
@@ -942,8 +965,8 @@ def test_spine_revision_routes_reject_switched_files(app, services, monkeypatch,
         status, headers, body = call(app, f"{prefix}/{after}/{name}")
         assert status == "200 OK" and body == bundle.read_bytes()
         assert headers["Cache-Control"] == "no-store"
-    if kind == "memorialLobby":
-        assert json.loads(call(app, f"{prefix}/{after}/lobby.json")[2])["content"] == bundle.read_bytes().hex()
+    if resource_type == "memorialLobby":
+        assert json.loads(call(app, f"{prefix}/{after}/memorial-lobby.json")[2])["content"] == bundle.read_bytes().hex()
 
 
 def test_a_texture_only_mod_previews_on_the_rig_its_textures_were_drawn_for(app, services, monkeypatch, tmp_path):
@@ -987,9 +1010,9 @@ def test_a_texture_only_mod_previews_on_the_rig_its_textures_were_drawn_for(app,
     assert call(app, f"{prefix}/{drawn}/skeleton.skel")[2] == b"new skeleton"
 
 
-@pytest.mark.parametrize("kind", ["portrait", "memorialLobby"])
-def test_live_spine_files_are_read_in_the_librarys_order(app, services, monkeypatch, tmp_path, kind):
-    name = "hoshino_spr" if kind == "portrait" else "hoshino_home"
+@pytest.mark.parametrize("resource_type", ["portrait", "memorialLobby"])
+def test_live_spine_files_are_read_in_the_librarys_order(app, services, monkeypatch, tmp_path, resource_type):
+    name = "hoshino_spr" if resource_type == "portrait" else "hoshino_home"
     official = _bundle(tmp_path, "assets-_mx-spinelobbies-b-_mxdependency-2026-01-01_assets_all")
     mod = _bundle(tmp_path, "assets-_mx-spinelobbies-a-_mxdependency-2026-01-01_assets_all", b"x")
     monkeypatch.setattr(services.game, "spine_cores", lambda k: {name: [mod, official]}, raising=False)
@@ -1001,16 +1024,16 @@ def test_live_spine_files_are_read_in_the_librarys_order(app, services, monkeypa
         raising=False,
     )
     # a library that knows nothing of the core: the game's own order
-    first = json.loads(call(app, f"/asset/spine/{kind}/{name}/manifest.json")[2])["revision"]
-    assert call(app, f"/asset/spine/{kind}/{name}/{first}/skeleton.skel")[0] == "200 OK"
+    first = json.loads(call(app, f"/asset/spine/{resource_type}/{name}/manifest.json")[2])["revision"]
+    assert call(app, f"/asset/spine/{resource_type}/{name}/{first}/skeleton.skel")[0] == "200 OK"
     assert seen[-1] == [mod, official]
     # the library puts the part that carries a mod last: the revision and the files follow that order
     services.library.live[name] = [official, mod]
-    second = json.loads(call(app, f"/asset/spine/{kind}/{name}/manifest.json")[2])["revision"]
+    second = json.loads(call(app, f"/asset/spine/{resource_type}/{name}/manifest.json")[2])["revision"]
     assert second != first
-    assert call(app, f"/asset/spine/{kind}/{name}/{second}/skeleton.skel")[0] == "200 OK"
+    assert call(app, f"/asset/spine/{resource_type}/{name}/{second}/skeleton.skel")[0] == "200 OK"
     assert seen[-1] == [official, mod]
-    assert call(app, f"/asset/spine/{kind}/{name}/skeleton.skel")[0] == "200 OK"
+    assert call(app, f"/asset/spine/{resource_type}/{name}/skeleton.skel")[0] == "200 OK"
     assert seen[-1] == [official, mod], "legacy routes use the same composition as the manifest"
 
 
@@ -1103,8 +1126,8 @@ def test_missing_official_spine_returns_404(app, services, monkeypatch):
     assert status == "404 Not Found" and "X-BAMT-Error" not in headers
 
 
-@pytest.mark.parametrize("kind,core", [("spr", "hoshino_spr"), ("lobby", "hoshino_home")])
-def test_current_mod_and_ui_routes_do_not_wait_for_library_preview(app, services, monkeypatch, kind, core):
+@pytest.mark.parametrize("resource_type, core", [("portrait", "hoshino_spr"), ("memorialLobby", "hoshino_home")])
+def test_current_mod_and_ui_routes_do_not_wait_for_library_preview(app, services, monkeypatch, resource_type, core):
     entered, release = threading.Event(), threading.Event()
 
     def preview(mod_id):
@@ -1116,13 +1139,15 @@ def test_current_mod_and_ui_routes_do_not_wait_for_library_preview(app, services
     monkeypatch.setattr(
         services.library,
         "state",
-        lambda key: {"files": [{"kind": kind, "applied": "mod:m1", "official": False, "restorable": False}]},
+        lambda key: {
+            "files": [{"resource_type": resource_type, "applied": "mod:m1", "official": False, "restorable": False}]
+        },
     )
     with ThreadPoolExecutor(max_workers=2) as pool:
         pending = pool.submit(call, app, "/asset/spine/mod/m1/skeleton.skel")
         try:
             assert entered.wait(1)
-            resource_type = {"spr": "portrait", "lobby": "memorialLobby"}[kind]
+            resource_type = {"portrait": "portrait", "memorialLobby": "memorialLobby"}[resource_type]
             for path in (
                 f"/asset/spine/{resource_type}/{core}/skeleton.skel",
                 "/asset/ui/atlases.json",
@@ -1341,7 +1366,7 @@ def test_lobby_warm_builds_the_prefab_index_once_per_game(app, services, monkeyp
         release.wait(5)
         return {}
 
-    monkeypatch.setattr(FakeGame, "_lobby_prefabs", prefabs, raising=False)
+    monkeypatch.setattr(FakeGame, "_memorial_lobby_prefabs", prefabs, raising=False)
     # Dependencies must remain demand-driven instead of scanning every CAB at startup.
     monkeypatch.setattr(
         FakeGame, "_cab_index", lambda game, everything=False: cabs.append((game, everything)) or {}, raising=False
@@ -1378,7 +1403,7 @@ def test_job_runs_and_reports_events(services):
     job_id = services.jobs.submit(
         "apply",
         lambda log, progress, **p: services.library.apply(log=log, progress=progress, **p),
-        variant_key="hoshino",
+        alt_id="hoshino",
         source="mod:m1",
     )
     events = []
@@ -1426,8 +1451,8 @@ def test_sse_stream_delivers_events():
 def test_ui_strings_fall_back_key_by_key():
     zh = ui_strings("zh-CN")
     en = ui_strings("en-US")
-    assert zh["webui.tab.lobby"] == "记忆大厅"
-    assert en["webui.tab.model"] == "Chibi"
+    assert zh["webui.tab.memorialLobby"] == "记忆大厅"
+    assert en["webui.tab.chibi"] == "Chibi"
     assert set(zh) == set(en)
     assert all("·" not in v and "・" not in v for v in zh.values())
     # Traditional Chinese falls back to English, not to Simplified Chinese (i18n.fallback_language); Korean and
@@ -1435,14 +1460,14 @@ def test_ui_strings_fall_back_key_by_key():
     # never the Simplified Chinese ones
     for lang in ("zh-TW", "ja-JP", "ko-KR", "th-TH"):
         shipped = lang in offered_languages()
-        assert (ui_strings(lang)["webui.tab.lobby"] != en["webui.tab.lobby"]) is shipped, lang
-        assert ui_strings(lang)["webui.tab.lobby"] != zh["webui.tab.lobby"], lang
+        assert (ui_strings(lang)["webui.tab.memorialLobby"] != en["webui.tab.memorialLobby"]) is shipped, lang
+        assert ui_strings(lang)["webui.tab.memorialLobby"] != zh["webui.tab.memorialLobby"], lang
         assert set(ui_strings(lang)) == set(en), lang
-    assert ui_strings("zh-TW")["webui.tab.lobby"] == "紀念大廳"
-    assert ui_strings("ja-JP")["webui.tab.lobby"] == "メモリアルロビー"
+    assert ui_strings("zh-TW")["webui.tab.memorialLobby"] == "紀念大廳"
+    assert ui_strings("ja-JP")["webui.tab.memorialLobby"] == "メモリアルロビー"
     # a shipped translation: the Global client's own Korean term
-    assert ui_strings("ko-KR")["webui.tab.lobby"] == "메모리얼 로비"
-    assert ui_strings("zh-SG")["webui.tab.lobby"] == "记忆大厅"
+    assert ui_strings("ko-KR")["webui.tab.memorialLobby"] == "메모리얼 로비"
+    assert ui_strings("zh-SG")["webui.tab.memorialLobby"] == "记忆大厅"
 
 
 def test_cookie_found_among_unparsable_cookies(app):
@@ -1457,37 +1482,37 @@ def test_non_ascii_token_is_refused_not_crashed(app):
     assert call(app, "/?t=星野", token=None)[0] == "403 Forbidden"
 
 
-def test_roster_view_keeps_only_valid_fields():
+def test_student_list_view_keeps_only_valid_fields():
     assert student_list_view(None) == {
-        "merged": False,
+        "group_alts": False,
         "mods": "all",
-        "recruit": "all",
+        "releaseStatus": "all",
         "sort": "recent",
         "order": "desc",
         "filters": {},
     }
     view = student_list_view(
         {
-            "merged": True,
+            "group_alts": True,
             "mods": "none",
-            "recruit": "maybe",
+            "releaseStatus": "maybe",
             "sort": "name",
             "extra": 1,
-            "filters": {"lobby": ["no", "no", "x"], "kind": "npc", "favorite": [], "bogus": ["yes"]},
+            "filters": {"memorialLobby": ["no", "no", "x"], "kind": "npc", "favorite": [], "bogus": ["yes"]},
         }
     )
     assert view == {
-        "merged": True,
+        "group_alts": True,
         "mods": "none",
-        "recruit": "all",
+        "releaseStatus": "all",
         "sort": "name",
         "order": "asc",
-        "filters": {"lobby": ["no"]},
+        "filters": {"memorialLobby": ["no"]},
     }
     assert student_list_view({"sort": "mods", "order": "asc"})["order"] == "asc"
 
 
-def test_roster_view_is_kept_across_launches(app, services, tmp_path):
+def test_student_list_view_is_kept_across_launches(app, services, tmp_path):
     assert rpc(app, "settings.get")["result"]["studentList"]["sort"] == "recent"
     sent = {
         "groupAlts": True,
@@ -1499,26 +1524,32 @@ def test_roster_view_is_kept_across_launches(app, services, tmp_path):
     saved = rpc(app, "settings.set", key="studentList", value=sent)["result"]["studentList"]
     assert saved == {"mods": "all", **sent}
     # a new launch reads the same file
-    legacy = {"merged": True, "recruit": "yes", "sort": "added", "order": "asc", "filters": {"portrait": ["replaced"]}}
-    assert student_list_view(UiState(tmp_path / "webui.json").get("roster")) == {"mods": "all", **legacy}
+    legacy = {
+        "group_alts": True,
+        "releaseStatus": "yes",
+        "sort": "added",
+        "order": "asc",
+        "filters": {"portrait": ["replaced"]},
+    }
+    assert student_list_view(UiState(tmp_path / "webui.json").get("student_list")) == {"mods": "all", **legacy}
 
 
-@pytest.mark.parametrize("kind", [["student"], ["npc"], ["student", "npc"]])
+@pytest.mark.parametrize("resource_type", [["student"], ["npc"], ["student", "npc"]])
 @pytest.mark.parametrize("recruit", ["all", "yes", "no"])
-def test_saved_roster_type_filter_is_dropped_on_load_and_save(app, services, tmp_path, kind, recruit):
+def test_saved_student_list_type_filter_is_dropped_on_load_and_save(app, services, tmp_path, resource_type, recruit):
     kept = {
-        "merged": True,
+        "group_alts": True,
         "mods": "none",
-        "recruit": recruit,
+        "releaseStatus": recruit,
         "sort": "name",
         "order": "desc",
         "filters": {"favorite": ["no"], "portrait": ["replaced"]},
     }
-    legacy = {**kept, "filters": {**kept["filters"], "kind": kind}}
-    services.state.set("roster", legacy)
+    legacy = {**kept, "filters": {**kept["filters"], "kind": resource_type}}
+    services.state.set("student_list", legacy)
     services.state.set("voice_volume", 35)
     services.state = UiState(tmp_path / "webui.json")
-    sent = {key: value for key, value in kept.items() if key not in ("merged", "recruit")}
+    sent = {key: value for key, value in kept.items() if key not in ("group_alts", "releaseStatus")}
     sent.update(groupAlts=True, releaseStatus=recruit)
     assert rpc(app, "settings.get")["result"]["studentList"] == sent
     assert (
@@ -1528,7 +1559,7 @@ def test_saved_roster_type_filter_is_dropped_on_load_and_save(app, services, tmp
         == sent
     )
     reloaded = UiState(tmp_path / "webui.json")
-    assert reloaded.get("roster") == kept
+    assert reloaded.get("student_list") == kept
     assert reloaded.get("voice_volume") == 35
 
 
@@ -2043,27 +2074,27 @@ def test_the_close_button_preflights_readers_and_refuses_writers(services, monke
 
 
 @pytest.mark.parametrize("unread", [False, True])
-def test_original_and_repaired_versions_share_roster_and_band_counts(app, services, monkeypatch, unread):
-    originals = [FakeMod("portrait", "hoshino"), FakeMod("lobby", "hoshino", kind="lobby")]
+def test_original_and_repaired_versions_share_student_list_and_band_counts(app, services, monkeypatch, unread):
+    originals = [FakeMod("portrait", "hoshino"), FakeMod("memorialLobby", "hoshino", resource_type="memorialLobby")]
     repaired = [
         FakeMod("portrait-fixed", "hoshino", user_added=False),
-        FakeMod("lobby-fixed", "hoshino", kind="lobby", user_added=False),
+        FakeMod("lobby-fixed", "hoshino", resource_type="memorialLobby", user_added=False),
     ]
     services.state.mark_mods_seen([] if unread else [mod.id for mod in originals])
     for original, fixed in zip(originals, repaired):
-        original.repaired_id = fixed.id
-        fixed.repaired_from = original.id
+        original.repaired_copy_id = fixed.id
+        fixed.repair_source_id = original.id
     for mods in (originals + repaired, repaired, originals):
         monkeypatch.setattr(services.library, "mods", lambda: mods)
         for method, params in (("students.list", {}), ("student.get", {"key": "hoshino"})):
             result = rpc(app, method, **params)["result"]
-            family = result["students"][0] if method == "students.list" else result
-            variant = family["alts"][0]
-            assert variant["mods"] == 2
-            assert variant["modCounts"] == {"portrait": 1, "memorialLobby": 1}
-            assert variant["fresh"] is (unread and any(mod.user_added for mod in mods))
+            student = result["students"][0] if method == "students.list" else result
+            alt = student["alts"][0]
+            assert alt["mods"] == 2
+            assert alt["modCounts"] == {"portrait": 1, "memorialLobby": 1}
+            assert alt["fresh"] is (unread and any(mod.user_added for mod in mods))
             if method == "student.get":
-                assert {mod["id"]: mod["fresh"] for mod in variant["modList"]} == {
+                assert {mod["id"]: mod["fresh"] for mod in alt["modList"]} == {
                     mod.id: unread and mod.user_added for mod in mods
                 }
 
@@ -2072,7 +2103,7 @@ def test_original_and_repaired_versions_share_roster_and_band_counts(app, servic
 def test_migrated_020_library_supplies_repair_labels_markers_and_counts(app, services, monkeypatch, tmp_path, orphan):
     from bmpt.library import ModLibrary
     from test_legacy_remap import legacy_record, write_legacy_state
-    from test_library import FakeCatalog as LibraryCatalog, FakeVariant as LibraryVariant
+    from test_library import FakeCatalog as LibraryCatalog, FakeAlt as LibraryVariant
 
     root = tmp_path / "legacy-library"
     original = legacy_record(root, 1, "hoshino_spr", core="hoshino_spr", target="hoshino")
@@ -2085,11 +2116,11 @@ def test_migrated_020_library_supplies_repair_labels_markers_and_counts(app, ser
     monkeypatch.setattr(services.library, "mods", library.mods)
     for method, params in (("students.list", {}), ("student.get", {"key": "hoshino"})):
         result = rpc(app, method, **params)["result"]
-        family = result["students"][0] if method == "students.list" else result
-        variant = family["alts"][0]
-        assert variant["mods"] == 1 and variant["modCounts"] == {"portrait": 1, "memorialLobby": 0}
+        student = result["students"][0] if method == "students.list" else result
+        alt = student["alts"][0]
+        assert alt["mods"] == 1 and alt["modCounts"] == {"portrait": 1, "memorialLobby": 0}
         if method == "student.get":
-            mods = {mod["id"]: mod for mod in variant["modList"]}
+            mods = {mod["id"]: mod for mod in alt["modList"]}
             fixed = mods[repaired["id"]]
             assert fixed["name"] == I18n().t("webui.remap.name", name="hoshino_spr" if orphan else "My painting")
             assert fixed["repairSourceId"]
@@ -2106,7 +2137,7 @@ def test_a_repaired_id_reaches_the_web_ui_only_while_its_copy_exists_or_is_held(
 
     from bmpt.library import ModLibrary
     from test_legacy_remap import legacy_record, write_legacy_state
-    from test_library import FakeCatalog as LibraryCatalog, FakeVariant as LibraryVariant
+    from test_library import FakeCatalog as LibraryCatalog, FakeAlt as LibraryVariant
 
     root = tmp_path / "library"
     original = legacy_record(root, 1, "hoshino_spr", core="hoshino_spr", target="hoshino")
@@ -2369,17 +2400,17 @@ def test_both_review_features_share_the_running_version_gate(app, services, monk
 def test_lobby_camera_save_checks_its_params_before_any_job(app, services):
     """lobby.camera.save: the variant's own lobby, a source the lobby can show, a framed view and a camera
     in range; refused before a job starts otherwise."""
-    services.catalog.v.lobby = "hoshino_home"
+    services.catalog.v.memorial_lobby = "hoshino_home"
     good = {
-        "variant": "hoshino",
-        "lobby": "hoshino_home",
+        "alt": "hoshino",
+        "memorialLobby": "hoshino_home",
         "source": "official",
         "view": {"x": -1000, "y": -600, "w": 2000, "h": 1125},
         "scale": 1.48,
         "offset": [0, -120],
     }
     for change, code in (
-        ({"lobby": "other_home"}, "bad_params"),
+        ({"memorialLobby": "other_home"}, "bad_params"),
         ({"source": "mod:missing"}, "source_unsupported"),
         ({"view": {"x": 0}}, "bad_params"),
         ({"scale": 0}, "bad_params"),
@@ -2387,7 +2418,7 @@ def test_lobby_camera_save_checks_its_params_before_any_job(app, services):
     ):
         assert rpc(app, "memorialLobby.camera.save", **{**good, **change})["error"]["code"] == code
     # a lobby without a prefab cannot keep a camera
-    assert rpc(app, "memorialLobby.camera.save", **good)["error"]["code"] == "lobby_camera_unsupported"
+    assert rpc(app, "memorialLobby.camera.save", **good)["error"]["code"] == "memorial_lobby_camera_unsupported"
 
 
 @pytest.mark.parametrize("version, enabled", [("0.7.0-rc.2", True), ("0.7.0-dev", True), ("0.7.0", False)])

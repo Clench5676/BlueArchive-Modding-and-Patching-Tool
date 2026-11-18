@@ -39,7 +39,7 @@ def run(env, scope="library", target=None, progress=lambda *_: None):
         folder=env.tmp / "exports",
         server="global",
         platform="windows",
-        kind=None,
+        resource_type=None,
         log=lambda *_: None,
         progress=progress,
     )
@@ -87,8 +87,8 @@ def test_an_export_names_each_mod_and_its_step_on_the_progress_line(setup_librar
         p["current"] == 1
         and p["total"] == 1
         and p["action"] == "export"
-        and p["variant"] == mod.target
-        and p["kind"] == mod.kind
+        and p["alt"] == mod.target
+        and p["resource_type"] == mod.resource_type
         and p["core"] == mod.core
         for p in lines
     )
@@ -176,13 +176,13 @@ def test_unavailable_platform_is_rejected_instead_of_relabelled(setup_library):
 
 
 @pytest.mark.parametrize("backup", [False, True])
-def test_single_original_variant_archive_uses_current_bundle_names(setup_library, backup):
+def test_single_original_alt_archive_uses_current_bundle_names(setup_library, backup):
     env = setup_library
     expected = env.original.read_bytes()
     if backup:
         env.original.with_name(env.original.name + ".backup").write_bytes(expected)
         env.original.write_bytes(make_mod(env.original, env.tmp / "external").read_bytes())
-    _, files = contents(run(env, "single", "variant:test"))
+    _, files = contents(run(env, "single", "alt:test"))
     assert files[env.original.name] == expected
 
 
@@ -238,7 +238,7 @@ def test_cross_server_mod_is_prepared_against_selected_target(setup_library, mon
         folder=env.tmp / "exports",
         server="japan",
         platform="windows",
-        kind=None,
+        resource_type=None,
         log=lambda *_: None,
         progress=lambda *_: None,
     )
@@ -310,9 +310,9 @@ def test_each_exported_mod_carries_only_its_package_manifest(setup_library, scop
     assert "skeletons" not in data  # nothing of the header-only test bundles reads as Spine
 
 
-def test_an_official_variant_export_marks_its_files_official(setup_library):
+def test_an_official_alt_export_marks_its_files_official(setup_library):
     env = setup_library
-    packages, _ = contents(run(env, "single", "variant:test"))
+    packages, _ = contents(run(env, "single", "alt:test"))
     data = packages[""]
     assert [item["role"] for item in data["files"]] == ["official"]
     assert "release" not in data["target"]

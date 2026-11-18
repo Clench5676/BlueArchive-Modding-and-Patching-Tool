@@ -273,12 +273,12 @@ def test_official_cycling_mod_is_accepted_and_identified_by_app_import(cycling_o
         scale=scale,
     )
     built = tmp_path / "mod" / report["bundle"]
-    assert library.identify_import(built, built.name) == (built.name, "shiroko_ridingsuit", "spr")
+    assert library.identify_import(built, built.name) == (built.name, "shiroko_ridingsuit", "portrait")
     preflight = library.inspect_import({built.name: built}, conversion=True)
     assert not preflight.get("rebuild", False)
     assert preflight["direct"] == {next(path for path in paths if path.name == built.name): built}
     (entry,) = library.add([built])
-    assert entry.target == "shiroko_ridingsuit" and entry.kind == "spr"
+    assert entry.target == "shiroko_ridingsuit" and entry.resource_type == "portrait"
     assert entry.file.name == built.name
     actual = remap.read_inputs([built]).textures["shiroko_ridingsuit_spr"]
     expected = assemble_page(

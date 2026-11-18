@@ -1,31 +1,7 @@
 {
-  "students": {
-    "42": {
-      "base": "hoshino",
-      "names": {
-        "en": "Hoshino",
-        "ja": "ホシノ",
-        "ko": "호시노",
-        "zh-CN": "星野",
-        "zh-TW": "星野"
-      },
-      "school": "Abydos"
-    },
-    "7": {
-      "base": "ch9000",
-      "names": {
-        "en": "Hoshino",
-        "ja": "ホシノ",
-        "ko": "호시노",
-        "zh-CN": "星野",
-        "zh-TW": "星野"
-      },
-      "school": "Abydos"
-    }
-  },
-  "variants": {
+  "alts": {
     "ch0010": {
-      "bg": "BG_Abydos_Collection",
+      "background": "BG_Abydos_Collection",
       "core_aliases": [
         "hoshino_swimsuit"
       ],
@@ -52,10 +28,10 @@
           "short": "泳裝"
         }
       },
+      "official_thumbnail": "Student_Portrait_CH0010_Collection",
       "order": 1,
       "playable": true,
-      "portrait": "Student_Portrait_CH0010_Collection",
-      "released": {
+      "released_on_server": {
         "global": true,
         "japan": true
       },
@@ -63,7 +39,7 @@
       "student_id": "42"
     },
     "ch0020": {
-      "bg": "BG_Abydos_Collection",
+      "background": "BG_Abydos_Collection",
       "file_id": "CH0020",
       "names": {
         "en": {
@@ -87,10 +63,10 @@
           "short": "體育服"
         }
       },
+      "official_thumbnail": "Student_Portrait_CH0020_Collection",
       "order": 2,
       "playable": true,
-      "portrait": "Student_Portrait_CH0020_Collection",
-      "released": {
+      "released_on_server": {
         "global": false,
         "japan": true
       },
@@ -98,7 +74,7 @@
       "student_id": "42"
     },
     "ch9000": {
-      "bg": "BG_Abydos_Collection",
+      "background": "BG_Abydos_Collection",
       "file_id": "CH9000",
       "names": {
         "en": {
@@ -122,14 +98,14 @@
           "short": "原皮"
         }
       },
+      "official_thumbnail": "Student_Portrait_hoshino_Collection",
       "order": 0,
       "playable": true,
-      "portrait": "Student_Portrait_hoshino_Collection",
       "school": "Abydos",
       "student_id": "7"
     },
     "hoshino": {
-      "bg": "BG_Abydos_Collection",
+      "background": "BG_Abydos_Collection",
       "file_id": "hoshino",
       "names": {
         "en": {
@@ -153,10 +129,10 @@
           "short": "原皮"
         }
       },
+      "official_thumbnail": "Student_Portrait_hoshino_Collection",
       "order": 0,
       "playable": true,
-      "portrait": "Student_Portrait_hoshino_Collection",
-      "released": {
+      "released_on_server": {
         "global": true,
         "japan": true
       },
@@ -164,7 +140,7 @@
       "student_id": "42"
     },
     "np0001": {
-      "bg": "BG_Abydos_Collection",
+      "background": "BG_Abydos_Collection",
       "file_id": "NP0001",
       "names": {
         "en": {
@@ -188,11 +164,35 @@
           "short": "Robber"
         }
       },
+      "official_thumbnail": null,
       "order": 0,
       "playable": false,
-      "portrait": null,
       "school": "Abydos",
       "student_id": "42"
+    }
+  },
+  "students": {
+    "42": {
+      "base": "hoshino",
+      "names": {
+        "en": "Hoshino",
+        "ja": "ホシノ",
+        "ko": "호시노",
+        "zh-CN": "星野",
+        "zh-TW": "星野"
+      },
+      "school": "Abydos"
+    },
+    "7": {
+      "base": "ch9000",
+      "names": {
+        "en": "Hoshino",
+        "ja": "ホシノ",
+        "ko": "호시노",
+        "zh-CN": "星野",
+        "zh-TW": "星野"
+      },
+      "school": "Abydos"
     }
   },
   "version": 1

@@ -58,7 +58,7 @@ def assert_old_mod_whole(env):
     assert raw_record(env, env.entry.id) == env.record
     (mod,) = env.library.mods()
     assert mod.id == env.entry.id and sorted(path.name for path in env.library._paths(env.record)) == sorted(env.old)
-    assert env.library.configured("test")["spr"] == f"mod:{env.entry.id}"
+    assert env.library.configured("test")["portrait"] == f"mod:{env.entry.id}"
     previous = env.directory / "previous"
     assert not previous.exists() or not any(previous.iterdir())
 
@@ -111,7 +111,7 @@ def test_an_interrupted_update_leaves_the_old_mod_whole_or_finishes_after_its_co
             key: value for key, value in env.record.items() if key != "files"
         }
         assert len(list((env.directory / "previous").iterdir())) == 1
-        assert env.library.configured("test")["spr"] == f"mod:{env.entry.id}"
+        assert env.library.configured("test")["portrait"] == f"mod:{env.entry.id}"
     else:
         assert_old_mod_whole(env)
 

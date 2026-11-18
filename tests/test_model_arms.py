@@ -10,8 +10,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from bmpt.gameassets import model_adapt as ma, model_arm_frames as arf, model_arm_solve as ars, model_arms as ar
-from bmpt.gameassets.model import BundleGraph, _key
+from bmpt.gameassets import chibi_adapt as ma, chibi_arm_frames as arf, chibi_arm_solve as ars, chibi_arms as ar
+from bmpt.gameassets.chibi import BundleGraph, _key
 from test_model_adapt import GAME_DIR, official, _index, _slot, _skeleton
 
 
@@ -172,10 +172,10 @@ def test_blend_wraps_and_rate_limit_respects_contacts_and_need_caps():
 
 
 def _open_pair(g, files, target_dev, source_dev):
-    from bmpt.gameassets.model import model_root
+    from bmpt.gameassets.chibi import chibi_root
 
     target_files = _slot(files, target_dev)
-    prefabs = ma._model_prefabs(g, [f for f in target_files if f.name.startswith("character-")])
+    prefabs = ma._chibi_prefabs(g, [f for f in target_files if f.name.startswith("character-")])
     sk = ma.Skeleton.of(g, prefabs[ma.choose_prefab(prefabs, target_dev)].deref())
     clips = ma.prefab_clips(g, sk, ma.own_prefabs(prefabs, target_dev))
 
@@ -193,16 +193,16 @@ def _open_pair(g, files, target_dev, source_dev):
     ]
     if not source_files:
         source_files = [p for p in files if p.name.startswith("field-character-_mxload")]
-    from bmpt.gameassets.model import AssetNotFound
+    from bmpt.gameassets.chibi import AssetNotFound
 
     try:
-        s_root, _, _ = model_root(g, source_files, source_dev)
+        s_root, _, _ = chibi_root(g, source_files, source_dev)
     except AssetNotFound:
         raise ma.refuse("no prefab", dev=source_dev) from None
     ss = ma.Skeleton.of(g, s_root)
     if not ss.renderers:
-        raise ma.refuse("static model", dev=source_dev)
-    sp = ma._model_prefabs(g, source_files)
+        raise ma.refuse("static chibi", dev=source_dev)
+    sp = ma._chibi_prefabs(g, source_files)
     sc = ma.prefab_clips(g, ss, ma.own_prefabs(sp, source_dev))
     source, _ = costume(ss, sc)
     plan = ma.plan(target, source, ma.probe_poses(sk, clips), fit=True, own_probes=ma.probe_poses(ss, sc), clips=clips)
@@ -393,7 +393,7 @@ def test_official_same_family_arm_census(view, tmp_path, record_property):
     _open(str(GAME_DIR), str(tmp_path))
     catalog = _state["catalog"]
     pairs = [
-        (catalog.variant(a).model, catalog.variant(b).model or catalog.variant(b).field_model)
+        (catalog.alt(a).chibi, catalog.alt(b).chibi or catalog.alt(b).field_chibi)
         for kind, a, b in _jobs()
         if kind == "pair"
     ]
@@ -405,7 +405,7 @@ def test_official_same_family_arm_census(view, tmp_path, record_property):
             if len(rows) % 20 == 0:
                 print(f"arm census {len(rows)}/{len(pairs)}", flush=True)
     (tmp_path / "arm-census.json").write_text(json.dumps(rows, indent=2))
-    errors = [r for r in rows if r.get("error") or r.get("refused") not in (None, "static model", "no prefab")]
+    errors = [r for r in rows if r.get("error") or r.get("refused") not in (None, "static chibi", "no prefab")]
     inward = [r for r in rows if r.get("inward_mm", 0) < -1.0001]
     worsening = [r for r in rows if r.get("worsening_mm", 0) > 1.0001]
     measured = [r for r in rows if "changed" in r]
@@ -707,7 +707,7 @@ def test_batched_minimum_rotations_match_the_single_rotation_and_the_half_turn()
 
 
 def test_tree_clone_equals_a_deep_copy_and_shares_nothing_with_the_original():
-    from bmpt.gameassets.model_arm_clips import clone_tree
+    from bmpt.gameassets.chibi_arm_clips import clone_tree
 
     shared = [1.5, -0.0, float("nan"), 2**70]
     tree = {
@@ -1095,7 +1095,7 @@ def _threaded_retarget_case(monkeypatch, delays, step=None):
     import threading
     import zlib
     from types import SimpleNamespace
-    from bmpt.gameassets import model_arm_clips as ac
+    from bmpt.gameassets import chibi_arm_clips as ac
 
     rig = _rig()
     body = _skinned_body(rig, np.random.default_rng(3))

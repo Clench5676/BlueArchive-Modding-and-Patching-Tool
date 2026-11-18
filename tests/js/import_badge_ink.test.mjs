@@ -194,7 +194,7 @@ test("the correction is the distance between the ink's centre and the background
       for (const state of statuses(locale)) {
         const tree = rowArt.row({
           name: "Student",
-          kind: text(locale, "tab.lobby"),
+          kind: text(locale, "tab.memorialLobby"),
           state,
           stateKey: "incomplete",
           meta: "ch0230 - 2 files, 4.1 MB",
@@ -273,7 +273,7 @@ test("the correction is the distance between the ink's centre and the background
         for (const unidentified of [false, true]) {
           const tree = rowArt.row({
             name: "Student",
-            kind: text(locale, "tab.lobby"),
+            kind: text(locale, "tab.memorialLobby"),
             state,
             stateKey: "incomplete",
             meta: METAS[0],
@@ -374,7 +374,7 @@ test("the correction is the distance between the ink's centre and the background
           for (const unidentified of [false, true]) {
             const data = {
               name: "Student",
-              kind: text(locale, "tab.lobby"),
+              kind: text(locale, "tab.memorialLobby"),
               state,
               stateKey: "incomplete",
               meta,
@@ -409,7 +409,7 @@ test("the correction is the distance between the ink's centre and the background
           .join(" ");
       const data = {
         name: "Student",
-        kind: text(locale, "tab.lobby"),
+        kind: text(locale, "tab.memorialLobby"),
         stateKey: "incomplete",
         meta: METAS[0],
         muted: true,
@@ -473,7 +473,7 @@ test("the correction is the distance between the ink's centre and the background
     test(`badge-line: every text of a row is TYPE.dense and sits on the card's first line in ${locale}`, () => {
       setStrings(locale, {});
       const rowArt = art(),
-        kind = text(locale, "tab.lobby");
+        kind = text(locale, "tab.memorialLobby");
       const tree = rowArt.row({
         name: "Student",
         kind,
@@ -510,7 +510,7 @@ test("the correction is the distance between the ink's centre and the background
     test(`badge-line: the first line's texts and a badge on it share one centre line, tops level, in ${locale}`, () => {
       setStrings(locale, {});
       const rowArt = art(),
-        kind = text(locale, "tab.lobby");
+        kind = text(locale, "tab.memorialLobby");
       for (const state of [
         text(locale, "import.state.ready"),
         text(locale, "import.state.update"),
@@ -541,7 +541,7 @@ test("the correction is the distance between the ink's centre and the background
     test(`badge-line: separate lines stack LINE.stack x the row's size (57.75) apart in ${locale}`, () => {
       setStrings(locale, {});
       const rowArt = art(),
-        kind = text(locale, "tab.lobby");
+        kind = text(locale, "tab.memorialLobby");
       // a badge on its own line (too wide for the metadata's), a route and a note: the badge's cell, then the route,
       // then the note, a pitch a line
       const tree = rowArt.row({
@@ -587,7 +587,7 @@ test("the correction is the distance between the ink's centre and the background
     test(`badge-line: the kind ends the name's line, the metadata ends SPACE.l before the badge, whose caption keeps CONTROL.badge.pad each side, in ${locale}`, () => {
       setStrings(locale, {});
       const rowArt = art(),
-        kind = text(locale, "tab.lobby");
+        kind = text(locale, "tab.memorialLobby");
       for (const state of [stateOf(locale, 360), text(locale, "import.state.ready")]) {
         const tree = rowArt.row({ name: "Student", kind, state, stateKey: "convert", meta: metaFor(locale) });
         const m = measure(tree),
@@ -634,7 +634,7 @@ test("the correction is the distance between the ink's centre and the background
       for (const state of statuses(locale)) {
         const data = {
           name: "Student",
-          kind: text(locale, "tab.lobby"),
+          kind: text(locale, "tab.memorialLobby"),
           state,
           stateKey: "incomplete",
           meta: metaFor(locale),
@@ -656,7 +656,7 @@ test("the correction is the distance between the ink's centre and the background
     test(`rows without a control keep their height, a badge on the first line included, in ${locale}`, () => {
       setStrings(locale, {});
       const rowArt = art(),
-        kind = text(locale, "tab.lobby");
+        kind = text(locale, "tab.memorialLobby");
       const states = [
         ...STATE_TEXTS.map((state) => text(locale, `import.state.${state}`)),
         missingLabel("missing", { n: 3 }, locale),
@@ -691,7 +691,7 @@ test("the correction is the distance between the ink's centre and the background
     test(`the Choose Files control keeps clear of the row's text and badge in ${locale}`, async () => {
       setStrings(locale, {});
       const rowArt = art(),
-        kind = text(locale, "tab.lobby");
+        kind = text(locale, "tab.memorialLobby");
       for (const state of [...longest(locale), ...statuses(locale)])
         for (const meta of METAS) {
           const tree = rowArt.row({
@@ -926,7 +926,7 @@ test("the correction is the distance between the ink's centre and the background
   for (const locale of LOCALES)
     test(`the prompt fits the popup frame in ${locale}: official file names wrap whole, the sentence stays, the frame never outgrows the stage`, () => {
       setStrings(locale, {});
-      const kind = text(locale, "tab.model");
+      const kind = text(locale, "tab.chibi");
       for (const count of [1, 3, 5, 9]) {
         const files = OFFICIAL.slice(0, count),
           promptLines = [
@@ -965,7 +965,11 @@ test("the correction is the distance between the ink's centre and the background
     test(`the list action's confirmation lists 25 rows inside the frame and its buttons share one size in ${locale}`, () => {
       setStrings(locale, {});
       const rows = Array.from({ length: 25 }, (_, i) =>
-        missingLabel("fillLine", { student: `${LONG_NAME} ${i}`, kind: text(locale, "tab.lobby"), n: 5 }, locale),
+        missingLabel(
+          "fillLine",
+          { student: `${LONG_NAME} ${i}`, kind: text(locale, "tab.memorialLobby"), n: 5 },
+          locale,
+        ),
       );
       const layout = Popup.messageLayout({
         lines: rows,
@@ -1000,7 +1004,7 @@ test("the correction is the distance between the ink's centre and the background
           for (const stateKey of ["blocked", "incomplete"]) {
             const tree = rowArt.row({
               name: "Student",
-              kind: text(locale, "tab.lobby"),
+              kind: text(locale, "tab.memorialLobby"),
               state,
               stateKey,
               meta,

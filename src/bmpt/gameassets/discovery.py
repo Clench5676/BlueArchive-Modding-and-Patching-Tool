@@ -58,7 +58,7 @@ def group_bundles(paths: list[Path], category: str) -> dict[str, list[Path]]:
 
     Args:
         paths: Bundle paths to sort and group, retaining coexisting dates and parts.
-        category: Exact parse_filename category to include, such as spr or lobby.
+        category: Exact parse_filename category to include, such as spinecharacters or spinelobbies.
     """
     groups: dict[str, list[Path]] = {}
     for path in sorted(paths):
@@ -69,7 +69,7 @@ def group_bundles(paths: list[Path], category: str) -> dict[str, list[Path]]:
 
 
 def is_atlas(path: Path) -> bool:
-    """Check whether a bundle belongs to the UI atlas family."""
+    """Check whether a bundle belongs to the UI atlas student."""
     return "uis-atlas-" in path.name
 
 
@@ -92,7 +92,7 @@ def is_pointer_texture(path: Path) -> bool:
     uses the EffectsFreezed texture families.
 
     Args:
-        path: Bundle filename to screen for cursor/shared-dependency/touch-effect family markers without loading it.
+        path: Bundle filename to screen for cursor/shared-dependency/touch-effect student markers without loading it.
     """
     name = path.name
     return (
@@ -128,8 +128,8 @@ def cab_names(path: Path) -> list[str]:
     return [name.lower() for name in read_cab_names(path) or ()]
 
 
-def is_model_dependency(path: Path) -> bool:
-    """Check for families holding chibi prefabs, meshes, materials, textures, shaders, or shared animators."""
+def is_chibi_dependency(path: Path) -> bool:
+    """Check for students holding chibi prefabs, meshes, materials, textures, shaders, or shared animators."""
     name = path.name
     return (
         "characters" in name
@@ -140,7 +140,7 @@ def is_model_dependency(path: Path) -> bool:
     )
 
 
-# parts of a character's or NPC's own dependency bundles named for an asset type that is never a model's root
+# parts of a character's or NPC's own dependency bundles named for an asset type that is never a chibi's root
 _NO_ROOT_PARTS = ("-textures-", "-materials-", "-audio-", "-textassets-", "-shaders-")
 
 
@@ -148,15 +148,15 @@ def own_bundle(name: str, dev: str) -> bool:
     """Check for a character's or NPC's own dependency bundles.
 
     Args:
-        name: Bundle filename in the assets-_mx-npcs|characters-<dev>-_mxdependency-* families.
+        name: Bundle filename in the assets-_mx-npcs|characters-<dev>-_mxdependency-* students.
         dev: Character or NPC dev name to match without case sensitivity.
     """
     parsed = parse_filename(name)
     return parsed.category in ("npcs", "characters") and parsed.core.lower() == dev.lower()
 
 
-def may_hold_model_root(name: str) -> bool:
-    """Check whether a dependency part can hold a model root.
+def may_hold_chibi_root(name: str) -> bool:
+    """Check whether a dependency part can hold a chibi root.
 
     Parts named for textures, materials, audio, text, or shaders are excluded.
 
@@ -166,13 +166,13 @@ def may_hold_model_root(name: str) -> bool:
     return not any(part in name for part in _NO_ROOT_PARTS)
 
 
-def is_lobby_prefab(path: Path) -> bool:
+def is_memorial_lobby_prefab(path: Path) -> bool:
     """Check for memorial lobby prefab bundles containing UILobbyElement/Lobby<Name>.prefab."""
     return path.name.startswith("ui-uilobbyelement-")
 
 
 def is_layout_texture(path: Path) -> bool:
-    """Check for texture-only families additionally referenced by the detail prefab.
+    """Check for texture-only students additionally referenced by the detail prefab.
 
     These supply names for embedded campaign widgets and UI effects, rather
     than expanding the shared UITexture index to character or gameplay art.

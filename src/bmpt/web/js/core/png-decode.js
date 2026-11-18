@@ -1,4 +1,4 @@
-// The 3D model's textures as the game stores them. Browsers decode images premultiplied by their alpha, and WebKit
+// The chibi's textures as the game stores them. Browsers decode images premultiplied by their alpha, and WebKit
 // keeps them so: where a texture's alpha is 0 its colour is lost (black). The game's textures use alpha as data (a
 // dress's sparkle mask, a mask's layer index) beside colours that must survive, so the viewer decodes PNGs itself and
 // hands WebGL straight RGBA (tests/js/png_decode.test.mjs).

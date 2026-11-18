@@ -34,7 +34,7 @@ class Deletion:
         self.directory = directory or library.root / "asset-deletions" / uuid4().hex
         self.rolling_back = False
         self.data = data or {
-            "version": 1,
+            "version": 2,
             "phase": "active",
             "records": copy.deepcopy(library._records),
             "held": sorted(library._held_ids()),
@@ -104,18 +104,18 @@ class Deletion:
                 entry["after"].append(digest)
             self.publish()
 
-    def remember_photo(self, variant, key):
-        """Back up a photograph, its manifest entry, and every selection pointing to it.
+    def remember_thumbnail(self, alt, key):
+        """Back up a thumbnail, its manifest entry, and every selection pointing to it.
 
         Args:
-            variant: Variant key authorizing access to the photograph's student family.
-            key: Photograph ID whose PNG and selection metadata must survive rollback.
+            alt: alt key authorizing access to the thumbnail's student.
+            key: thumbnail ID whose PNG and selection metadata must survive rollback.
         """
-        store = self.library.photographs
-        self.data["photo"] = {
-            "variant": variant,
+        store = self.library.thumbnails
+        self.data["thumbnail"] = {
+            "alt": alt,
             "key": key,
-            "entry": copy.deepcopy(store._entry(variant, key)),
+            "entry": copy.deepcopy(store._entry(alt, key)),
             "selected": [v for v, chosen in store._read()["selected"].items() if chosen == key],
         }
         atomic_copy(store._path(key), self.directory / "photo.png")
@@ -202,18 +202,18 @@ class Deletion:
                 current.update(copy.deepcopy(previous or {}))
 
             library.profiles.update(restore)
-        if photo := data.get("photo"):
+        if thumbnail := data.get("thumbnail"):
             from ..core.filelock import file_lock
 
-            store = library.photographs
+            store = library.thumbnails
             with store._lock, file_lock(store.root / "index.lock"):
-                atomic_copy(self.directory / "photo.png", store._path(photo["key"]))
+                atomic_copy(self.directory / "photo.png", store._path(thumbnail["key"]))
                 store._cached = None
                 manifest = copy.deepcopy(store._read())
-                manifest["photos"][photo["key"]] = photo["entry"]
-                for variant in photo["selected"]:
-                    if manifest["selected"].get(variant) is None:
-                        manifest["selected"][variant] = photo["key"]
+                manifest["thumbnails"][thumbnail["key"]] = thumbnail["entry"]
+                for alt in thumbnail["selected"]:
+                    if manifest["selected"].get(alt) is None:
+                        manifest["selected"][alt] = thumbnail["key"]
                 store._write(manifest)
         library._save()
         for key in new_ids:
@@ -224,7 +224,7 @@ def _validate(library, directory, data):
     if (
         directory.is_symlink()
         or directory.parent.is_symlink()
-        or data.get("version") != 1
+        or data.get("version") != 2
         or data.get("phase") not in ("active", "committed")
     ):
         raise ServiceError("library_io_error", file=directory)
@@ -237,7 +237,7 @@ def _validate(library, directory, data):
     for name in data["built"]:
         if not re.fullmatch(r"[a-f0-9]{40}\.bundle", name):
             raise ServiceError("library_io_error", file=directory)
-    if data.get("photo") and not re.fullmatch(r"[a-f0-9]{32}", data["photo"]["key"]):
+    if data.get("thumbnail") and not re.fullmatch(r"[a-f0-9]{32}", data["thumbnail"]["key"]):
         raise ServiceError("library_io_error", file=directory)
     for index, entry in enumerate(data["games"]):
         if entry["backup"] != f"game/{index}.bundle":

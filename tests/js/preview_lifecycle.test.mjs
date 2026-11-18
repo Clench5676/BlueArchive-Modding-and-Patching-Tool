@@ -204,7 +204,7 @@ test("frame readiness uses foreground frames but can finish after focus leaves",
   t.mock.timers.reset();
 });
 
-for (const kind of ["portrait", "lobby", "special L2D"])
+for (const kind of ["portrait", "memorialLobby", "special L2D"])
   test(`${kind} restarts without stale frames, rebuilds its context and ignores disposed events`, async (t) => {
     const env = surface();
     globals(t, env);
@@ -505,7 +505,7 @@ test("a Spine player restarted under Now Loading draws again once it ends", asyn
   }, {});
   const p = await load.ready;
   freezeShown(true);
-  p.startRendering(); // a host restarting its clock behind Now Loading (photography opening)
+  p.startRendering(); // a host restarting its clock behind Now Loading (thumbnail capture opening)
   flush();
   assert.equal(p.stopRequestAnimationFrame, true, "the skipped frame ended the loop");
   freezeShown(false);
@@ -537,7 +537,7 @@ test("a clip fetch waiting for a job on the server does not reach its 15 s cap",
       answer = resolve;
     });
     let outcome = null;
-    withPreviewTimeout(fetched, 15000, "model clips").then(
+    withPreviewTimeout(fetched, 15000, "chibi clips").then(
       (v) => {
         outcome = v;
       },
@@ -546,7 +546,7 @@ test("a clip fetch waiting for a job on the server does not reach its 15 s cap",
       },
     );
     advance(1000);
-    setLibraryWaiting(true, "job"); // preview.waiting: the clip waits for the model lock a job holds
+    setLibraryWaiting(true, "job"); // preview.waiting: the clip waits for the chibi lock a job holds
     setLibraryWaiting(true);
     setLibraryWaiting(false); // a library wait ending meanwhile ends nothing else
     advance(30000);
@@ -562,7 +562,7 @@ test("a clip fetch waiting for a job on the server does not reach its 15 s cap",
     assert.equal(outcome, "clip");
     // without the signal, the cap still holds for the clip's own time
     let late = null;
-    withPreviewTimeout(new Promise(() => {}), 15000, "model clips").catch((err) => {
+    withPreviewTimeout(new Promise(() => {}), 15000, "chibi clips").catch((err) => {
       late = err;
     });
     advance(15000);

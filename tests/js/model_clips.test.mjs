@@ -1,5 +1,5 @@
-// A clip added on demand to the shown chibi (model.js addClips, actClips): fetched from the model route with the shown
-// model's source, its tracks moved onto the shown model's nodes, its renderer switches found in the shown model or
+// A clip added on demand to the shown chibi (chibi.js addClips, actClips): fetched from the chibi route with the shown
+// chibi's source, its tracks moved onto the shown chibi's nodes, its renderer switches found in the shown chibi or
 // brought along from the clip's GLB, and played in turn. Only the GPU is a stand-in.
 import assert from "node:assert/strict";
 import { register } from "node:module";
@@ -12,7 +12,7 @@ register(
   return next(spec, ctx); }`)}`,
 );
 const THREE = await import("three");
-const { createStillView } = await import("../../src/bmpt/web/js/model/model.js");
+const { createStillView } = await import("../../src/bmpt/web/js/chibi/chibi.js");
 
 // one buffer of float32 runs, each a buffer view
 function buffer(...runs) {
@@ -143,7 +143,7 @@ async function shown() {
   return view;
 }
 
-test("an added clip is fetched from the shown model's source, plays on the shown nodes and brings its gag face", async () => {
+test("an added clip is fetched from the shown chibi's source, plays on the shown nodes and brings its gag face", async () => {
   const view = await shown();
   try {
     assert.deepEqual(view.json.extras.clips, ["X_Y_Formation_Idle", "X_Y_Exs", "X_Y_Normal_Attack_Start"]);

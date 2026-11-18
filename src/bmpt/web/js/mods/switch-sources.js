@@ -1,5 +1,5 @@
 // What the detail screen's switch cards offer and what the game shows now, for the portrait ("portrait") and the
-// memorial lobby ("lobby"), and the 3D model: pure functions of the student that student.get returns, tested in
+// memorial lobby ("memorialLobby"), and the chibi: pure functions of the student that student.get returns, tested in
 // Node (tests/js/switch_sources.test.mjs). Switching saves the chosen source and installs it while enabled; the
 // library keeps what it replaces (docs/webui/library.md, library).
 import { spineBase } from "../core/api.js";
@@ -8,23 +8,25 @@ import { spineBase } from "../core/api.js";
  * The kind of source an asset tab switches; every asset tab uses the same source selection and apply flow.
  * @returns {"portrait"|"memorialLobby"|"chibi"|null} The resource type; null for another tab.
  */
-export const switchKindOf = (tab) => ({ portrait: "portrait", lobby: "memorialLobby", model: "chibi" })[tab] || null;
-/** The detail tab that shows a resource type: "portrait", "lobby" or "model"; null for another type. */
-export const tabOfKind = (kind) => ({ portrait: "portrait", memorialLobby: "lobby", chibi: "model" })[kind] || null;
+export const switchKindOf = (tab) =>
+  ({ portrait: "portrait", memorialLobby: "memorialLobby", chibi: "chibi" })[tab] || null;
+/** The detail tab that shows a resource type: "portrait", "memorialLobby" or "chibi"; null for another type. */
+export const tabOfKind = (kind) =>
+  ({ portrait: "portrait", memorialLobby: "memorialLobby", chibi: "chibi" })[kind] || null;
 
-/** The core of an alt's skeleton of a kind: its portrait or its memorial lobby (or its 3D model's). */
+/** The core of an alt's skeleton of a kind: its portrait or its memorial lobby (or its chibi's). */
 export const coreOf = (v, kind = "portrait") =>
   (kind === "chibi" ? v.chibi : kind === "memorialLobby" ? v.memorialLobby : v.portrait) || null;
 /**
- * Whether an alt has a kind to show: an alt with only a field-mode model (fieldModel: an event or story
+ * Whether an alt has a kind to show: an alt with only a field-mode chibi (fieldChibi: an event or story
  * costume) has a 3D tab, but no slot to switch.
  */
 export const hasKind = (v, kind) =>
   ["portrait", "memorialLobby", "chibi"].includes(kind) &&
-  (!!coreOf(v, kind) || (kind === "chibi" && !!v?.fieldChibi) || !!v?.storedKinds?.includes(kind));
+  (!!coreOf(v, kind) || (kind === "chibi" && !!v?.fieldChibi) || !!v?.storedResourceTypes?.includes(kind));
 /** Whether an alt has any kind to show. */
 export const hasAsset = (v) => hasKind(v, "portrait") || hasKind(v, "memorialLobby") || hasKind(v, "chibi");
-/** The first kind an alt has: the portrait, else the lobby, else the model. */
+/** The first kind an alt has: the portrait, else the memorial lobby, else the chibi. */
 export const primaryKind = (v) =>
   hasKind(v, "portrait")
     ? "portrait"
@@ -39,15 +41,15 @@ export function availableTab(v, tab) {
   return hasKind(v, "portrait")
     ? "portrait"
     : hasKind(v, "memorialLobby")
-      ? "lobby"
+      ? "memorialLobby"
       : hasKind(v, "chibi")
-        ? "model"
-        : "lobby";
+        ? "chibi"
+        : "memorialLobby";
 }
 
 /**
- * The game file parts of one kind ("portrait" portrait, "lobby" memorial lobby, "model" the 3D chibi's whole slot),
- * newest first.
+ * The game file parts of one kind ("portrait" portrait, "memorialLobby" memorial lobby, "chibi" the 3D chibi's whole
+ * slot), newest first.
  */
 export const partsOf = (v, kind = "portrait") => {
   const parts = (v?.state?.files || []).filter((f) => f.resourceType === kind);
@@ -99,10 +101,10 @@ export const sourceOf = (key) =>
 export const overwrittenOf = (v, kind = "portrait") =>
   partsOf(v, kind).some((f) => !isOfficial(f) && f.restorable === false);
 
-// The cautions of the 3D model's costume pairs (model.costumeCautions) are kept beside the verdicts under this
+// The cautions of the chibi's costume pairs (chibi.costumeCautions) are kept beside the verdicts under this
 // key: { other: ["ex_parts" | "carried_shader", ...] }. It is a symbol, so it never reads as an alt.
 export const CAUTIONS = Symbol("cautions");
-const CAUTION_TEXT = { ex_parts: "model.exParts", carried_shader: "model.carriedShader" };
+const CAUTION_TEXT = { ex_parts: "chibi.exParts", carried_shader: "chibi.carriedShader" };
 const cautionsOf = (costumes, key) => {
   const found = costumes?.[CAUTIONS]?.[key];
   return Array.isArray(found) && found.some((c) => c in CAUTION_TEXT) ? { cautions: found } : {};
@@ -113,22 +115,22 @@ export const cautionKey = (c) => {
   return found ? CAUTION_TEXT[found] : null;
 };
 /**
- * The sources an alt's portrait or lobby can be switched to, in the switch popup's order: its own official
+ * The sources an alt's portrait or memorial lobby can be switched to, in the switch popup's order: its own official
  * files, its own mods of that kind, then for the portrait the other alts' official files (those with a
  * portrait of their own) and the other alts' portrait mods. Other alts' memorial lobbies and their
- * lobby mods are not offered: another student's lobby under this alt's lobby prefab is untested in the
- * game. Each is { key, kind ("self" | "mod" | "alt"), core, alt, id, mod, origin (the alt a mod was
- * made for), restorable (its files have an official copy), greyed (cannot be chosen) }. The 3D model lists
- * every other model of the student as a costume at once; only a pair that was built and exported for these
- * files can be applied (`costumes`: model.costumes' verdicts, "ok" | "preview" | "refused" | null): "ok" and
+ * memorial lobby mods are not offered: another student's memorial lobby under this alt's memorial lobby prefab is
+ * untested in the game. Each is { key, kind ("self" | "mod" | "alt"), core, alt, id, mod, origin (the alt a mod was
+ * made for), restorable (its files have an official copy), greyed (cannot be chosen) }. The chibi lists
+ * every other chibi of the student as a costume at once; only a pair that was built and exported for these
+ * files can be applied (`costumes`: chibi.costumes' verdicts, "ok" | "preview" | "refused" | null): "ok" and
  * "preview" pairs are offered, the latter with a caution (`beyondFit`); unchecked or refused pairs are for a
  * preview only (`previewOnly`), and a refused pair cannot be chosen as the preview either (`refused`). Another
- * student's model (`students`: students.list's) is offered through the popup's search, or all at once with "Show
+ * student's chibi (`students`: students.list's) is offered through the popup's search, or all at once with "Show
  * other students" (crossCandidates), save the one already chosen, listed last (`cross`).
  * @param {object} shownStudent The student, as student.get gives it.
- * @param {"portrait"|"lobby"|"model"} [kind] The kind to switch.
- * @param {object|null} [costumes] The 3D model's verdicts by alt.
- * @param {object[]|null} [students] students.list's students, for other students' models.
+ * @param {"portrait"|"memorialLobby"|"chibi"} [kind] The kind to switch.
+ * @param {object|null} [costumes] The chibi's verdicts by alt.
+ * @param {object[]|null} [students] students.list's students, for other students' chibis.
  */
 export function candidates(shownStudent, v, kind = "portrait", costumes = null, students = null) {
   const own = coreOf(v, kind);
@@ -148,7 +150,7 @@ export function candidates(shownStudent, v, kind = "portrait", costumes = null, 
       : shownStudent.alts.filter((o) => o.key !== v.key && !!coreOf(o, kind) && coreOf(o, kind) !== own);
   const chosen = kind === "chibi" ? new Set([configuredKey(v, kind), sourceKey(v?.previewSources?.chibi)]) : null;
   const chosenCross =
-    kind === "chibi" && across ? crossModels(students, v).filter((o) => chosen.has(`v:${o.key}`)) : [];
+    kind === "chibi" && across ? crossChibis(students, v).filter((o) => chosen.has(`v:${o.key}`)) : [];
   const mod = (m) => ({
     key: `m:${m.id}`,
     kind: "mod",
@@ -186,8 +188,8 @@ export function candidates(shownStudent, v, kind = "portrait", costumes = null, 
 }
 
 /**
- * The other alts whose model an alt's 3D model may take as a costume, before their check: any other
- * model of the student, field-mode models included (model.costumes / model.checkCostumes judge each pair).
+ * The other alts whose chibi an alt's chibi may take as a costume, before their check: any other
+ * chibi of the student, field-mode chibis included (chibi.costumes / chibi.checkCostumes judge each pair).
  */
 export function costumeCandidates(shownStudent, v) {
   const own = coreOf(v, "chibi");
@@ -197,32 +199,32 @@ export function costumeCandidates(shownStudent, v) {
   );
 }
 
-// --- another student's model ---
-// The most cards a search adds to Switch 3D Model: the pairs one model.costumes or model.checkCostumes call takes
+// --- another student's chibi ---
+// The most cards a search adds to Switch Chibi: the pairs one chibi.costumes or chibi.checkCostumes call takes
 // (webui/api_students.py costume_keys).
 export const CROSS_LIMIT = 64;
-// "Show other students" (Switch 3D Model): every other student's model listed after the student's own, not only
+// "Show other students" (Switch Chibi): every other student's chibi listed after the student's own, not only
 // the search's hits. Off at every App start and never saved: kept for as long as the page lives, across students
 // and popups.
 const others = { shown: false };
-/** Whether the 3D popup lists all other students' models ("Show other students"). */
+/** Whether the 3D popup lists all other students' chibis ("Show other students"). */
 export const showOthers = () => others.shown;
 /** Set "Show other students". */
 export const setShowOthers = (on) => {
   others.shown = !!on;
 };
 /**
- * The other students' alts (students.list's students) whose model an alt's 3D model may take as a costume:
- * any with a battle model or a field-mode or NPC one.
+ * The other students' alts (students.list's students) whose chibi an alt's chibi may take as a costume:
+ * any with a battle chibi or a field-mode or NPC one.
  */
-export function crossModels(students, v) {
+export function crossChibis(students, v) {
   if (!coreOf(v, "chibi")) return [];
   return (students || [])
     .flatMap((f) => f.alts || [])
     .filter((o) => o.student !== v.student && o.key !== v.key && !!(coreOf(o, "chibi") || o.fieldChibi));
 }
 /**
- * The card of another student's model. It is a deliberate choice: past the stretch limit ("preview") it is
+ * The card of another student's chibi. It is a deliberate choice: past the stretch limit ("preview") it is
  * applied like "ok"; before its verdict lands it waits (`pending`), and a refused one is shown for a preview
  * only.
  */
@@ -245,13 +247,13 @@ export const crossCard = (o, costumes = null) => {
   };
 };
 /**
- * The cards a search adds after the popup's own: the other students' models `match` finds, refused ones left
- * out, in `compare`'s order (the roster's name order), the first `limit` (CROSS_LIMIT: what one RPC call takes;
+ * The cards a search adds after the popup's own: the other students' chibis `match` finds, refused ones left
+ * out, in `compare`'s order (the student list's name order), the first `limit` (CROSS_LIMIT: what one RPC call takes;
  * "Show other students" lists them all).
  * @param {object[]} students students.list's students.
- * @param {object|null} [costumes] The 3D model's verdicts.
+ * @param {object|null} [costumes] The chibi's verdicts.
  * @param {object} [options]
- * @param {(model: object) => boolean} [options.match] Whether a model matches the search.
+ * @param {(chibi: object) => boolean} [options.match] Whether a chibi matches the search.
  * @param {((a: object, b: object) => number)|null} [options.compare] The order of the hits.
  * @param {string[]} [options.exclude] The keys of the popup's own cards.
  * @param {number} [options.limit] The most cards.
@@ -263,14 +265,14 @@ export function crossCandidates(
   { match = () => true, compare = null, exclude = [], limit = CROSS_LIMIT } = {},
 ) {
   const skip = new Set(exclude);
-  const hits = crossModels(students, v).filter(
+  const hits = crossChibis(students, v).filter(
     (o) => !skip.has(`v:${o.key}`) && costumes?.[o.key] !== "refused" && match(o),
   );
   if (compare) hits.sort(compare);
   return hits.slice(0, limit).map((o) => crossCard(o, costumes));
 }
 /**
- * What a card of another student's model carries beyond any card's, from the search or from "Show other
+ * What a card of another student's chibi carries beyond any card's, from the search or from "Show other
  * students" alike: its word of caution on hover (`caution`), and the dev ids the popup's search also finds it
  * by.
  */
@@ -278,7 +280,7 @@ export const crossExtras = (c, caution) =>
   c.cross ? { hint: caution, terms: [c.alt.fileId, c.alt.chibi, c.alt.fieldChibi] } : {};
 /**
  * What keeps a 3D candidate from being applied by its costume check.
- * @returns {"pending"|"unfit"|null} "pending" (another student's model before its verdict), "unfit" (refused:
+ * @returns {"pending"|"unfit"|null} "pending" (another student's chibi before its verdict), "unfit" (refused:
  *     shown, never applied) or null.
  */
 export function costumeHold(shownStudent, v, key, costumes) {
@@ -345,7 +347,7 @@ export const previewChanged = (before, after, kind, beforeEnabled, enabled) =>
   !after ||
   beforeEnabled !== enabled ||
   previewKey(before, kind, beforeEnabled) !== previewKey(after, kind, enabled);
-export function modelSource(v, enabled = true) {
+export function chibiSource(v, enabled = true) {
   if (enabled && !v?.configured && !v?.previewSources?.chibi) return "live";
   const key = previewKey(v, "chibi", enabled);
   return key.startsWith("m:")
@@ -356,9 +358,9 @@ export function modelSource(v, enabled = true) {
         ? "official"
         : "live";
 }
-// the model route's address of an alt's chibi from a source; with `clip`, of that clip of it alone (model.js
+// the chibi route's address of an alt's chibi from a source; with `clip`, of that clip of it alone (chibi.js
 // addClips)
-export function modelUrl(key, source = "live", clip = null) {
+export function chibiUrl(key, source = "live", clip = null) {
   const query = [
     source === "live" ? "" : `source=${encodeURIComponent(source)}`,
     clip ? `clip=${encodeURIComponent(clip)}` : "",
@@ -368,7 +370,7 @@ export function modelUrl(key, source = "live", clip = null) {
 }
 
 export function previewBase(v, kind = "portrait", enabled = true, alts = []) {
-  if (kind === "chibi") return modelUrl(v.key, modelSource(v, enabled));
+  if (kind === "chibi") return chibiUrl(v.key, chibiSource(v, enabled));
   if (enabled && !v?.configured && !v?.previewSources?.[kind]) return spineBase(kind, coreOf(v, kind));
   const key = previewKey(v, kind, enabled);
   if (key.startsWith("m:")) return spineBase("mod", key.slice(2));

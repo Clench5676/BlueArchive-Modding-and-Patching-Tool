@@ -1044,7 +1044,7 @@ def finish(plan_path, returned, output, *, diagnostic=False, atlas=None, pack=No
     for item in plan["poses"]:
         geometry = json.loads((path.parent / item["geometry"]).read_text())
         target, box = targets[item["name"]]
-        # Masked slots never enter model inputs. Restore their official composite
+        # Masked slots never enter chibi inputs. Restore their official composite
         # pixels for the cut's full-composite identity and display convention.
         full = compose(geometry, baseline, density=plan["density"], frame=plan["frame"], inverse=False)
         clean = Image.open(path.parent / item["official"]).convert("RGBA")

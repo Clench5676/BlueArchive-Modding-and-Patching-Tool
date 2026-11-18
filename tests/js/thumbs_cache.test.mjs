@@ -323,7 +323,7 @@ test("resolved bases keep the revision beside every atlas page and can be forgot
   assert.notEqual(await thumb(resolved), picture);
 });
 
-test("a still starts from cleared tracks, so the skeleton's first animation (a lobby's intro) never mixes in", async () => {
+test("a still starts from cleared tracks, so the skeleton's first animation (a memorial lobby's intro) never mixes in", async () => {
   const base = spineBase("official-memorialLobby", "pose_home");
   set(base, "1");
   animations = ["Start_Idle_01", "Idle_01", "Talk_01_A"];
@@ -338,7 +338,8 @@ test("a still starts from cleared tracks, so the skeleton's first animation (a l
     "card and its bust: the idle both times",
   );
   assert.ok(posed.findIndex((e) => e[0] === "setup") < idle, "setup pose first");
-  // a lobby without Idle_01 rests in its first other animation, never an intro; one with intros only in the setup pose
+  // a memorial lobby without Idle_01 rests in its first other animation, never an intro; one with intros only in the
+  // setup pose
   animations = ["Start_Idle_01", "Dummy", "Loop_01"];
   const other = spineBase("official-memorialLobby", "pose2_home");
   set(other, "2");
@@ -1292,7 +1293,7 @@ test("a popup preempts the background renderer and keeps priority between lazy r
   const create = document.createElement,
     background = thumbnailScope(),
     callbacks = [];
-  const bases = ["roster_active", "roster_queued", "hina_original", "hina_dress"].map((name) =>
+  const bases = ["student_list_active", "student_list_queued", "hina_original", "hina_dress"].map((name) =>
     spineBase("official-portrait", name),
   );
   let popup;
@@ -1306,8 +1307,8 @@ test("a popup preempts the background renderer and keeps priority between lazy r
       },
     });
     bases.forEach((base, i) => set(base, "abcd"[i]));
-    const first = background.thumb(bases[0], "roster"),
-      queued = background.thumb(bases[1], "roster");
+    const first = background.thumb(bases[0], "studentList"),
+      queued = background.thumb(bases[1], "studentList");
     await new Promise(setImmediate);
     assert.equal(callbacks.length, 1);
     const oldPlayer = [...players][0];
@@ -1555,10 +1556,10 @@ test("an opted-in persistent PNG hit bypasses Spine creation after the memory ca
 for (const dependency of ["source", "background", "framing"])
   test(`persistent thumbnail misses when its ${dependency} revision changes`, async () => {
     const server = persistentBackend(),
-      lobby = dependency === "framing";
-    const base = spineBase(lobby ? "official-memorialLobby" : "official-portrait", `disk_${dependency}`);
+      memorialLobby = dependency === "framing";
+    const base = spineBase(memorialLobby ? "official-memorialLobby" : "official-portrait", `disk_${dependency}`);
     const background = dependency === "background" ? "/asset/art/background/disk-revision.png" : null;
-    const render = () => thumb(base, "face", null, lobby, null, background);
+    const render = () => thumb(base, "face", null, memorialLobby, null, background);
     const before = loaded.length;
     try {
       set(base, "b");
@@ -1591,15 +1592,15 @@ for (const dependency of ["source", "background", "framing"])
 for (const missing of ["background", "framing"])
   test(`an incomplete ${missing} capture never poisons the persistent thumbnail cache`, async () => {
     const server = persistentBackend(),
-      lobby = missing === "framing";
-    const base = spineBase(lobby ? "official-memorialLobby" : "official-portrait", `disk_missing_${missing}`);
+      memorialLobby = missing === "framing";
+    const base = spineBase(memorialLobby ? "official-memorialLobby" : "official-portrait", `disk_missing_${missing}`);
     const background = missing === "background" ? "/asset/art/background/disk-missing.png" : null;
     const before = loaded.length;
     try {
       set(base, "e");
       server.state[missing] = false;
       assert.ok(
-        await thumb(base, "card", null, lobby, null, background),
+        await thumb(base, "card", null, memorialLobby, null, background),
         "the page may display its in-memory fallback",
       );
       await until(() => !players.size, "both card and speculative bust finish before checking writes");
@@ -1607,7 +1608,7 @@ for (const missing of ["background", "framing"])
       assert.equal(server.blobReads.length, 0, "incomplete pictures are rejected before encoding an upload");
       forget(base.slice(0, base.lastIndexOf("/")));
       server.state[missing] = true;
-      assert.ok(await thumb(base, "card", null, lobby, null, background));
+      assert.ok(await thumb(base, "card", null, memorialLobby, null, background));
       await until(() => server.files.size === 2, "the recovered card and companion may both be persisted");
       assert.equal(
         loaded.length,
@@ -1670,7 +1671,7 @@ async function modalLoadingHold() {
     `const {holds,stage}=env;const wired=new WeakSet(),refresh=()=>{},Popup={allowsInput:()=>true},T=key=>key,track=Promise.resolve.bind(Promise),wait=async()=>{},close=async()=>{};let overlay=null;\n${code}\nreturn{hold,held:()=>holds.size>0};`,
   )({ holds, stage: () => el });
 }
-test("Hall visible-thumbnail retries drain and settle while a modal loading hold remains active", async (t) => {
+test("StudentHall visible-thumbnail retries drain and settle while a modal loading hold remains active", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const Loading = await modalLoadingHold(),
     Player = spine.SpinePlayer,
@@ -1717,7 +1718,7 @@ test("Hall visible-thumbnail retries drain and settle while a modal loading hold
     t.mock.timers.reset();
   }
 });
-test("cancelling a Hall modal during first capture timeout releases its hold and retires pending retries", async (t) => {
+test("cancelling a Student Hall modal during first capture timeout releases its hold and retires pending retries", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const Loading = await modalLoadingHold(),
     Player = spine.SpinePlayer,
@@ -1751,13 +1752,13 @@ test("cancelling a Hall modal during first capture timeout releases its hold and
     t.mock.timers.reset();
   }
 });
-test("a non-timeout Hall capture failure settles its modal hold without awaiting idle retries", async () => {
+test("a non-timeout Student Hall capture failure settles its modal hold without awaiting idle retries", async () => {
   const Loading = await modalLoadingHold(),
     Player = spine.SpinePlayer,
     scope = thumbnailScope({ priority: "popup" });
   spine.SpinePlayer = class {
     constructor() {
-      throw new Error("Hall fixture capture failure");
+      throw new Error("StudentHall fixture capture failure");
     }
   };
   try {

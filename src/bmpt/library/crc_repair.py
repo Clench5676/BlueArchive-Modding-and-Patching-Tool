@@ -25,11 +25,11 @@ from bmpt.engine import LogFunc, ProgressCallback, no_log, t
 from ..core.errors import ServiceError
 from ..core.logging_utils import log_failure
 from . import safety
-from .judge import LIBRARY_SOURCES, core_of, crc_state, now, says_official
-from .models import JsonResult
+from .judge import LIBRARY_SOURCES, core_of, crc_state, now, says_official, sorted_resource_types
+from .records import JsonResult
 
 if TYPE_CHECKING:
-    from .models import Pin
+    from .records import Pin
     from .service import ModLibrary
 
 logger = logging.getLogger(__name__)
@@ -41,14 +41,14 @@ CHECK = "target_crc"
 class CrcRepairResult(JsonResult):
     """Report dropped built copies, rewritten game entries, and failures with code and params.
 
-    Entries identify install, core, variant, and kind; cores/kinds identify changed game displays.
+    Entries identify install, core, alt, and kind; cores/kinds identify changed game displays.
     """
 
     dropped: list[dict] = field(default_factory=list)
     rewritten: list[dict] = field(default_factory=list)
     failed: list[dict] = field(default_factory=list)
     cores: list[str] = field(default_factory=list)
-    kinds: list[str] = field(default_factory=list)
+    resource_types: list[str] = field(default_factory=list)
 
 
 def checked(config: dict | None) -> bool:
@@ -90,12 +90,12 @@ def _lacks_crc(library: ModLibrary, path: Path, name: str, sha1: str | None = No
 
 def _item(library: ModLibrary, pin: Pin | None, install: str, core: str) -> dict[str, str]:
     if pin is None:
-        return {"install": install, "core": core, "variant": core, "kind": "spr"}
+        return {"install": install, "core": core, "alt": core, "resource_type": "portrait"}
     return {
         "install": install,
         "core": core,
-        "variant": library._core_map(pin).key(core) or core,
-        "kind": library._kind(core, pin) or "spr",
+        "alt": library._core_map(pin).key(core) or core,
+        "resource_type": library._resource_type(core, pin) or "portrait",
     }
 
 
@@ -157,7 +157,7 @@ def findings(library: ModLibrary) -> dict[str, Any]:
         library: Library whose built-copy records and unchanged managed game writes are inspected.
 
     Returns:
-        due and entries identifying install, core, variant, kind, and affected built/game copies.
+        due and entries identifying install, core, alt, kind, and affected built/game copies.
     """
     config = library.profiles.read()
     if checked(config):
@@ -218,7 +218,7 @@ def repair(library: ModLibrary, log: LogFunc = no_log, progress: ProgressCallbac
                 for pin, core, _source in game
             )
             game = []
-    cores, kinds = set(), set()
+    cores, resource_types = set(), set()
     for i, (pin, core, source) in enumerate(game, 1):
         item = _item(library, pin, pin.key, core)
         step_aside()
@@ -232,10 +232,10 @@ def repair(library: ModLibrary, log: LogFunc = no_log, progress: ProgressCallbac
                 continue
         result.rewritten.append(item)
         cores.add(core)
-        kinds.add(item["kind"])
+        resource_types.add(item["resource_type"])
         if progress:
             progress(i, len(game), t("webui.progress.apply", name=core))
-    result.cores, result.kinds = sorted(cores), sorted(kinds)
+    result.cores, result.resource_types = sorted(cores), sorted_resource_types(resource_types)
     if not result.failed:
         _mark(library)
     return result

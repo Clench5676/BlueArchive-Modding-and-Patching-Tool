@@ -14,15 +14,15 @@ def test_spans_record_waits_holds_and_the_longest_value():
     spans.install(timings)
     try:
         lock = threading.Lock()
-        with spans.held("model-lock.model", lock, hold=True):
+        with spans.held("chibi-lock.chibi", lock, hold=True):
             pass
-        assert "model-lock.model.wait" not in timings.snapshot()  # an uncontended lock records no wait
-        assert timings.snapshot()["model-lock.model.held"]["count"] == 1
+        assert "chibi-lock.chibi.wait" not in timings.snapshot()  # an uncontended lock records no wait
+        assert timings.snapshot()["chibi-lock.chibi.held"]["count"] == 1
         lock.acquire()
         threading.Timer(0.05, lock.release).start()
-        with spans.held("model-lock.model", lock):
+        with spans.held("chibi-lock.chibi", lock):
             pass
-        wait = timings.snapshot()["model-lock.model.wait"]
+        wait = timings.snapshot()["chibi-lock.chibi.wait"]
         assert wait["count"] == 1 and wait["max"] >= 0.04
         with spans.span("asset.model.official"):
             time.sleep(0.01)
@@ -46,7 +46,7 @@ def test_unfinished_spans_waits_and_measures_are_listed_until_they_end():
     entered, leave = threading.Event(), threading.Event()
 
     def waiter():
-        with spans.held("model-lock.model", lock):
+        with spans.held("chibi-lock.chibi", lock):
             entered.set()
             leave.wait(2)
 
@@ -57,12 +57,12 @@ def test_unfinished_spans_waits_and_measures_are_listed_until_they_end():
         listed = spans.active()
         names = [item["name"] for item in listed]
         assert names[:2] == ["asset.model.mod", "scan.files"]  # the oldest first
-        assert "model-lock.model.wait" in names and "model-lock.model.held" not in names
+        assert "chibi-lock.chibi.wait" in names and "chibi-lock.chibi.held" not in names
         assert listed[0]["seconds"] >= 0.02
         lock.release()
         assert entered.wait(2)
         names = [item["name"] for item in spans.active()]
-        assert "model-lock.model.held" in names and "model-lock.model.wait" not in names
+        assert "chibi-lock.chibi.held" in names and "chibi-lock.chibi.wait" not in names
         leave.set()
         thread.join(2)
     assert spans.active() == []
@@ -72,7 +72,7 @@ def test_unfinished_spans_waits_and_measures_are_listed_until_they_end():
 def test_a_failing_block_releases_its_lock_and_leaves_the_list():
     lock = threading.Lock()
     try:
-        with spans.held("lock", lock, hold=True), spans.span("export.model.convert"):
+        with spans.held("lock", lock, hold=True), spans.span("export.chibi.convert"):
             raise ValueError
     except ValueError:
         pass

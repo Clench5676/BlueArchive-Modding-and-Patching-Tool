@@ -19,6 +19,8 @@ from bmpt.host.store_formats import (
     inverse_translate,
     json_bytes,
     load_document,
+    managed_bytes,
+    managed_document,
     parse_json,
     translate,
 )
@@ -97,8 +99,8 @@ def test_upgrade_copies_revision_keyed_library_caches_when_absent(tmp_path):
     data = _data(tmp_path / "data")
     legacy = data / "library"
     entries = {
-        "costume-verdicts.json": b'{"version":1,"verdicts":{}}',
-        "worn-items.json": b'{"version":1,"models":{}}',
+        "costume-verdicts.json": b'{"version":2,"verdicts":{}}',
+        "worn-items.json": b'{"version":2,"chibis":{}}',
         "costume-poses/" + "a" * 64 + ".npz": b"cached pose",
     }
     for name, value in entries.items():
@@ -153,6 +155,8 @@ def test_upgrade_copies_revision_keyed_library_caches_when_absent(tmp_path):
                         "label": "variant:mine",
                         "assignment": "x",
                         "optimized_from": "variant:foo",
+                        "import_sources": [{"source": {"files": [], "originals": [], "extra": 1}}],
+                        "roster_photography": {"choices": {"collection": {"variant": "x", "photo": "capture"}}},
                     }
                 ],
             },
@@ -224,13 +228,15 @@ def test_upgrade_copies_revision_keyed_library_caches_when_absent(tmp_path):
         ),
     ],
 )
-def test_formats(store, original, path, expected):
+def test_formats(store, original, path, expected, tmp_path):
     converted, shape = translate(store, original)
     member = converted
     for key in path:
         member = member[key]
     assert member == expected
     assert documents_equal(inverse_translate(store, parse_json(json_bytes(converted)), shape), original)
+    current = _write(tmp_path / "current.json", converted)
+    assert managed_bytes(store, managed_document(store, current)) == current.read_bytes()
 
 
 def test_strict_documents(tmp_path):
@@ -250,8 +256,8 @@ def test_strict_documents(tmp_path):
 def test_runtime_state_reuses_validated_records_and_preserves_opaque_numbers(monkeypatch):
     encoder = store_formats.StateEncoder()
     document = parse_json(
-        '{"version":1,"mods":[{"kind":"spr","label":"one","opaque":0.1234567890123456789}],'
-        '"applied":{"a":{"source":"variant:a","sha1":"old"},"b":{"source":"official","sha1":"kept"}}}'
+        '{"version":2,"mods":[{"resource_type":"portrait","name":"one","opaque":0.1234567890123456789}],'
+        '"applied":{"a":{"source":"alt:a","sha1":"old"},"b":{"source":"official","sha1":"kept"}}}'
     )
     assert parse_json(encoder.encode(document)) == parse_json(store_formats.managed_bytes("S", document))
     checked = []

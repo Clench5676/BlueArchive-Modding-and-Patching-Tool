@@ -8,7 +8,7 @@ import queue
 import threading
 from typing import Any, Callable, Iterator
 
-from .contract import wire_event
+from .contract import wire_value
 
 HEARTBEAT_SECONDS = 15.0
 
@@ -70,7 +70,7 @@ class EventBus:
                 fn(*message)
             except Exception:
                 logger.exception("event observer failed on %s", event)
-        message = (event, wire_event(event, message[1]))
+        message = (event, wire_value(message[1]))
         for q in subscribers:
             try:
                 q.put_nowait(message)

@@ -209,11 +209,11 @@ test("all six locales retain their existing Applied labels for accessibility", (
   for (const locale of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url))).webui;
     assert.ok(ui.status.applied);
-    assert.ok(ui.photo.applied);
+    assert.ok(ui.thumbnail.applied);
   }
 });
 
-test("Hall outline gold is the applied Mulligan SelectLine's single sprite yellow", () => {
+test("StudentHall outline gold is the applied Mulligan SelectLine's single sprite yellow", () => {
   const line = at(selectionPrefab(), `${SELECTION_SLOT}/SelectLine`);
   assert.equal(line.widgets.filter((w) => "sprite" in w).length, 1);
   assert.equal(sprite(line).color, `${APPLIED_SELECTION_GOLD}/1.00`);

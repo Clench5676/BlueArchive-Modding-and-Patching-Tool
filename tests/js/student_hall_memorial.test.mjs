@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createMemorialPool } from "../../src/bmpt/web/js/hall/student-hall-memorial.js";
+import { createMemorialPool } from "../../src/bmpt/web/js/student-hall/student-hall-memorial.js";
 const choice = (name, id = name) => ({ id, alt: name, source: `mod:${name}` });
 function fixture() {
   const events = [],
@@ -55,7 +55,7 @@ test("resource identity reuses the current memorial even when its playlist UUID 
   assert.equal(h.events.filter((event) => event[0] === "load").length, 1);
   assert.equal(h.hosts.length, 1);
 });
-test("only current and one staging lobby exist and replacement disposal precedes activation", async () => {
+test("only current and one staging memorial lobby exist and replacement disposal precedes activation", async () => {
   const h = fixture(),
     signal = new AbortController().signal;
   for (const name of ["a", "b", "c", "d", "e"]) {

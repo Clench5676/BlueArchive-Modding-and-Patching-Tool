@@ -16,13 +16,13 @@ from types import SimpleNamespace
 import pytest
 from UnityPy.helpers.CompressionHelper import compress_lz4
 
-from bmpt.catalog import Catalog, model_core
+from bmpt.catalog import Catalog, chibi_core
 from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
-from bmpt.gameassets import model
-from bmpt.gameassets import model_glb
-from bmpt.gameassets import model_service
+from bmpt.gameassets import chibi
+from bmpt.gameassets import chibi_glb
+from bmpt.gameassets import chibi_service
 from bmpt.gameassets import service
-from bmpt.gameassets.discovery import cab_names, is_model_dependency
+from bmpt.gameassets.discovery import cab_names, is_chibi_dependency
 from ba_modding_toolkit.searching import get_search_dirs
 
 FIXTURES = Path(__file__).parent / "fixtures" / "catalog"
@@ -35,12 +35,12 @@ GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-
 
 def test_safe_unpack_floats_with_zero_bit_size():
     packed = SimpleNamespace(m_BitSize=0, m_NumItems=6, m_Start=0.25, m_Range=0.0, m_Data=b"")
-    assert model_glb.safe_unpack_floats(packed) == [0.25] * 6
-    assert model_glb.safe_unpack_floats(packed, 0, 4, shape=(2,)) == [[0.25, 0.25], [0.25, 0.25]]
+    assert chibi_glb.safe_unpack_floats(packed) == [0.25] * 6
+    assert chibi_glb.safe_unpack_floats(packed, 0, 4, shape=(2,)) == [[0.25, 0.25], [0.25, 0.25]]
     # the mesh decoder uses the safe version
     from UnityPy.helpers import MeshHelper
 
-    assert MeshHelper.unpack_floats is model_glb.safe_unpack_floats
+    assert MeshHelper.unpack_floats is chibi_glb.safe_unpack_floats
 
 
 def test_compressed_skin_sums_integer_weights():
@@ -48,14 +48,14 @@ def test_compressed_skin_sums_integer_weights():
     # three weights short of 31 imply the fourth and read one more bone index
     weights = [1, 25, 5, 31, 10, 10, 10]
     bones = [3, 4, 5, 6, 7, 8, 9, 2]
-    w, j = model_glb.compressed_skin(weights, bones, 3)
+    w, j = chibi_glb.compressed_skin(weights, bones, 3)
     assert j == [[3, 4, 5, 0], [6, 0, 0, 0], [7, 8, 9, 2]]
     assert w[0] == pytest.approx([1 / 31, 25 / 31, 5 / 31, 0])
     assert w[1] == [1, 0, 0, 0]
     assert w[2] == pytest.approx([10 / 31, 10 / 31, 10 / 31, 1 / 31])
     assert all(sum(row) == pytest.approx(1) for row in w)
     # extra data past the last vertex is ignored, missing bone indices do not raise
-    assert model_glb.compressed_skin([31, 31, 31], [1], 2)[1] == [[1, 0, 0, 0], [0, 0, 0, 0]]
+    assert chibi_glb.compressed_skin([31, 31, 31], [1], 2)[1] == [[1, 0, 0, 0], [0, 0, 0, 0]]
 
 
 def _channels(*formats):
@@ -74,22 +74,22 @@ def test_fix_vertex_formats_scales_normalised_channels():
         m_Colors=[(255, 0, 51, 255)],
         m_UV0=[(0.5, 0.5)],
     )
-    model_glb.fix_vertex_formats(mesh, handler)
+    chibi_glb.fix_vertex_formats(mesh, handler)
     assert handler.m_Colors == [pytest.approx((1.0, 0.0, 0.2, 1.0))]
     assert handler.m_Normals == [pytest.approx((1.0, -1.0, 0.0))]  # SNorm -128 clamps to -1
     assert handler.m_Vertices == [(1.0, 2.0, 3.0)] and handler.m_UV0 == [(0.5, 0.5)]
     # older vertex format tables differ: left alone
     old = SimpleNamespace(version=(2018, 4, 0, 0), m_Colors=[(255, 0, 0, 255)])
-    model_glb.fix_vertex_formats(_channels((0, 3), (0, 3), (0, 0), (2, 4)), old)
+    chibi_glb.fix_vertex_formats(_channels((0, 3), (0, 3), (0, 0), (2, 4)), old)
     assert old.m_Colors == [(255, 0, 0, 255)]
 
 
 def test_pad_skin_rigid_props_and_renormalise():
-    joints, weights = model_glb.pad_skin([(5,), (6,)], None, 2)
+    joints, weights = chibi_glb.pad_skin([(5,), (6,)], None, 2)
     assert joints == [(5, 0, 0, 0), (6, 0, 0, 0)] and weights == [(1.0, 0.0, 0.0, 0.0)] * 2
-    joints, weights = model_glb.pad_skin([(1, 2)], [(0.5, 0.25)], 1)
+    joints, weights = chibi_glb.pad_skin([(1, 2)], [(0.5, 0.25)], 1)
     assert joints == [(1, 2, 0, 0)] and weights == [pytest.approx((2 / 3, 1 / 3, 0, 0))]
-    assert model_glb.pad_skin(None, None, 3) == (None, None)
+    assert chibi_glb.pad_skin(None, None, 3) == (None, None)
 
 
 # --- clips ---
@@ -126,7 +126,7 @@ def _clip(streamed=(), curve_count=0, dense=None, constant=(), stop=1.0, rate=2.
 
 def test_read_streamed_frames():
     words = _words((-math.inf, [(0, 0, 0, 0, 1)]), (0.0, [(0, 0, 0, 2, 1)]), (math.inf, []))
-    frames = model_glb.read_streamed(words)
+    frames = chibi_glb.read_streamed(words)
     assert [f[0] for f in frames] == [-math.inf, 0.0, math.inf]
     assert frames[1][1] == [(0, 0.0, 0.0, 2.0, 1.0)]
 
@@ -146,7 +146,7 @@ def test_decode_clip_streamed_dense_constant():
         "m_BeginTime": 0.0,
         "m_SampleArray": [10, 20, 30, 40],
     }
-    clip = model_glb.decode_clip(_clip(streamed, 2, dense, constant=[7, 8]))
+    clip = chibi_glb.decode_clip(_clip(streamed, 2, dense, constant=[7, 8]))
     assert clip.duration == 1.0 and clip.times == [0.0, 0.5, 1.0]
     assert clip.curves[0] == pytest.approx([1, 2, 5])
     assert clip.curves[1] == pytest.approx([0, 0, 0.125])  # before its first key it holds that key's value
@@ -165,24 +165,24 @@ def test_bind_tracks_walks_binding_dimensions():
         {"typeID": 4, "attribute": 4, "path": a},  # Euler: 11-13
     ]
     curves = {i: [float(i)] for i in range(14)}
-    tracks = model_glb.bind_tracks(bindings, curves, {a: 0, b: 1})
+    tracks = chibi_glb.bind_tracks(bindings, curves, {a: 0, b: 1})
     assert tracks == {0: {1: [[0.0], [1.0], [2.0]], 4: [[11.0], [12.0], [13.0]]}, 1: {2: [[3.0], [4.0], [5.0], [6.0]]}}
     assert (
-        model_glb.binding_dims({"typeID": 4, "attribute": 2}) == 4
-        and model_glb.binding_dims({"typeID": 23, "attribute": 2}) == 1
+        chibi_glb.binding_dims({"typeID": 4, "attribute": 2}) == 4
+        and chibi_glb.binding_dims({"typeID": 23, "attribute": 2}) == 1
     )
 
 
 def test_track_values_mirror_and_continuity():
-    path, values = model_glb.track_values(1, [[1.0, 2.0], [2.0], [3.0, 4.0]])
+    path, values = chibi_glb.track_values(1, [[1.0, 2.0], [2.0], [3.0, 4.0]])
     assert path == "translation" and values == [(-1.0, 2.0, 3.0), (-2.0, 2.0, 4.0)]
     # the second quaternion is the first one negated: kept on the same side
-    path, values = model_glb.track_values(2, [[0.0, 0.0], [0.6, -0.6], [0.0, 0.0], [0.8, -0.8]])
+    path, values = chibi_glb.track_values(2, [[0.0, 0.0], [0.6, -0.6], [0.0, 0.0], [0.8, -0.8]])
     assert (
         path == "rotation" and values[0] == pytest.approx((0, -0.6, 0, 0.8)) and values[1] == pytest.approx(values[0])
     )
     # Euler 90 degrees about Y: a quarter turn, mirrored to -Y
-    path, values = model_glb.track_values(4, [[0.0], [90.0], [0.0]])
+    path, values = chibi_glb.track_values(4, [[0.0], [90.0], [0.0]])
     s = math.sqrt(0.5)
     assert path == "rotation" and values[0] == pytest.approx((0, -s, 0, s))
 
@@ -191,15 +191,15 @@ def test_euler_rotation_orders():
     s = math.sqrt(0.5)
     qx, qy = (s, 0, 0, s), (0, s, 0, s)
     # Unity's own order (ZXY): X before Y, q = qy * qx; XYZ the same here, ZYX applies Y first
-    assert model_glb.euler_to_quat((90, 90, 0)) == pytest.approx(model_glb.qmul(qy, qx))
-    assert model_glb.euler_to_quat((90, 90, 0), 0) == pytest.approx(model_glb.qmul(qy, qx))
-    assert model_glb.euler_to_quat((90, 90, 0), 5) == pytest.approx(model_glb.qmul(qx, qy))
+    assert chibi_glb.euler_to_quat((90, 90, 0)) == pytest.approx(chibi_glb.qmul(qy, qx))
+    assert chibi_glb.euler_to_quat((90, 90, 0), 0) == pytest.approx(chibi_glb.qmul(qy, qx))
+    assert chibi_glb.euler_to_quat((90, 90, 0), 5) == pytest.approx(chibi_glb.qmul(qx, qy))
     # X and Z: ZXY applies Z first (q = qx * qz), XYZ applies X first (q = qz * qx)
     qz = (0, 0, s, s)
-    assert model_glb.euler_to_quat((90, 0, 90)) == pytest.approx(model_glb.qmul(qx, qz))
-    assert model_glb.euler_to_quat((90, 0, 90), 0) == pytest.approx(model_glb.qmul(qz, qx))
+    assert chibi_glb.euler_to_quat((90, 0, 90)) == pytest.approx(chibi_glb.qmul(qx, qz))
+    assert chibi_glb.euler_to_quat((90, 0, 90), 0) == pytest.approx(chibi_glb.qmul(qz, qx))
     # an unknown order falls back to Unity's
-    assert model_glb.euler_to_quat((90, 0, 90), 9) == pytest.approx(model_glb.euler_to_quat((90, 0, 90)))
+    assert chibi_glb.euler_to_quat((90, 0, 90), 9) == pytest.approx(chibi_glb.euler_to_quat((90, 0, 90)))
 
 
 def test_euler_orders_from_custom_type():
@@ -210,33 +210,33 @@ def test_euler_orders_from_custom_type():
         {"typeID": 4, "attribute": 2, "path": c, "customType": 0},  # a quaternion: no order
         {"typeID": 4, "attribute": 4, "path": 12345, "customType": 0},  # a path the model lacks
     ]
-    assert model_glb.euler_orders(bindings, {a: 0, b: 1, c: 2}) == {0: 0, 1: 4}
+    assert chibi_glb.euler_orders(bindings, {a: 0, b: 1, c: 2}) == {0: 0, 1: 4}
     # the order reaches the channel: 90 degrees about X then Z (XYZ) differs from Z then X (Unity's)
-    _, xyz = model_glb.track_values(4, [[90.0], [0.0], [90.0]], 0)
-    _, zxy = model_glb.track_values(4, [[90.0], [0.0], [90.0]])
+    _, xyz = chibi_glb.track_values(4, [[90.0], [0.0], [90.0]], 0)
+    _, zxy = chibi_glb.track_values(4, [[90.0], [0.0], [90.0]])
     assert xyz[0] != pytest.approx(zxy[0])
-    assert xyz[0] == pytest.approx(model_glb.quat_norm(model_glb.mquat(model_glb.euler_to_quat((90, 0, 90), 0))))
+    assert xyz[0] == pytest.approx(chibi_glb.quat_norm(chibi_glb.mquat(chibi_glb.euler_to_quat((90, 0, 90), 0))))
 
 
 def test_mirror_matrix_and_quaternion_helpers():
     identity = {f"e{r}{c}": float(r == c) for r in range(4) for c in range(4)}
-    assert model_glb.mirror_matrix(identity) == [float(r == c) for c in range(4) for r in range(4)]
+    assert chibi_glb.mirror_matrix(identity) == [float(r == c) for c in range(4) for r in range(4)]
     m = dict(identity, e03=2.0, e13=3.0)  # translation (2, 3, 0)
-    assert model_glb.mirror_matrix(m)[12:15] == [-2.0, 3.0, 0.0]
-    assert model_glb.qmul((0, 0, 0, 1), (0.1, 0.2, 0.3, 0.9)) == pytest.approx((0.1, 0.2, 0.3, 0.9))
-    assert model_glb.euler_to_quat((0, 0, 0)) == pytest.approx((0, 0, 0, 1))
+    assert chibi_glb.mirror_matrix(m)[12:15] == [-2.0, 3.0, 0.0]
+    assert chibi_glb.qmul((0, 0, 0, 1), (0.1, 0.2, 0.3, 0.9)) == pytest.approx((0.1, 0.2, 0.3, 0.9))
+    assert chibi_glb.euler_to_quat((0, 0, 0)) == pytest.approx((0, 0, 0, 1))
 
 
 def test_pick_clips_prefers_own_clips_and_falls_back_to_an_idle():
     names = ["CH0258_01_Formation_Idle", "CH0258_02_Formation_Idle", "CH0258_01_Cafe_Idle", "CH0258_02_Victory_End"]
-    assert model_glb.pick_clips(names, ("Formation_Idle", "Cafe_Idle", "Victory_End"), "ch0258_02") == [
+    assert chibi_glb.pick_clips(names, ("Formation_Idle", "Cafe_Idle", "Victory_End"), "ch0258_02") == [
         (1, "Formation_Idle"),
         (2, "Cafe_Idle"),
         (3, "Victory_End"),
     ]
     npc = ["Police_Normal_Attack_Ing", "Police_Stand_Idle", "Police_Normal_Idle"]
-    assert model_glb.pick_clips(npc, model_glb.DEFAULT_CLIPS, "police") == [(2, "Idle")]
-    assert model_glb.pick_clips(["X_Move_Ing"], model_glb.DEFAULT_CLIPS, "x") == []
+    assert chibi_glb.pick_clips(npc, chibi_glb.DEFAULT_CLIPS, "police") == [(2, "Idle")]
+    assert chibi_glb.pick_clips(["X_Move_Ing"], chibi_glb.DEFAULT_CLIPS, "x") == []
 
 
 def test_default_clips_bring_the_knockdown_fall_and_the_retreat_cry():
@@ -251,32 +251,32 @@ def test_default_clips_bring_the_knockdown_fall_and_the_retreat_cry():
         "VitalDeathGroggy",
         "VitalHit",
     ]
-    assert model_glb.pick_clips(names, model_glb.DEFAULT_CLIPS, "ch0069") == [
+    assert chibi_glb.pick_clips(names, chibi_glb.DEFAULT_CLIPS, "ch0069") == [
         (0, "Formation_Idle"),
         (4, "Vital_Retreat"),
         (1, "Vital_Death"),
     ]
     # a student with two battle forms shows the first form's; misspelt pickups still count
     two = ["CH0187_Formation_Idle", "CH0187_Vital_Death02", "CH0187_Vital_Death01", "CH0187_Vital_Retreat01"]
-    assert model_glb.pick_clips(two, model_glb.DEFAULT_CLIPS, "ch0187") == [
+    assert chibi_glb.pick_clips(two, chibi_glb.DEFAULT_CLIPS, "ch0187") == [
         (0, "Formation_Idle"),
         (3, "Vital_Retreat"),
         (2, "Vital_Death"),
     ]
     for name in ("CH0271_Fomation_Pickup", "Hanae_Original_Formation Pickup"):
-        assert model_glb.pick_clips(["X_Formation_Idle", name], model_glb.DEFAULT_CLIPS, "x") == [
+        assert chibi_glb.pick_clips(["X_Formation_Idle", name], chibi_glb.DEFAULT_CLIPS, "x") == [
             (0, "Formation_Idle"),
             (1, "Formation_Pickup"),
         ]
     # the own name wins over an alias
-    assert model_glb.pick_clips(["X_Vital_Death01", "X_Vital_Death"], ("Vital_Death",), "x") == [(1, "Vital_Death")]
+    assert chibi_glb.pick_clips(["X_Vital_Death01", "X_Vital_Death"], ("Vital_Death",), "x") == [(1, "Vital_Death")]
 
 
 # --- GLB ---
 
 
 def test_glb_writer_layout():
-    glb = model_glb.GlbWriter()
+    glb = chibi_glb.GlbWriter()
     pos = glb.accessor([(0.0, 1.0, 2.0), (-1.0, 0.5, 3.0)], "VEC3", target=34962, minmax=True)
     idx = glb.accessor([0, 1, 1], "SCALAR", component=5123, target=34963)  # 6 bytes: the next view is padded
     tex = glb.image(b"\x89PNG..", "Tex")
@@ -301,7 +301,7 @@ def test_glb_writer_layout():
 
 
 def test_glb_writer_samplers_and_linear_textures():
-    glb = model_glb.GlbWriter()
+    glb = chibi_glb.GlbWriter()
     clamp = {"magFilter": 9729, "minFilter": 9729, "wrapS": 33071, "wrapT": 33071}
     a = glb.image(b"a", "Body", sampler=clamp)
     b = glb.image(b"b", "Body_Mask", linear=True, sampler=dict(clamp))
@@ -317,25 +317,25 @@ def test_glb_writer_samplers_and_linear_textures():
 def test_texture_sampler_follows_the_game_settings():
     # bilinear without mipmaps, clamped (the characters' textures); point; trilinear with mipmaps; per-axis wrap
     settings = lambda **s: {"m_TextureSettings": {"m_FilterMode": 1, "m_WrapU": 1, "m_WrapV": 1, **s}, "m_MipCount": 1}  # noqa: E731
-    assert model.texture_sampler(settings()) == {"magFilter": 9729, "minFilter": 9729, "wrapS": 33071, "wrapT": 33071}
-    assert model.texture_sampler(settings(m_FilterMode=0, m_WrapU=0))["magFilter"] == 9728
-    assert model.texture_sampler(settings(m_FilterMode=0, m_WrapU=0))["minFilter"] == 9728
-    assert model.texture_sampler({**settings(m_FilterMode=2), "m_MipCount": 9})["minFilter"] == 9987
-    assert model.texture_sampler({**settings(), "m_MipCount": 9})["minFilter"] == 9985
+    assert chibi.texture_sampler(settings()) == {"magFilter": 9729, "minFilter": 9729, "wrapS": 33071, "wrapT": 33071}
+    assert chibi.texture_sampler(settings(m_FilterMode=0, m_WrapU=0))["magFilter"] == 9728
+    assert chibi.texture_sampler(settings(m_FilterMode=0, m_WrapU=0))["minFilter"] == 9728
+    assert chibi.texture_sampler({**settings(m_FilterMode=2), "m_MipCount": 9})["minFilter"] == 9987
+    assert chibi.texture_sampler({**settings(), "m_MipCount": 9})["minFilter"] == 9985
     # point with mipmaps (ch0270): the nearest texel of the nearest mipmap, never a blend
-    assert model.texture_sampler({**settings(m_FilterMode=0), "m_MipCount": 9}) == {
+    assert chibi.texture_sampler({**settings(m_FilterMode=0), "m_MipCount": 9}) == {
         "magFilter": 9728,
         "minFilter": 9984,
         "wrapS": 33071,
         "wrapT": 33071,
     }
-    assert model.texture_sampler(settings(m_WrapU=0, m_WrapV=2)) == {
+    assert chibi.texture_sampler(settings(m_WrapU=0, m_WrapV=2)) == {
         "magFilter": 9729,
         "minFilter": 9729,
         "wrapS": 10497,
         "wrapT": 33648,
     }
-    assert model.texture_sampler({})["wrapS"] == 10497  # no settings: Unity's defaults
+    assert chibi.texture_sampler({})["wrapS"] == 10497  # no settings: Unity's defaults
 
 
 # --- shaders ---
@@ -371,7 +371,7 @@ def _form(name, props=(), passes=(), sub_tags=()):
 
 def test_shader_kind_by_name_prefix():
     kinds = {
-        name: model.shader_kind(name)
+        name: chibi.shader_kind(name)
         for name in (
             "MX/C-General/Layer4",
             "MX/C-General/Layer4-Inline",
@@ -419,7 +419,7 @@ def test_shader_kind_by_name_prefix():
         "DSFX/FX_SHADER_Matcap": "matcap",
         "DSFX/FX_SHADER_AlphaBlend_Add": "unlit",
     }
-    assert model.shader_kind(None) == "general"
+    assert chibi.shader_kind(None) == "general"
 
 
 def test_shader_vectors_outline_and_state():
@@ -432,35 +432,35 @@ def test_shader_vectors_outline_and_state():
             ("SHADOWCASTER", 0, 1, 1, 0, None),
         ],
     )
-    assert model.shader_vectors(layer4) == {"_ShadowTintR4"}
-    assert model.shader_outline(layer4)
+    assert chibi.shader_vectors(layer4) == {"_ShadowTintR4"}
+    assert chibi.shader_outline(layer4)
     # HDR Color properties (flag 16) are stored linear; a plain Color (Weapon's _ShadowTint) or a hidden one is not
     hair = _form(
         "MX/C-Hair", props=[("_Tint", 0, 16), ("_ShadowTint", 0, 16), ("_CodeAddColor", 0, 1), ("_SpecDir", 1, 16)]
     )
-    assert model.shader_hdr(hair) == {"_Tint", "_ShadowTint"}
-    assert model.shader_hdr(_form("MX/C-Weapon", props=[("_Color", 0), ("_ShadowTint", 0), ("_GlowTint0", 0, 16)])) == {
+    assert chibi.shader_hdr(hair) == {"_Tint", "_ShadowTint"}
+    assert chibi.shader_hdr(_form("MX/C-Weapon", props=[("_Color", 0), ("_ShadowTint", 0), ("_GlowTint0", 0, 16)])) == {
         "_GlowTint0"
     }
     # the state names material properties: the material's floats decide
     floats = {"_Cull": 0.0, "_ZWrite": 1.0, "_SrcBlend": 1.0, "_DstBlend": 0.0}
-    assert model.shader_state(layer4, floats) == {"cull": 0, "zwrite": 1, "src": 1, "dst": 0, "queue": 2000}
+    assert chibi.shader_state(layer4, floats) == {"cull": 0, "zwrite": 1, "src": 1, "dst": 0, "queue": 2000}
     # MX/C-General/Transparent blends in the pass whatever the material's floats say; its queue tag counts
     transparent = _form("MX/C-General/Transparent", passes=[("UniversalForward", "_Cull", 0, 5, 10, "Transparent")])
-    assert model.shader_state(transparent, {"_Cull": 2.0, "_SrcBlend": 1.0, "_DstBlend": 0.0}) == {
+    assert chibi.shader_state(transparent, {"_Cull": 2.0, "_SrcBlend": 1.0, "_DstBlend": 0.0}) == {
         "cull": 2,
         "zwrite": 0,
         "src": 5,
         "dst": 10,
         "queue": 3000,
     }
-    assert not model.shader_outline(transparent)
+    assert not chibi.shader_outline(transparent)
     # a pass without a light mode (the halos), a queue with an offset, a material's own render queue
     eyes = _form("MX/C-EyesMouth", passes=[("DepthOnly", 2, 1, 1, 0, None), ("", 2, 1, 5, 10, "Geometry+1")])
-    assert model.shader_state(eyes, {})["queue"] == 2001 and model.shader_state(eyes, {})["src"] == 5
-    assert model.shader_state(eyes, {}, custom_queue=2450)["queue"] == 2450
+    assert chibi.shader_state(eyes, {})["queue"] == 2001 and chibi.shader_state(eyes, {})["src"] == 5
+    assert chibi.shader_state(eyes, {}, custom_queue=2450)["queue"] == 2450
     assert (
-        model.shader_state(
+        chibi.shader_state(
             _form("X", passes=[("UniversalForward", 2, 1, 1, 0, None)], sub_tags=[("Queue", "AlphaTest")]), {}
         )["queue"]
         == 2450
@@ -483,7 +483,7 @@ def test_bind_toggles_walks_the_curve_index():
         {"typeID": 25, "attribute": enabled, "path": face01, "isPPtrCurve": 1},  # 9
     ]
     curves = {i: [float(i)] for i in range(10)}
-    assert model_glb.bind_toggles(bindings, curves, {face: 1, face01: 2, fx: 3}) == [
+    assert chibi_glb.bind_toggles(bindings, curves, {face: 1, face01: 2, fx: 3}) == [
         (1, "renderer", [4.0]),
         (2, "renderer", [5.0]),
         (3, "active", [6.0]),
@@ -492,9 +492,9 @@ def test_bind_toggles_walks_the_curve_index():
 
 def test_toggle_keys_are_change_points():
     times = [0.0, 0.5, 1.0, 1.5, 2.0]
-    assert model_glb.toggle_keys([1.0, 1.0, 0.0, 0.2, 1.0], times) == [[0.0, 1], [1.0, 0], [2.0, 1]]
-    assert model_glb.toggle_keys([0.0], times) == [[0.0, 0]]  # a constant curve
-    assert model_glb.toggle_keys([0.0, 1.0], [2.0, 2.5], start=2.0) == [[0.0, 0], [0.5, 1]]  # from the clip start
+    assert chibi_glb.toggle_keys([1.0, 1.0, 0.0, 0.2, 1.0], times) == [[0.0, 1], [1.0, 0], [2.0, 1]]
+    assert chibi_glb.toggle_keys([0.0], times) == [[0.0, 0]]  # a constant curve
+    assert chibi_glb.toggle_keys([0.0, 1.0], [2.0, 2.5], start=2.0) == [[0.0, 0], [0.5, 1]]  # from the clip start
 
 
 def test_toggles_bring_in_disabled_renderers_and_drop_rest_states(monkeypatch):
@@ -508,7 +508,7 @@ def test_toggles_bring_in_disabled_renderers_and_drop_rest_states(monkeypatch):
         *_game_object(40, "Props", [], children=(50,)),
         *_game_object(50, "Prop", [_object(52, "SkinnedMeshRenderer", m_Enabled=1)]),
     )
-    exporter = model._Exporter(graph, "ch0145")
+    exporter = chibi._Exporter(graph, "ch0145")
     exporter.visit(graph.objects[1], None, "", True)
     assert list(exporter.disabled) == [3]  # the node of Face02
 
@@ -533,7 +533,7 @@ def test_toggles_bring_in_disabled_renderers_and_drop_rest_states(monkeypatch):
             ]
         },
     }
-    decoded = model_glb.DecodedClip(
+    decoded = chibi_glb.DecodedClip(
         1.5, [0.0, 0.5, 1.0, 1.5], {0: [1.0], 1: [0.0], 2: [0.0, 0.0, 1.0, 1.0], 3: [1.0, 0.0, 0.0, 0.0]}
     )
     toggles = exporter.toggles(tt, decoded, by_hash)
@@ -560,7 +560,7 @@ def _strict(data):
 def test_glb_json_has_only_finite_numbers():
     # Saya's body material holds _CameraFadeParams = (0, inf, 0, 0)
     graph = SimpleNamespace(tree=lambda obj: obj.tree, deref=lambda obj, pointer: None)
-    exporter = model._Exporter(graph, "saya_original")
+    exporter = chibi._Exporter(graph, "saya_original")
     material = SimpleNamespace(
         assets_file=SimpleNamespace(name="CAB-A"),
         path_id=1,
@@ -582,16 +582,16 @@ def test_glb_json_has_only_finite_numbers():
     exporter.glb.json["scenes"][0]["nodes"].append(0)
     doc = _strict(exporter.glb.finish())
     extras = doc["materials"][0]["extras"]
-    assert extras["colors"]["_CameraFadeParams"] == [0.0, model_glb.FLT_MAX, 0.0, 0.0]
-    assert extras["colors"]["_Odd"] == [0.0, -model_glb.FLT_MAX, 1.0, 1.0]  # NaN becomes 0
-    assert extras["floats"] == {"_Cull": 2.0, "_Far": model_glb.FLT_MAX}
-    assert doc["nodes"][0]["translation"] == [model_glb.FLT_MAX, 0.0, 0.0]
+    assert extras["colors"]["_CameraFadeParams"] == [0.0, chibi_glb.FLT_MAX, 0.0, 0.0]
+    assert extras["colors"]["_Odd"] == [0.0, -chibi_glb.FLT_MAX, 1.0, 1.0]  # NaN becomes 0
+    assert extras["floats"] == {"_Cull": 2.0, "_Far": chibi_glb.FLT_MAX}
+    assert doc["nodes"][0]["translation"] == [chibi_glb.FLT_MAX, 0.0, 0.0]
 
 
 def test_glb_writer_rejects_what_is_not_finite(monkeypatch):
     # without the clean-up a non-finite number fails the export instead of the viewer
-    monkeypatch.setattr(model_glb, "finite_json", lambda value: value)
-    glb = model_glb.GlbWriter()
+    monkeypatch.setattr(chibi_glb, "finite_json", lambda value: value)
+    glb = chibi_glb.GlbWriter()
     glb.json["nodes"].append({"name": "root", "scale": [math.nan, 1.0, 1.0]})
     with pytest.raises(ValueError):
         glb.finish()
@@ -654,7 +654,7 @@ def test_visit_skips_disabled_and_hidden_renderers():
         *_game_object(20, "CH0189_Face01_Outline", [_object(22, "SkinnedMeshRenderer", m_Enabled=0)]),
         *_game_object(30, "Off", [_object(32, "MeshRenderer", m_Enabled=1)], active=0),
     )
-    exporter = model._Exporter(graph, "ch0189")
+    exporter = chibi._Exporter(graph, "ch0189")
     exporter.visit(graph.objects[1], None, "", True)
     assert [graph.tree(go)["m_Name"] for _, _, go in exporter.renderers] == ["CH0189_Face_Outline"]
     names = {n["name"]: n.get("extras", {}).get("hidden", False) for n in exporter.nodes}
@@ -669,42 +669,42 @@ def test_ex_only_renderers_alternative_faces_and_cut_in_bodies():
         (2, "CH0198_Face01_Outline", [("face", 1944)]),
         (3, "CH0198_Face_Outline", [("face", 1704), ("eyebrow", 318), ("eyemouth", 192)]),
     ]
-    assert model.ex_only_renderers(koyuki) == {2}
+    assert chibi.ex_only_renderers(koyuki) == {2}
     # Chiaki (ch0238): the body's small face part is not a face renderer; Face02 (no eyes) goes, Face01 stays
     chiaki = [
         (1, "CH0238_Body", [("body", 900), ("face", 96), ("eyemouth", 96)]),
         (2, "CH0238_Face01", [("face", 2652), ("eyemouth", 582)]),
         (3, "CH0238_Face02", [("face", 2700)]),
     ]
-    assert model.ex_only_renderers(chiaki) == {3}
+    assert chibi.ex_only_renderers(chiaki) == {3}
     # Hasumi (Swimsuit): the second face carries the sunglasses (another material) and no eyes
     hasumi = [
         (1, "CH0291_Face_01", [("face", 2142), ("eyebrow", 60), ("eyemouth", 591)]),
         (2, "CH0291_Face_02", [("face", 1602), ("eyebrow", 60), ("general", 300)]),
     ]
-    assert model.ex_only_renderers(hasumi) == {2}
+    assert chibi.ex_only_renderers(hasumi) == {2}
     # Neru (School): a prop drawn with the face material is not a face renderer
     neru = [
         (1, "CH0280_Prop_Outline", [("face", 216), ("eyebrow", 12)]),
         (2, "CH0280_Face_Outline", [("face", 3252), ("eyemouth", 558)]),
         (3, "CH0280_Face01_Outline", [("face", 2865)]),
     ]
-    assert model.ex_only_renderers(neru) == {3}
+    assert chibi.ex_only_renderers(neru) == {3}
     # one face (eyes in the body), or two faces and none with eyes: nothing to choose
     assert (
-        model.ex_only_renderers([(1, "Body", [("body", 900), ("eyemouth", 96)]), (2, "Face", [("face", 2112)])])
+        chibi.ex_only_renderers([(1, "Body", [("body", 900), ("eyemouth", 96)]), (2, "Face", [("face", 2112)])])
         == set()
     )
-    assert model.ex_only_renderers([(1, "Face", [("face", 2000)]), (2, "Face01", [("face", 1900)])]) == set()
+    assert chibi.ex_only_renderers([(1, "Face", [("face", 2000)]), (2, "Face01", [("face", 1900)])]) == set()
     # Shigure (Hot Spring): the cut-in copy of the body goes; a cut-in prop stays (the clips scale props away)
     shigure = [
         (1, "CH0123_CutIn_Body", [("body", 900), ("face", 1914), ("eyemouth", 978)]),
         (2, "CH0123_Body", [("body", 900), ("face", 1914), ("eyemouth", 978)]),
         (3, "CH139_Cutin_chair", [("general", 400)]),
     ]
-    assert model.ex_only_renderers(shigure) == {1}
+    assert chibi.ex_only_renderers(shigure) == {1}
     # only cut-in bodies: none of them goes
-    assert model.ex_only_renderers(shigure[:1]) == set()
+    assert chibi.ex_only_renderers(shigure[:1]) == set()
 
 
 def test_set_aside_ex_only_reads_submeshes_and_shaders(monkeypatch):
@@ -739,7 +739,7 @@ def test_set_aside_ex_only_reads_submeshes_and_shaders(monkeypatch):
             ],
         ),
     )
-    exporter = model._Exporter(graph, "ch0198")
+    exporter = chibi._Exporter(graph, "ch0198")
     exporter.visit(graph.objects[1], None, "", True)
     exporter.set_aside_ex_only()
     assert [graph.tree(go)["m_Name"] for _, _, go in exporter.renderers] == ["CH0198_Face_Outline"]
@@ -762,12 +762,12 @@ def test_set_aside_ex_only_reads_submeshes_and_shaders(monkeypatch):
     # a clip that turns it off changes nothing (hidden at rest already); one that turns it on brings it in
     assert (
         exporter.toggles(
-            tt, model_glb.DecodedClip(1.0, [0.0, 1.0], {0: [0.0]}), {zlib.crc32(b"CH0198_Face01_Outline"): 1}
+            tt, chibi_glb.DecodedClip(1.0, [0.0, 1.0], {0: [0.0]}), {zlib.crc32(b"CH0198_Face01_Outline"): 1}
         )
         == []
     )
     toggles = exporter.toggles(
-        tt, model_glb.DecodedClip(1.0, [0.0, 1.0], {0: [0.0, 1.0]}), {zlib.crc32(b"CH0198_Face01_Outline"): 1}
+        tt, chibi_glb.DecodedClip(1.0, [0.0, 1.0], {0: [0.0, 1.0]}), {zlib.crc32(b"CH0198_Face01_Outline"): 1}
     )
     gag_mesh = exporter.nodes[1]["extras"]["renderer"]
     assert (
@@ -791,7 +791,7 @@ def test_material_outline_respects_disabled_shader_passes():
             [("Hair", []), ("Hair_Alpha", ["Outline"]), ("Shadowless", ["SHADOWCASTER"])]
         )
     ]
-    exporter = model._Exporter(_Graph(shader, *mats), "ch0264")
+    exporter = chibi._Exporter(_Graph(shader, *mats), "ch0264")
     outlines = {
         m.tree["m_Name"]: exporter.glb.json["materials"][exporter.material(m)]["extras"]["outline"] for m in mats
     }
@@ -866,8 +866,8 @@ def test_model_dependency_families():
         "prologdepengroup-assets-_mx-program-animators-_mxprolog-2024-11-18_assets_all_4.bundle",
         "assets-_mx-npcs-np0024-_mxdependency-2024-11-18_000_assets_all_5.bundle",
     ):
-        assert is_model_dependency(Path(name))
-    assert not is_model_dependency(Path("uis-01_common-14_charactercollect-_mxload-2024-11-18.bundle"))
+        assert is_chibi_dependency(Path(name))
+    assert not is_chibi_dependency(Path("uis-01_common-14_charactercollect-_mxload-2024-11-18.bundle"))
 
 
 # --- GameAssets ---
@@ -889,22 +889,22 @@ def test_model_glb_is_memory_only_and_keyed_by_bundle_stamps(tmp_path, monkeypat
         "character-hoshino_original-_mxload-2024-11-18_assets_all_2.bundle",
         "character-Bad.Name-_mxload-2024-11-18_assets_all_3.bundle",
     )
-    assert game.model_cores() == {"ch0242", "hoshino_original"}
+    assert game.chibi_cores() == {"ch0242", "hoshino_original"}
     calls = []
 
     def export(graph, bundles, dev, **kwargs):
         calls.append((dev, [p.name for p in bundles], graph.index))
         return b"glTF" + bytes(len(calls))
 
-    monkeypatch.setattr(model, "export_chibi", export)
-    assert game.model_glb("CH0242") == b"glTF\0"
-    assert game.model_glb("ch0242") == b"glTF\0"
+    monkeypatch.setattr(chibi, "export_chibi", export)
+    assert game.chibi_glb("CH0242") == b"glTF\0"
+    assert game.chibi_glb("ch0242") == b"glTF\0"
     assert calls == [("ch0242", [prefab], {})]  # empty files have no CAB names
     assert not (tmp_path / "cache").exists()  # never on disk, even with consent
     os.utime(resources / prefab, ns=(1, 1))
-    assert game.model_glb("ch0242") == b"glTF\0\0"  # a changed prefab bundle exports again
+    assert game.chibi_glb("ch0242") == b"glTF\0\0"  # a changed prefab bundle exports again
     with pytest.raises(AssetNotFound):
-        game.model_glb("ch9999")
+        game.chibi_glb("ch9999")
 
 
 def test_model_glb_exports_again_when_a_bundle_it_read_changes(tmp_path, monkeypatch):
@@ -918,20 +918,20 @@ def test_model_glb_exports_again_when_a_bundle_it_read_changes(tmp_path, monkeyp
         calls.append(dev)
         return b"glTF" + bytes(len(calls))
 
-    monkeypatch.setattr(model, "export_chibi", export)
-    assert game.model_glb("ch0242") == game.model_glb("ch0242") == b"glTF\0"
+    monkeypatch.setattr(chibi, "export_chibi", export)
+    assert game.chibi_glb("ch0242") == game.chibi_glb("ch0242") == b"glTF\0"
     os.utime(resources / dependency, ns=(1, 1))  # a texture mod installed in place
-    assert game.model_glb("ch0242") == game.model_glb("ch0242") == b"glTF\0\0"
+    assert game.chibi_glb("ch0242") == game.chibi_glb("ch0242") == b"glTF\0\0"
     (resources / dependency).unlink()
-    assert game.model_glb("ch0242") == b"glTF\0\0\0"
+    assert game.chibi_glb("ch0242") == b"glTF\0\0\0"
     assert len(calls) == 3 and not (tmp_path / "cache").exists()
 
 
 def test_model_glb_cache_hit_does_not_wait_for_export_lock(tmp_path, monkeypatch):
     prefab = "character-ch0242-_mxload-2024-11-18_assets_all_1.bundle"
     game, resources = _game(tmp_path, prefab)
-    monkeypatch.setattr(model, "export_chibi", lambda *args, **_: b"glTF cached")
-    assert game.model_glb("ch0242") == b"glTF cached"
+    monkeypatch.setattr(chibi, "export_chibi", lambda *args, **_: b"glTF cached")
+    assert game.chibi_glb("ch0242") == b"glTF cached"
 
     class UnrelatedExport:
         def __enter__(self):
@@ -940,8 +940,8 @@ def test_model_glb_cache_hit_does_not_wait_for_export_lock(tmp_path, monkeypatch
         def __exit__(self, *args):
             pass
 
-    monkeypatch.setattr(model_service, "_MODEL_LOCK", UnrelatedExport())
-    assert game.model_glb("ch0242") == b"glTF cached"
+    monkeypatch.setattr(chibi_service, "_CHIBI_LOCK", UnrelatedExport())
+    assert game.chibi_glb("ch0242") == b"glTF cached"
     assert not (tmp_path / "cache").exists()
 
 
@@ -954,7 +954,7 @@ def test_model_glb_waiting_requests_reuse_the_completed_export(tmp_path, monkeyp
 
     def get(key, **kwargs):
         value = lookup(key, **kwargs)
-        if key.startswith(service._SCHEMA + "model/") and value is None and started.is_set():
+        if key.startswith(service._SCHEMA + "chibi/") and value is None and started.is_set():
             waiting.set()
         return value
 
@@ -965,12 +965,12 @@ def test_model_glb_waiting_requests_reuse_the_completed_export(tmp_path, monkeyp
         return b"glTF shared"
 
     monkeypatch.setattr(game.cache, "get", get)
-    monkeypatch.setattr(model, "export_chibi", export)
+    monkeypatch.setattr(chibi, "export_chibi", export)
     with ThreadPoolExecutor(max_workers=2) as pool:
-        first = pool.submit(game.model_glb, "ch0242")
+        first = pool.submit(game.chibi_glb, "ch0242")
         try:
             assert started.wait(5)
-            second = pool.submit(game.model_glb, "ch0242")
+            second = pool.submit(game.chibi_glb, "ch0242")
             assert waiting.wait(5)
         finally:
             release.set()
@@ -991,16 +991,16 @@ def test_model_glb_cache_detects_mtime_preserving_replacement(tmp_path, monkeypa
         calls.append(dev)
         return b"glTF" + bytes(len(calls))
 
-    monkeypatch.setattr(model, "export_chibi", export)
-    assert game.model_glb("ch0242") == b"glTF\0"
+    monkeypatch.setattr(chibi, "export_chibi", export)
+    assert game.chibi_glb("ch0242") == b"glTF\0"
     path = resources / (prefab if changed == "prefab" else dependency)
     before = path.stat()
     replacement = resources / "replacement"
     replacement.write_bytes(b"")
     os.utime(replacement, ns=(before.st_atime_ns, before.st_mtime_ns))
     replacement.replace(path)
-    assert game.model_glb("ch0242") == b"glTF\0\0"
-    assert game.model_glb("ch0242") == b"glTF\0\0"
+    assert game.chibi_glb("ch0242") == b"glTF\0\0"
+    assert game.chibi_glb("ch0242") == b"glTF\0\0"
     assert len(calls) == 2
     assert not (tmp_path / "cache").exists()
 
@@ -1029,7 +1029,7 @@ def test_model_graph_falls_back_to_every_bundle_once(tmp_path):
 
         return nullcontext(Env())
 
-    graph = model.BundleGraph(
+    graph = chibi.BundleGraph(
         {}, fallback=lambda: asked.append(1) or {"cab-b": str(tmp_path / "b.bundle")}, opener=opener
     )
     owner = SimpleNamespace(
@@ -1047,38 +1047,40 @@ def test_model_graph_falls_back_to_every_bundle_once(tmp_path):
 
 def test_model_core_candidates():
     cores = {"hoshino_original", "ch0258_02", "ch0076", "ch0242", "ch0242_original"}
-    assert model_core("ch0242", [], cores) == "ch0242"  # the key itself first
-    assert model_core("hoshino", [], cores) == "hoshino_original"
-    assert model_core("ch0258", ["CH0258_02", "hoshino_battle_tank"], cores) == "ch0258_02"
-    assert model_core("erika", ["ch0076"], cores) == "ch0076"
-    assert model_core("tsumugi", ["ch0252"], cores) is None
+    assert chibi_core("ch0242", [], cores) == "ch0242"  # the key itself first
+    assert chibi_core("hoshino", [], cores) == "hoshino_original"
+    assert chibi_core("ch0258", ["CH0258_02", "hoshino_battle_tank"], cores) == "ch0258_02"
+    assert chibi_core("erika", ["ch0076"], cores) == "ch0076"
+    assert chibi_core("tsumugi", ["ch0252"], cores) is None
 
 
 class ModelGame:
-    def __init__(self, models=None):
-        self.models = models
+    def __init__(self, chibis=None):
+        self.chibis = chibis
 
     def spine_cores(self, kind):
-        return {"spr": {k + "_spr": [] for k in ("hoshino", "ch0010", "ch0020", "np0001")}, "lobby": {}}[kind]
+        return {"portrait": {k + "_spr": [] for k in ("hoshino", "ch0010", "ch0020", "np0001")}, "memorialLobby": {}}[
+            kind
+        ]
 
     def collection_names(self):
         return {"bg": [], "portrait": []}
 
-    def model_cores(self):
-        return set(self.models)
+    def chibi_cores(self):
+        return set(self.chibis)
 
 
 def test_catalog_variant_model_mapping():
     game = ModelGame({"hoshino_original", "hoshino_swimsuit_original", "np0001"})
     catalog = Catalog(game, FIXTURES / "characters.csv", FIXTURES / "catalog.json")
-    assert catalog.variant("hoshino").model == "hoshino_original"
-    assert catalog.variant("ch0010").model == "hoshino_swimsuit_original"  # through its dev alias
-    assert catalog.variant("ch0020").model is None
-    assert catalog.variant("np0001").model == "np0001"
-    assert catalog.variant("hoshino").to_json()["model"] == "hoshino_original"
+    assert catalog.alt("hoshino").chibi == "hoshino_original"
+    assert catalog.alt("ch0010").chibi == "hoshino_swimsuit_original"  # through its dev alias
+    assert catalog.alt("ch0020").chibi is None
+    assert catalog.alt("np0001").chibi == "np0001"
+    assert catalog.alt("hoshino").to_json()["chibi"] == "hoshino_original"
     # a game source without models (fakes without models, no install): no model anywhere
     plain = SimpleNamespace(spine_cores=game.spine_cores, collection_names=game.collection_names)
-    assert Catalog(plain, None, FIXTURES / "catalog.json").variant("hoshino").model is None
+    assert Catalog(plain, None, FIXTURES / "catalog.json").alt("hoshino").chibi is None
 
 
 # --- a local install (read only) ---
@@ -1105,7 +1107,7 @@ def test_real_halo_particles(tmp_path):
     }
     want["ch0294"] = want["ch0069"]
     for core, names in want.items():
-        doc = _strict(game.model_glb(core))
+        doc = _strict(game.chibi_glb(core))
         fx = doc["extras"]["haloFx"]
         assert [s["name"] for s in fx["systems"]] == names, core
         follower = doc["extras"]["haloFollower"]["node"]
@@ -1129,7 +1131,7 @@ def test_real_halo_particles(tmp_path):
             ring = next(s for s in fx["systems"] if s["name"] == "trail1")
             assert ring["renderer"]["mode"] == 4 and ring["renderer"]["mesh"] in fx["meshes"]
             assert fx["materials"][ring["material"]]["shader"] == "DSFX/FX_SHADER_AlphaBlend_Add_Mask_0_MXChar"
-    assert "haloFx" not in _strict(game.model_glb("hoshino_original"))["extras"]
+    assert "haloFx" not in _strict(game.chibi_glb("hoshino_original"))["extras"]
 
 
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
@@ -1145,7 +1147,7 @@ def test_real_retreat_clip_per_model(tmp_path):
         "hanae_original": (None, ()),
     }
     for core, (clip, more) in expected.items():
-        doc = _strict(game.model_glb(core))
+        doc = _strict(game.chibi_glb(core))
         anims = {a["extras"]["slot"]: a for a in doc["animations"]}
         listed = doc["extras"]["clips"]
         if clip is None:
@@ -1158,8 +1160,8 @@ def test_real_retreat_clip_per_model(tmp_path):
 @pytest.mark.skipif(not GAME_DIR.is_dir(), reason="No local game install")
 def test_real_chibi_exports(tmp_path):
     game = GameAssets(get_search_dirs(GAME_DIR), AssetCache(root=tmp_path / "cache", allowed=True))
-    assert {"hoshino_original", "ch0242"} <= game.model_cores()
-    data = game.model_glb("hoshino_original")
+    assert {"hoshino_original", "ch0242"} <= game.chibi_cores()
+    data = game.chibi_glb("hoshino_original")
     assert data[:4] == b"glTF" and struct.unpack_from("<I", data, 8)[0] == len(data)
     doc = _strict(data)
     assert doc["extras"]["prefab"] == "Echelon_Hoshino_Original" and "haloFollower" in doc["extras"]
@@ -1186,20 +1188,20 @@ def test_real_chibi_exports(tmp_path):
     assert masks and all("mask" in n.lower() or "spec" in n.lower() or "green" in n.lower() for n in masks)
     assert all(doc["samplers"][t["sampler"]]["minFilter"] in (9728, 9729) for t in doc["textures"])
     drawn = lambda doc: {n["name"] for n in doc["nodes"] if "mesh" in n}  # noqa: E731
-    if "ch0145" in game.model_cores():  # Miyu: every clip turns her expression face off, so it is never drawn
-        miyu = _strict(game.model_glb("ch0145"))
+    if "ch0145" in game.chibi_cores():  # Miyu: every clip turns her expression face off, so it is never drawn
+        miyu = _strict(game.chibi_glb("ch0145"))
         idle = next(a for a in miyu["animations"] if a["extras"]["slot"] == "Formation_Idle")
         assert "toggles" not in idle["extras"]
         assert "CH0145_Face_Outline_mesh" in drawn(miyu) and "CH0145_Face01_Outline_mesh" not in drawn(miyu)
-    if "ch0198" in game.model_cores():  # Koyuki: no clip switches her faces; the gag face is left out
-        koyuki = drawn(_strict(game.model_glb("ch0198")))
+    if "ch0198" in game.chibi_cores():  # Koyuki: no clip switches her faces; the gag face is left out
+        koyuki = drawn(_strict(game.chibi_glb("ch0198")))
         assert "CH0198_Face_Outline_mesh" in koyuki and "CH0198_Face01_Outline_mesh" not in koyuki
-    if "saya_original" in game.model_cores():  # an infinite material constant
+    if "saya_original" in game.chibi_cores():  # an infinite material constant
         fade = [
             m["extras"]["colors"].get("_CameraFadeParams")
-            for m in _strict(game.model_glb("saya_original"))["materials"]
+            for m in _strict(game.chibi_glb("saya_original"))["materials"]
         ]
-        assert [0.0, model_glb.FLT_MAX, 0.0, 0.0] in fade
+        assert [0.0, chibi_glb.FLT_MAX, 0.0, 0.0] in fade
     assert not (tmp_path / "cache").exists()
 
 
@@ -1215,8 +1217,8 @@ def test_model_preview_overrides_the_prefab_root_as_well_as_dependencies(tmp_pat
         calls.append((list(bundles), graph.index["cab-mod"]))
         return b"glTF preview"
 
-    monkeypatch.setattr(model, "export_chibi", export)
-    assert game.model_glb("ch0242", overrides=[upload]) == b"glTF preview"
+    monkeypatch.setattr(chibi, "export_chibi", export)
+    assert game.chibi_glb("ch0242", overrides=[upload]) == b"glTF preview"
     assert calls == [([upload], str(upload))]
 
 
@@ -1245,14 +1247,14 @@ def test_model_preview_reads_the_files_outside_its_source_by_its_rule(tmp_path, 
             lambda path: path.resolve().is_relative_to(tmp_path / "library"),
         )
 
-    monkeypatch.setattr(model, "export_chibi", export)
-    assert game.model_glb("ch0242", reads=rule("official", texture)) == b"glTF\x01"
+    monkeypatch.setattr(chibi, "export_chibi", export)
+    assert game.chibi_glb("ch0242", reads=rule("official", texture)) == b"glTF\x01"
     assert seen[-1] == ([str(resources / prefab)], {"cab-tex": str(kept / texture)})
-    assert game.model_glb("ch0242", reads=rule("official", texture)) == b"glTF\x01"  # its rule's export, cached
-    assert game.model_glb("ch0242", reads=rule("configured:a", texture)) == b"glTF\x02"  # another rule
-    assert game.model_glb("ch0242", reads=rule("prefab", prefab)) == b"glTF\x03"
+    assert game.chibi_glb("ch0242", reads=rule("official", texture)) == b"glTF\x01"  # its rule's export, cached
+    assert game.chibi_glb("ch0242", reads=rule("configured:a", texture)) == b"glTF\x02"  # another rule
+    assert game.chibi_glb("ch0242", reads=rule("prefab", prefab)) == b"glTF\x03"
     assert seen[-1][0] == [str(kept / prefab)]  # an unsupplied prefab bundle is read by the rule as well
-    assert game.model_glb("ch0242") == b"glTF\x04"  # live: the game folder as it is
+    assert game.chibi_glb("ch0242") == b"glTF\x04"  # live: the game folder as it is
     assert seen[-1] == ([str(resources / prefab)], {"cab-tex": str(resources / texture)})
     assert not (tmp_path / "cache").exists()
 
@@ -1272,16 +1274,16 @@ def test_npc_prefab_picks_the_ids_prefab_with_a_halo_then_by_name():
         "field_npc_erika_original_nonweapon",
         "field_player_np0009",
     ]
-    assert model.npc_prefab(stems, "np0143") == "field_npc_np0143_ar_weapon"
-    assert model.npc_prefab(stems, "NP0060") == "field_npc_np0060_justice_student"
-    assert model.npc_prefab(stems, "ch0171") == "field_npc_ch0171_nonweapon"  # its _NoHalo copy last
-    assert model.npc_prefab(["field_npc_ch0171_nonweapon_nohalo"], "ch0171") == "field_npc_ch0171_nonweapon_nohalo"
-    assert model.npc_prefab(stems, "np0009") is None  # a field player is not an NPC prefab
-    assert model.npc_prefab(stems, "erika") is None  # only ids name NPC prefabs
+    assert chibi.npc_prefab(stems, "np0143") == "field_npc_np0143_ar_weapon"
+    assert chibi.npc_prefab(stems, "NP0060") == "field_npc_np0060_justice_student"
+    assert chibi.npc_prefab(stems, "ch0171") == "field_npc_ch0171_nonweapon"  # its _NoHalo copy last
+    assert chibi.npc_prefab(["field_npc_ch0171_nonweapon_nohalo"], "ch0171") == "field_npc_ch0171_nonweapon_nohalo"
+    assert chibi.npc_prefab(stems, "np0009") is None  # a field player is not an NPC prefab
+    assert chibi.npc_prefab(stems, "erika") is None  # only ids name NPC prefabs
 
 
 def test_own_bundles_and_the_parts_that_can_hold_a_root():
-    from bmpt.gameassets.discovery import may_hold_model_root, own_bundle
+    from bmpt.gameassets.discovery import may_hold_chibi_root, own_bundle
 
     assert own_bundle("assets-_mx-npcs-np0206-_mxdependency-2025-07-25_001_assets_all_1.bundle", "NP0206")
     assert own_bundle("assets-_mx-characters-np0269-_mxdependency-meshes-2026-04-06_assets_all_2.bundle", "np0269")
@@ -1290,10 +1292,10 @@ def test_own_bundles_and_the_parts_that_can_hold_a_root():
     assert not own_bundle(
         "assets-_mx-spinecharacters-np0206_spr-_mxdependency-2025-07-25_000_assets_all_5.bundle", "np0206"
     )
-    assert may_hold_model_root("assets-_mx-npcs-arona-_mxdependency-meshes-2026-07-02_assets_all_6.bundle")
-    assert may_hold_model_root("assets-_mx-npcs-np0206-_mxdependency-2025-07-25_001_assets_all_7.bundle")
+    assert may_hold_chibi_root("assets-_mx-npcs-arona-_mxdependency-meshes-2026-07-02_assets_all_6.bundle")
+    assert may_hold_chibi_root("assets-_mx-npcs-np0206-_mxdependency-2025-07-25_001_assets_all_7.bundle")
     for part in ("textures", "materials", "audio", "textassets"):
-        assert not may_hold_model_root(f"assets-_mx-npcs-arona-_mxdependency-{part}-2026-07-02_assets_all_8.bundle")
+        assert not may_hold_chibi_root(f"assets-_mx-npcs-arona-_mxdependency-{part}-2026-07-02_assets_all_8.bundle")
 
 
 class _AssetGraph(_Graph):
@@ -1362,16 +1364,16 @@ def test_asset_root_prefers_a_prefab_with_an_animator_then_the_most_renderers():
         *gacha_part,
         *empty,
     )
-    root, name = model.asset_root(graph, [Path(a), Path(b), Path(other)])
+    root, name = chibi.asset_root(graph, [Path(a), Path(b), Path(other)])
     # two prefabs with an Animator: the one with more renderers; the imported model and the empty prefab lose
     assert (root.path_id, name) == (30, "Assets/_MX/NPCs/Arona/Arona_Original_Gacha.prefab")
-    root, _ = model.asset_root(graph, [Path(a)])
+    root, _ = chibi.asset_root(graph, [Path(a)])
     assert root.path_id == 1  # a child entry of the imported model is never a root
     # with a dev name only the character's own bundles count
     graph.added.clear()
-    assert model.asset_root(graph, [Path(b), Path(other)], "np0206") is None
+    assert chibi.asset_root(graph, [Path(b), Path(other)], "np0206") is None
     assert graph.added == [other]
-    assert model.asset_root(graph, [], "arona") is None
+    assert chibi.asset_root(graph, [], "arona") is None
 
 
 def test_bound_clips_keep_the_clips_that_move_the_model_most_bound_first():
@@ -1394,7 +1396,7 @@ def test_bound_clips_keep_the_clips_that_move_the_model_most_bound_first():
         clip(3, "Unrelated_Idle", ["Elsewhere"]),
         clip(4, "Arona_Other_Idle", bones, cab="CAB-B"),
     )
-    exporter = model._Exporter(graph, "arona")
+    exporter = chibi._Exporter(graph, "arona")
     exporter.path_of = {0: "", **{i + 1: path for i, path in enumerate(bones)}}
     chosen = exporter.bound_clips(graph, [Path("own.bundle")])
     assert [c.peek_name() for c in chosen] == ["Arona_Original_AroPla_Cacha_02_Idle", "Arona_Original_Sack_Idle"]
@@ -1414,15 +1416,15 @@ def test_model_root_takes_prefab_kinds_then_a_field_npc_then_an_own_model(monkey
         "field_npc_np0143_sr_weapon": SimpleNamespace(deref=lambda: npc_sr),
         "field_npc_np0143_ar_weapon": SimpleNamespace(deref=lambda: npc_ar),
     }
-    monkeypatch.setattr(model, "_prefabs", lambda graph, bundles: prefabs)
+    monkeypatch.setattr(chibi, "_prefabs", lambda graph, bundles: prefabs)
     own = object()
-    monkeypatch.setattr(model, "asset_root", lambda graph, bundles, dev: (own, "x.prefab") if dev == "np0206" else None)
+    monkeypatch.setattr(chibi, "asset_root", lambda graph, bundles, dev: (own, "x.prefab") if dev == "np0206" else None)
     graph = SimpleNamespace(tree=lambda obj: {"m_Name": "NP0206_Mesh"})
-    assert model.model_root(graph, [], "np0009")[1:] == ("Field_Player_NP0009", "field")
-    assert model.model_root(graph, [], "np0143") == (npc_ar, "Field_NPC_NP0143_AR_Weapon", "npc")
-    assert model.model_root(graph, [], "np0206") == (own, "NP0206_Mesh", "asset")
+    assert chibi.chibi_root(graph, [], "np0009")[1:] == ("Field_Player_NP0009", "field")
+    assert chibi.chibi_root(graph, [], "np0143") == (npc_ar, "Field_NPC_NP0143_AR_Weapon", "npc")
+    assert chibi.chibi_root(graph, [], "np0206") == (own, "NP0206_Mesh", "asset")
     with pytest.raises(AssetNotFound):
-        model.model_root(graph, [], "np9999")
+        chibi.chibi_root(graph, [], "np9999")
 
 
 def test_field_index_holds_field_npcs_by_id(tmp_path, monkeypatch):
@@ -1454,8 +1456,8 @@ def test_field_index_holds_field_npcs_by_id(tmp_path, monkeypatch):
         def __exit__(self, *exc):
             return False
 
-    monkeypatch.setattr(model_service, "open_bundle", Env)
-    assert game.field_model_cores() == {"np0009", "np0143", "ch0171"}
+    monkeypatch.setattr(chibi_service, "open_bundle", Env)
+    assert game.field_chibi_cores() == {"np0009", "np0143", "ch0171"}
     assert [Path(p).name for p in game._field_index()["np0143"]] == [first, second]
 
 
@@ -1468,13 +1470,13 @@ def test_own_models_are_read_once_per_name_and_exported_from_their_bundles(tmp_p
     game, resources = _game(tmp_path, *names)
     reads = []
 
-    def own_model(self, core, paths):
+    def own_chibi(self, core, paths):
         reads.append((core, sorted(Path(p).name for p in paths)))
         return [paths[1]] if core == "np0206" else None
 
-    monkeypatch.setattr(GameAssets, "_asset_model", own_model)
-    assert game.asset_model_cores({"np0206", "NP0269", "np0999"}) == {"np0206"}
-    assert game.asset_model_cores({"np0206", "np0269"}) == {"np0206"}
+    monkeypatch.setattr(GameAssets, "_asset_chibi", own_chibi)
+    assert game.asset_chibi_cores({"np0206", "NP0269", "np0999"}) == {"np0206"}
+    assert game.asset_chibi_cores({"np0206", "np0269"}) == {"np0206"}
     # read once each, and only the names with bundles of their own
     assert reads == [("np0206", names[:2]), ("np0269", names[2:])]
     exported = []
@@ -1483,22 +1485,22 @@ def test_own_models_are_read_once_per_name_and_exported_from_their_bundles(tmp_p
         exported.append((dev, [p.name for p in bundles]))
         return b"glTF"
 
-    monkeypatch.setattr(model, "export_chibi", export)
-    assert game.model_glb("np0206") == b"glTF"
+    monkeypatch.setattr(chibi, "export_chibi", export)
+    assert game.chibi_glb("np0206") == b"glTF"
     assert exported == [("np0206", [names[1]])]
     with pytest.raises(AssetNotFound):
-        game.model_glb("np0269")
+        game.chibi_glb("np0269")
 
 
 class NoSlotGame(ModelGame):
-    def __init__(self, models, fields, owned):
-        super().__init__(models)
+    def __init__(self, chibis, fields, owned):
+        super().__init__(chibis)
         self.fields, self.owned, self.asked = fields, owned, []
 
-    def field_model_cores(self):
+    def field_chibi_cores(self):
         return set(self.fields)
 
-    def asset_model_cores(self, candidates):
+    def asset_chibi_cores(self, candidates):
         self.asked.append(set(candidates))
         return set(self.owned) & set(candidates)
 
@@ -1506,10 +1508,10 @@ class NoSlotGame(ModelGame):
 def test_catalog_gives_a_variant_with_no_model_its_own_one():
     game = NoSlotGame({"hoshino_original"}, {"np0001"}, {"ch0020", "ch0010"})
     catalog = Catalog(game, FIXTURES / "characters.csv", FIXTURES / "catalog.json")
-    assert (catalog.variant("hoshino").model, catalog.variant("hoshino").field_model) == ("hoshino_original", None)
-    assert (catalog.variant("np0001").model, catalog.variant("np0001").field_model) == (None, "np0001")
+    assert (catalog.alt("hoshino").chibi, catalog.alt("hoshino").field_chibi) == ("hoshino_original", None)
+    assert (catalog.alt("np0001").chibi, catalog.alt("np0001").field_chibi) == (None, "np0001")
     # a model of the variant's own bundles is its slot: a mod of those bundles applies there
-    assert (catalog.variant("ch0020").model, catalog.variant("ch0020").field_model) == ("ch0020", None)
+    assert (catalog.alt("ch0020").chibi, catalog.alt("ch0020").field_chibi) == ("ch0020", None)
     # asked once, for the variants with neither a character nor a field model only
     assert len(game.asked) == 1 and "ch0020" in game.asked[0] and not {"hoshino", "np0001"} & game.asked[0]
-    assert catalog.variant("ch0020").to_json()["model"] == "ch0020"
+    assert catalog.alt("ch0020").to_json()["chibi"] == "ch0020"

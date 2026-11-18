@@ -1,5 +1,5 @@
-// The list popups' toolbar (every list popup is class L): the student roster's toolbar fitted by its own steps
-// (roster-widgets.js toolbarFit), the three segments, search, sort and order, without a checkbox (Switch 3D Model's
+// The list popups' toolbar (every list popup is class L): the student list's toolbar fitted by its own steps
+// (student-list-widgets.js toolbarFit), the three segments, search, sort and order, without a checkbox (Switch Chibi's
 // "Show other students" stands under the details; the toolbar has no room for it at this width), in every shipped
 // language, longest first (English, Thai), against the locale files' real strings. Text is measured on the fit tests'
 // stand-in canvas (helpers/fit_canvas.mjs): the logic is asserted, not a font.
@@ -28,7 +28,7 @@ const SEGMENTS = ["seg.all", "seg.recruit", "seg.noRecruit"],
 const ORDER = [...LOCALES].sort(
   (a, b) => (a === "en-US" ? -2 : a === "th-TH" ? -1 : 0) - (b === "en-US" ? -2 : b === "th-TH" ? -1 : 0),
 );
-const list = Popup.listLayout(false, "model").list,
+const list = Popup.listLayout(false, "chibi").list,
   RIGHT = list.r - SPACE.m,
   LEFT = list.l + SPACE.m;
 function layoutFor(locale, sortKey = "sort.default") {
@@ -45,7 +45,7 @@ for (const locale of ORDER)
       assert.equal(
         lay.fits,
         true,
-        `${locale}: the segments stand after the list's left edge (steps down to the roster's last)`,
+        `${locale}: the segments stand after the list's left edge (steps down to the student list's last)`,
       );
       // segments at the list's left padding, search, sort, order at its right: at least SPACE.l
       // between the groups and SPACE.m among the tools
@@ -121,19 +121,19 @@ const WORDING = {
   "th-TH": "แสดงนักเรียนคนอื่น",
 };
 for (const locale of LOCALES)
-  test(`model.showOthers is in ${locale} with the agreed wording`, () => {
-    assert.equal(text(locale, "model.showOthers"), WORDING[locale]);
+  test(`chibi.showOthers is in ${locale} with the agreed wording`, () => {
+    assert.equal(text(locale, "chibi.showOthers"), WORDING[locale]);
     assert.equal(Object.keys(WORDING).length, LOCALES.length);
   });
 
 // a list card's bottom row: the tag (Optimized) from the corner or after the recruit icon, on one line, never under the
-// pin or past the card, in every shipped language on the 3D model card
+// pin or past the card, in every shipped language on the chibi card
 for (const locale of ORDER)
   test(`a card's tags stand in one row after the recruit icon in ${locale}`, () => {
     setStrings(locale, Object.fromEntries(flat(webui(locale))));
     document.documentElement.lang = locale;
-    const { w } = Popup.listLayout(false, "model").card;
-    const tag = { text: webui(locale).model.optimized };
+    const { w } = Popup.listLayout(false, "chibi").card;
+    const tag = { text: webui(locale).chibi.optimized };
     for (const it of [{ tag }, { tag, recruit: true }, { tag, fav: true }]) {
       const row = Popup.tagRow(it, w),
         texts = row.map((t) => t.mark.text);

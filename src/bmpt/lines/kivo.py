@@ -2,7 +2,7 @@
 
 The game's own text tables are encrypted, so the lines shown with a memorial lobby come from Kivo's student pages:
 each voice entry is named after the game's voice clip (e.g. ``Hoshino_MemorialLobby_1.ogg``), the same name the
-lobby skeleton's talk animations carry as Spine events. Nothing read here is written to disk.
+memorial lobby skeleton's talk animations carry as Spine events. Nothing read here is written to disk.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def _one_line(text: str | None) -> str:
     return re.sub(r"(?<=[^\x00-\x7f])[ \u3000]+(?=[^\x00-\x7f])", "", text)
 
 
-def lobby_lines(page: dict[str, Any]) -> dict[str, dict[str, str]]:
+def memorial_lobby_lines(page: dict[str, Any]) -> dict[str, dict[str, str]]:
     """Collect the memorial lobby lines of a Kivo student page.
 
     Thai text comes from the Global table; Kivo supplies no Thai dialogue fallback.
@@ -107,7 +107,7 @@ class Kivo:
             page_id: Kivo's numeric student page id.
 
         Returns:
-            The lines as ``lobby_lines`` gives them.
+            The lines as ``memorial_lobby_lines`` gives them.
 
         Raises:
             ServiceError: ``lines_unavailable`` for an id that is not a number, or a page that could not be fetched
@@ -124,7 +124,7 @@ class Kivo:
         except Exception as e:  # offline, HTTP errors, bad JSON
             logger.info("Kivo page %s unavailable: %s", page_id, e)
             raise ServiceError("lines_unavailable") from e
-        lines = lobby_lines(data.get("data", data) if isinstance(data, dict) else {})
+        lines = memorial_lobby_lines(data.get("data", data) if isinstance(data, dict) else {})
         with self._lock:
             self._pages[page_id] = lines
         return lines

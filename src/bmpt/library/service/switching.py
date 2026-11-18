@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..records import stored_target
+
 import logging
 import time
 from dataclasses import replace
@@ -25,11 +27,11 @@ from ..rebuild import rebuild
 from .. import targets as resolver
 from ..judge import (
     core_of,
-    kind_of_file,
+    resource_type_of_file,
 )
-from ..models import (
+from ..records import (
     ApplyResult,
-    Kind,
+    ResourceType,
     Pin,
 )
 from ..storage import atomic_copy
@@ -72,7 +74,7 @@ class SwitchingMixin:
                     target: sources[target.name] if target.name in sources else self._official_or_current(target, pin)
                     for target in targets
                 }
-        if record["kind"] == "other":
+        if record["resource_type"] == "other":
             resolution = self._resolve(sources, targets, pin, older=stale)
             more_stale = self._stale_sources(resolution.current, pin, targets=targets)
             if more_stale:
@@ -110,7 +112,7 @@ class SwitchingMixin:
                     continue
                 matching = resolver.same_prefix(sources, target)
                 if not matching:
-                    raise ServiceError("mod_target_mismatch", id=record["id"], variant=core_of(target.name))
+                    raise ServiceError("mod_target_mismatch", id=record["id"], alt=core_of(target.name))
                 result = rebuild(
                     matching,
                     [original],
@@ -194,11 +196,11 @@ class SwitchingMixin:
     @_serialized
     def apply(
         self,
-        variant_key: str,
+        alt_id: str,
         source: str,
         log: LogFunc = no_log,
         progress: ProgressCallback | None = None,
-        kind: Kind | None = "spr",
+        resource_type: ResourceType | None = "portrait",
         pin: Pin | None = None,
         *,
         create_backup: bool = False,
@@ -206,18 +208,19 @@ class SwitchingMixin:
     ) -> ApplyResult:
         """Install and configure a source choice, deferring writes while mods are off.
 
-        A mod replaces its whole kind; a same-family variant's mod can be adapted to
+        A mod replaces its whole kind; another alt's mod from the same student can be adapted to
         official targets. The validated choice is saved before installation. A memorial lobby camera
-        (``lobby_camera``) is a lobby choice: its source's art and its own prefab; any other lobby choice puts the
-        variant's prefab back to its base.
+        (``memorial_lobby_camera``) is a memorial lobby choice: its source's art and its own prefab; any other
+        memorial lobby choice puts the
+        alt's prefab back to its base.
 
         Args:
-            variant_key: Destination variant key, or generic other:/other-set: target for kind other.
-            source: official, mod:<id>, or variant:<key>; a model variant source fits its costume.
+            alt_id: Destination alt key, or generic other:/other-set: target for kind other.
+            source: official, mod:<id>, or alt:<key>; a chibi alt source fits its costume.
             log: Receives user-facing operation messages.
             progress: Receives apply progress; None disables reporting.
-            kind: Slot kind; None selects all kinds for official, a mod's own kind, or both Spine kinds
-                for variant adaptation.
+            resource_type: Slot kind; None selects all kinds for official, a mod's own kind, or both Spine kinds
+                for alt adaptation.
             pin: Game install and server the operation is fixed to; None uses the current install.
             create_backup: Whether game writes also create classic adjacent backups.
             fraction: Costume-build fraction callback overriding progress for the build;
@@ -230,60 +233,62 @@ class SwitchingMixin:
             ServiceError: A source or target is unsupported, a required original is missing,
                 confirmation is required, or protected game writes are refused.
         """
-        from .. import lobby_camera
+        from .. import memorial_lobby_camera
 
-        camera = lobby_camera.camera_of(self, source) if kind == "lobby" else None
+        camera = memorial_lobby_camera.camera_of(self, source) if resource_type == "memorialLobby" else None
         if source != "official":
-            self._untested_apply(variant_key, source, kind, self._current(pin), camera)
+            self._untested_apply(alt_id, source, resource_type, self._current(pin), camera)
         if camera is not None:
-            return lobby_camera.apply(self, variant_key, camera, log, progress, self._current(pin), create_backup)
+            return memorial_lobby_camera.apply(self, alt_id, camera, log, progress, self._current(pin), create_backup)
         result = self._apply_choice(
-            variant_key, source, log, progress, kind, pin, create_backup=create_backup, fraction=fraction
+            alt_id, source, log, progress, resource_type, pin, create_backup=create_backup, fraction=fraction
         )
-        if kind in ("lobby", None) and lobby_camera.cameras(self, variant_key):
-            lobby_camera.release(self, variant_key, self._current(pin), log, progress)
+        if resource_type in ("memorialLobby", None) and memorial_lobby_camera.cameras(self, alt_id):
+            memorial_lobby_camera.release(self, alt_id, self._current(pin), log, progress)
         return result
 
     def _apply_choice(
         self,
-        variant_key: str,
+        alt_id: str,
         source: str,
         log: LogFunc = no_log,
         progress: ProgressCallback | None = None,
-        kind: Kind | None = "spr",
+        resource_type: ResourceType | None = "portrait",
         pin: Pin | None = None,
         *,
         create_backup: bool = False,
         fraction: Callable[[float], None] | None = None,
     ) -> ApplyResult:
-        """Install and configure one kind from a mod, variant, or originals.
+        """Install and configure one kind from a mod, alt, or originals.
 
-        None selects all kinds for originals, and both Spine kinds for variant adaptation.
+        None selects all kinds for originals, and both Spine kinds for alt adaptation.
 
-        A mod replaces all parts of its own kind as a unit. Another variant's mod must belong to the same family and
+        A mod replaces all parts of its own kind as a unit. Another alt's mod must belong to the same student and
         is adapted to official targets. While mods are off nothing is written: the source is configured and applied
         when mods are on (``deferred``). Save the validated choice before attempting installation.
         """
         if source == "official":
             pin = self._current(pin)
             if not profiles_mod.enabled(self.profiles.read()):
-                targets = self._game_files(variant_key, kind, pin)
-                kinds = {
-                    (core_of(path.name) if kind == "other" else kind_of_file(path.name)): core_of(path.name)
+                targets = self._game_files(alt_id, resource_type, pin)
+                resource_types = {
+                    (core_of(path.name) if resource_type == "other" else resource_type_of_file(path.name)): core_of(
+                        path.name
+                    )
                     for path in targets
                 }
-                return self._defer(pin, variant_key, kinds, None)
-            return self._restore(variant_key, log, kind, pin=pin)
-        if kind == "other":
-            return self._apply_other(variant_key, source, log, progress, self._current(pin), create_backup)
-        variant = self._variant(variant_key)
+                return self._defer(pin, alt_id, resource_types, None)
+            return self._restore(alt_id, log, resource_type, pin=pin)
+        if resource_type == "other":
+            return self._apply_other(alt_id, source, log, progress, self._current(pin), create_backup)
+        alt = self._alt(alt_id)
         pin = self._current(pin)
         on = profiles_mod.enabled(self.profiles.read())
         started = time.perf_counter()
-        kinds = {}
+        resource_types = {}
         kept_current: list[str] = []
         incomplete = False
-        change = _ChoiceChange(self, pin, variant_key, source)
+        change = _ChoiceChange(self, pin, alt_id, source)
         try:
             if on:
                 self._check_stopping(pin)
@@ -292,38 +297,40 @@ class SwitchingMixin:
                 build_keys: dict[Path, str] = {}
                 if source.startswith("mod:"):
                     record = self._record(source[4:])
-                    target_variant = self._target_of(record)
-                    if (kind is not None and record["kind"] != kind) or (
-                        self._variant(target_variant).family != variant.family
+                    target_alt = self._target_of(record)
+                    if (resource_type is not None and record["resource_type"] != resource_type) or (
+                        self._alt(target_alt).student != alt.student
                     ):
-                        raise ServiceError("mod_target_mismatch", id=record["id"], variant=variant_key)
-                    targets = self._game_files(variant_key, record["kind"], pin)
+                        raise ServiceError("mod_target_mismatch", id=record["id"], alt=alt_id)
+                    targets = self._game_files(alt_id, record["resource_type"], pin)
                     if not targets:
-                        raise ServiceError("game_file_not_found", variant=variant_key)
+                        raise ServiceError("game_file_not_found", alt=alt_id)
                     cores = [
-                        getattr(variant, "model").lower() if record["kind"] == "model" else core_of(targets[0].name)
+                        getattr(alt, "chibi").lower()
+                        if record["resource_type"] == "chibi"
+                        else core_of(targets[0].name)
                     ]
-                    own_model = record["kind"] == "model" and all(
+                    own_chibi = record["resource_type"] == "chibi" and all(
                         core_of(name) in self._core_map(pin).slot_cores(cores[0]) for name in record["files"]
                     )
-                    if (record["kind"] == "model" and not own_model) or (
-                        record["kind"] == "lobby" and core_of(record["files"][0]) != cores[0]
+                    if (record["resource_type"] == "chibi" and not own_chibi) or (
+                        record["resource_type"] == "memorialLobby" and core_of(record["files"][0]) != cores[0]
                     ):
-                        raise ServiceError("mod_target_mismatch", id=record["id"], variant=variant_key)
+                        raise ServiceError("mod_target_mismatch", id=record["id"], alt=alt_id)
                     if not on:
-                        return self._defer(pin, variant_key, {record["kind"]: cores[0]}, source)
-                    kinds = {record["kind"]: cores[0]}
+                        return self._defer(pin, alt_id, {record["resource_type"]: cores[0]}, source)
+                    resource_types = {record["resource_type"]: cores[0]}
                     incomplete = self._incomplete(record, pin)
-                    change.configure(kinds)
-                    if own_model or core_of(record["files"][0]) == cores[0]:
+                    change.configure(resource_types)
+                    if own_chibi or core_of(record["files"][0]) == cores[0]:
                         view = self._view([pin], "full")
                         entry = view.entry(pin, cores[0])
                         identity = self._identity({path.name: path for path in self._paths(record)})
                         if entry.carried == source and self._matches_installed(identity, entry):
                             self._note_judged(view, entry)
-                            change.configure({record["kind"]: cores[0]})
-                            self._selection_error(pin, kinds.values(), None)
-                            return ApplyResult(variant_key, source, [], unchanged=True, incomplete=incomplete)
+                            change.configure({record["resource_type"]: cores[0]})
+                            self._selection_error(pin, resource_types.values(), None)
+                            return ApplyResult(alt_id, source, [], unchanged=True, incomplete=incomplete)
                         replacements = self._cached_build(
                             self._paths(record),
                             targets,
@@ -331,63 +338,63 @@ class SwitchingMixin:
                             lambda: self._install_direct(record, targets, work, log, progress, pin),
                             build_keys,
                         )
-                    elif target_variant != variant_key:
+                    elif target_alt != alt_id:
                         sources = self._preview(record, pin)
                         replacements = self._cached_build(
                             sources,
                             targets,
                             pin,
-                            lambda: self._stage_adapted(sources, targets, work / record["kind"], log, pin),
+                            lambda: self._stage_adapted(sources, targets, work / record["resource_type"], log, pin),
                             build_keys,
                         )
-                    else:  # a lobby mod of another core of this variant: not offered, never written there
+                    else:  # a memorial lobby mod of another core of this alt: not offered, never written there
                         raise ServiceError("game_file_outside_resources", file=targets[0])
-                    kinds = {record["kind"]: cores[0]}
-                elif source.startswith("variant:") and kind == "model":
-                    # another variant's costume put on this variant's model slot (gameassets.model_adapt)
-                    other = source[8:]
-                    if other == variant_key:
+                    resource_types = {record["resource_type"]: cores[0]}
+                elif source.startswith("alt:") and resource_type == "chibi":
+                    # another alt's costume put on this alt's chibi slot (gameassets.chibi_adapt)
+                    other = source[4:]
+                    if other == alt_id:
                         raise ServiceError("source_unsupported", source=source)
-                    own = getattr(variant, "model", None)
-                    targets = self._game_files(variant_key, "model", pin)
+                    own = getattr(alt, "chibi", None)
+                    targets = self._game_files(alt_id, "chibi", pin)
                     if not own or not targets:
-                        raise ServiceError("game_file_not_found", variant=variant_key)
-                    verdict = self._verdicts().get(self._costume_signature(variant_key, other, pin)[0])
+                        raise ServiceError("game_file_not_found", alt=alt_id)
+                    verdict = self._verdicts().get(self._costume_signature(alt_id, other, pin)[0])
                     if not self._costume_allowed(verdict):  # refused: never saved or written
                         raise ServiceError("source_unsupported", source=verdict.get("reason") or source)
-                    kinds = {"model": own.lower()}
-                    change.configure(kinds)
+                    resource_types = {"chibi": own.lower()}
+                    change.configure(resource_types)
                     if not on:
-                        return self._defer(pin, variant_key, kinds, source)
+                        return self._defer(pin, alt_id, resource_types, source)
                     _, inputs = self._costume_source(other, pin)
                     replacements = self._cached_build(
                         inputs,
                         targets,
                         pin,
                         lambda: self._stage_costume(
-                            other, targets, work / "model", log, pin, fraction=fraction or _item_fraction(progress)
+                            other, targets, work / "chibi", log, pin, fraction=fraction or _item_fraction(progress)
                         ),
                         build_keys,
                     )
-                elif source.startswith("variant:"):
-                    other = source[8:]
-                    self._variant(other)
-                    if kind == "model":
+                elif source.startswith("alt:"):
+                    other = source[4:]
+                    self._alt(other)
+                    if resource_type == "chibi":
                         raise ServiceError("source_unsupported", source=source)
                     replacements: dict[Path, Path] = {}
-                    kinds = {}
-                    for current in ("spr", "lobby") if kind is None else (kind,):
-                        targets = self._game_files(variant_key, current, pin)
+                    resource_types = {}
+                    for current in ("portrait", "memorialLobby") if resource_type is None else (resource_type,):
+                        targets = self._game_files(alt_id, current, pin)
                         sources = self._game_files(other, current, pin)
                         if not targets or not sources:
                             continue
-                        kinds[current] = core_of(targets[0].name)
-                    if not kinds:
-                        raise ServiceError("game_file_not_found", variant=variant_key)
-                    change.configure(kinds)
+                        resource_types[current] = core_of(targets[0].name)
+                    if not resource_types:
+                        raise ServiceError("game_file_not_found", alt=alt_id)
+                    change.configure(resource_types)
                     if on:
-                        for current in kinds:
-                            targets = self._game_files(variant_key, current, pin)
+                        for current in resource_types:
+                            targets = self._game_files(alt_id, current, pin)
                             sources = self._game_files(other, current, pin)
                             official = [self._official_for(path, pin) for path in sources]
                             replacements.update(
@@ -399,10 +406,10 @@ class SwitchingMixin:
                                     build_keys,
                                 )
                             )
-                    if not kinds:
-                        raise ServiceError("game_file_not_found", variant=variant_key)
+                    if not resource_types:
+                        raise ServiceError("game_file_not_found", alt=alt_id)
                     if not on:
-                        return self._defer(pin, variant_key, kinds, source)
+                        return self._defer(pin, alt_id, resource_types, source)
                 else:
                     raise ServiceError("source_unsupported", source=source)
                 prepared = time.perf_counter()
@@ -418,13 +425,13 @@ class SwitchingMixin:
                     create_backup=create_backup,
                     kept_current=kept_current,
                 )
-                change.configure(kinds)
-                self._selection_error(pin, kinds.values(), None)
-                for core in kinds.values():
+                change.configure(resource_types)
+                self._selection_error(pin, resource_types.values(), None)
+                for core in resource_types.values():
                     self._clear_marker(pin, core)
                 logger.info("Mod apply copy and record: %.3f s", time.perf_counter() - prepared)
                 return ApplyResult(
-                    variant_key,
+                    alt_id,
                     source,
                     files,
                     unchanged=not files,
@@ -432,10 +439,10 @@ class SwitchingMixin:
                     incomplete=incomplete,
                 )
         except Exception as error:
-            if not change.refused(error) and kinds:
+            if not change.refused(error) and resource_types:
                 self._selection_error(
                     pin,
-                    kinds.values(),
+                    resource_types.values(),
                     error.to_json()
                     if isinstance(error, ServiceError)
                     else {
@@ -453,7 +460,7 @@ class SwitchingMixin:
             )
 
     def _untested_apply(
-        self, variant_key: str, source: str, kind: Kind | None, pin: Pin, camera: dict[str, Any] | None
+        self, alt_id: str, source: str, resource_type: ResourceType | None, pin: Pin, camera: dict[str, Any] | None
     ) -> None:
         """Give an apply's confirmation on an untested build (``_check_untested``).
 
@@ -462,34 +469,41 @@ class SwitchingMixin:
         """
         if self.untested_version(pin) is None or not profiles_mod.enabled(self.profiles.read()):
             return
-        if camera is not None:  # one entry, the lobby, for the art and the prefab it holds
+        if camera is not None:  # one entry, the memorial lobby, for the art and the prefab it holds
             groups = [
                 (
-                    variant_key,
-                    "lobby",
-                    [*self._game_files(variant_key, "lobby", pin), *self._game_files(camera["target"], "other", pin)],
+                    alt_id,
+                    "memorialLobby",
+                    [
+                        *self._game_files(alt_id, "memorialLobby", pin),
+                        *self._game_files(stored_target(camera), "other", pin),
+                    ],
                 )
             ]
-        elif kind == "other":
-            groups = [(variant_key, "other", self._game_files(variant_key, "other", pin))]
+        elif resource_type == "other":
+            groups = [(alt_id, "other", self._game_files(alt_id, "other", pin))]
         else:
             record = self._records.get(source[4:]) if source.startswith("mod:") else None
-            kinds = (kind,) if kind else ((record["kind"],) if record else ("spr", "lobby"))
-            groups = [(variant_key, current, self._game_files(variant_key, current, pin)) for current in kinds]
+            resource_types = (
+                (resource_type,)
+                if resource_type
+                else ((record["resource_type"],) if record else ("portrait", "memorialLobby"))
+            )
+            groups = [(alt_id, current, self._game_files(alt_id, current, pin)) for current in resource_types]
         self._check_untested(
             [
-                (pin, self._untested_entry(pin, core_of(targets[0].name), targets, variant, current), targets)
-                for variant, current, targets in groups
+                (pin, self._untested_entry(pin, core_of(targets[0].name), targets, alt, current), targets)
+                for alt, current, targets in groups
                 if targets
             ]
         )
 
-    def _defer(self, pin: Pin, variant_key: str, kinds: dict[str, str], source: str | None) -> ApplyResult:
+    def _defer(self, pin: Pin, alt_id: str, resource_types: dict[str, str], source: str | None) -> ApplyResult:
         """While mods are off: configure the source without writing, applied when mods are on."""
-        self._configure(pin, variant_key, kinds, source)
+        self._configure(pin, alt_id, resource_types, source)
         if source is None:
             self._prune_quietly()
-        return ApplyResult(variant_key, source or "official", [], unchanged=True, deferred=True)
+        return ApplyResult(alt_id, source or "official", [], unchanged=True, deferred=True)
 
     def _apply_other(
         self,
@@ -505,17 +519,17 @@ class SwitchingMixin:
         if not source.startswith("mod:"):
             raise ServiceError("source_unsupported", source=source)
         record = self._record(source[4:])
-        if record["kind"] != "other" or record["target"] != target:
-            raise ServiceError("mod_target_mismatch", id=record["id"], variant=target)
+        if record["resource_type"] != "other" or stored_target(record) != target:
+            raise ServiceError("mod_target_mismatch", id=record["id"], alt=target)
         targets = self._game_files(target, "other", pin)
-        kinds = {core_of(path.name): core_of(path.name) for path in targets}
+        resource_types = {core_of(path.name): core_of(path.name) for path in targets}
         if not profiles_mod.enabled(self.profiles.read()):
-            return self._defer(pin, target, kinds, source)
+            return self._defer(pin, target, resource_types, source)
         kept_current: list[str] = []
         change = _ChoiceChange(self, pin, target, source)
         try:
             self._check_stopping(pin)
-            change.configure(kinds)
+            change.configure(resource_types)
             with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
                 build_keys = {}
                 replacements = self._cached_build(
@@ -537,16 +551,16 @@ class SwitchingMixin:
                     kept_current=kept_current,
                     untested=untested,
                 )
-            self._configure(pin, target, kinds, source)
-            self._selection_error(pin, kinds, None)
-            for slot in kinds:
+            self._configure(pin, target, resource_types, source)
+            self._selection_error(pin, resource_types, None)
+            for slot in resource_types:
                 self._clear_marker(pin, slot)
             return ApplyResult(target, source, files, unchanged=not files, kept_current=bool(kept_current))
         except Exception as error:
             if not change.refused(error):
                 self._selection_error(
                     pin,
-                    kinds,
+                    resource_types,
                     error.to_json()
                     if isinstance(error, ServiceError)
                     else {
@@ -562,63 +576,71 @@ class SwitchingMixin:
     @_serialized
     def restore(
         self,
-        variant_key: str,
+        alt_id: str,
         log: LogFunc = no_log,
-        kind: Kind | None = "spr",
+        resource_type: ResourceType | None = "portrait",
         pin: Pin | None = None,
         progress: ProgressCallback | None = None,
     ) -> ApplyResult:
         """Restore official bytes and drop the selected slots' configuration.
 
-        Already-official files are only recorded. A lobby's restore puts its prefab back too, when one of
-        its cameras holds it (``lobby_camera.release``).
+        Already-official files are only recorded. A memorial lobby's restore puts its prefab back too, when one of
+        its cameras holds it (``memorial_lobby_camera.release``).
 
         Args:
-            variant_key: Variant key, or generic other:/other-set: target whose files are restored.
+            alt_id: alt key, or generic other:/other-set: target whose files are restored.
             log: Receives user-facing operation messages.
-            kind: Slot kind to restore; None restores all kinds.
+            resource_type: Slot kind to restore; None restores all kinds.
             pin: Game install and server the operation is fixed to; None uses the current install.
             progress: Receives restore progress; None disables reporting.
         """
-        from .. import lobby_camera
+        from .. import memorial_lobby_camera
 
-        result = self._restore(variant_key, log, kind, pin, progress)
+        result = self._restore(alt_id, log, resource_type, pin, progress)
         if (
-            kind in ("lobby", None)
-            and not variant_key.startswith(("other:", "other-set:"))
-            and (lobby_camera.cameras(self, variant_key))
+            resource_type in ("memorialLobby", None)
+            and not alt_id.startswith(("other:", "other-set:"))
+            and (memorial_lobby_camera.cameras(self, alt_id))
         ):
-            lobby_camera.release(self, variant_key, self._current(pin), log, progress)
+            memorial_lobby_camera.release(self, alt_id, self._current(pin), log, progress)
         return result
 
     def _restore(
         self,
-        variant_key: str,
+        alt_id: str,
         log: LogFunc = no_log,
-        kind: Kind | None = "spr",
+        resource_type: ResourceType | None = "portrait",
         pin: Pin | None = None,
         progress: ProgressCallback | None = None,
     ) -> ApplyResult:
         pin = self._current(pin)
         self.profiles.read()
-        targets = self._game_files(variant_key, kind, pin)
+        targets = self._game_files(alt_id, resource_type, pin)
         if not targets:
-            raise ServiceError("game_file_not_found", variant=variant_key)
+            raise ServiceError("game_file_not_found", alt=alt_id)
         try:
             replacements = {path: self._official_for(path, pin) for path in targets}
             files = self._commit(replacements, "official", log, progress=progress, pin=pin, prune=False)
-            kinds = {
-                (core_of(path.name) if kind == "other" else kind_of_file(path.name)): core_of(path.name)
+            resource_types = {
+                (core_of(path.name) if resource_type == "other" else resource_type_of_file(path.name)): core_of(
+                    path.name
+                )
                 for path in targets
             }
-            self._configure(pin, variant_key, kinds, None)
+            self._configure(pin, alt_id, resource_types, None)
         finally:
             self._prune_quietly()
-        return ApplyResult(variant_key, "official", files, unchanged=not files)
+        return ApplyResult(alt_id, "official", files, unchanged=not files)
 
     @_serialized
     def would_write(
-        self, variant_key: str, source: str, kind: Kind | None = "spr", pin: Pin | None = None, *, setting: bool = False
+        self,
+        alt_id: str,
+        source: str,
+        resource_type: ResourceType | None = "portrait",
+        pin: Pin | None = None,
+        *,
+        setting: bool = False,
     ) -> bool:
         """Estimate whether a source setting or explicit restore would write game files.
 
@@ -626,9 +648,9 @@ class SwitchingMixin:
         allowing those calls while the classic UI is open.
 
         Args:
-            variant_key: Variant key or generic target identifying the destination files.
+            alt_id: alt key or generic target identifying the destination files.
             source: Requested source; official checks file headers, while other sources follow switch intent.
-            kind: Slot kind to inspect; None considers every applicable kind.
+            resource_type: Slot kind to inspect; None considers every applicable kind.
             pin: Game install and server the operation is fixed to; None uses the current install.
             setting: Whether this is a source setting deferred while mods are off, rather than an explicit restore.
         """
@@ -638,9 +660,9 @@ class SwitchingMixin:
             return False
         if source != "official":
             return on
-        view = self._view([pin], "family")
-        for path in self._game_files(variant_key, kind, pin):
-            part = view.part(path, pin, kind_of_file(path.name) or "spr")
+        view = self._view([pin], "student")
+        for path in self._game_files(alt_id, resource_type, pin):
+            part = view.part(path, pin, resource_type_of_file(path.name) or "portrait")
             if not part.official:
                 return True
         return False
@@ -658,14 +680,14 @@ class SwitchingMixin:
         """Write an entry internally: its core's parts in its own install switched to a source, and nothing else.
 
         The configuration stays. The write is from a built copy when one still fits; a mod made for the core is
-        installed directly, another variant's mod adapted, another variant's files (in that same install) adapted.
+        installed directly, another alt's mod adapted, another alt's files (in that same install) adapted.
         ``fraction``: told how far a costume build is and when the write starts (``mod_progress.Part``).
         """
         core = self._core_map(pin).slot(core)
         targets = self._spine_parts(core, pin)
         if not targets:
-            raise ServiceError("game_file_not_found", variant=core)
-        kind = self._kind(core, pin) or "spr"
+            raise ServiceError("game_file_not_found", alt=core)
+        resource_type = self._resource_type(core, pin) or "portrait"
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
             work = Path(temporary)
             build_keys: dict[Path, str] = {}
@@ -677,11 +699,11 @@ class SwitchingMixin:
             if replacements is None:
                 if source.startswith("mod:"):
                     record = self._record(source[4:])
-                    if record["kind"] == "model" and any(
+                    if record["resource_type"] == "chibi" and any(
                         core_of(name) not in self._core_map(pin).slot_cores(core) for name in record["files"]
                     ):
-                        raise ServiceError("mod_target_mismatch", id=record["id"], variant=core)
-                    if record["kind"] in ("other", "model") or core_of(record["files"][0]) == core:
+                        raise ServiceError("mod_target_mismatch", id=record["id"], alt=core)
+                    if record["resource_type"] in ("other", "chibi") or core_of(record["files"][0]) == core:
                         replacements = self._cached_build(
                             self._paths(record),
                             targets,
@@ -695,31 +717,36 @@ class SwitchingMixin:
                             sources,
                             targets,
                             pin,
-                            lambda: self._stage_adapted(sources, targets, work / kind, log, pin),
+                            lambda: self._stage_adapted(sources, targets, work / resource_type, log, pin),
                             build_keys,
                         )
-                elif source.startswith("variant:") and kind == "model":
-                    _, inputs = self._costume_source(source[8:], pin)
+                elif source.startswith("alt:") and resource_type == "chibi":
+                    _, inputs = self._costume_source(source[4:], pin)
                     replacements = self._cached_build(
                         inputs,
                         targets,
                         pin,
                         lambda: self._stage_costume(
-                            source[8:], targets, work / kind, log, pin, fraction=fraction or _item_fraction(progress)
+                            source[4:],
+                            targets,
+                            work / resource_type,
+                            log,
+                            pin,
+                            fraction=fraction or _item_fraction(progress),
                         ),
                         build_keys,
                     )
-                elif source.startswith("variant:"):
-                    other = self._core_map(pin).core(source[8:], kind)
+                elif source.startswith("alt:"):
+                    other = self._core_map(pin).core(source[4:], resource_type)
                     sources = self._index(pin).get(other.lower(), []) if other else []
                     if not sources:
-                        raise ServiceError("game_file_not_found", variant=source[8:])
+                        raise ServiceError("game_file_not_found", alt=source[4:])
                     official = [self._official_for(path, pin) for path in sources]
                     replacements = self._cached_build(
                         official,
                         targets,
                         pin,
-                        lambda: self._stage_adapted(official, targets, work / kind, log, pin),
+                        lambda: self._stage_adapted(official, targets, work / resource_type, log, pin),
                         build_keys,
                     )
                 else:

@@ -199,8 +199,8 @@ def build_catalog(
         entry.update(
             playable=True,
             kind="playable",
-            bg=student.get("CollectionBG"),
-            portrait=portrait_name(entry, student),
+            background=student.get("CollectionBG"),
+            official_thumbnail=portrait_name(entry, student),
             school=student.get("School"),
             schale_id=student["Id"],
             order=student.get("DefaultOrder", student["Id"]),
@@ -208,7 +208,9 @@ def build_catalog(
         # per-server release, used at runtime when the install has no collection portrait for the variant
         flags = student.get("IsReleased") or []
         if flags:
-            entry["released"] = {server: bool(flags[i]) for server, i in RELEASE_INDEX.items() if i < len(flags)}
+            entry["released_on_server"] = {
+                server: bool(flags[i]) for server, i in RELEASE_INDEX.items() if i < len(flags)
+            }
         aliases = {
             student["PathName"].lower(),
             student["DevName"].lower(),
@@ -263,20 +265,20 @@ def build_catalog(
             entry = entries[key]
             entry.update(
                 student_id=sid,
-                kind=variant["kind"],
+                kind={"extra-spr": "extra-portrait"}.get(variant["kind"], variant["kind"]),
                 playable=variant["kind"] == "playable",
-                bg=variant.get("collectionBG"),
+                background=variant.get("collectionBG"),
                 school=family.get("schoolKey"),
                 research_key=variant["key"],
                 research_order=variant.get("releaseOrder", index),
             )
             if variant.get("rosterPortraitSource") == "collection":
-                entry["portrait"] = Path(variant["rosterPortrait"]).stem
+                entry["official_thumbnail"] = Path(variant["rosterPortrait"]).stem
             else:
-                entry["portrait"] = None
+                entry["official_thumbnail"] = None
             if not entry["playable"]:
-                entry["fallbacks"] = {lang: "story_variant" for lang in LANGUAGES}
-                entry.pop("released", None)
+                entry["fallbacks"] = {lang: "story_alt" for lang in LANGUAGES}
+                entry.pop("released_on_server", None)
 
     grouped = defaultdict(list)
     for key, entry in entries.items():
@@ -315,8 +317,8 @@ def build_catalog(
                 entry["name_sources"] = csv_sources(row_map[key], bases, entry["fallbacks"])
             if "research_key" not in entry:
                 page = pages.get(entry.get("page_id"))
-                entry["kind"] = "extra-spr" if page else "npc"
-                entry["bg"] = (page or base_entry).get("bg")
+                entry["kind"] = "extra-portrait" if page else "npc"
+                entry["background"] = (page or base_entry).get("background")
         curated_playables = all("research_order" in entries[key] for key in keys if entries[key]["playable"])
         ordered = sorted(
             keys,
@@ -341,13 +343,13 @@ def build_catalog(
         for lang in SOURCE_LANGUAGES:
             words = [part if lang == "zh-CN" else NAMING["glossary"][part][lang] for part in parts]
             entry["names"][lang] = compose(bases[lang], words, lang)
-            entry["fallbacks"][lang] = "story_variant"
+            entry["fallbacks"][lang] = "story_alt"
             entry["name_sources"][lang] = "fallback"
     for research_key, values in NAMING["terror"].items():
         key = research.get(research_key)
         if key in entries:
             entries[key]["names"] = {lang: {"full": full, "short": short} for lang, (full, short) in values.items()}
-            entries[key]["fallbacks"] = {lang: "story_variant" for lang in LANGUAGES}
+            entries[key]["fallbacks"] = {lang: "story_alt" for lang in LANGUAGES}
             entries[key]["name_sources"] = {lang: "fallback" for lang in LANGUAGES}
 
     for research_key, values in names.get("variants", {}).items():
@@ -404,7 +406,7 @@ def build_catalog(
     return {
         "version": 1,
         "students": students,
-        "variants": entries,
+        "alts": entries,
         "summary": summary,
         "rules": names.get("rules", {}),
     }
@@ -488,8 +490,8 @@ def validate_game(data: dict, directory: Path) -> list[dict[str, str]]:
         textures.update(obj.peek_name().lower() for obj in environment.objects if obj.type.name == "Texture2D")
     mismatches = [
         {"key": key, "field": field, "name": entry[field]}
-        for key, entry in sorted(data["variants"].items())
-        for field in ("bg", "portrait")
+        for key, entry in sorted(data["alts"].items())
+        for field in ("background", "official_thumbnail")
         if entry.get(field) and entry[field].lower() not in textures
     ]
     for mismatch in mismatches:
@@ -524,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
     logger.info(
         "Catalog: %d students, %d variants; %s",
         len(data["students"]),
-        len(data["variants"]),
+        len(data["alts"]),
         json.dumps(data["summary"], sort_keys=True),
     )
     if args.game:

@@ -2,24 +2,32 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { compact } from "./helpers/source-text.mjs";
 import { test } from "node:test";
-const source = await readFile(new URL("../../src/bmpt/web/js/photography/camera.js", import.meta.url), "utf8");
-const { FRAME, portraitCaptureView, lobbyCaptureView, portraitMinimum, lobbyMaximumWidth, choiceLayout } = await import(
-  "data:text/javascript;base64," + Buffer.from(source).toString("base64")
-);
+const source = await readFile(new URL("../../src/bmpt/web/js/thumbnail-capture/camera.js", import.meta.url), "utf8");
+const {
+  FRAME,
+  portraitCaptureView,
+  memorialLobbyCaptureView,
+  portraitMinimum,
+  memorialLobbyMaximumWidth,
+  choiceLayout,
+} = await import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
 test("minimum portrait zoom can put the entire authored portrait height in the square", () => {
   const k = portraitMinimum([-1200, -800, 1200, 3200], 0.324);
   assert.ok(k < 0.324);
   assert.equal(FRAME.size / k, 4000);
 });
 test("maximum memorial view can put the complete painted height in the square", () => {
-  const width = lobbyMaximumWidth({ x0: 0, y0: 0, x1: 1920, y1: 1080 }, 1920);
+  const width = memorialLobbyMaximumWidth({ x0: 0, y0: 0, x1: 1920, y1: 1080 }, 1920);
   assert.equal((FRAME.size / 1920) * width, 1080);
-  const view = lobbyCaptureView({ x: 0, y: 0, w: width, h: (width * 9) / 16 }, { x0: 0, y0: 0, x1: 1920, y1: 1080 });
+  const view = memorialLobbyCaptureView(
+    { x: 0, y: 0, w: width, h: (width * 9) / 16 },
+    { x0: 0, y0: 0, x1: 1920, y1: 1080 },
+  );
   assert.ok(Math.abs(view.y + (1 - FRAME.y / 1080) * view.h - 1080) < 1e-8);
 });
 test("the action popover fits its visible rows and scrolls only excess content", () => {
-  const short = choiceLayout("lobby", 5),
-    long = choiceLayout("lobby", 20),
+  const short = choiceLayout("memorialLobby", 5),
+    long = choiceLayout("memorialLobby", 20),
     face = choiceLayout("portrait", 3);
   assert.equal(short.rows, 2);
   assert.equal(short.height, 146);
@@ -39,13 +47,13 @@ test("portrait camera can pan at minimum zoom while keeping the framing square i
 });
 test("memorial camera can pan at minimum zoom without constraining the entire display to the scene", () => {
   const bounds = { x0: 0, y0: 0, x1: 1920, y1: 1080 };
-  assert.deepEqual(lobbyCaptureView({ x: -400, y: 200, w: 1920, h: 1080 }, bounds), {
+  assert.deepEqual(memorialLobbyCaptureView({ x: -400, y: 200, w: 1920, h: 1080 }, bounds), {
     x: -400,
     y: 200,
     w: 1920,
     h: 1080,
   });
-  const edge = lobbyCaptureView({ x: 10000, y: -10000, w: 1920, h: 1080 }, bounds);
+  const edge = memorialLobbyCaptureView({ x: 10000, y: -10000, w: 1920, h: 1080 }, bounds);
   assert.ok(Math.abs(edge.x - FRAME.x) < 1e-8);
   assert.ok(Math.abs(edge.y + 360) < 1e-8);
 });
@@ -61,7 +69,7 @@ test("portrait crop stays in the scene through both pan extremes at each support
       assert.equal(v.k, k);
     }
 });
-test("framing matches the real roster portrait aspect and stays centered", () => {
+test("framing matches the real student list portrait aspect and stays centered", () => {
   assert.ok(Math.abs(FRAME.width / FRAME.height - 404 / 456) < 1e-12);
   assert.equal(FRAME.x + FRAME.width / 2, 960);
   assert.equal(FRAME.y + FRAME.height / 2, 540);
@@ -70,7 +78,7 @@ test("memorial framing stays painted at every zoom and both pan extremes", () =>
   const bounds = { x0: -300, y0: 200, x1: 1620, y1: 1280 };
   for (const width of [1920, 1280, 960, 480])
     for (const sign of [-1, 1]) {
-      const v = lobbyCaptureView({ x: sign * 1e6, y: sign * 1e6, w: width, h: (width * 9) / 16 }, bounds);
+      const v = memorialLobbyCaptureView({ x: sign * 1e6, y: sign * 1e6, w: width, h: (width * 9) / 16 }, bounds);
       assert.ok(v.x + (FRAME.x / 1920) * v.w >= bounds.x0 - 1e-8);
       assert.ok(v.x + ((FRAME.x + FRAME.width) / 1920) * v.w <= bounds.x1 + 1e-8);
       assert.ok(v.y + (1 - (FRAME.y + FRAME.size) / 1080) * v.h >= bounds.y0 - 1e-8);
@@ -80,14 +88,14 @@ test("memorial framing stays painted at every zoom and both pan extremes", () =>
 
 test("composed occlusion control keeps the right edge, centred neighbours and scaled gaps", async () => {
   const controller = await readFile(
-    new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url),
+    new URL("../../src/bmpt/web/js/thumbnail-capture/controller.js", import.meta.url),
     "utf8",
   );
   const { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
   const { row } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
   const S = 1920 / 2960,
     code = controller.slice(
-      controller.indexOf("function photographyToolbarLayout("),
+      controller.indexOf("function thumbnailCaptureToolbarLayout("),
       controller.indexOf("function galleryReveal("),
     );
   const boxes = new Function(
@@ -97,7 +105,7 @@ test("composed occlusion control keeps the right edge, centred neighbours and sc
     "FULLSCREEN_BUTTON",
     "row",
     "S",
-    `${code};return photographyToolbarLayout();`,
+    `${code};return thumbnailCaptureToolbarLayout();`,
   )(CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON, row, S);
   const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
   near(boxes.top[0] + boxes.top[2], 1890);

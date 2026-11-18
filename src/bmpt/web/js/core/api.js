@@ -272,7 +272,7 @@ export const spinePrefix = (kind, key) => `/asset/spine/${kind}/${encodeURICompo
 /**
  * A skeleton's base path: <base>.skel and <base>.atlas; the atlas pages resolve next to them. The id is in the
  * path, not a query: the player fetches every file relative to the base.
- * @param {string} kind "portrait", "lobby" or "model".
+ * @param {string} kind "portrait", "memorialLobby" or "chibi".
  * @param {string} key The core.
  * @param {string|null} [install] The id of another known install (mods.state.installs[].id), whose own files
  *     the core segment <core>@<id> reads (an entry card of that install); none for the current install's.

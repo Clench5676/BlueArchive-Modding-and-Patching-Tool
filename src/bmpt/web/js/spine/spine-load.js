@@ -169,8 +169,8 @@ export function loadPlayer(
     return { ready, dispose, player: null };
   }
   try {
-    // A frame the runtime draws runs every hook: without them a frame is only half drawn (a lobby's skeleton without
-    // its linear-light pass looks dark). While the context is being rebuilt nothing is drawn through them.
+    // A frame the runtime draws runs every hook: without them a frame is only half drawn (a memorial lobby's skeleton
+    // without its linear-light pass looks dark). While the context is being rebuilt nothing is drawn through them.
     const hooks = Object.fromEntries(
       ["frame", "update", "draw", "updateWorldTransform"]
         .filter((key) => config[key])
@@ -237,8 +237,8 @@ export function loadPlayer(
       const render = () => {
         if (settled || disposed || failed || signal?.aborted || (manual && assetsReady)) return;
         frames += 1;
-        // An owner may stop a player's own loop while it still loads (the hall pauses its scene); before the success
-        // hook nothing else would draw it, so the load would wait for its timeout.
+        // An owner may stop a player's own loop while it still loads (the Student Hall pauses its scene); before the
+        // success hook nothing else would draw it, so the load would wait for its timeout.
         const stopped = !assetsReady && !!player?.stopRequestAnimationFrame;
         if ((manual || !lifecycle.active() || stopped) && !lifecycle.recovering()) {
           try {

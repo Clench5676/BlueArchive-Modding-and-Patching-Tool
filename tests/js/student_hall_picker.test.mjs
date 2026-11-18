@@ -7,8 +7,8 @@ import {
   portraitRows,
   studentChoices,
   memorialChoices,
-} from "../../src/bmpt/web/js/hall/student-hall-model.js";
-import { normalizeView } from "../../src/bmpt/web/js/roster/roster-order.js";
+} from "../../src/bmpt/web/js/student-hall/student-hall-chibi.js";
+import { normalizeView } from "../../src/bmpt/web/js/student-list/student-list-order.js";
 class Element {
   style = {};
   dataset = {};
@@ -85,7 +85,7 @@ globalThis.pickerFixture = {
     rowPlate: async (...args) => {
       plates.push(args);
     },
-    rosterToolbar: async () => {},
+    studentListToolbar: async () => {},
     caption: async (...args) => {
       captions.push(args);
     },
@@ -119,10 +119,13 @@ globalThis.pickerFixture = {
     },
   },
 };
-let source = await readFile(new URL("../../src/bmpt/web/js/hall/student-hall-picker.js", import.meta.url), "utf8");
+let source = await readFile(
+  new URL("../../src/bmpt/web/js/student-hall/student-hall-picker.js", import.meta.url),
+  "utf8",
+);
 source = source.replace(/^import [^;]*;$/gm, "");
 const API = await import(
-  `data:text/javascript;base64,${Buffer.from("const {UI,Display,Popup,bindReorder,dragFeedback,normalizeView,sourceKey,portraitRows,studentChoices,memorialChoices,thumbnailScope,lazyThumbnail,spineBase,L,T,language}=globalThis.pickerFixture;\n" + source + "\n//# sourceURL=hall-picker-fixture.js").toString("base64")}`
+  `data:text/javascript;base64,${Buffer.from("const {UI,Display,Popup,bindReorder,dragFeedback,normalizeView,sourceKey,portraitRows,studentChoices,memorialChoices,thumbnailScope,lazyThumbnail,spineBase,L,T,language}=globalThis.pickerFixture;\n" + source + "\n//# sourceURL=student-hall-picker-fixture.js").toString("base64")}`
 );
 const settle = async () => {
   await new Promise(setImmediate);
@@ -149,7 +152,7 @@ test("adding a memorial disables its current control synchronously and the redra
   await settle();
   // the candidates are the chosen student's: none before one is chosen, the panel asking for one
   assert.equal(cards.filter((card) => card.options.onAdd).length, 0);
-  assert.ok(captions.some(([, text]) => text === "hall.selectStudent"));
+  assert.ok(captions.some(([, text]) => text === "studentHall.selectStudent"));
   heads.at(-1)[4]();
   await settle();
   const candidate = cards.find((card) => card.options.onAdd);
@@ -161,7 +164,7 @@ test("adding a memorial disables its current control synchronously and the redra
   await pending;
   const next = cards.filter((card) => card.options.onAdd).at(-1);
   assert.equal(next.options.addEnabled, false);
-  assert.equal(next.options.addLabel, "hall.added");
+  assert.equal(next.options.addLabel, "studentHall.added");
   await candidate.options.onAdd({ currentTarget: hit });
   assert.equal(draft.current().memorialLobbies.length, 1);
   assert.deepEqual(errors, []);
@@ -171,11 +174,11 @@ test("adding a memorial disables its current control synchronously and the redra
 // Escape in the picker's search box closes the search (as its toolbar button does) and the picker stays
 test("Escape in the picker's search closes the search and clears it; the picker stays", async () => {
   const fixture = globalThis.pickerFixture.UI,
-    saved = { rosterToolbar: fixture.rosterToolbar, search: fixture.search };
+    saved = { studentListToolbar: fixture.studentListToolbar, search: fixture.search };
   const toolbars = [],
     searches = [];
   let closed = 0;
-  fixture.rosterToolbar = async (host, view, searching, actions) => {
+  fixture.studentListToolbar = async (host, view, searching, actions) => {
     toolbars.push({ searching, actions });
   };
   fixture.search = async (host, query, onChange, box, options) => {
@@ -230,7 +233,7 @@ test("Escape in the picker's search closes the search and clears it; the picker 
   }
 });
 
-test("portrait replacement reuses Hall rows and explicit choice buttons without adding another entry", async () => {
+test("portrait replacement reuses Student Hall rows and explicit choice buttons without adding another entry", async () => {
   cards.length = 0;
   const replaced = [],
     draft = createDraft({
@@ -306,7 +309,7 @@ test("the portrait picker draws names and plates from the row layout, with Done 
   assert.equal(frames.at(-1).options, pickerFixture.UI.PORTRAIT_FRAME);
   assert.deepEqual(
     frames.at(-1).actions.map((a) => a.label),
-    ["hall.doneAdding"],
+    ["studentHall.doneAdding"],
   );
   assert.equal(cards.find((c) => c.options.onAdd).options.addSize, 41);
   assert.deepEqual(errors, []);
@@ -316,9 +319,9 @@ test("Change Portrait is present beside background in all six locales, with the 
   const words = { "en-US": "Change Portrait", "zh-CN": "\u66f4\u6362\u7acb\u7ed8" };
   for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
     const raw = await readFile(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url), "utf8"),
-      hall = JSON.parse(raw).webui.hall;
-    assert.ok(hall.changePortrait);
-    if (words[lang]) assert.equal(hall.changePortrait, words[lang]);
+      studentHall = JSON.parse(raw).webui.studentHall;
+    assert.ok(studentHall.changePortrait);
+    if (words[lang]) assert.equal(studentHall.changePortrait, words[lang]);
     assert.match(raw, /"background": [^\n]+\n\s*"changePortrait":/);
   }
 });

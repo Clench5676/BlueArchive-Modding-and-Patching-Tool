@@ -10,8 +10,8 @@ import pytest
 from PIL import Image
 
 from bmpt.core.errors import ServiceError
-from bmpt.library import photographs
-from bmpt.library.photographs import Photographs
+from bmpt.library import thumbnails
+from bmpt.library.thumbnails import Thumbnails
 
 
 def capture(size=(202, 228), color=(13, 85, 170, 180)):
@@ -22,32 +22,32 @@ def capture(size=(202, 228), color=(13, 85, 170, 180)):
 
 
 def test_lossless_rectangular_capture_ownership_and_independent_app_selection(tmp_path):
-    gallery = Photographs(tmp_path)
+    gallery = Thumbnails(tmp_path)
     png, raw = capture()
     first = gallery.save("student_a", png, "portrait", "02", source="portrait/source")
     key = first["saved"]
-    second = gallery.save("student_b", png, "lobby", action="Talk_01")
-    assert first["photos"][0]["width"] == 202 and first["photos"][0]["height"] == 228
+    second = gallery.save("student_b", png, "memorialLobby", action="Talk_01")
+    assert first["thumbnails"][0]["width"] == 202 and first["thumbnails"][0]["height"] == 228
     assert gallery.image("student_a", key) == raw
-    assert first["photos"][0]["sha256"] == hashlib.sha256(raw).hexdigest()
+    assert first["thumbnails"][0]["sha256"] == hashlib.sha256(raw).hexdigest()
     gallery.select("student_a", key)
-    assert Photographs(tmp_path).app_url("student_a").endswith(key + ".png")
+    assert Thumbnails(tmp_path).app_url("student_a").endswith(key + ".png")
     assert gallery.list("student_b")["app"] is None
-    assert gallery.list("student_b")["photos"][0]["id"] == second["saved"]
+    assert gallery.list("student_b")["thumbnails"][0]["id"] == second["saved"]
     with pytest.raises(ServiceError, match="thumbnail_missing"):
         gallery.image("student_b", key)
 
 
 @pytest.mark.parametrize("bad", ["", "data:image/jpeg;base64,abc", "data:image/png;base64,!!!", 42])
 def test_invalid_capture_is_rejected_without_creating_files(tmp_path, bad):
-    gallery = Photographs(tmp_path)
+    gallery = Thumbnails(tmp_path)
     with pytest.raises(ServiceError, match="thumbnail_invalid"):
         gallery.save("a", bad, "portrait")
     assert not gallery.root.exists()
 
 
 def test_unreasonable_dimensions_and_wrong_mode_are_rejected(tmp_path):
-    gallery = Photographs(tmp_path)
+    gallery = Thumbnails(tmp_path)
     for size in ((32, 228), (202, 32), (4097, 64)):
         with pytest.raises(ServiceError, match="thumbnail_invalid"):
             gallery.save("a", capture(size)[0], "portrait")
@@ -56,27 +56,27 @@ def test_unreasonable_dimensions_and_wrong_mode_are_rejected(tmp_path):
 
 
 def test_metadata_failure_leaves_no_partial_photo_or_choice(tmp_path, monkeypatch):
-    gallery = Photographs(tmp_path)
-    monkeypatch.setattr(photographs, "atomic_json", lambda *args: (_ for _ in ()).throw(OSError("Synthetic failure")))
+    gallery = Thumbnails(tmp_path)
+    monkeypatch.setattr(thumbnails, "atomic_json", lambda *args: (_ for _ in ()).throw(OSError("Synthetic failure")))
     with pytest.raises(OSError):
         gallery.save("a", capture()[0], "portrait")
-    assert gallery.list("a")["photos"] == []
+    assert gallery.list("a")["thumbnails"] == []
     assert not list((gallery.root / "images").iterdir())
 
 
 def test_preview_selection_is_deletable_but_unreconciled_game_use_is_protected(tmp_path):
-    gallery = Photographs(tmp_path)
+    gallery = Thumbnails(tmp_path)
     key = gallery.save("a", capture()[0], "portrait")["saved"]
     gallery.select("a", key)
     with pytest.raises(ServiceError, match="thumbnail_in_use"):
         gallery.delete("a", key, {key})
     gallery.delete("a", key)
     assert gallery.selection("a") is None
-    assert gallery.list("a")["photos"] == []
+    assert gallery.list("a")["thumbnails"] == []
 
 
 def test_modified_png_and_path_traversal_cannot_be_selected(tmp_path):
-    gallery = Photographs(tmp_path)
+    gallery = Thumbnails(tmp_path)
     key = gallery.save("a", capture()[0], "portrait")["saved"]
     (gallery.root / "images" / (key + ".png")).write_bytes(b"changed")
     with pytest.raises(ServiceError, match="thumbnail_invalid"):
@@ -88,7 +88,7 @@ def test_modified_png_and_path_traversal_cannot_be_selected(tmp_path):
 
 
 def test_manifest_corruption_is_reported_without_overwriting_it(tmp_path):
-    gallery = Photographs(tmp_path)
+    gallery = Thumbnails(tmp_path)
     gallery.root.mkdir()
     gallery.index.write_text("bad JSON")
     with pytest.raises(ServiceError, match="thumbnail_library_invalid"):
@@ -97,31 +97,31 @@ def test_manifest_corruption_is_reported_without_overwriting_it(tmp_path):
 
 
 def test_two_instances_preserve_each_others_captures_and_selection(tmp_path):
-    first, second = Photographs(tmp_path), Photographs(tmp_path)
+    first, second = Thumbnails(tmp_path), Thumbnails(tmp_path)
     png, _ = capture()
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda store: store.save("a", png, "portrait"), (first, second)))
-    photos = first.list("a")["photos"]
+    photos = first.list("a")["thumbnails"]
     assert len(photos) == 2 and {entry["number"] for entry in photos} == {1, 2}
     key = results[0]["saved"]
     second.select("a", key)
     assert first.list("a")["app"] == key
 
 
-def test_generated_default_is_unique_per_variant_even_when_render_bytes_change(tmp_path):
-    first, second = Photographs(tmp_path), Photographs(tmp_path)
+def test_generated_default_is_unique_per_alt_even_when_render_bytes_change(tmp_path):
+    first, second = Thumbnails(tmp_path), Thumbnails(tmp_path)
     captures = [capture()[0], capture(color=(90, 30, 10, 255))[0]]
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(
             pool.map(lambda args: args[0].save("a", args[1], "portrait", builtin=True), zip((first, second), captures))
         )
     assert results[0]["saved"] == results[1]["saved"]
-    assert len(first.list("a")["photos"]) == 1
+    assert len(first.list("a")["thumbnails"]) == 1
     assert first.save("b", captures[0], "portrait", builtin=True)["saved"] != results[0]["saved"]
 
 
 def test_symlinked_capture_cannot_escape_the_library(tmp_path):
-    gallery = Photographs(tmp_path)
+    gallery = Thumbnails(tmp_path)
     key = gallery.save("a", capture()[0], "portrait")["saved"]
     path = gallery.root / "images" / (key + ".png")
     elsewhere = tmp_path / "elsewhere.png"
@@ -133,18 +133,18 @@ def test_symlinked_capture_cannot_escape_the_library(tmp_path):
 
 
 def test_failed_selection_publish_retains_previous_selection(tmp_path, monkeypatch):
-    gallery = Photographs(tmp_path)
+    gallery = Thumbnails(tmp_path)
     first = gallery.save("a", capture()[0], "portrait")["saved"]
     second = gallery.save("a", capture(color=(10, 20, 30, 255))[0], "portrait")["saved"]
     gallery.select("a", first)
-    monkeypatch.setattr(photographs, "atomic_json", lambda *args: (_ for _ in ()).throw(OSError("Synthetic failure")))
+    monkeypatch.setattr(thumbnails, "atomic_json", lambda *args: (_ for _ in ()).throw(OSError("Synthetic failure")))
     with pytest.raises(OSError):
         gallery.select("a", second)
-    assert Photographs(tmp_path).list("a")["app"] == first
+    assert Thumbnails(tmp_path).list("a")["app"] == first
 
 
-def test_family_gallery_has_independent_variant_counters_and_selections(tmp_path):
-    from bmpt.library.photographs import Photographs
+def test_student_gallery_has_independent_alt_counters_and_selections(tmp_path):
+    from bmpt.library.thumbnails import Thumbnails
     import base64
     import io
     from PIL import Image
@@ -152,31 +152,31 @@ def test_family_gallery_has_independent_variant_counters_and_selections(tmp_path
     stream = io.BytesIO()
     Image.new("RGBA", (202, 228), (40, 120, 180, 255)).save(stream, "PNG")
     png = "data:image/png;base64," + base64.b64encode(stream.getvalue()).decode()
-    store = Photographs(tmp_path, lambda key: key.split("_")[0])
+    store = Thumbnails(tmp_path, lambda key: key.split("_")[0])
     a = store.save("student_base", png, "portrait")["saved"]
-    b = store.save("student_swimsuit", png, "lobby")["saved"]
-    entries = store.list("student_base")["photos"]
+    b = store.save("student_swimsuit", png, "memorialLobby")["saved"]
+    entries = store.list("student_base")["thumbnails"]
     assert {item["id"] for item in entries} == {a, b}
     assert [item["number"] for item in entries] == [1, 1]
     store.select("student_base", b)
     assert store.list("student_base")["app"] == b
     assert store.list("student_swimsuit")["app"] is None
-    assert store.list("another_base")["photos"] == []
+    assert store.list("another_base")["thumbnails"] == []
     builtin = store.save("student_base", png, "portrait", builtin=True)["saved"]
-    generated = next(item for item in store.list("student_base")["photos"] if item["id"] == builtin)
+    generated = next(item for item in store.list("student_base")["thumbnails"] if item["id"] == builtin)
     assert generated["provenance"] == "generated" and generated["managed"]
-    assert next(item for item in store.save("student_base", png, "portrait")["photos"] if item["number"] == 2)
+    assert next(item for item in store.save("student_base", png, "portrait")["thumbnails"] if item["number"] == 2)
     store.select("student_base", "official")
     assert store.selection("student_base") == "official"
     assert store.app_url("student_base") is None
-    reopened = Photographs(tmp_path, lambda key: key.split("_")[0])
+    reopened = Thumbnails(tmp_path, lambda key: key.split("_")[0])
     assert reopened.image("student_base", b) == stream.getvalue()
 
 
 def test_manifest_flush_failure_restores_references_before_removing_image(tmp_path, monkeypatch):
-    gallery = Photographs(tmp_path)
+    gallery = Thumbnails(tmp_path)
     first = gallery.save("a", capture()[0], "portrait")["saved"]
-    real = photographs.atomic_json
+    real = thumbnails.atomic_json
     calls = []
 
     def fail_after_replace(path, data):
@@ -185,18 +185,18 @@ def test_manifest_flush_failure_restores_references_before_removing_image(tmp_pa
         if len(calls) == 1:
             raise OSError("Manifest directory flush failed")
 
-    monkeypatch.setattr(photographs, "atomic_json", fail_after_replace)
+    monkeypatch.setattr(thumbnails, "atomic_json", fail_after_replace)
     with pytest.raises(OSError):
         gallery.save("a", capture()[0], "portrait")
-    fresh = Photographs(tmp_path)
-    assert [entry["id"] for entry in fresh.list("a")["photos"]] == [first]
+    fresh = Thumbnails(tmp_path)
+    assert [entry["id"] for entry in fresh.list("a")["thumbnails"]] == [first]
     assert len(list((gallery.root / "images").glob("*.png"))) == 1
     assert fresh.image("a", first)
 
 
 def test_failed_save_rollback_retains_valid_published_bytes_without_success(tmp_path, monkeypatch):
-    gallery = Photographs(tmp_path)
-    real = photographs.atomic_json
+    gallery = Thumbnails(tmp_path)
+    real = thumbnails.atomic_json
     calls = []
 
     def fail(path, data):
@@ -205,9 +205,9 @@ def test_failed_save_rollback_retains_valid_published_bytes_without_success(tmp_
             real(path, data)
         raise OSError("Flush or rollback failed")
 
-    monkeypatch.setattr(photographs, "atomic_json", fail)
+    monkeypatch.setattr(thumbnails, "atomic_json", fail)
     with pytest.raises(OSError):
         gallery.save("a", capture()[0], "portrait")
-    fresh = Photographs(tmp_path)
-    for entry in fresh.list("a")["photos"]:
+    fresh = Thumbnails(tmp_path)
+    for entry in fresh.list("a")["thumbnails"]:
         assert fresh.image("a", entry["id"])

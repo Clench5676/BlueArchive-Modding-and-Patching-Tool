@@ -43,7 +43,7 @@ const fireTimer = (delay) => {
   callback();
 };
 const pendingTimers = () => [...timers.keys()].filter((id) => timerDelays.get(id) !== 25000);
-globalThis.hallDialogueHarness = {
+globalThis.studentHallDialogueHarness = {
   dialogueText,
   spriteBorders,
   sliceAxis,
@@ -65,9 +65,12 @@ globalThis.hallDialogueHarness = {
   URL: { createObjectURL: () => `blob:voice-${nextTimer}`, revokeObjectURL: (url) => revoked.push(url) },
   freezeWhileLoading,
 };
-let source = await readFile(new URL("../../src/bmpt/web/js/hall/student-hall-dialogue.js", import.meta.url), "utf8");
+let source = await readFile(
+  new URL("../../src/bmpt/web/js/student-hall/student-hall-dialogue.js", import.meta.url),
+  "utf8",
+);
 source = source.replace(/^import [^;]*;$/gm, "");
-source = `const {NGUI, defaultRpc, language, S, talkExpression, setTimeout, clearTimeout, URL, spriteBorders, sliceAxis, slicePoint, dialogueText, freezeWhileLoading} = globalThis.hallDialogueHarness;\n${source}`;
+source = `const {NGUI, defaultRpc, language, S, talkExpression, setTimeout, clearTimeout, URL, spriteBorders, sliceAxis, slicePoint, dialogueText, freezeWhileLoading} = globalThis.studentHallDialogueHarness;\n${source}`;
 const {
   createDialogue,
   memoryMemo,
@@ -75,10 +78,10 @@ const {
   balloonPosition,
   balloonBody,
   wrapDialogue,
-  lobbyPoint,
-  lobbyBalloon,
+  memorialLobbyPoint,
+  memorialLobbyBalloon,
   clampBalloon,
-  createLobbyDialogue,
+  createMemorialLobbyDialogue,
 } = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 const deferred = () => {
   let resolve, reject;
@@ -213,7 +216,7 @@ function fixture(extra = {}) {
   return { controller, host, calls, players, talking, rendered, errors, diagnostics, settings, signal };
 }
 
-test("actual Lobby balloon keeps native font, sliced sprite and spacing while wrapping all text", () => {
+test("actual Memorial lobby balloon keeps native font, sliced sprite and spacing while wrapping all text", () => {
   const ui = { find, glyphWidth: (text, size) => [...text].length * size };
   const saved = template(),
     text = "\u6700\u8fd1\u5728\u70ba\u4e86\u63d0\u5347\u7bc0\u594f\u800c\u7df4\u7fd2\u3002";
@@ -1037,7 +1040,7 @@ test("scene zoom moves an existing balloon with its actor without rerendering or
   assert.equal(timers.size, 0);
 });
 
-const lobbyGeometry = (extra = {}) => ({
+const memorialLobbyGeometry = (extra = {}) => ({
   info: { dialog: { Talk: [-320, 503] } },
   meta: { touch: { x: -769, y: 361 }, sparse: false },
   view: { x: -1480, y: -832.5, w: 2960, h: 1665 },
@@ -1046,17 +1049,17 @@ const lobbyGeometry = (extra = {}) => ({
 });
 const balloonUi = { find, glyphWidth: (text, size) => ([...text].length * size) / 2 };
 test("memorial Talk maps its top-left prefab point through the same view as the pat point", () => {
-  const g = lobbyGeometry(),
-    at = lobbyPoint({ x: -320, y: 503 }, g.view);
-  const placed = lobbyBalloon(template(), "Hello", g, { ui: balloonUi });
+  const g = memorialLobbyGeometry(),
+    at = memorialLobbyPoint({ x: -320, y: 503 }, g.view);
+  const placed = memorialLobbyBalloon(template(), "Hello", g, { ui: balloonUi });
   assert.equal(placed.x, (1160 / 2960) * 1920);
   assert.ok(Math.abs(placed.y - (329.5 / 1665) * 1080) < 1e-9);
   assert.equal(placed.x, at.x);
   assert.equal(placed.y, at.y);
   assert.equal(placed.flip, false);
   const zoom = { x: -1100, y: -300, w: 1400, h: 787.5 };
-  const moved = lobbyBalloon(template(), "Hello", lobbyGeometry({ view: zoom }), { ui: balloonUi });
-  const point = lobbyPoint({ x: -320, y: 503 }, zoom);
+  const moved = memorialLobbyBalloon(template(), "Hello", memorialLobbyGeometry({ view: zoom }), { ui: balloonUi });
+  const point = memorialLobbyPoint({ x: -320, y: 503 }, zoom);
   assert.equal(moved.x, Math.min(point.x, 1000 - moved.width));
   assert.equal(moved.y, 0);
 });
@@ -1067,27 +1070,27 @@ test("missing or nonfinite Talk, special framing and sparse art all use the pat 
     { framing: "character" },
     { meta: { touch: { x: -769, y: 361 }, sparse: true } },
   ]) {
-    const g = lobbyGeometry(extra),
-      placed = lobbyBalloon(template(), "Hello", g, { ui: balloonUi });
-    const point = lobbyPoint(g.meta.touch, g.view);
+    const g = memorialLobbyGeometry(extra),
+      placed = memorialLobbyBalloon(template(), "Hello", g, { ui: balloonUi });
+    const point = memorialLobbyPoint(g.meta.touch, g.view);
     assert.deepEqual(
       { x: placed.x, y: placed.y, flip: placed.flip },
       balloonPosition({ ...point, width: 0, height: 0 }, placed, g.bounds),
     );
   }
-  const g = lobbyGeometry({ info: {}, meta: { touch: { x: 0, y: -700 } } });
-  const result = lobbyBalloon(template(), "Hello", g, { ui: balloonUi });
+  const g = memorialLobbyGeometry({ info: {}, meta: { touch: { x: 0, y: -700 } } });
+  const result = memorialLobbyBalloon(template(), "Hello", g, { ui: balloonUi });
   assert.equal(result.flip, true);
   assert.ok(result.x + result.width <= g.bounds.right);
   assert.ok(result.y + result.height <= g.bounds.bottom);
 });
 test("fullscreen keeps the Talk balloon by the head, bounded by the whole stage instead of the left view", () => {
-  const g = lobbyGeometry(),
+  const g = memorialLobbyGeometry(),
     line = "A line long enough to reach past the detail panel's edge";
-  const normal = lobbyBalloon(template(), line, g, { ui: balloonUi });
-  const wide = lobbyBalloon(template(), line, { ...g, full: true }, { ui: balloonUi });
+  const normal = memorialLobbyBalloon(template(), line, g, { ui: balloonUi });
+  const wide = memorialLobbyBalloon(template(), line, { ...g, full: true }, { ui: balloonUi });
   assert.equal(find(wide.tree, "Sprite").widgets[0].sprite, find(normal.tree, "Sprite").widgets[0].sprite);
-  const at = lobbyPoint({ x: g.info.dialog.Talk[0], y: g.info.dialog.Talk[1] }, g.view);
+  const at = memorialLobbyPoint({ x: g.info.dialog.Talk[0], y: g.info.dialog.Talk[1] }, g.view);
   assert.deepEqual(
     { x: wide.x, y: wide.y, flip: wide.flip },
     clampBalloon(at, wide, { left: 0, top: 0, right: 1920, bottom: 1080 }),
@@ -1096,7 +1099,7 @@ test("fullscreen keeps the Talk balloon by the head, bounded by the whole stage 
     normal.x + normal.width <= g.bounds.right && wide.x + wide.width > g.bounds.right,
     "only the left view held it in",
   );
-  const panned = lobbyBalloon(
+  const panned = memorialLobbyBalloon(
     template(),
     line,
     { ...g, full: true, view: { ...g.view, x: g.view.x - 100 } },
@@ -1114,14 +1117,14 @@ test("balloon subtitle transitions preserve the 260 ms sequence and immediate la
     add: (...keys) => keys.forEach((key) => classes.add(key)),
     remove: (...keys) => keys.forEach((key) => classes.delete(key)),
   };
-  const h = createLobbyDialogue({
+  const h = createMemorialLobbyDialogue({
     host,
-    geometry: () => lobbyGeometry(),
+    geometry: () => memorialLobbyGeometry(),
     ui: { ...balloonUi, render: async () => {} },
     call: async () => template(),
     raf: (fn) => fn(),
-    later: hallDialogueHarness.setTimeout,
-    cancel: hallDialogueHarness.clearTimeout,
+    later: studentHallDialogueHarness.setTimeout,
+    cancel: studentHallDialogueHarness.clearTimeout,
   });
   h.show("First");
   await flush();
@@ -1144,13 +1147,16 @@ test("balloon subtitle transitions preserve the 260 ms sequence and immediate la
   assert.equal(host.hidden, true);
   h.dispose();
 });
-test("the Hall and memorial lobby use one prepareBalloon and CSS contributes no subtitle look", async () => {
-  const lobby = await readFile(new URL("../../src/bmpt/web/js/lobby/lobby-players.js", import.meta.url), "utf8");
+test("the Student Hall and memorial lobby use one prepareBalloon and CSS contributes no subtitle look", async () => {
+  const memorialLobby = await readFile(
+    new URL("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-players.js", import.meta.url),
+    "utf8",
+  );
   const css = await readFile(new URL("../../src/bmpt/web/css/app.css", import.meta.url), "utf8");
-  assert.match(flat(lobby), /import\("\.\.\/hall\/student-hall-dialogue.js"\)/);
+  assert.match(flat(memorialLobby), /import\("\.\.\/student-hall\/student-hall-dialogue.js"\)/);
   assert.equal((source.match(/function prepareBalloon\(/g) || []).length, 1);
   assert.equal((flat(source).match(/prepareBalloon\(template|prepareBalloon\(saved/g) || []).length, 3);
-  for (const rule of css.matchAll(/[^{}]*\.lobby-subtitle[^{}]*\{([^}]*)\}/g))
+  for (const rule of css.matchAll(/[^{}]*\.memorial-lobby-subtitle[^{}]*\{([^}]*)\}/g))
     assert.doesNotMatch(rule[1], /background|border-radius|color|font|padding|bottom:|left:/);
 });
 
@@ -1165,8 +1171,8 @@ test("camera motion repositions an existing Talk drawing, flips when needed and 
     add: (...keys) => keys.forEach((key) => classes.add(key)),
     remove: (...keys) => keys.forEach((key) => classes.delete(key)),
   };
-  let g = lobbyGeometry({ info: {} });
-  const h = createLobbyDialogue({
+  let g = memorialLobbyGeometry({ info: {} });
+  const h = createMemorialLobbyDialogue({
     host,
     geometry: () => g,
     ui: { ...balloonUi, render: async (tree) => draws.push(tree) },
@@ -1175,8 +1181,8 @@ test("camera motion repositions an existing Talk drawing, flips when needed and 
       return template();
     },
     raf: (fn) => frames.push(fn),
-    later: hallDialogueHarness.setTimeout,
-    cancel: hallDialogueHarness.clearTimeout,
+    later: studentHallDialogueHarness.setTimeout,
+    cancel: studentHallDialogueHarness.clearTimeout,
   });
   h.show("Hello");
   await flush();
@@ -1210,8 +1216,8 @@ test("camera motion repositions an existing Talk drawing, flips when needed and 
   h.dispose();
 });
 test("Talk remains inside the visible left area at minimum/default/large windows and 1x/2x/3x densities", () => {
-  const g = lobbyGeometry({ info: {}, meta: { touch: { x: -10, y: -700 } } });
-  const p = lobbyBalloon(template(), "Hello", g, { ui: balloonUi });
+  const g = memorialLobbyGeometry({ info: {}, meta: { touch: { x: -10, y: -700 } } });
+  const p = memorialLobbyBalloon(template(), "Hello", g, { ui: balloonUi });
   for (const [w, h] of [
     [960, 540],
     [1600, 900],
@@ -1226,7 +1232,7 @@ test("Talk remains inside the visible left area at minimum/default/large windows
     }
 });
 
-test("Now Loading over the Hall pauses its voice and caption lifetime, and both go on afterwards", async () => {
+test("Now Loading over the Student Hall pauses its voice and caption lifetime, and both go on afterwards", async () => {
   const h = fixture();
   await h.controller.play(entry());
   const voice = h.players[0];

@@ -37,8 +37,8 @@
 		"info": {
 			"title": {
 				"portrait": "立ち絵情報",
-				"lobby": "メモリアルロビー情報",
-				"model": "3Dモデル情報"
+				"memorialLobby": "メモリアルロビー情報",
+				"chibi": "3Dモデル情報"
 			},
 			"details": "詳細",
 			"current": "現在",
@@ -49,30 +49,30 @@
 		"row": {
 			"box": {
 				"portrait": "立ち絵",
-				"lobby": "メモリアルロビー",
-				"model": "3Dモデル"
+				"memorialLobby": "メモリアルロビー",
+				"chibi": "3Dモデル"
 			},
 			"switch": {
 				"portrait": "立ち絵切り替え",
-				"lobby": "メモリアルロビー切り替え",
-				"model": "3Dモデル切り替え"
+				"memorialLobby": "メモリアルロビー切り替え",
+				"chibi": "3Dモデル切り替え"
 			},
 			"add": {
 				"portrait": "立ち絵追加",
-				"lobby": "メモリアルロビー追加",
-				"model": "3Dモデル追加"
+				"memorialLobby": "メモリアルロビー追加",
+				"chibi": "3Dモデル追加"
 			},
 			"four": {
 				"portrait": "差分",
-				"lobby": "会話",
-				"model": "モーション"
+				"memorialLobby": "会話",
+				"chibi": "モーション"
 			}
 		},
 		"detail": {
 			"copyFailed": "名前をコピーできませんでした。",
 			"failed": "プレビューを表示できません"
 		},
-		"lobby": {
+		"memorialLobby": {
 			"original": "公式",
 			"fullscreen": "フルスクリーン",
 			"playAll": "会話をすべて再生",
@@ -84,7 +84,7 @@
 			"cameraAlbum": "アルバム",
 			"cameraName": "カメラ {n}"
 		},
-		"model": {
+		"chibi": {
 			"original": "公式",
 			"has": "あり",
 			"none": "なし",
@@ -185,7 +185,7 @@
 			"classic": "{label} - クラシック画面",
 			"import": "MODインポート"
 		},
-		"roster": {
+		"studentList": {
 			"title": "生徒リスト",
 			"merge": "生徒ごとにまとめる",
 			"search": "検索",
@@ -224,9 +224,9 @@
 			}
 		},
 		"band": {
-			"modCounts": "立ち絵：{portraits}、メモリアルロビー：{lobbies}",
+			"modCounts": "立ち絵：{portraits}、メモリアルロビー：{memorialLobbies}",
 			"portrait": "立ち絵",
-			"lobby": "ロビー",
+			"memorialLobby": "ロビー",
 			"replaced": "置き換え済み"
 		},
 		"bar": {
@@ -234,8 +234,8 @@
 		},
 		"tab": {
 			"portrait": "立ち絵",
-			"lobby": "メモリアルロビー",
-			"model": "3Dモデル"
+			"memorialLobby": "メモリアルロビー",
+			"chibi": "3Dモデル"
 		},
 		"status": {
 			"original": "公式",
@@ -621,8 +621,8 @@
 			"thumbnail_in_use": "使用中のサムネイルです",
 			"thumbnail_library_invalid": "サムネイルライブラリを読み込めません",
 			"thumbnail_target_unavailable": "生徒一覧の画像が利用できません",
-			"lobby_camera_unsupported": "このメモリアルロビーではカメラを使用できません",
-			"lobby_camera_failed": "カメラを保存できません",
+			"memorial_lobby_camera_unsupported": "このメモリアルロビーではカメラを使用できません",
+			"memorial_lobby_camera_failed": "カメラを保存できません",
 			"thumbnail_apply_failed": "サムネイルを適用できません",
 			"student_hall_last_portrait": "立ち絵を1つ以上残してください",
 			"native_only": "デスクトップアプリで利用できます"
@@ -843,18 +843,18 @@
 			"changes": "変更：",
 			"autoUpdate": "自動更新可能：",
 			"remapUpdate": "現在の .atlas ファイルに合わせて Mod のテクスチャを再配置",
-			"graft": "Mod の .skel ファイルを維持し、公式の新しい差分を追加",
-			"graftOldRig": "Mod 作成時の .skel ファイルと .atlas ファイルを使い、公式の新しい差分を追加",
-			"graftAction": "差分を追加",
+			"addExpressions": "Mod の .skel ファイルを維持し、公式の新しい差分を追加",
+			"addExpressionsOldRig": "Mod 作成時の .skel ファイルと .atlas ファイルを使い、公式の新しい差分を追加",
+			"addExpressionsAction": "差分を追加",
 			"converterAction": "変換ツールで追加",
 			"converterTitle": "SpineSkeletonDataConverter をダウンロード",
 			"converterLicence": "サードパーティ製ツール、PolyForm Noncommercial 1.0.0、非商用のみ",
 			"converterMac": "macOS 版は各自でビルド",
 			"converterDownload": "ダウンロード",
 			"converterPage": "プロジェクトページ",
-			"graftAnimations": "Mod の .skel ファイルを維持し、公式の新しいアニメーションを追加",
-			"graftAnimationsAction": "アニメーションを追加",
-			"graftRefused": "{name}、追加できないアニメーション：{names}",
+			"addAnimations": "Mod の .skel ファイルを維持し、公式の新しいアニメーションを追加",
+			"addAnimationsAction": "アニメーションを追加",
+			"addAnimationsRefused": "{name}、追加できないアニメーション：{names}",
 			"refusedAnimation": "{name}（{why}）",
 			"why": {
 				"bone": "ボーン {name} なし",
@@ -893,23 +893,23 @@
 			"zoomOut": "縮小",
 			"marks": "変更箇所を表示",
 			"oldRig": "旧 .skel ファイルと .atlas ファイルを使用：{names}",
-			"grafted": "追加した差分：{n}",
-			"graftCorrected": "自動補正：{n}",
-			"graftUnfixed": "手動修正が必要：{n}",
-			"graftRefused": "追加できなかったアニメーション：{n}",
-			"graftGrown": "テクスチャを {n} px 拡張",
-			"graftUnanchored": "新しい差分は公式の位置に配置",
+			"addedExpressions": "追加した差分：{n}",
+			"addAnimationsCorrected": "自動補正：{n}",
+			"addAnimationsUnfixed": "手動修正が必要：{n}",
+			"addAnimationsRefused": "追加できなかったアニメーション：{n}",
+			"addAnimationsGrown": "テクスチャを {n} px 拡張",
+			"addExpressionsUnanchored": "新しい差分は公式の位置に配置",
 			"expression": "差分 {name}（{n}/{total}）",
 			"previousExpression": "前の差分",
 			"nextExpression": "次の差分",
-			"graftDone": "差分を追加済み",
-			"graftPartial": "差分を追加済み、一部要確認",
-			"graftedAnimations": "追加したアニメーション：{n}",
+			"addExpressionsDone": "差分を追加済み",
+			"addExpressionsPartial": "差分を追加済み、一部要確認",
+			"addedAnimations": "追加したアニメーション：{n}",
 			"animation": "アニメーション {name}（{n}/{total}）",
 			"previousAnimation": "前のアニメーション",
 			"nextAnimation": "次のアニメーション",
-			"graftAnimationsDone": "アニメーションを追加済み",
-			"graftAnimationsPartial": "アニメーションを追加済み、一部未追加"
+			"addAnimationsDone": "アニメーションを追加済み",
+			"addAnimationsPartial": "アニメーションを追加済み、一部未追加"
 		},
 		"spine": {
 			"license": {
@@ -1055,9 +1055,9 @@
 				"add": "Mod ライブラリに追加",
 				"apply": "Mod 適用",
 				"export": "ファイル出力",
-				"readModel": "モデル読み込み",
+				"readChibi": "モデル読み込み",
 				"fitCostume": "衣装合わせ",
-				"buildModel": "モデル生成",
+				"buildChibi": "モデル生成",
 				"write": "ゲームファイル書き込み",
 				"restore": "公式ファイル復元"
 			},
@@ -1127,7 +1127,7 @@
 			"success": "出力完了。フォルダーを開きますか？",
 			"openFolder": "フォルダーを開く"
 		},
-		"hall": {
+		"studentHall": {
 			"title": "生徒ロビー",
 			"portraits": "立ち絵",
 			"memorial": "メモリアルロビー",
@@ -1181,12 +1181,12 @@
 			"layerBack": "最背面へ",
 			"flipHorizontal": "左右反転"
 		},
-		"photo": {
+		"thumbnail": {
 			"open": "サムネイル撮影",
 			"title": "サムネイル撮影",
 			"back": "戻る",
 			"portrait": "立ち絵",
-			"lobby": "メモリアルロビー",
+			"memorialLobby": "メモリアルロビー",
 			"gridOn": "グリッド非表示",
 			"gridOff": "グリッド表示",
 			"capture": "撮影",
@@ -1210,7 +1210,7 @@
 			"captureFailed": "撮影失敗",
 			"noAssets": "利用可能な素材がありません",
 			"natural": "通常",
-			"photoLabel": "サムネイル",
+			"thumbnailLabel": "サムネイル",
 			"next": "次へ",
 			"previous": "前へ",
 			"applied": "適用済み",
@@ -1238,7 +1238,7 @@
 					"title": "生徒のサムネイル",
 					"body": "生徒詳細の全画面表示でサムネイル撮影が可能に"
 				},
-				"hall-viewing-zoom": {
+				"student-hall-viewing-zoom": {
 					"title": "生徒ロビーを拡大",
 					"body": "ホイールやピンチで立ち絵のシーンを拡大、移動して表示"
 				}

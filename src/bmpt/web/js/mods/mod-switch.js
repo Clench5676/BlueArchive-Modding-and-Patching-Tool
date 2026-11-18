@@ -47,7 +47,7 @@ export function errorText(code, params = {}) {
  * @param {object} state mods.state.
  * @param {object} [options]
  * @param {"top"|"settings"} [options.place] "top" (the top bar) hides the switch without a current install (the
- *     roster and the detail screen are not available then); "settings" always shows it.
+ *     student list and the detail screen are not available then); "settings" always shows it.
  */
 export function view(state, { place = "top" } = {}) {
   if (!state) return { hidden: true, on: true, busy: false, unavailable: false, reason: null, dot: false };
@@ -164,9 +164,9 @@ export function entryLabel(entry, nameOf = (e) => e?.alt || e?.core || "", sep =
   }
   const kind =
     entry?.resourceType === "chibi"
-      ? "tab.model"
+      ? "tab.chibi"
       : entry?.resourceType === "memorialLobby" || (entry?.core && !/_spr$/i.test(entry.core))
-        ? "tab.lobby"
+        ? "tab.memorialLobby"
         : "tab.portrait";
   return `${nameOf(entry)}${sep}${T(kind)}`;
 }
@@ -282,7 +282,7 @@ export function driftChoice(button, entries, selected) {
 let state = null;
 let explainedHere = false; // the explanation was shown in this page (mods.state follows a moment later)
 let inFlight = false; // a toggle (or Retry) this page started runs
-let names = async () => (e) => e?.alt || e?.core || ""; // main.js gives the alts' names (the roster's data)
+let names = async () => (e) => e?.alt || e?.core || ""; // main.js gives the alts' names (the student list's data)
 let refreshPage = async () => {}; // main.js resolves this once the visible page has refreshed and drawn
 const REFRESH_CAP = 15000;
 let host = null,

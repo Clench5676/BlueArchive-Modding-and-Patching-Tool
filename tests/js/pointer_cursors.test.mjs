@@ -51,8 +51,8 @@ test("a hit area or an unseen control never sets a system cursor of its own", ()
   assert.doesNotMatch(app.match(/\.hit\.slider-range\s*\{[^}]*\}/)[0], /cursor/);
   assert.match(app, /^\.hit\s*\{[^}]*cursor: var\(--cursor-press\)/m);
   // a card that does not open a preview shows the plain game pointer, not the system arrow
-  const hall = readFileSync(join(WEB, "js/hall/student-hall-ui.js"), "utf8");
-  assert.match(hall, /if \(!interactive\) \{[^}]*hit\.style\.cursor = "var\(--cursor\)"/);
+  const studentHall = readFileSync(join(WEB, "js/student-hall/student-hall-ui.js"), "utf8");
+  assert.match(studentHall, /if \(!interactive\) \{[^}]*hit\.style\.cursor = "var\(--cursor\)"/);
 });
 
 test("only the root sets the pointer variables, cursor.js once the game's pointer is read", () => {
@@ -72,13 +72,15 @@ test("only the root sets the pointer variables, cursor.js once the game's pointe
   ]);
 });
 
-test("camera mode keeps the game's pointer: .photo-active sets no cursor and no pointer variable", () => {
-  const css = read("css/photography.css");
-  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, selector]) => /\.photo-active/.test(selector));
-  assert.ok(rules.length > 3, `${rules.length} .photo-active rules found`);
+test("camera mode keeps the game's pointer: .thumbnail-active sets no cursor and no pointer variable", () => {
+  const css = read("css/thumbnail-capture.css");
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, selector]) =>
+    /\.thumbnail-active/.test(selector),
+  );
+  assert.ok(rules.length > 3, `${rules.length} .thumbnail-active rules found`);
   for (const [, selector, body] of rules) assert.doesNotMatch(body, /cursor/, `${selector.trim()} changes the pointer`);
   // the touch effect rule next to it stays
-  assert.match(css, /\.photo-active \.touch-fx\s*\{[^}]*display:\s*none/);
+  assert.match(css, /\.thumbnail-active \.touch-fx\s*\{[^}]*display:\s*none/);
   // only the pan surface changes the pointer in camera mode (grab, the drag handle)
-  assert.match(css, /\.photo-pan\s*\{[^}]*cursor:\s*grab/);
+  assert.match(css, /\.thumbnail-pan\s*\{[^}]*cursor:\s*grab/);
 });

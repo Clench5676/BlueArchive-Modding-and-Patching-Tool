@@ -30,7 +30,7 @@ import {
   noteFit,
   noteNode,
 } from "./settings-rows.js";
-import { ZOOM_LABELS, ZOOM_MODES } from "../lobby/lobby-measure.js";
+import { ZOOM_LABELS, ZOOM_MODES } from "../memorial-lobby/memorial-lobby-measure.js";
 import { on, rpc } from "../core/api.js";
 import { T, errorText, platform } from "../core/i18n.js";
 import { $, DOT, S, clone, glyphsOf, hitButton, wrapPath } from "../core/util.js";
@@ -235,7 +235,7 @@ function sliderRow(name, y, title, value, muted) {
 }
 
 // the custom zoom-out limit: the slider row without the sound icons, the value where the mute check is
-const ZOOM_CUSTOM = [1, 4]; // game views across (webui/state.py LOBBY_ZOOM_CUSTOM), in 0.1 steps
+const ZOOM_CUSTOM = [1, 4]; // game views across (webui/state.py MEMORIAL_LOBBY_ZOOM_CUSTOM), in 0.1 steps
 const factorText = (v) => T("settings.zoomOut.factor", { v: v.toFixed(1) });
 function factorRow(name, y, title, value) {
   const [lo, hi] = ZOOM_CUSTOM,
@@ -533,7 +533,7 @@ function rows({ builtSize = null, sizeError = null } = {}) {
     const modes = ZOOM_MODES.map((m) => [m, T(`settings.zoomOut.${ZOOM_LABELS[m]}`)]);
     add(radioRow("ZoomOut", 0, T("settings.zoomOut.label"), modes, zoom.mode, (v) => set("memorialLobbyZoomOut", v)));
     if (zoom.mode === "custom") add(factorRow("ZoomCustom", 0, T("settings.zoomOut.limit"), zoom.custom));
-    // the game's PP option: the lobby's post-processing volumes (colour grading, chromatic aberration, Panini)
+    // the game's PP option: the memorial lobby's post-processing volumes (colour grading, chromatic aberration, Panini)
     add(
       radioRow(
         "Post",
@@ -547,7 +547,7 @@ function rows({ builtSize = null, sizeError = null } = {}) {
         (v) => set("memorialLobbyPostProcessing", v),
       ),
     );
-    // the memorial lobby's intro when it is entered (off: the lobby as the intro leaves it)
+    // the memorial lobby's intro when it is entered (off: the memorial lobby as the intro leaves it)
     add(
       radioRow(
         "Intro",
@@ -718,7 +718,7 @@ async function saveSetting(key, value) {
   return next;
 }
 
-// --- the sliders: a native range input over the game's slider, as the Hall's size slider has it. The pointer,
+// --- the sliders: a native range input over the game's slider, as the Student Hall's size slider has it. The pointer,
 // the arrow keys, Home, End and Page Up and Down move it, a screen reader reads it (name, value); the game's
 // thumb follows it (and the value label, if any), and the value is saved when the input commits (the pointer's
 // release, each key press). The input is unseen: its focus shows as a ring on the thumb. A drag the system

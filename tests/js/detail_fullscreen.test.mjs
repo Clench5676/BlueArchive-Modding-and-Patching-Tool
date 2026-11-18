@@ -8,7 +8,7 @@ const source = readFileSync(new URL("../../src/bmpt/web/js/detail/detail-fullscr
 const code = source
   .slice(source.indexOf("// fullscreen memorial lobby:"), source.indexOf("// the switch card's still"))
   .replace(/^export /gm, "");
-function harness(start, hasLobby = true) {
+function harness(start, hasMemorialLobby = true) {
   const calls = [],
     nodes = new Map();
   const switchButton = { dataset: { visualAction: "Btn_HideUI" }, focus() {} };
@@ -35,7 +35,7 @@ function harness(start, hasLobby = true) {
     fullscreen: true,
     open: true,
     busy: false,
-    photoSession: false,
+    thumbnailSession: false,
     altId: selection.skin,
     selection,
     mainPlayer: { skeleton: {} },
@@ -45,14 +45,14 @@ function harness(start, hasLobby = true) {
     document: { querySelector: () => node("topbar") },
     T: (key) => key,
     alt: () => ({ key: selection.skin }),
-    previewAvailable: (_, kind) => kind !== "memorialLobby" || hasLobby,
-    switchKindOf: (part) => ({ portrait: "portrait", lobby: "memorialLobby", model: "chibi" })[part] || null,
+    previewAvailable: (_, kind) => kind !== "memorialLobby" || hasMemorialLobby,
+    switchKindOf: (part) => ({ portrait: "portrait", memorialLobby: "memorialLobby", chibi: "chibi" })[part] || null,
     detailViewport: () => ({ detail: true }),
     Loading: { held: () => false },
-    Photo: { visualEntry: async (on) => calls.push(["launcher", on]) },
+    ThumbnailCapture: { visualEntry: async (on) => calls.push(["launcher", on]) },
     Camera: { close() {}, entry: async () => {} },
-    Lobby: { frame: (value) => calls.push(["lobby.frame", value]), interactive() {} },
-    modelLib: null,
+    MemorialLobby: { frame: (value) => calls.push(["memorialLobby.frame", value]), interactive() {} },
+    chibiLib: null,
     Visual: {
       close: (options) => calls.push(["visual.close", options]),
       uiOut() {},
@@ -72,7 +72,7 @@ function harness(start, hasLobby = true) {
       return true;
     },
     stillAfterFullscreen() {},
-    photoBridge: { release: async () => {} },
+    thumbnailBridge: { release: async () => {} },
   };
   // the screen's state this module writes through detail.js's setters
   env.setTab = (value) => {
@@ -88,17 +88,17 @@ function harness(start, hasLobby = true) {
   return { env, calls, selection };
 }
 
-for (const start of ["portrait", "lobby"])
+for (const start of ["portrait", "memorialLobby"])
   test(`${start} switches directly and Back retains the selected preview state`, async () => {
     const { env, calls, selection } = harness(start),
       before = { ...selection };
     await env.switchView();
-    assert.equal(env.tab, start === "portrait" ? "lobby" : "portrait");
+    assert.equal(env.tab, start === "portrait" ? "memorialLobby" : "portrait");
     const close = calls.find(([name]) => name === "visual.close")[1];
     assert.equal(close.instant, true);
     assert.equal(close.restore, false);
     assert.ok(!calls.some(([name]) => name === "uiBack"));
-    assert.ok(!calls.some(([name, value]) => name === "lobby.frame" && value === "left"));
+    assert.ok(!calls.some(([name, value]) => name === "memorialLobby.frame" && value === "left"));
     const entry = calls.find(([name]) => name === "visual.open");
     if (entry) assert.equal(entry[1].instant, true);
     assert.deepEqual(selection, before);

@@ -98,9 +98,9 @@ class El {
     }
   }
   querySelectorAll(selector) {
-    if (selector === ".lobby-view .lobby-layer:not(.lobby-off) canvas")
+    if (selector === ".memorial-lobby-view .memorial-lobby-layer:not(.memorial-lobby-off) canvas")
       return walk(this)
-        .filter((n) => n.classList.contains("lobby-layer") && !n.classList.contains("lobby-off"))
+        .filter((n) => n.classList.contains("memorial-lobby-layer") && !n.classList.contains("memorial-lobby-off"))
         .flatMap((n) => n.querySelectorAll("canvas"));
     const match = (n) =>
       selector === "*"
@@ -191,8 +191,8 @@ const hosts = Object.fromEntries(
     "ngui-chips",
     "ngui-expr",
     "portrait",
-    "lobby",
-    "model",
+    "memorial-lobby",
+    "chibi",
     "popup",
     "picker",
     "dialog",
@@ -379,7 +379,7 @@ globalThis.spine = {
         clearTracks() {},
         apply() {},
       };
-      if (playerMode === "lobby-ready" && el.className === "lobby-layer") {
+      if (playerMode === "memorial-lobby-ready" && el.className === "memorial-lobby-layer") {
         this.skeleton.data.findBone = () => null;
         this.skeleton = new Skeleton(this.skeleton.data);
         this.animationState = new AnimationState({ skeletonData: this.skeleton.data });
@@ -560,11 +560,11 @@ const reply = (data, status = 200) => ({ ok: status === 200, status, json: async
 let student,
   indexMode = "ready",
   layoutMode = "ready",
-  lobbyMode = "pending",
+  memorialLobbyMode = "pending",
   optionalPending = false,
   modsEnabled = true;
 let modsInstall = null,
-  modelAdoption = null;
+  chibiAdoption = null;
 let seenReply = async () => ({ result: null });
 const saveAlias = async ({ id, alias }) => {
   const mod = student.alts.flatMap((v) => v.modList || []).find((m) => m.id === id);
@@ -602,9 +602,9 @@ globalThis.fetch = async (url, opts = {}) => {
     }
     if (method === "jobs.get" && request.params.id === "apply-test")
       return reply({ result: { state: "done", result: { deferred: !modsEnabled, files: [] } } });
-    if (method === "mods.adopt" && modelAdoption) return reply({ result: "model-adoption" });
-    if (method === "jobs.get" && request.params.id === "model-adoption")
-      return reply({ result: { state: "done", result: modelAdoption() } });
+    if (method === "mods.adopt" && chibiAdoption) return reply({ result: "chibi-adoption" });
+    if (method === "jobs.get" && request.params.id === "chibi-adoption")
+      return reply({ result: { state: "done", result: chibiAdoption() } });
     return reply({
       result:
         method === "student.get" ? student : method === "mods.state" ? { enabled: modsEnabled, ...modsInstall } : null,
@@ -641,14 +641,14 @@ globalThis.fetch = async (url, opts = {}) => {
     return reply(node("Empty"));
   }
   if (url.startsWith("/asset/spine/") && url.endsWith("manifest.json")) {
-    if (url.includes("/memorialLobby/") && lobbyMode === "pending") return new Promise(() => {});
+    if (url.includes("/memorialLobby/") && memorialLobbyMode === "pending") return new Promise(() => {});
     return reply({ revision: portraitRevision.repeat(64) }, url.includes("/portrait/") ? portraitStatus : 200);
   }
   if (url.startsWith("/asset/spine/memorialLobby/")) {
-    if (lobbyMode === "pending") return new Promise(() => {});
+    if (memorialLobbyMode === "pending") return new Promise(() => {});
     return reply(url.endsWith("files.json") ? ["ibuki_home.skel", "ibuki_home.atlas"] : null);
   }
-  if (url.startsWith("/asset/spine/mod/library-only-lobby/")) {
+  if (url.startsWith("/asset/spine/mod/library-only-memorial-lobby/")) {
     return reply(url.endsWith("files.json") ? ["ibuki_home.skel", "ibuki_home.atlas"] : null);
   }
   throw new Error(`Unexpected fetch ${url}`);
@@ -671,16 +671,16 @@ setStrings(
   "en-US",
   flat(JSON.parse(readFileSync(new URL("../../src/bmpt/locales/en-US.json", import.meta.url), "utf8"))),
 );
-const modelRequests = [],
-  modelStillRequests = [];
-let modelPreview = null;
-globalThis.__detailModel = {
+const chibiRequests = [],
+  chibiStillRequests = [];
+let chibiPreview = null;
+globalThis.__detailChibi = {
   createStillView() {
     let source;
     return {
       async load(url) {
         source = url;
-        modelStillRequests.push(url);
+        chibiStillRequests.push(url);
       },
       async renderStill() {
         return `blob:rendered-${source}`;
@@ -689,10 +689,10 @@ globalThis.__detailModel = {
     };
   },
   async show(key, host, options) {
-    modelRequests.push({ key, ...options });
-    modelPreview = options;
+    chibiRequests.push({ key, ...options });
+    chibiPreview = options;
     const canvas = document.createElement("canvas");
-    canvas.className = "model-view ready";
+    canvas.className = "chibi-view ready";
     host.replaceChildren(canvas);
     return ["idle"];
   },
@@ -703,11 +703,11 @@ globalThis.__detailModel = {
   settled: async () => {},
   current: () => "idle",
   play() {},
-  snapshot: () => `blob:model-${modelPreview?.source}`,
+  snapshot: () => `blob:chibi-${chibiPreview?.source}`,
 };
-const modelStub = `data:text/javascript,${encodeURIComponent(
-  Object.keys(globalThis.__detailModel)
-    .map((name) => `export const ${name} = (...args) => globalThis.__detailModel.${name}(...args);`)
+const chibiStub = `data:text/javascript,${encodeURIComponent(
+  Object.keys(globalThis.__detailChibi)
+    .map((name) => `export const ${name} = (...args) => globalThis.__detailChibi.${name}(...args);`)
     .join("\n"),
 )}`;
 register(
@@ -727,13 +727,13 @@ register(
   return result;
 }
 export async function resolve(spec, ctx, next) {
-  if ((spec === "../model/model.js" && ctx.parentURL?.endsWith("/detail.js")) ||
-      (spec === "./model.js" && ctx.parentURL?.endsWith("/model-still.js")))
-    return { url: ${JSON.stringify(modelStub)}, shortCircuit: true };
+  if ((spec === "../chibi/chibi.js" && ctx.parentURL?.endsWith("/detail.js")) ||
+      (spec === "./chibi.js" && ctx.parentURL?.endsWith("/chibi-still.js")))
+    return { url: ${JSON.stringify(chibiStub)}, shortCircuit: true };
   return next(spec, ctx);
 }`)}`,
 );
-await import(modelStub);
+await import(chibiStub);
 // detail.js first, as the app loads it; then the modules split from it, read as one with it
 const Detail = Object.assign(
   {},
@@ -786,7 +786,7 @@ let invalidations = 0;
 const context = {
   prefs: { voiceMuted: true, voiceVolume: 0 },
   info: {},
-  invalidateRoster() {
+  invalidateStudentList() {
     invalidations++;
   },
   step() {},
@@ -950,7 +950,7 @@ test("detail waits for UI images and bounds optional thumbnails before reveal", 
     assert.ok(recovered.style.backgroundImage, "a fresh render retries failed sprites");
     assert.equal(recovered.style.backgroundColor, "");
     back.onclick();
-    assert.equal(location.hash, "#/roster");
+    assert.equal(location.hash, "#/student-list");
   } finally {
     Detail.hide();
     await flush();
@@ -1244,18 +1244,18 @@ for (const status of [404, 500])
     }
   });
 
-test("a lobby switch stays covered until its failed preview settles and can retry", async (t) => {
+test("a memorial lobby switch stays covered until its failed preview settles and can retry", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     errors.length = 0;
-    student = modStudent("memorialLobby", "lobby");
+    student = modStudent("memorialLobby", "memorialLobby");
     const showing = Detail.show(context, student, "ibuki");
     await flush();
     t.mock.timers.tick(1300);
     await flush();
     await finish(t, showing);
-    const lobbyTab = walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("Tab_2/Tab_Off/Label"));
-    const switching = lobbyTab.click();
+    const memorialLobbyTab = walk(hosts.ngui).find((e) => e.dataset.part?.endsWith("Tab_2/Tab_Off/Label"));
+    const switching = memorialLobbyTab.click();
     await flush();
     assert.equal(Loading.covering(), false, "in-page preview waits keep the current screen visible");
     assert.equal(Loading.held(), true);
@@ -1265,13 +1265,16 @@ test("a lobby switch stays covered until its failed preview settles and can retr
     }
     await finish(t, switching);
     assert.equal(Loading.covering(), false);
-    assert.ok(switchButton(), "the new panel commits even though Lobby.show is pending");
+    assert.ok(switchButton(), "the new panel commits even though MemorialLobby.show is pending");
     assert.equal(switchButton().getAttribute("aria-label"), "Switch Memorial Lobby");
     t.mock.timers.tick(16000);
     await flush();
-    assert.ok(errors.some((a) => a.some((e) => String(e).includes("Detail lobby: timed out"))));
-    assert.equal(hosts.lobby.querySelector(".lobby-unavailable")?.textContent, "Preview unavailable");
-    assert.ok(!hosts.lobby.classList.contains("pending"));
+    assert.ok(errors.some((a) => a.some((e) => String(e).includes("Detail memorialLobby: timed out"))));
+    assert.equal(
+      hosts["memorial-lobby"].querySelector(".memorial-lobby-unavailable")?.textContent,
+      "Preview unavailable",
+    );
+    assert.ok(!hosts["memorial-lobby"].classList.contains("pending"));
     assert.ok(
       rpcRequests.some(
         (r) => r.method === "preview.failed" && r.params.url.includes("/memorialLobby/ibuki_home/") && r.params.step,
@@ -1296,12 +1299,12 @@ test("a lobby switch stays covered until its failed preview settles and can retr
     await finish(t, retry);
     assert.ok(
       assetRequests.filter((url) => url.includes("/memorialLobby/") && url.endsWith("manifest.json")).length > before,
-      "showing the lobby tab again asks for a new source after failure",
+      "showing the memorial lobby tab again asks for a new source after failure",
     );
     t.mock.timers.tick(16000);
     await flush();
     back.onclick();
-    assert.equal(location.hash, "#/roster");
+    assert.equal(location.hash, "#/student-list");
   } finally {
     Detail.hide();
     await flush();
@@ -1315,7 +1318,7 @@ for (const core of ["arona_workpage_daytime", "np0032_npc"])
       t.mock.timers.enable({ apis: ["setTimeout"] });
       try {
         errors.length = 0;
-        lobbyMode = "pending";
+        memorialLobbyMode = "pending";
         const v = {
           key: `special:${core}`,
           portrait: null,
@@ -1385,8 +1388,11 @@ for (const core of ["arona_workpage_daytime", "np0032_npc"])
           !playerRequests.slice(start).some((url) => url.includes("/portrait/")),
           "no missing portrait player is started",
         );
-        assert.equal(hosts.lobby.querySelector(".lobby-unavailable")?.textContent, "Preview unavailable");
-        assert.ok(!hosts.lobby.classList.contains("pending"));
+        assert.equal(
+          hosts["memorial-lobby"].querySelector(".memorial-lobby-unavailable")?.textContent,
+          "Preview unavailable",
+        );
+        assert.ok(!hosts["memorial-lobby"].classList.contains("pending"));
         assert.equal(switchButton().getAttribute("aria-label"), "Switch L2D");
         assert.ok(switchButton().listeners.click.length, "apply and restore still have a switch card");
         assert.ok(!rpcRequests.slice(rpcStart).some((r) => r.method === "memorialLobby.lines"));
@@ -1423,7 +1429,7 @@ for (const core of ["arona_workpage_daytime", "np0032_npc"])
         assert.ok(!walk(hosts.popup).some((el) => el.getAttribute("aria-label") === "Remap to current version"));
         await closeSwitch();
         back.onclick();
-        assert.equal(location.hash, "#/roster");
+        assert.equal(location.hash, "#/student-list");
       } finally {
         Detail.hide();
         await flush();
@@ -1442,17 +1448,20 @@ test("NGUI logs missing atlas metadata and keeps placeholder geometry for contro
   assert.ok(errors.some((a) => a.some((e) => String(e).includes("Missing sprite Common/MissingSprite"))));
 });
 
-test("a lobby player setup exception settles its layer instead of hanging Lobby.show", async () => {
-  const Lobby = await import("../../src/bmpt/web/js/lobby/lobby.js");
+test("a memorial lobby player setup exception settles its layer instead of hanging MemorialLobby.show", async () => {
+  const MemorialLobby = await import("../../src/bmpt/web/js/memorial-lobby/memorial-lobby.js");
   try {
     errors.length = 0;
-    lobbyMode = "ready";
+    memorialLobbyMode = "ready";
     playerMode = "broken";
-    await assert.rejects(Lobby.show("ibuki_home", hosts.lobby, "ibuki"), /Mod skeleton setup failed/);
-    assert.ok(errors.some((a) => a[0] === "Lobby player setup failed"));
+    await assert.rejects(
+      MemorialLobby.show("ibuki_home", hosts["memorial-lobby"], "ibuki"),
+      /Mod skeleton setup failed/,
+    );
+    assert.ok(errors.some((a) => a[0] === "MemorialLobby player setup failed"));
   } finally {
-    Lobby.hide(hosts.lobby);
-    lobbyMode = "pending";
+    MemorialLobby.hide(hosts["memorial-lobby"]);
+    memorialLobbyMode = "pending";
     playerMode = "ready";
   }
 });
@@ -1550,7 +1559,7 @@ test("NGUI image callbacks have a deadline and a later request can retry", async
   }
 });
 
-test("long portrait and lobby names only resize their own info cell in every locale", async (t) => {
+test("long portrait and memorial lobby names only resize their own info cell in every locale", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const paths = [
     "Label_Life/Data_Widget/Data",
@@ -1579,10 +1588,10 @@ test("long portrait and lobby names only resize their own info cell in every loc
           t.mock.timers.tick(16000);
           await flush();
           await finish(t, showing);
-          const lobbyTab =
+          const memorialLobbyTab =
             kind === "memorialLobby" && walk(hosts.ngui).find((el) => el.dataset.part?.endsWith("Tab_2/Tab_Off/Label"));
-          if (lobbyTab) {
-            const switching = lobbyTab.click();
+          if (memorialLobbyTab) {
+            const switching = memorialLobbyTab.click();
             await flush();
             t.mock.timers.tick(16000);
             await flush();
@@ -1684,7 +1693,7 @@ test("student aliases lead the existing name band, keep the alt's original, and 
       assert.equal(part("Label_Name").children.length, 0, "a name that fits never ends in an ellipsis");
       assert.equal(rpcRequests.findLast((r) => r.method === "aliases.set").params.alt, "ibuki_dress");
       assert.deepEqual(base.customAliases, ["Original nickname"]);
-      assert.equal(invalidations, invalidated + 1, "roster will reload aliases and name order");
+      assert.equal(invalidations, invalidated + 1, "studentList will reload aliases and name order");
       await pencil().click();
       await flush();
       for (const input of hosts.popup.querySelectorAll(".alias-input")) input.value = "";
@@ -2141,7 +2150,7 @@ test("new mod dots survive visits and tab changes, then clear for the switch's o
   try {
     student = modStudent();
     const v = student.alts[0];
-    v.chibi = "ibuki_model";
+    v.chibi = "ibuki_chibi";
     v.modList = ["portrait", "memorialLobby"].map((kind) => ({
       id: kind,
       targetAlt: v.key,
@@ -2154,8 +2163,8 @@ test("new mod dots survive visits and tab changes, then clear for the switch's o
       portrait: "dress_spr",
       memorialLobby: "dress_home",
       modList: [
-        { id: "dress-spr", targetAlt: "dress", resourceType: "portrait", fresh: true },
-        { id: "dress-lobby", targetAlt: "dress", resourceType: "memorialLobby", fresh: true },
+        { id: "dress-portrait", targetAlt: "dress", resourceType: "portrait", fresh: true },
+        { id: "dress-memorial-lobby", targetAlt: "dress", resourceType: "memorialLobby", fresh: true },
       ],
     });
     const start = rpcRequests.length,
@@ -2176,9 +2185,9 @@ test("new mod dots survive visits and tab changes, then clear for the switch's o
     await finish(t, switching);
     assert.ok(tabDot(1));
     assert.ok(tabDot(2), "selecting a tab leaves its mods new");
-    const lobby = switchButton().click();
+    const memorialLobby = switchButton().click();
     await flush();
-    await lobby;
+    await memorialLobby;
     assert.equal(tabDot(2), undefined);
     assert.ok(tabDot(1));
     assert.ok(chipDot(v.key));
@@ -2194,12 +2203,12 @@ test("new mod dots survive visits and tab changes, then clear for the switch's o
     assert.equal(tabDot(1), undefined);
     assert.equal(tabDot(2), undefined);
     assert.equal(chipDot(v.key), undefined);
-    assert.ok(chipDot("dress"), "the other alt still has an unseen lobby mod");
+    assert.ok(chipDot("dress"), "the other alt still has an unseen memorial lobby mod");
     assert.deepEqual(rpcRequests.filter((r) => r.method === "mods.seen").at(-1).params, {
-      ids: ["portrait", "dress-spr"],
+      ids: ["portrait", "dress-portrait"],
     });
     assert.equal(student.alts[1].modList[1].fresh, true);
-    assert.equal(invalidations - invalidated, 2, "Back fetches the roster's updated marks immediately");
+    assert.equal(invalidations - invalidated, 2, "Back fetches the student list's updated marks immediately");
     await closeSwitch();
     const before = rpcRequests.filter((r) => r.method === "mods.seen").length;
     const again = switchButton().click();
@@ -2218,12 +2227,12 @@ test("new mod dots survive visits and tab changes, then clear for the switch's o
   }
 });
 
-for (const kind of ["portrait", "memorialLobby", "lobby"])
+for (const kind of ["portrait", "memorialLobby", "memorialLobby"])
   for (const enabled of [true, false])
     test(`opening the ${kind} result tab sees the ${enabled ? "applied" : "configured"} import without opening its switch`, async (t) => {
       t.mock.timers.enable({ apis: ["setTimeout"] });
       try {
-        const assetKind = kind === "lobby" ? "memorialLobby" : kind;
+        const assetKind = kind === "memorialLobby" ? "memorialLobby" : kind;
         student = modStudent(assetKind, `import-${assetKind}`);
         const v = student.alts[0],
           imported = v.modList[0];
@@ -2253,7 +2262,7 @@ for (const kind of ["portrait", "memorialLobby", "lobby"])
             .map((r) => r.params),
           [{ ids: [imported.id] }],
         );
-        assert.equal(invalidations, invalidated + 1, "returning to the roster refreshes its cleared mark");
+        assert.equal(invalidations, invalidated + 1, "returning to the student list refreshes its cleared mark");
         assert.equal(hosts.popup.hidden, true);
       } finally {
         Detail.hide();
@@ -2406,7 +2415,7 @@ test("the 3D tab dot only follows mods of its own kind", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     student = modStudent("chibi");
-    student.alts[0].chibi = "ibuki_model";
+    student.alts[0].chibi = "ibuki_chibi";
     student.alts[0].modList[0].fresh = true;
     await showPortrait(t);
     assert.equal(tabDot(1), undefined);
@@ -2420,7 +2429,7 @@ test("the 3D tab dot only follows mods of its own kind", async (t) => {
   }
 });
 
-test("an alt with only a field or NPC model draws it on the 3D tab", async (t) => {
+test("an alt with only a field or NPC chibi draws it on the 3D tab", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     errors.length = 0;
@@ -2430,7 +2439,7 @@ test("an alt with only a field or NPC model draws it on the 3D tab", async (t) =
     v.chibi = null;
     v.fieldChibi = "np0143";
     v.state.files = [];
-    modelRequests.length = 0;
+    chibiRequests.length = 0;
     await showPortrait(t);
     const switching = tabButton(3).click();
     for (let i = 0; i < 20; i++) {
@@ -2438,7 +2447,7 @@ test("an alt with only a field or NPC model draws it on the 3D tab", async (t) =
       await flush();
     }
     await finish(t, switching);
-    assert.equal(modelRequests.at(-1)?.key, v.key, "the model viewer was asked for the alt's model");
+    assert.equal(chibiRequests.at(-1)?.key, v.key, "the chibi viewer was asked for the alt's chibi");
   } finally {
     closeLeftMessages();
     Detail.hide();
@@ -2447,20 +2456,20 @@ test("an alt with only a field or NPC model draws it on the 3D tab", async (t) =
   }
 });
 
-test("an official 3D model with no official copy left opens the overwritten message, not the generic failure", async (t) => {
+test("an official chibi with no official copy left opens the overwritten message, not the generic failure", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const show = globalThis.__detailModel.show;
+  const show = globalThis.__detailChibi.show;
   try {
     errors.length = 0;
     closeLeftMessages();
     student = modStudent("chibi");
     const v = student.alts[0];
-    v.chibi = "ibuki_model";
+    v.chibi = "ibuki_chibi";
     v.state.files = [{ resourceType: "chibi", applied: "official", official: true, restorable: true, crc: "ok" }];
     modsEnabled = false;
     await ModSwitch.refresh();
-    globalThis.__detailModel.show = async (key, host, options) => {
-      modelRequests.push({ key, ...options });
+    globalThis.__detailChibi.show = async (key, host, options) => {
+      chibiRequests.push({ key, ...options });
       throw Object.assign(new Error(`/asset/chibi/${key}.glb?source=official: HTTP 404`), {
         code: "official_unavailable",
       });
@@ -2472,13 +2481,13 @@ test("an official 3D model with no official copy left opens the overwritten mess
       await flush();
     }
     await finish(t, switching);
-    assert.equal(modelRequests.at(-1).source, "official");
+    assert.equal(chibiRequests.at(-1).source, "official");
     const texts = walk(hosts.dialog).map((el) => el.textContent);
     assert.ok(texts.includes("Official File Missing"), texts.join(" | "));
     assert.ok(texts.includes("No official copy left"), texts.join(" | "));
     assert.ok(!texts.includes("Chibi unavailable"), texts.join(" | "));
   } finally {
-    globalThis.__detailModel.show = show;
+    globalThis.__detailChibi.show = show;
     closeLeftMessages();
     Detail.hide();
     modsEnabled = true;
@@ -2582,8 +2591,8 @@ for (const core of ["ibuki_home", "arona_workpage_daytime", "np0032_npc"])
     try {
       errors.length = 0;
       warnings.length = 0;
-      lobbyMode = "ready";
-      playerMode = "lobby-ready";
+      memorialLobbyMode = "ready";
+      playerMode = "memorial-lobby-ready";
       student = modStudent("memorialLobby");
       const v = student.alts[0];
       v.bg = "/asset/art/background/Portrait_Only";
@@ -2603,7 +2612,7 @@ for (const core of ["ibuki_home", "arona_workpage_daytime", "np0032_npc"])
       const bust = walk(hosts.ngui).find((e) => e.dataset.path?.endsWith("Normal/Bust"));
       assert.ok(
         bust.children[0].style.backgroundImage?.startsWith('url("blob:'),
-        "a generated lobby still fills the thumbnail",
+        "a generated memorial lobby still fills the thumbnail",
       );
       assert.ok(
         bust.style.backgroundImage?.includes("rgb(20.000, 40.000, 60.000)"),
@@ -2616,18 +2625,18 @@ for (const core of ["ibuki_home", "arona_workpage_daytime", "np0032_npc"])
       assert.ok(!warnings.some((args) => args[0] === "Switch card colours unavailable"));
     } finally {
       Detail.hide();
-      lobbyMode = "pending";
+      memorialLobbyMode = "pending";
       playerMode = "ready";
       await flush();
       t.mock.timers.reset();
     }
   });
 
-test("re-entering a torn-down lobby rebuilds its players and keeps the Portrait tab usable", async (t) => {
+test("re-entering a torn-down memorial lobby rebuilds its players and keeps the Portrait tab usable", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    lobbyMode = "ready";
-    playerMode = "lobby-ready";
+    memorialLobbyMode = "ready";
+    playerMode = "memorial-lobby-ready";
     student = modStudent("memorialLobby", "route-recovery");
     await showPortrait(t);
     const switching = tabButton(2).click();
@@ -2635,7 +2644,7 @@ test("re-entering a torn-down lobby rebuilds its players and keeps the Portrait 
     await finish(t, switching);
     const before = previewPlayers.filter((p) => !p.disposed);
     assert.ok(before.length);
-    assert.equal(hosts.lobby.hidden, false);
+    assert.equal(hosts["memorial-lobby"].hidden, false);
     Detail.hide();
     assert.equal(Detail.currentAlt(), null);
     assert.ok(before.every((p) => p.disposed));
@@ -2643,8 +2652,8 @@ test("re-entering a torn-down lobby rebuilds its players and keeps the Portrait 
     const returning = Detail.show(context, student, "ibuki");
     await flush();
     await finish(t, returning);
-    assert.ok(playerRequests.length > requests, "the same alt gets fresh lobby players after hide");
-    assert.equal(hosts.lobby.hidden, false);
+    assert.ok(playerRequests.length > requests, "the same alt gets fresh memorial lobby players after hide");
+    assert.equal(hosts["memorial-lobby"].hidden, false);
     assert.equal(Detail.currentAlt(), "ibuki");
     const portrait = tabButton(1).click();
     await flush();
@@ -2652,44 +2661,48 @@ test("re-entering a torn-down lobby rebuilds its players and keeps the Portrait 
     t.mock.timers.tick(360);
     await flush();
     assert.equal(hosts.portrait.hidden, false);
-    assert.equal(hosts.lobby.hidden, true);
+    assert.equal(hosts["memorial-lobby"].hidden, true);
   } finally {
     Detail.hide();
-    lobbyMode = "pending";
+    memorialLobbyMode = "pending";
     playerMode = "ready";
     await flush();
     t.mock.timers.reset();
   }
 });
 
-for (const kind of ["portrait", "lobby", "model"])
+for (const kind of ["portrait", "memorialLobby", "chibi"])
   test(`repeated locale changes preserve the active ${kind} player and route`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     try {
       student = modStudent("portrait", `locale-${kind}`);
-      student.alts[0].chibi = "ibuki_model";
+      student.alts[0].chibi = "ibuki_chibi";
       student.alts[0].names.ja = { full: "Localized Ibuki", short: "Localized" };
-      lobbyMode = "ready";
-      playerMode = "lobby-ready";
+      memorialLobbyMode = "ready";
+      playerMode = "memorial-lobby-ready";
       thumbMode = "ready";
       const showing = Detail.show(context, student, "ibuki", { kind });
       await flush();
       await finish(t, showing);
       const players = previewPlayers.filter((p) => !p.disposed),
-        modelCount = modelRequests.length;
+        chibiCount = chibiRequests.length;
       const liveCount = previewPlayers.length,
         before = rpcRequests.length,
         hash = location.hash;
-      const canvases = hosts[kind].children.slice();
+      const canvases = hosts[kind === "memorialLobby" ? "memorial-lobby" : kind].children.slice();
       for (const lang of ["ja-JP", "en-US", "ja-JP"]) {
         setStrings(lang, localeTable(lang));
         await Detail.relabel();
         await flush();
         assert.equal(previewPlayers.length, liveCount, "localization cannot create a new live Spine player");
-        assert.equal(modelRequests.length, modelCount, "localization cannot reload a model");
+        assert.equal(chibiRequests.length, chibiCount, "localization cannot reload a chibi");
         assert.ok(players.every((p) => !p.disposed));
-        assert.deepEqual(hosts[kind].children, canvases, "the media DOM remains mounted");
-        assert.equal(hosts[kind].hidden, false);
+        assert.deepEqual(
+          hosts[kind === "memorialLobby" ? "memorial-lobby" : kind].children,
+          canvases,
+          "the media DOM remains mounted",
+        );
+        assert.equal(hosts[kind === "memorialLobby" ? "memorial-lobby" : kind].hidden, false);
         assert.equal(location.hash, hash);
         const apply = walk(hosts.ngui).find((e) => e.dataset.part === `${INFO}/Skill/SkillData_EX (3)/Bg`);
         assert.ok(apply, "the existing action remains available");
@@ -2699,11 +2712,11 @@ for (const kind of ["portrait", "lobby", "model"])
         !rpcRequests.slice(before).some((r) => ["students.list", "student.get", "ui.visit"].includes(r.method)),
         "locale refresh reuses loaded student data",
       );
-      if (kind === "lobby")
+      if (kind === "memorialLobby")
         assert.equal(rpcRequests.filter((r) => r.method === "memorialLobby.lines").at(-1).params.lang, "ja");
     } finally {
       Detail.hide();
-      lobbyMode = "pending";
+      memorialLobbyMode = "pending";
       playerMode = "ready";
       thumbMode = "pending";
       setStrings("en-US", localeTable("en-US"));
@@ -2746,13 +2759,13 @@ test("an open source picker relabels while keeping its unsaved selection and scr
 });
 
 for (const enabled of [true, false])
-  test(`model switching reuses the detail controls and previews its source with mods ${enabled ? "on" : "off"}`, async (t) => {
+  test(`chibi switching reuses the detail controls and previews its source with mods ${enabled ? "on" : "off"}`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     try {
       errors.length = 0;
       student = modStudent("chibi");
       const v = student.alts[0];
-      v.chibi = "ibuki_model";
+      v.chibi = "ibuki_chibi";
       v.configured = { chibi: "mod:test" };
       v.selection = { chibi: { source: "mod:test", installed: enabled } };
       v.modList[0].fresh = true;
@@ -2767,15 +2780,15 @@ for (const enabled of [true, false])
         await flush();
       }
       await finish(t, switching);
-      assert.equal(modelRequests.at(-1)?.key, "ibuki", errors.map((args) => args.map(String).join(" ")).join("\n"));
-      assert.equal(modelRequests.at(-1).source, "mod:test");
-      assert.ok(switchButton(), "the model switch opens the shared popup");
+      assert.equal(chibiRequests.at(-1)?.key, "ibuki", errors.map((args) => args.map(String).join(" ")).join("\n"));
+      assert.equal(chibiRequests.at(-1).source, "mod:test");
+      assert.ok(switchButton(), "the chibi switch opens the shared popup");
       const add = walk(hosts.ngui).find((e) => e.dataset.part === `${INFO}/Weapon/Btn_Up_Wrapper/Btn_Up/BG (1)`);
       assert.ok(add && add.getAttribute("aria-label") === "Add Chibi");
       const text = walk(hosts.ngui).find((e) => e.className === "switch-text");
       assert.ok(text.children.some((e) => e.className === "switch-go"));
       assert.ok(text.children.some((e) => e.innerText?.startsWith("test - ")));
-      assert.equal(tabDot(3), undefined, "showing the model tab marks its configured asset seen");
+      assert.equal(tabDot(3), undefined, "showing the chibi tab marks its configured asset seen");
       assert.equal(v.fresh, false);
       await switchButton().click();
       await flush();
@@ -2797,8 +2810,8 @@ for (const enabled of [true, false])
       );
       assert.equal(switchImage?.children[0].style.backgroundImage, mod, "detail and popup share the source's 3D still");
       const info = walk(hosts.popup).find((e) => e.dataset.path === "Details/Picture/Thumb");
-      assert.equal(info.style.width, info.style.height, "the model info preview is square");
-      assert.equal(tabDot(3), undefined, "opening the model switch marks its offered mods seen");
+      assert.equal(info.style.width, info.style.height, "the chibi info preview is square");
+      assert.equal(tabDot(3), undefined, "opening the chibi switch marks its offered mods seen");
       assert.equal(v.modList[0].fresh, false);
       assert.ok(!errors.flat().some((e) => String(e).includes("Spine source unavailable")));
       await closeSwitch();
@@ -3109,22 +3122,22 @@ for (const kind of ["portrait", "memorialLobby", "chibi"])
     test(`library-only ${kind} remains selectable and preview ${selected ? "uses its saved Mod" : "stays unselected"}`, async (t) => {
       t.mock.timers.enable({ apis: ["setTimeout"] });
       try {
-        lobbyMode = "ready";
-        playerMode = "lobby-ready";
+        memorialLobbyMode = "ready";
+        playerMode = "memorial-lobby-ready";
         student = modStudent(kind, `library-only-${kind}`);
         const v = student.alts[0];
         Object.assign(v, {
           portrait: null,
           memorialLobby: null,
           chibi: null,
-          storedKinds: [kind],
+          storedResourceTypes: [kind],
           localResourceTypes: [],
           configured: {},
           previewSources: selected ? { [kind]: `mod:library-only-${kind}` } : {},
           state: { files: [] },
         });
         const assetsBefore = assetRequests.length,
-          modelsBefore = modelRequests.length,
+          chibisBefore = chibiRequests.length,
           rpcsBefore = rpcRequests.length;
         const showing = Detail.show(context, student, v.key);
         await flush();
@@ -3145,8 +3158,8 @@ for (const kind of ["portrait", "memorialLobby", "chibi"])
           false,
         );
         if (kind === "chibi") {
-          assert.equal(modelRequests.length - modelsBefore, selected ? 1 : 0);
-          if (selected) assert.equal(modelRequests.at(-1).source, "mod:library-only-chibi");
+          assert.equal(chibiRequests.length - chibisBefore, selected ? 1 : 0);
+          if (selected) assert.equal(chibiRequests.at(-1).source, "mod:library-only-chibi");
         } else {
           assert.equal(
             assetRequests.slice(assetsBefore).some((url) => url.includes(`/mod/library-only-${kind}/`)),
@@ -3156,7 +3169,7 @@ for (const kind of ["portrait", "memorialLobby", "chibi"])
         assert.deepEqual(v.previewSources, selected ? { [kind]: `mod:library-only-${kind}` } : {});
       } finally {
         Detail.hide();
-        lobbyMode = "pending";
+        memorialLobbyMode = "pending";
         playerMode = "ready";
         await flush();
         t.mock.timers.reset();
@@ -3199,7 +3212,7 @@ test("an unselected library-only Mod can be saved for preview without applying",
       portrait: null,
       memorialLobby: null,
       chibi: null,
-      storedKinds: ["portrait"],
+      storedResourceTypes: ["portrait"],
       localResourceTypes: [],
       configured: {},
       previewSources: {},
@@ -3232,7 +3245,7 @@ test("an unselected library-only Mod can be saved for preview without applying",
 const visualButton = (name) => walk(hosts["visual-ui"]).find((el) => el.dataset.visualAction === name);
 const zoomButton = () => walk(hosts.ngui).find((el) => el.dataset.part === `${PLATE}/Char_ZoomBtn`);
 function assertPhotographyCorner(mode) {
-  const launcher = document.getElementById("photo-launcher");
+  const launcher = document.getElementById("thumbnail-launcher");
   const hit = walk(launcher).find((el) => el.tagName === "BUTTON"),
     scale = 1920 / 2960;
   // the fullscreen views' one button size
@@ -3247,7 +3260,7 @@ function assertPhotographyCorner(mode) {
   ["left", "top", "width", "height"].forEach((key, index) =>
     assert.ok(
       Math.abs(parseFloat(hit.style[key]) - expected[index]) < 0.02,
-      `Photography ${key} follows the existing ${mode} corner`,
+      `Thumbnail capture ${key} follows the existing ${mode} corner`,
     ),
   );
 }
@@ -3264,8 +3277,8 @@ for (const enabled of [true, false])
     closeLeftMessages();
     try {
       errors.length = 0;
-      lobbyMode = "ready";
-      playerMode = "lobby-ready";
+      memorialLobbyMode = "ready";
+      playerMode = "memorial-lobby-ready";
       setStrings("en-US", localeTable("en-US"));
       modsEnabled = enabled;
       await ModSwitch.refresh();
@@ -3274,11 +3287,11 @@ for (const enabled of [true, false])
       selected.key = "selected-skin";
       selected.portrait = "selected_skin_spr";
       selected.memorialLobby = "selected_skin_home";
-      selected.previewSources = { portrait: "mod:portrait-preview", memorialLobby: "mod:library-only-lobby" };
-      selected.configured = { portrait: "mod:configured-portrait", memorialLobby: "mod:configured-lobby" };
+      selected.previewSources = { portrait: "mod:portrait-preview", memorialLobby: "mod:library-only-memorial-lobby" };
+      selected.configured = { portrait: "mod:configured-portrait", memorialLobby: "mod:configured-memorial-lobby" };
       selected.modList = [
         { id: "portrait-preview", targetAlt: selected.key, resourceType: "portrait" },
-        { id: "library-only-lobby", targetAlt: selected.key, resourceType: "memorialLobby" },
+        { id: "library-only-memorial-lobby", targetAlt: selected.key, resourceType: "memorialLobby" },
       ];
       student.alts.push(selected);
       await showPortrait(t, selected.key);
@@ -3302,21 +3315,25 @@ for (const enabled of [true, false])
       await clickFullscreen(t, visualButton("Btn_HideUI"));
       assert.equal(hosts.stage.classList.contains("fullscreen"), true);
       assert.equal(Detail.currentAlt(), selected.key);
-      assert.equal(hosts.lobby.hidden, false);
-      assert.equal(hosts["visual-ui"].querySelector(".visual-touch"), null, "Lobby input has no portrait overlay");
+      assert.equal(hosts["memorial-lobby"].hidden, false);
+      assert.equal(
+        hosts["visual-ui"].querySelector(".visual-touch"),
+        null,
+        "MemorialLobby input has no portrait overlay",
+      );
       assert.equal(visualButton("Btn_HideUI").getAttribute("aria-label"), "Switch Portrait");
       assert.equal(document.activeElement, visualButton("Btn_HideUI"), "The replacement switch retains keyboard focus");
-      assert.equal(hosts["fs-exit"].hidden, false, "Back remains available in the lobby");
+      assert.equal(hosts["fs-exit"].hidden, false, "Back remains available in the memorialLobby");
       const s = 1920 / 2960,
         // the Back button's size
         backBounds = [960 + (-1354 - 171 / 2) * s, 540 - (650 + 126 / 2) * s, 171 * s, 126 * s];
       ["left", "top", "width", "height"].forEach((key, index) =>
         assert.ok(
           Math.abs(parseFloat(hosts["fs-exit"].style[key]) - backBounds[index]) < 0.02,
-          `Lobby Back ${key} keeps its existing position`,
+          `MemorialLobby Back ${key} keeps its existing position`,
         ),
       );
-      assertPhotographyCorner("lobby");
+      assertPhotographyCorner("memorialLobby");
       await clickFullscreen(t, visualButton("Btn_HideUI"));
       assert.equal(hosts.portrait.hidden, false);
       assert.equal(hosts["fs-exit"].hidden, true, "The portrait keeps its own Back control");
@@ -3325,11 +3342,11 @@ for (const enabled of [true, false])
       assert.equal(player.trackNames[1], "01", "The selected expression survives the round trip");
       assert.equal(document.activeElement, visualButton("Btn_HideUI"));
       assertPhotographyCorner("portrait");
-      assert.ok(playerRequests.slice(assets).some((url) => url.includes("/mod/library-only-lobby/")));
+      assert.ok(playerRequests.slice(assets).some((url) => url.includes("/mod/library-only-memorial-lobby/")));
       assert.ok(assetRequests.slice(requests).some((url) => url.includes("/memorialLobby/selected_skin_home/")));
       assert.ok(
         !assetRequests.slice(requests).some((url) => url.includes("/memorialLobby/ibuki_home/")),
-        "No other skin supplies the lobby",
+        "No other skin supplies the memorialLobby",
       );
       assert.ok(playerRequests.slice(assets).some((url) => url.includes("/mod/portrait-preview/")));
       await clickFullscreen(t, visualButton("Btn_Back"));
@@ -3351,14 +3368,14 @@ for (const enabled of [true, false])
       Detail.hide();
       modsEnabled = true;
       await ModSwitch.refresh();
-      lobbyMode = "pending";
+      memorialLobbyMode = "pending";
       playerMode = "ready";
       await flush();
       t.mock.timers.reset();
     }
   });
 
-test("a skin without a lobby omits the switch even when another skin has a lobby", async (t) => {
+test("a skin without a memorial lobby omits the switch even when another skin has a memorialLobby", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     student = modStudent();
@@ -3369,7 +3386,7 @@ test("a skin without a lobby omits the switch even when another skin has a lobby
     assert.equal(visualButton("Btn_HideUI"), undefined);
     assert.ok(visualButton("Btn_Back"));
     assert.ok(walk(hosts["visual-ui"]).some((el) => el.dataset.path?.includes("Btn_RefreshPos_Disable")));
-    assert.ok(document.getElementById("photo-launcher"), "Photography remains available");
+    assert.ok(document.getElementById("thumbnail-launcher"), "Thumbnail capture remains available");
     await clickFullscreen(t, visualButton("Btn_Back"));
     assert.equal(hosts.stage.classList.contains("fullscreen"), false);
   } finally {
@@ -3380,12 +3397,12 @@ test("a skin without a lobby omits the switch even when another skin has a lobby
 });
 
 for (const viaSwitch of [true, false])
-  test(`Back and Escape leave the lobby fullscreen ${viaSwitch ? "after the portrait switch" : "from the lobby detail tab"}`, async (t) => {
+  test(`Back and Escape leave the memorial lobby fullscreen ${viaSwitch ? "after the portrait switch" : "from the memorial lobby detail tab"}`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     closeLeftMessages();
     try {
-      lobbyMode = "ready";
-      playerMode = "lobby-ready";
+      memorialLobbyMode = "ready";
+      playerMode = "memorial-lobby-ready";
       student = modStudent();
       await showPortrait(t);
       if (!viaSwitch) await clickFullscreen(t, tabButton(2));
@@ -3404,7 +3421,7 @@ for (const viaSwitch of [true, false])
       assert.equal(hosts.ngui.inert, false);
     } finally {
       Detail.hide();
-      lobbyMode = "pending";
+      memorialLobbyMode = "pending";
       playerMode = "ready";
       await flush();
       t.mock.timers.reset();
@@ -3416,7 +3433,7 @@ test("Escape while a fullscreen switch is loading cannot reopen fullscreen with 
   closeLeftMessages();
   try {
     student = modStudent();
-    lobbyMode = "pending";
+    memorialLobbyMode = "pending";
     await showPortrait(t);
     await clickFullscreen(t, zoomButton());
     const switching = visualButton("Btn_HideUI").click();
@@ -3442,14 +3459,14 @@ for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
       scale = 1920 / 2960,
       layout = visualPrefab();
     const labels = {
-      back: strings["webui.lobby.exit"],
+      back: strings["webui.memorialLobby.exit"],
       reset: strings["webui.visual.reset"],
-      switch: strings["webui.row.switch.lobby"],
+      switch: strings["webui.row.switch.memorialLobby"],
     };
     const before = structuredClone(layout);
     const parts = await Visual.prepare({ layout, strings: labels });
     let switched = 0;
-    const lobby = await Visual.prepareSwitch({
+    const memorialLobby = await Visual.prepareSwitch({
       layout,
       label: strings["webui.row.switch.portrait"],
       onSwitch: () => {
@@ -3459,25 +3476,25 @@ for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
     let leftCamera = 0;
     const cameraBack = await Visual.prepareBack({
       layout,
-      label: strings["webui.photo.back"],
+      label: strings["webui.thumbnail.back"],
       onBack: () => {
         leftCamera++;
       },
     });
     const button = (group) => walk(group).find((el) => el.tagName === "BUTTON");
     const portraitSwitch = button(parts.groups.Btn_HideUI),
-      lobbySwitch = button(lobby);
+      memorialLobbySwitch = button(memorialLobby);
     for (const key of ["left", "top", "width", "height", "zIndex"])
-      assert.equal(lobbySwitch.style[key], portraitSwitch.style[key], "Both views use the identical hit area");
-    assert.equal(portraitSwitch.getAttribute("aria-label"), strings["webui.row.switch.lobby"]);
-    assert.equal(lobbySwitch.getAttribute("aria-label"), strings["webui.row.switch.portrait"]);
-    for (const control of [portraitSwitch, lobbySwitch]) {
+      assert.equal(memorialLobbySwitch.style[key], portraitSwitch.style[key], "Both views use the identical hit area");
+    assert.equal(portraitSwitch.getAttribute("aria-label"), strings["webui.row.switch.memorialLobby"]);
+    assert.equal(memorialLobbySwitch.getAttribute("aria-label"), strings["webui.row.switch.portrait"]);
+    for (const control of [portraitSwitch, memorialLobbySwitch]) {
       assert.equal(control.tagName, "BUTTON", "Native buttons support Tab, Enter and Space");
       assert.notEqual(control.tabIndex, -1);
       assert.equal(control.disabled, undefined);
       assert.equal(control.closest("[inert]"), null);
     }
-    await lobbySwitch.click();
+    await memorialLobbySwitch.click();
     assert.equal(switched, 1);
     for (const key of ["left", "top", "width", "height", "zIndex"])
       assert.equal(
@@ -3485,7 +3502,7 @@ for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
         button(parts.groups.Btn_Back).style[key],
         "Camera Back uses the complete fullscreen collider",
       );
-    assert.equal(button(cameraBack).getAttribute("aria-label"), strings["webui.photo.back"]);
+    assert.equal(button(cameraBack).getAttribute("aria-label"), strings["webui.thumbnail.back"]);
     await button(cameraBack).click();
     assert.equal(leftCamera, 1, "Camera Back calls its leave action");
     const backIcon = (group) => walk(group).find((el) => el.dataset.path?.endsWith("LeftTop/Btn_Back/Icon"));
@@ -3522,7 +3539,7 @@ for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
         for (const [actual, reference] of expected)
           actual.forEach((value, index) => near(value * factor, reference[index] * factor));
       }
-    for (const group of [parts.groups.Btn_HideUI, lobby]) {
+    for (const group of [parts.groups.Btn_HideUI, memorialLobby]) {
       const icon = walk(group).find((el) => el.dataset.path?.endsWith("RightTop/Btn_HideUI/Icon"));
       near(parseFloat(icon.style.width), 79 * scale);
       near(parseFloat(icon.style.height), 67 * scale);
@@ -3545,7 +3562,7 @@ for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
       ["innerWidth", "innerHeight", "bamtWindowChrome", "bamtHeaderGeometry"].map((k) => [k, globalThis[k]]),
     );
     const holder = body.appendChild(new El());
-    holder.append(...Object.values(parts.groups), lobby, cameraBack);
+    holder.append(...Object.values(parts.groups), memorialLobby, cameraBack);
     const exit = holder.appendChild(new El("button"));
     try {
       await Visual.exitControl(exit, layout);
@@ -3587,7 +3604,7 @@ for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
             [parts.groups.Btn_Back, "LeftTop/Btn_Back", "top-left"],
             [cameraBack, "LeftTop/Btn_Back", "top-left"],
             [parts.groups.Btn_HideUI, "RightTop/Btn_HideUI", "top-right"],
-            [lobby, "RightTop/Btn_HideUI", "top-right"],
+            [memorialLobby, "RightTop/Btn_HideUI", "top-right"],
             [parts.groups.Btn_RefreshPos, "RightBottom/Btn_RefreshPos/Btn_RefreshPos", "bottom-right"],
             [parts.groups.Btn_RefreshPos_Disable, "RightBottom/Btn_RefreshPos_Disable/Btn_RefreshPos", "bottom-right"],
           ];
@@ -3646,7 +3663,7 @@ for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"])
             );
           }
           if (platform === "win32" && width === 2560 && height === 1440) {
-            for (const group of [parts.groups.Btn_HideUI, lobby]) {
+            for (const group of [parts.groups.Btn_HideUI, memorialLobby]) {
               const [tx, ty] = group.style.translate.split(" ").map(parseFloat),
                 box = bounds(button(group));
               const hit = { left: stageLeft + (box[0] + tx) * k, top: stageTop + (box[1] + ty) * k };
@@ -3698,10 +3715,14 @@ test("the student arrows, the copy button and the alt chips are named, and the s
       const part = (suffix) => walk(body).find((e) => e.tagName === "BUTTON" && e.dataset.part?.endsWith(suffix));
       assert.equal(
         part("Arrow_L/Left").getAttribute("aria-label"),
-        table["webui.hall.previous"],
+        table["webui.studentHall.previous"],
         `${lang}: previous student`,
       );
-      assert.equal(part("Arrow_R/Right").getAttribute("aria-label"), table["webui.hall.next"], `${lang}: next student`);
+      assert.equal(
+        part("Arrow_R/Right").getAttribute("aria-label"),
+        table["webui.studentHall.next"],
+        `${lang}: next student`,
+      );
       const copy = part("Char_CVCollectionBtn").getAttribute("aria-label");
       assert.ok(copy.startsWith(table["webui.window.copy"]), `${lang}: the copy button says Copy: ${copy}`);
       assert.ok(copy.includes("ibuki_spr"), `${lang}: and the file it copies: ${copy}`);
@@ -3781,9 +3802,9 @@ test("the expression strip's cards, its pile and Collapse are named, and the pic
       // three faces and the pile
       assert.equal(cards().length, 4, `${lang}: three faces and the pile`);
       const [natural, second, third, pile] = cards();
-      assert.equal(natural.getAttribute("aria-label"), table["webui.photo.natural"], `${lang}: the plain face`);
-      assert.equal(second.getAttribute("aria-label"), `${table["webui.photo.expressions"]} 01`);
-      assert.equal(third.getAttribute("aria-label"), `${table["webui.photo.expressions"]} 02`);
+      assert.equal(natural.getAttribute("aria-label"), table["webui.thumbnail.natural"], `${lang}: the plain face`);
+      assert.equal(second.getAttribute("aria-label"), `${table["webui.thumbnail.expressions"]} 01`);
+      assert.equal(third.getAttribute("aria-label"), `${table["webui.thumbnail.expressions"]} 02`);
       assert.deepEqual(
         [natural, second, third].map((card) => card.getAttribute("aria-pressed")),
         ["true", "false", "false"],
@@ -4253,9 +4274,9 @@ test("incomplete mods use the existing card and popup status widgets in all loca
   }
 });
 
-test("the overwritten model message adds the model core with Mods off and refreshes detail", async (t) => {
+test("the overwritten chibi message adds the chibi core with Mods off and refreshes detail", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const show = globalThis.__detailModel.show;
+  const show = globalThis.__detailChibi.show;
   const eventSource = globalThis.EventSource;
   globalThis.EventSource = class extends EventTarget {
     close() {}
@@ -4264,17 +4285,17 @@ test("the overwritten model message adds the model core with Mods off and refres
     closeLeftMessages();
     student = modStudent("chibi");
     const v = student.alts[0];
-    v.chibi = "ibuki_model";
+    v.chibi = "ibuki_chibi";
     v.state.files = [{ resourceType: "chibi", applied: "unknown", official: false, restorable: false, crc: "fixed" }];
     modsEnabled = false;
     modsInstall = { current: "install", installs: [{ key: "install", folder: "/synthetic/game" }] };
     await ModSwitch.refresh();
-    modelAdoption = () => {
+    chibiAdoption = () => {
       v.state.files[0].applied = "mod:kept";
       return { added: [{ id: "kept", resourceType: "chibi", targetAlt: v.key }], failed: [], skipped: [] };
     };
-    globalThis.__detailModel.show = async () => {
-      throw Object.assign(new Error("No official model"), { code: "official_unavailable" });
+    globalThis.__detailChibi.show = async () => {
+      throw Object.assign(new Error("No official chibi"), { code: "official_unavailable" });
     };
     await showPortrait(t);
     await finish(t, tabButton(3).click());
@@ -4292,11 +4313,11 @@ test("the overwritten model message adds the model core with Mods off and refres
       await flush();
     }
     const request = rpcRequests.findLast((r) => r.method === "mods.adopt");
-    assert.deepEqual(request.params.entries, [{ install: "install", core: "ibuki_model" }]);
+    assert.deepEqual(request.params.entries, [{ install: "install", core: "ibuki_chibi" }]);
     assert.ok(invalidations > before);
   } finally {
-    modelAdoption = modsInstall = null;
-    globalThis.__detailModel.show = show;
+    chibiAdoption = modsInstall = null;
+    globalThis.__detailChibi.show = show;
     globalThis.EventSource = eventSource;
     closeLeftMessages();
     Detail.hide();

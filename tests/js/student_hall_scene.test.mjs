@@ -7,11 +7,11 @@ import {
   sourceKey,
   portraitSelection,
   portraitReplacements,
-} from "../../src/bmpt/web/js/hall/student-hall-model.js";
-import { createMemorialPool } from "../../src/bmpt/web/js/hall/student-hall-memorial.js";
+} from "../../src/bmpt/web/js/student-hall/student-hall-chibi.js";
+import { createMemorialPool } from "../../src/bmpt/web/js/student-hall/student-hall-memorial.js";
 import { dialogueText } from "../../src/bmpt/web/js/detail/dialogue-text.js";
-import { sceneRect, sceneViewport } from "../../src/bmpt/web/js/hall/student-hall-camera.js";
-import { portraitRect } from "../../src/bmpt/web/js/hall/student-hall-framing.js";
+import { sceneRect, sceneViewport } from "../../src/bmpt/web/js/student-hall/student-hall-camera.js";
+import { portraitRect } from "../../src/bmpt/web/js/student-hall/student-hall-framing.js";
 
 class Element {
   constructor() {
@@ -143,7 +143,7 @@ globalThis.sceneHarness = {
       return fn();
     },
   },
-  Lobby: { hide() {} },
+  MemorialLobby: { hide() {} },
   Popup: { notify() {}, anyOpen: () => false },
   UI: { button: async () => {}, caption: async () => {} },
   rpc: async (method, params) => {
@@ -162,12 +162,16 @@ globalThis.sceneHarness = {
     return button;
   },
 };
-const hallFile = (name) => readFile(new URL(`../../src/bmpt/web/js/hall/${name}`, import.meta.url), "utf8");
-let source = joinedModules(await hallFile("student-hall.js"), await hallFile("student-hall-portrait-toolbar.js"));
+const studentHallFile = (name) =>
+  readFile(new URL(`../../src/bmpt/web/js/student-hall/${name}`, import.meta.url), "utf8");
+let source = joinedModules(
+  await studentHallFile("student-hall.js"),
+  await studentHallFile("student-hall-portrait-toolbar.js"),
+);
 source =
   `import { CONTROL, XS_BUTTON, SPACE } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";\nimport { row } from "${new URL("../../src/bmpt/web/js/ui/ui-grid.js", import.meta.url).href}";\n` +
   source;
-source = `import { bindPortraitPointer, portraitToolbarLayout } from "${new URL("../../src/bmpt/web/js/hall/student-hall-framing.js", import.meta.url).href}";\nconst {createDraft,createMemorialPool,sourceKey,portraitSelection,portraitReplacements,portraitRect,sceneRect,sceneViewport,dialogueText,language,clone,S,T,L,document,Backgrounds,Loading,Lobby,Popup,UI,rpc,hitButton}=globalThis.sceneHarness;\n${source}
+source = `import { bindPortraitPointer, portraitToolbarLayout } from "${new URL("../../src/bmpt/web/js/student-hall/student-hall-framing.js", import.meta.url).href}";\nconst {createDraft,createMemorialPool,sourceKey,portraitSelection,portraitReplacements,portraitRect,sceneRect,sceneViewport,dialogueText,language,clone,S,T,L,document,Backgrounds,Loading,MemorialLobby,Popup,UI,rpc,hitButton}=globalThis.sceneHarness;\n${source}
 const originalHits=renderHits;
 export function fixture(value,renderer,memory=null,shownMode=value.mode){
  store=createDraft(value);root=document.createElement('div');art=document.createElement('div');hits=document.createElement('div');chrome=document.createElement('div');subtitle=document.createElement('div');root.append(art,hits,chrome,subtitle);
@@ -185,8 +189,8 @@ export function cameraFixture(view){sceneCamera={view:()=>view,sync(){},dispose(
 export function hitsNow(){originalHits();return hits;}`;
 // The fixture is intentionally DOM-only; actual Spine identities and GPU resource reuse are covered by
 // student_hall.test.
-source += "\n//# sourceURL=hall-scene-fixture.js";
-const Hall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+source += "\n//# sourceURL=student-hall-scene-fixture.js";
+const StudentHall = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 function setup() {
   loads = disposals = holds = updates = 0;
   persisted = [];
@@ -197,21 +201,21 @@ function setup() {
   renderer.actors = new Map(
     value.portraits.map((entry) => [entry.id, { entry, player: { animationState: { trackTime: 18 } } }]),
   );
-  Hall.fixture(value, renderer);
+  StudentHall.fixture(value, renderer);
   return value;
 }
 
 test("Change Layout Save and Cancel reconcile the existing scene without loading, holds or disposal", async () => {
   setup();
   const before = [...renderer.actors.values()].map((actor) => actor.player);
-  await Hall.controls().find((action) => action[0] === "Layout")[4]();
-  Hall.draft().current().portraits[0].x = 900;
-  await Hall.saveDraft();
-  assert.equal(Hall.draft().saved().portraits[0].x, 900);
+  await StudentHall.controls().find((action) => action[0] === "Layout")[4]();
+  StudentHall.draft().current().portraits[0].x = 900;
+  await StudentHall.saveDraft();
+  assert.equal(StudentHall.draft().saved().portraits[0].x, 900);
   assert.deepEqual(persisted, ["studentHall.update"]);
-  await Hall.controls().find((action) => action[0] === "Layout")[4]();
-  Hall.draft().current().portraits[0].x = 1200;
-  await Hall.cancelDraft();
+  await StudentHall.controls().find((action) => action[0] === "Layout")[4]();
+  StudentHall.draft().current().portraits[0].x = 1200;
+  await StudentHall.cancelDraft();
   assert.equal(renderer.actors.get("a").entry.x, 900);
   assert.deepEqual(
     [...renderer.actors.values()].map((actor) => actor.player),
@@ -225,9 +229,9 @@ test("Change Layout Save and Cancel reconcile the existing scene without loading
 });
 test("portrait hit order follows saved layer order and wheel or keys cannot mutate relative size", async () => {
   const value = setup();
-  Hall.draft().begin("layout");
-  Hall.draft().layer("a", "front");
-  Hall.hitsNow();
+  StudentHall.draft().begin("layout");
+  StudentHall.draft().layer("a", "front");
+  StudentHall.hitsNow();
   assert.deepEqual(
     buttons.map((button) => button.dataset.entry),
     ["b", "c", "a"],
@@ -237,35 +241,35 @@ test("portrait hit order follows saved layer order and wheel or keys cannot muta
     button.emit("keydown", { key: "+", preventDefault() {} });
   }
   assert.deepEqual(
-    Hall.draft()
+    StudentHall.draft()
       .current()
       .portraits.map((entry) => entry.scale),
     [1, 1, 1],
   );
   assert.ok(buttons.every((button) => !button.listeners.wheel && !button.listeners.keydown));
-  assert.equal(Hall.draft().current().portraitScale, 1);
+  assert.equal(StudentHall.draft().current().portraitScale, 1);
   assert.equal(value.portraits[0].scale, 1);
 });
 test("two-or-more portrait layouts offer layer and flip actions, with boundary moves disabled", () => {
   setup();
-  Hall.draft().begin("layout");
-  const list = Hall.draft().current().portraits;
-  assert.equal(Hall.portraitActions(list[0]).length, 7);
-  assert.equal(Hall.portraitActions(list[0]).find((action) => action[0] === "Backward")[3], false);
-  assert.equal(Hall.portraitActions(list[2]).find((action) => action[0] === "Front")[3], false);
-  Hall.draft().remove("c");
-  assert.equal(Hall.portraitActions(list[0]).length, 7);
-  Hall.draft().remove("b");
+  StudentHall.draft().begin("layout");
+  const list = StudentHall.draft().current().portraits;
+  assert.equal(StudentHall.portraitActions(list[0]).length, 7);
+  assert.equal(StudentHall.portraitActions(list[0]).find((action) => action[0] === "Backward")[3], false);
+  assert.equal(StudentHall.portraitActions(list[2]).find((action) => action[0] === "Front")[3], false);
+  StudentHall.draft().remove("c");
+  assert.equal(StudentHall.portraitActions(list[0]).length, 7);
+  StudentHall.draft().remove("b");
   assert.deepEqual(
-    Hall.portraitActions(list[0]).map((a) => [a[0], a[3]]),
+    StudentHall.portraitActions(list[0]).map((a) => [a[0], a[3]]),
     [["Change", false]],
   );
-  assert.equal(Hall.draft().remove("a"), false);
+  assert.equal(StudentHall.draft().remove("a"), false);
 });
 
 test("one hover owner keeps its palette during pointer entry, focus loss and overlapping actor entry", () => {
   const shown = [],
-    hover = Hall.createHoverOwner((id) => shown.push(id));
+    hover = StudentHall.createHoverOwner((id) => shown.push(id));
   hover.focus("a");
   hover.paletteEnter();
   hover.focus(null);
@@ -279,7 +283,7 @@ test("one hover owner keeps its palette during pointer entry, focus loss and ove
 });
 test("actor to palette transitions never hide the palette before its pointerenter or click", () => {
   const shown = [],
-    hover = Hall.createHoverOwner((id) => shown.push(id));
+    hover = StudentHall.createHoverOwner((id) => shown.push(id));
   hover.actorEnter("a");
   hover.actorLeave("a", true);
   hover.focus(null);
@@ -297,8 +301,8 @@ test("actor to palette transitions never hide the palette before its pointerente
 
 test("the shared action palette stays above every hit rectangle through real focusout and pointer events", async () => {
   setup();
-  Hall.draft().begin("layout");
-  const hits = Hall.hitsNow(),
+  StudentHall.draft().begin("layout");
+  const hits = StudentHall.hitsNow(),
     palette = hits.children.at(-1);
   assert.equal(palette.style.zIndex, "1000");
   assert.equal(palette.style.pointerEvents, "auto");
@@ -317,8 +321,8 @@ test("the shared action palette stays above every hit rectangle through real foc
 
 test("pixel pointer surface replaces overlapping rectangle dragging while named buttons stay keyboard reachable", () => {
   setup();
-  Hall.draft().begin("layout");
-  const hits = Hall.hitsNow(),
+  StudentHall.draft().begin("layout");
+  const hits = StudentHall.hitsNow(),
     surface = hits.children.find((child) => "portraitSurface" in child.dataset);
   assert.ok(surface);
   assert.ok(buttons.every((button) => button.style.pointerEvents === "none"));
@@ -330,10 +334,10 @@ test("atlas alpha is prepared for picking only in layout editing", () => {
   renderer.preparePick = () => prepared++;
   try {
     setup();
-    Hall.hitsNow();
+    StudentHall.hitsNow();
     assert.equal(prepared, 0, "viewing never decodes atlas alpha");
-    Hall.draft().begin("layout");
-    Hall.hitsNow();
+    StudentHall.draft().begin("layout");
+    StudentHall.hitsNow();
     assert.equal(prepared, 1);
   } finally {
     delete renderer.preparePick;
@@ -392,8 +396,8 @@ test("a mode transition retains old complete art and controls until target resou
   value.memorialLobbies = [{ id: "m1", alt: "memory", source: "mod:memory" }];
   value.active = "m1";
   const memory = memoryFixture();
-  Hall.fixture(value, renderer, memory.pool);
-  const before = Hall.elements(),
+  StudentHall.fixture(value, renderer, memory.pool);
+  const before = StudentHall.elements(),
     oldChrome = new Element();
   before.chrome.append(oldChrome);
   let resourcesReady, chromeReady;
@@ -405,8 +409,8 @@ test("a mode transition retains old complete art and controls until target resou
   chromeDelay = new Promise((resolve) => {
     chromeReady = resolve;
   });
-  Hall.draft().current().mode = "memorialLobby";
-  const pending = Hall.renderScene();
+  StudentHall.draft().current().mode = "memorialLobby";
+  const pending = StudentHall.renderScene();
   await tick();
   assert.equal(before.chrome.children[0], oldChrome);
   assert.equal(before.hits.isConnected, true);
@@ -422,7 +426,7 @@ test("a mode transition retains old complete art and controls until target resou
   await pending;
   assert.notEqual(before.chrome.children[0], oldChrome);
   assert.equal(before.hits.isConnected, false);
-  assert.equal(Hall.elements().sceneMode, "memorialLobby");
+  assert.equal(StudentHall.elements().sceneMode, "memorialLobby");
   assert.equal(before.portraitSceneHost.style.visibility, "hidden");
   assert.equal(memory.pool.current().host.style.visibility, "");
 });
@@ -438,17 +442,17 @@ test("playlist edits and source-identical active UUID changes never restart the 
     session = await memory.pool.prepare(value.memorialLobbies[0], () => new Element(), new AbortController().signal);
   memory.pool.commit(session);
   memory.pool.resume();
-  Hall.fixture(value, renderer, memory.pool);
+  StudentHall.fixture(value, renderer, memory.pool);
   memory.events.length = 0;
-  Hall.draft().begin("memorialLobby");
-  Hall.draft().current().memorialLobbies.reverse();
-  await Hall.renderScene();
-  await Hall.saveDraft();
-  Hall.draft().begin("memorialLobby");
-  Hall.draft().current().memorialLobbies[1].id = "replacement-id";
-  Hall.draft().current().active = "replacement-id";
-  await Hall.renderScene();
-  await Hall.cancelDraft();
+  StudentHall.draft().begin("memorialLobby");
+  StudentHall.draft().current().memorialLobbies.reverse();
+  await StudentHall.renderScene();
+  await StudentHall.saveDraft();
+  StudentHall.draft().begin("memorialLobby");
+  StudentHall.draft().current().memorialLobbies[1].id = "replacement-id";
+  StudentHall.draft().current().active = "replacement-id";
+  await StudentHall.renderScene();
+  await StudentHall.cancelDraft();
   assert.deepEqual(memory.events, []);
   assert.equal(memory.pool.current(), session);
 });
@@ -457,14 +461,14 @@ test("portraits and the last memorial survive round trips with one memory load a
   value.memorialLobbies = [{ id: "m1", alt: "memory", source: "mod:memory" }];
   value.active = "m1";
   const memory = memoryFixture();
-  Hall.fixture(value, renderer, memory.pool);
-  Hall.draft().current().mode = "memorialLobby";
-  await Hall.renderScene();
+  StudentHall.fixture(value, renderer, memory.pool);
+  StudentHall.draft().current().mode = "memorialLobby";
+  await StudentHall.renderScene();
   const retained = memory.pool.current();
-  Hall.draft().current().mode = "portraits";
-  await Hall.renderScene();
-  Hall.draft().current().mode = "memorialLobby";
-  await Hall.renderScene();
+  StudentHall.draft().current().mode = "portraits";
+  await StudentHall.renderScene();
+  StudentHall.draft().current().mode = "memorialLobby";
+  await StudentHall.renderScene();
   assert.equal(memory.pool.current(), retained);
   assert.equal(memory.events.filter((event) => event[0] === "load").length, 1);
   assert.equal(memory.events.filter((event) => event[0] === "hide").length, 0);
@@ -490,9 +494,9 @@ test("the real memorial wrapper rejects null metadata or a false frame result be
     show: async () => null,
     prepareFrame: async () => false,
   };
-  await assert.rejects(Hall.memorial(choice, host, signal, player), /source is unavailable/);
+  await assert.rejects(StudentHall.memorial(choice, host, signal, player), /source is unavailable/);
   player.show = async () => ({ sequences: [] });
-  await assert.rejects(Hall.memorial(choice, host, signal, player), /frame is unavailable/);
+  await assert.rejects(StudentHall.memorial(choice, host, signal, player), /frame is unavailable/);
 });
 test("Next then Previous during staging cancels the pending source and resumes the retained current memory", async () => {
   const value = setup();
@@ -506,7 +510,7 @@ test("Next then Previous during staging cancels the pending source and resumes t
     session = await memory.pool.prepare(value.memorialLobbies[0], () => new Element(), new AbortController().signal);
   memory.pool.commit(session);
   memory.pool.resume();
-  Hall.fixture(value, renderer, memory.pool);
+  StudentHall.fixture(value, renderer, memory.pool);
   memory.events.length = 0;
   let finish;
   memory.delay(
@@ -514,13 +518,13 @@ test("Next then Previous during staging cancels the pending source and resumes t
       finish = resolve;
     }),
   );
-  const next = Hall.step(1);
+  const next = StudentHall.step(1);
   await tick();
   assert.equal(session.player.suspended, true);
-  await Hall.step(-1);
+  await StudentHall.step(-1);
   assert.equal(memory.pool.current(), session);
   assert.equal(session.player.suspended, false);
-  assert.equal(Hall.draft().saved().active, "m1");
+  assert.equal(StudentHall.draft().saved().active, "m1");
   finish();
   await next;
   assert.equal(memory.pool.current(), session);
@@ -533,15 +537,15 @@ test("Next then Previous during staging cancels the pending source and resumes t
 
 test("immersive portrait interaction preserves its draft and renderer while disabling editing gestures", async () => {
   setup();
-  Hall.draft().begin("layout");
-  const entry = Hall.draft().current().portraits[0],
+  StudentHall.draft().begin("layout");
+  const entry = StudentHall.draft().current().portraits[0],
     actor = renderer.actors.get(entry.id),
     before = structuredClone(entry);
   let spoken = null;
-  Hall.immersiveFixture(true, async (value) => {
+  StudentHall.immersiveFixture(true, async (value) => {
     spoken = value.id;
   });
-  Hall.hitsNow();
+  StudentHall.hitsNow();
   const target = buttons[0];
   target.emit("pointerdown", { clientX: 100, clientY: 100, pointerId: 1, preventDefault() {} });
   target.emit("pointermove", { clientX: 300, clientY: 400, buttons: 1 });
@@ -550,23 +554,23 @@ test("immersive portrait interaction preserves its draft and renderer while disa
   assert.deepEqual(entry, before);
   assert.equal(spoken, entry.id);
   assert.equal(renderer.actors.get(entry.id), actor);
-  assert.equal(Hall.draft().kind(), "layout");
+  assert.equal(StudentHall.draft().kind(), "layout");
   assert.equal(updates, 0);
   assert.equal(disposals, 0);
-  Hall.immersiveFixture(false, async () => {});
+  StudentHall.immersiveFixture(false, async () => {});
 });
 
 test("viewing zoom projects every portrait hit with the artwork, and editing keeps original layout coordinates", () => {
   setup();
-  Hall.hitsNow();
+  StudentHall.hitsNow();
   const before = buttons.slice(-3).map((button) => button.rect);
-  Hall.cameraFixture({ scale: 2, x: -500, y: -200 });
-  Hall.hitsNow();
+  StudentHall.cameraFixture({ scale: 2, x: -500, y: -200 });
+  StudentHall.hitsNow();
   const after = buttons.slice(-3).map((button) => button.rect);
   for (let i = 0; i < before.length; i++)
     assert.deepEqual(after[i], [before[i][0] * 2 - 500, before[i][1] * 2 - 200, before[i][2] * 2, before[i][3] * 2]);
-  Hall.draft().begin("layout");
-  Hall.hitsNow();
+  StudentHall.draft().begin("layout");
+  StudentHall.hitsNow();
   assert.deepEqual(
     buttons.slice(-3).map((button) => button.rect),
     before,
@@ -595,9 +599,9 @@ test("a retained memorial changes caption language without replaying and rejects
     },
   };
   testLanguage = "ja-JP";
-  const old = Hall.refreshMemorialCaptions(player, source);
+  const old = StudentHall.refreshMemorialCaptions(player, source);
   testLanguage = "zh-CN";
-  await Hall.refreshMemorialCaptions(player);
+  await StudentHall.refreshMemorialCaptions(player);
   assert.equal(requests[1].lang, "zh-TW");
   const tables = published.filter((value) => value.rows !== undefined);
   assert.equal(tables[0].text(tables[0].rows.voice), "Current Chinese");
@@ -606,55 +610,55 @@ test("a retained memorial changes caption language without replaying and rejects
   await old;
   assert.equal(published.filter((value) => value.rows !== undefined).length, 1);
   controller.abort();
-  await Hall.refreshMemorialCaptions(player);
+  await StudentHall.refreshMemorialCaptions(player);
   assert.equal(requests.length, 2);
 });
 
 test("selection toggles, switches, pins against hover, and survives layer/flip redraws", () => {
   setup();
-  Hall.draft().begin("layout");
-  let hits = Hall.hitsNow();
+  StudentHall.draft().begin("layout");
+  let hits = StudentHall.hitsNow();
   buttons[0].emit("click", { detail: 0 });
-  assert.equal(Hall.selection(), "a");
+  assert.equal(StudentHall.selection(), "a");
   const palette = hits.children.at(-1);
   buttons[1].emit("pointerenter");
   assert.equal(palette.dataset.actorToolbar, "a");
   buttons[0].emit("click", { detail: 0 });
-  assert.equal(Hall.selection(), null);
+  assert.equal(StudentHall.selection(), null);
   buttons[1].emit("click", { detail: 0 });
-  assert.equal(Hall.selection(), "b");
+  assert.equal(StudentHall.selection(), "b");
   buttons[2].emit("click", { detail: 0 });
-  assert.equal(Hall.selection(), "c");
-  Hall.draft().layer("c", "back");
-  Hall.draft().flip("c");
-  hits = Hall.hitsNow();
-  assert.equal(Hall.selection(), "c");
+  assert.equal(StudentHall.selection(), "c");
+  StudentHall.draft().layer("c", "back");
+  StudentHall.draft().flip("c");
+  hits = StudentHall.hitsNow();
+  assert.equal(StudentHall.selection(), "c");
   assert.equal(hits.children.at(-1).dataset.actorToolbar, "c");
   assert.equal(buttons.at(-3)["aria-pressed"], "true");
 });
 test("four-stage-pixel click tolerance, empty clicks, Escape and drag never toggle off", () => {
   setup();
-  Hall.draft().begin("layout");
-  let hits = Hall.hitsNow();
+  StudentHall.draft().begin("layout");
+  let hits = StudentHall.hitsNow();
   renderer.pick = () => "a";
   const surface = () => hits.children.find((e) => "portraitSurface" in e.dataset);
   const press = (x, y) =>
     surface().emit("pointerdown", { button: 0, clientX: x, clientY: y, pointerId: 1, preventDefault() {} });
   const release = (x, y) => {
     surface().emit("pointerup", { clientX: x, clientY: y, pointerId: 1 });
-    hits = Hall.elements().hits;
+    hits = StudentHall.elements().hits;
   };
-  const before = Hall.draft().current().portraits[0].x;
+  const before = StudentHall.draft().current().portraits[0].x;
   press(100, 100);
   release(104, 100);
-  assert.equal(Hall.selection(), "a");
-  assert.equal(Hall.draft().current().portraits[0].x, before);
+  assert.equal(StudentHall.selection(), "a");
+  assert.equal(StudentHall.draft().current().portraits[0].x, before);
   press(100, 100);
   release(105, 100);
-  assert.equal(Hall.selection(), "a");
-  assert.equal(Hall.draft().current().portraits[0].x, before + 5);
+  assert.equal(StudentHall.selection(), "a");
+  assert.equal(StudentHall.draft().current().portraits[0].x, before + 5);
   let prevented = false;
-  Hall.onKey({
+  StudentHall.onKey({
     key: "Escape",
     preventDefault() {
       prevented = true;
@@ -662,40 +666,40 @@ test("four-stage-pixel click tolerance, empty clicks, Escape and drag never togg
     stopImmediatePropagation() {},
   });
   assert.ok(prevented);
-  assert.equal(Hall.selection(), null);
+  assert.equal(StudentHall.selection(), null);
   prevented = false;
-  Hall.onKey({
+  StudentHall.onKey({
     key: "Escape",
     preventDefault() {
       prevented = true;
     },
   });
   assert.equal(prevented, false);
-  Hall.selectPortrait("click", "a");
+  StudentHall.selectPortrait("click", "a");
   renderer.pick = () => null;
   press(100, 100);
   release(100, 100);
-  assert.equal(Hall.selection(), null);
+  assert.equal(StudentHall.selection(), null);
   delete renderer.pick;
 });
 test("Save, Cancel, removal and leaving end editor selection", async () => {
   setup();
-  Hall.draft().begin("layout");
-  Hall.selectPortrait("click", "a");
-  await Hall.saveDraft();
-  assert.equal(Hall.selection(), null);
-  Hall.draft().begin("layout");
-  Hall.selectPortrait("click", "b");
-  await Hall.cancelDraft();
-  assert.equal(Hall.selection(), null);
-  Hall.draft().begin("layout");
-  Hall.selectPortrait("click", "c");
-  Hall.draft().remove("c");
-  Hall.hitsNow();
-  assert.equal(Hall.selection(), null);
-  Hall.selectPortrait("click", "a");
-  Hall.selectPortrait("end");
-  assert.equal(Hall.selection(), null);
+  StudentHall.draft().begin("layout");
+  StudentHall.selectPortrait("click", "a");
+  await StudentHall.saveDraft();
+  assert.equal(StudentHall.selection(), null);
+  StudentHall.draft().begin("layout");
+  StudentHall.selectPortrait("click", "b");
+  await StudentHall.cancelDraft();
+  assert.equal(StudentHall.selection(), null);
+  StudentHall.draft().begin("layout");
+  StudentHall.selectPortrait("click", "c");
+  StudentHall.draft().remove("c");
+  StudentHall.hitsNow();
+  assert.equal(StudentHall.selection(), null);
+  StudentHall.selectPortrait("click", "a");
+  StudentHall.selectPortrait("end");
+  assert.equal(StudentHall.selection(), null);
 });
 test("selection reducer covers redraws and drag cancellation without persisting session state", () => {
   let selected = null;
@@ -718,26 +722,26 @@ test("selection reducer covers redraws and drag cancellation without persisting 
 test("pixel surface ends a press on lost capture or released buttons; the press has already selected", () => {
   for (const event of ["lostpointercapture", "released"]) {
     setup();
-    Hall.draft().begin("layout");
-    const host = Hall.hitsNow(),
+    StudentHall.draft().begin("layout");
+    const host = StudentHall.hitsNow(),
       surface = host.children.find((e) => "portraitSurface" in e.dataset);
     renderer.pick = () => "a";
-    const entry = Hall.draft().current().portraits[0],
+    const entry = StudentHall.draft().current().portraits[0],
       initial = entry.x;
     surface.emit("pointerdown", { button: 0, clientX: 100, clientY: 100, pointerId: 1, preventDefault() {} });
-    assert.equal(Hall.selection(), "a");
+    assert.equal(StudentHall.selection(), "a");
     if (event === "lostpointercapture") surface.emit(event, { pointerId: 1 });
     else surface.emit("pointermove", { clientX: 200, clientY: 100, buttons: 0 });
     surface.emit("pointermove", { clientX: 300, clientY: 100, buttons: 1 });
     assert.equal(entry.x, initial);
-    assert.equal(Hall.selection(), "a");
+    assert.equal(StudentHall.selection(), "a");
     delete renderer.pick;
   }
 });
 test("hover keeps a portrait's toolbar over the transparent parts of its box, the way up to the toolbar", () => {
   setup();
-  Hall.draft().begin("layout");
-  const hits = Hall.hitsNow(),
+  StudentHall.draft().begin("layout");
+  const hits = StudentHall.hitsNow(),
     surface = hits.children.find((e) => "portraitSurface" in e.dataset),
     palette = hits.children.at(-1);
   const [left, top, width] = hits.children.find((e) => e.dataset.entry === "a").rect;
@@ -753,34 +757,34 @@ test("hover keeps a portrait's toolbar over the transparent parts of its box, th
 });
 test("WebKit's click-only release selects, toggles off and never drags", () => {
   setup();
-  Hall.draft().begin("layout");
-  let hits = Hall.hitsNow();
+  StudentHall.draft().begin("layout");
+  let hits = StudentHall.hitsNow();
   renderer.pick = () => "a";
   const surface = () => hits.children.find((e) => "portraitSurface" in e.dataset),
-    entry = Hall.draft().current().portraits[0],
+    entry = StudentHall.draft().current().portraits[0],
     initial = entry.x;
   // The sequence the macOS WKWebView sends: pointerdown, a move that still reports a button, then only click.
   const tap = () => {
     surface().emit("pointerdown", { button: 0, clientX: 100, clientY: 100, pointerId: 1, preventDefault() {} });
     surface().emit("pointermove", { clientX: 100, clientY: 100, buttons: 4, pointerId: 1 });
     surface().emit("click", { clientX: 100, clientY: 100 });
-    hits = Hall.elements().hits;
+    hits = StudentHall.elements().hits;
   };
   tap();
-  assert.equal(Hall.selection(), "a");
+  assert.equal(StudentHall.selection(), "a");
   assert.equal(entry.x, initial);
   assert.equal(hits.children.at(-1).dataset.actorToolbar, "a", "the toolbar is pinned");
   tap();
-  assert.equal(Hall.selection(), null, "a second click clears it");
+  assert.equal(StudentHall.selection(), null, "a second click clears it");
   tap();
-  assert.equal(Hall.selection(), "a");
+  assert.equal(StudentHall.selection(), "a");
   renderer.pick = () => null;
   tap();
-  assert.equal(Hall.selection(), null, "an empty click clears it");
+  assert.equal(StudentHall.selection(), null, "an empty click clears it");
   delete renderer.pick;
 });
 
-test("ordinary Hall memorials keep their view bounds with the full camera; immersion alone frees the whole stage", () => {
+test("ordinary Student Hall memorials keep their view bounds with the full camera; immersion alone frees the whole stage", () => {
   setup();
   const changes = [],
     player = {
@@ -790,11 +794,11 @@ test("ordinary Hall memorials keep their view bounds with the full camera; immer
       setPostProcessing() {},
       setIntro() {},
     };
-  Hall.configureMemorial(player);
-  Hall.immersiveFixture(true);
-  Hall.configureMemorial(player);
-  Hall.immersiveFixture(false);
-  Hall.configureMemorial(player);
+  StudentHall.configureMemorial(player);
+  StudentHall.immersiveFixture(true);
+  StudentHall.configureMemorial(player);
+  StudentHall.immersiveFixture(false);
+  StudentHall.configureMemorial(player);
   assert.deepEqual(changes, [false, true, false]);
   assert.match(
     flat(source),

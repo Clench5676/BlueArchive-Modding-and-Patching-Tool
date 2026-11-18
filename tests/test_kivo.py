@@ -39,7 +39,7 @@ def test_clip_id_matches_spine_events_and_kivo_names():
 
 
 def test_lobby_lines():
-    lines = kivo.lobby_lines(PAGE)
+    lines = kivo.memorial_lobby_lines(PAGE)
     assert set(lines) == {"hoshino_memoriallobby_1", "hoshino_memoriallobby_2"}
     one = lines["hoshino_memoriallobby_1"]
     assert one == {
@@ -79,4 +79,4 @@ def test_chinese_lines_lose_the_spaces_kivo_wraps_with():
     page = {
         "voice": [{"description": "CH0187_MemorialLobby_1_1", "text": "这里， 老师。\n好。", "text_original": "ここ。"}]
     }
-    assert kivo.lobby_lines(page)["ch0187_memoriallobby_1_1"]["zh-CN"] == "这里，老师。好。"
+    assert kivo.memorial_lobby_lines(page)["ch0187_memoriallobby_1_1"]["zh-CN"] == "这里，老师。好。"

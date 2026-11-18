@@ -23,7 +23,7 @@
   (`tests/test_bundle_guard.py` measures them on the verified view).
 - **Game assets.** Two classes. *Light* (atlas sprites, atlas metadata, UI textures, prefab layouts, bundle indexes):
   kept in memory; written to the disk cache only after the user agreed (`consent = true`). *Heavy* (collection art,
-  Spine skeletons, lobbies, 3D models): memory, plus the default-on **Preview Cache** setting, which permits lossless
+  Spine skeletons, memorial lobbies, 3D chibis): memory, plus the default-on **Preview Cache** setting, which permits lossless
   exports and generated PNG thumbnails in the user cache directory. Browser responses remain
   `Cache-Control: no-store`; voices remain memory-only.
 - **Disk cache.** Generation 2 uses a sibling with the `-bmpt-g2` suffix beside the platform or configured cache
@@ -31,7 +31,7 @@
   separately under `previews/`.
 - **Preview cache.** On by default, preserving an explicitly saved off setting, independent of the light-asset
   consent. Stored under the cache directory's `previews/`, bounded to 2 GiB with least-recently-used eviction.
-  Entries are keyed by installation/resource/export identity, source revisions and model dependencies; stills
+  Entries are keyed by installation/resource/export identity, source revisions and chibi dependencies; stills
   additionally by renderer parameters, background/framing content and the renderer's own code (every still names its
   renderer in `preview.cacheGet` / `preview.cachePut`, and the backend keys it by the content hash of that renderer's
   pixel files, `webui/stills.py`; `tests/test_still_renderers.py` holds every import of those files to a pixel or
@@ -72,29 +72,29 @@ class GameAssets:
     # heavy
     def collection_bg(self, name: str) -> tuple[bytes, str]    # (data, mime)
     def collection_portrait(self, name: str) -> bytes          # PNG
-    def collection_names(self) -> dict[str, list[str]]         # {"bg": [...], "portrait": [...]}
-    def spine_cores(self, kind: str) -> dict[str, list[Path]]  # kind "spr" | "lobby": core -> bundle parts
-    def spine_files(self, kind: str, core: str) -> dict[str, bytes]        # file name -> bytes (.skel, .atlas, pages)
+    def collection_names(self) -> dict[str, list[str]]         # {"background": [...], "portrait": [...]}
+    def spine_cores(self, resource_type: str) -> dict[str, list[Path]]  # "portrait" | "memorialLobby": core -> bundle parts
+    def spine_files(self, resource_type: str, core: str) -> dict[str, bytes]        # file name -> bytes (.skel, .atlas, pages)
     def spine_files_from(self, bundles: list[Path]) -> dict[str, bytes]    # the same, for a mod's bundle files
-    def lobby_info(self, core: str) -> dict                    # a lobby's layers, touch boxes, clips, idle pools,
+    def memorial_lobby_info(self, core: str) -> dict                    # a memorial lobby's layers, touch boxes, clips, idle pools,
                                                                # sound events, post-processing, particle and mesh
                                                                # effects, page materials, pins and intro
-    def lobby_fx_texture(self, core: str, tex_id: str) -> bytes # a texture lobby_info's "fx" lists, as PNG
-    def lobby_sound(self, core: str, clip_id: str) -> bytes   # a clip lobby_info's "sounds" lists, decoded to WAV
-    def model_cores(self) -> set[str]                          # dev names with a chibi (character-<dev>-_mxload-*)
-    def model_glb(self, core: str) -> bytes                    # the chibi as one GLB (model.py)
+    def memorial_lobby_fx_texture(self, core: str, tex_id: str) -> bytes # a texture memorial_lobby_info's "fx" lists, as PNG
+    def memorial_lobby_sound(self, core: str, clip_id: str) -> bytes   # a clip memorial_lobby_info's "sounds" lists, decoded to WAV
+    def chibi_cores(self) -> set[str]                          # dev names with a chibi (character-<dev>-_mxload-*)
+    def chibi_glb(self, core: str) -> bytes                    # the chibi as one GLB (chibi.py)
 ```
 
 The collection art is read where the game loads it (CostumeExcel's texture paths, the
 `uis-01_common-14_charactercollect-*` bundles); the index holds names and bundle locations only, in memory.
 `/asset/art/background/` serves only names starting with `BG_`, `/asset/art/officialThumbnail/` only `Student_Portrait_`.
 
-`model_glb` reads prefab bundles and resolves their external CABs on demand. Chibi, memorial lobby and office graphs share
+`chibi_glb` reads prefab bundles and resolves their external CABs on demand. Chibi, memorial lobby and office graphs share
 the revision-checked `gameassets/cabs.py` resolver; the optional preview cache persists bounded, checksummed CAB
 metadata, confined to the installation and checked by device, inode, size, mtime and ctime. The shared
 `unity/unityfs.py` parser reads only header/block info and uses the declared bundle length to ignore CRC-correction
 tails. The GLB carries material, sampler, outline, blend and clip-toggle data. `chibi-materials.js` applies that
-data when rendering a chibi. `model-camera.js` supplies the initial framing. The view accepts zoom, pan and orbit
+data when rendering a chibi. `chibi-camera.js` supplies the initial framing. The view accepts zoom, pan and orbit
 with eased framing (`attachInput`).
 
 `AssetNotFound` (a `KeyError`) when a name is unknown. Layout nodes use the schema
@@ -112,7 +112,7 @@ node as a path below the controller's node (`""` is the node itself, `null` an u
 | `MXDualStateButton` | `NormalButton`, `DisabledButton` |
 | `ButtonActivator` | `activeObject`, `inactiveObject`, `button`, `contentsLockObject` |
 
-The lobby's bottom menu (`UILobby`, `Front/Bottom/Menu/BG/Grid/<entry>`) holds the game's disabled look for the
+The memorial lobby's bottom menu (`UILobby`, `Front/Bottom/Menu/BG/Grid/<entry>`) holds the game's disabled look for the
 greyed navigation: `Disable` shows the icon sprite at `#797979` with `Common_Icon_Lock` over it; the label is outside
 both states.
 
@@ -123,54 +123,54 @@ separate namespace.
 
 ```python
 @dataclass
-class Variant:
+class Alt:
     key: str                  # file_id lower-cased: "hoshino", "hoshino_swimsuit", "ch0241", "np0045"
     file_id: str              # as in the character map: "CH0241"
-    family: str               # Family.key
+    student: str              # Student.key
     names: dict[str, dict]    # {lang: {"full", "short"}}
     playable: bool            # a playable student (on some server)
-    order: int                # release order inside the family
-    spr: str | None           # Spine portrait core, when the install has it
-    lobby: str | None         # memorial lobby core, when the install has it
-    bg: str | None            # collection background texture name
-    portrait: str | None      # collection portrait texture name (None: the front end renders a bust)
+    order: int                # release order among the student's alts
+    portrait: str | None           # Spine portrait core, when the install has it
+    memorial_lobby: str | None         # memorial lobby core, when the install has it
+    background: str | None            # collection background texture name
+    official_thumbnail: str | None  # collection portrait texture name (None: the front end renders a bust)
     date: str | None          # date of the portrait bundle
-    page_id: str | None       # the student page on Kivo, for lobby lines
-    recruitable: bool         # on the selected server (see below)
-    model: str | None         # 3D chibi dev name, when the install has it
-    schale_id: int | None     # the game's character id (SchaleDB's), for the Global server's lobby lines
+    page_id: str | None       # the student page on Kivo, for memorial lobby lines
+    released_on_server: bool  # on the selected server (see below)
+    chibi: str | None         # 3D chibi dev name, when the install has it
+    schale_id: int | None     # the game's character id (SchaleDB's), for the Global server's memorial lobby lines
     aliases: list[str]        # the CN server's zh-CN names: the search matches them, the UI never shows them
 
 @dataclass
-class Family:
-    key: str                  # the base variant's key
+class Student:
+    key: str                  # the base alt's key
     names: dict[str, str]     # base name per language
     school: str | None
-    variants: list[Variant]
+    alts: list[Alt]
     aliases: list[str]        # the CN server's base names
 
 class Catalog:
     def __init__(self, game, character_map, data=<package data>, server="global"): ...  # "global" | "japan"
-    def families(self) -> list[Family]
-    def family(self, key: str) -> Family
-    def variant(self, key: str) -> Variant
-    def variant_for_core(self, core: str) -> Variant | None    # "ch0241_spr" or "ch0241_home" -> Variant
-    def core_map(self, spr_cores, lobby_cores, special_cores=()) -> CoreMap  # any install's cores -> variant keys
+    def students(self) -> list[Student]
+    def student(self, key: str) -> Student
+    def alt(self, key: str) -> Alt
+    def alt_for_core(self, core: str) -> Alt | None    # "ch0241_spr" or "ch0241_home" -> Alt
+    def core_map(self, portrait_cores, memorial_lobby_cores, special_cores=()) -> CoreMap  # install cores -> alt keys
     def reload(self) -> None                                    # parse the data again, rebuild the snapshot
 ```
 
-`core_map` runs the roster's own core rules on another install's core names, so the library keys a core the same way
-in every game folder: a portrait core's key is the core less `_spr`; a lobby core belongs to the installed alt
+`core_map` runs the student list's core rules on another install's core names, so the library keys a core the same way
+in every game folder: a portrait core's key is the core less `_spr`; a memorial lobby core belongs to the installed alt
 whose key or core alias plus `_home`, `_home_gl` or `_home_teen` names it, a direct file-id match first. The shipped
 data and the character map are parsed once and kept; every build works on a copy, and `reload()` keeps the old parse
 when the data is invalid.
 
-Special Spine slots use `special:<lower-case core>` keys and the lobby workflow. Discovery accepts named
+Special Spine slots use `special:<lower-case core>` keys and the memorial lobby workflow. Discovery accepts named
 `spinebackground` bundles and nonstandard cores in `spinelobbies` and `spinecharacters`; shared `_mxcommon` bundles
 are excluded. The category is retained on the alt (`spineCategory` in RPC data) and kept separate from student
 portraits and memorial lobbies; import, apply, restore, configuration, the global toggle and entry scans classify
-these files by category as well as core, while parts still match by prefix and resource type. Roster cards, chips,
-the picker and search include lobby-only alts; container paths under `SpineBackground/<core>/` identify the
+these files by category as well as core, while parts still match by prefix and resource type. Student List cards, chips,
+the picker and search include memorial lobby-only alts; container paths under `SpineBackground/<core>/` identify the
 owning scene, and conflicting scene containers are refused. Known role tokens (workpage, daytime, night, task, cafe)
 have locale labels; unknown names keep their exact core.
 
@@ -200,7 +200,7 @@ portrait index permits the alt. All playable alts remain in the student list.
   other language, Traditional Chinese included, to en-US (a Simplified string in a Traditional screen reads as a
   wrong translation, an English one as an untranslated one).
 - Names come with the data per language (`i18n.js` `NAME_LANG`: zh-CN, zh-TW, en, ja, ko, th); the catalog names
-  every alt in those languages. The lobby's lines follow the UI language (`LINE_LANGS`).
+  every alt in those languages. The memorial lobby's lines follow the UI language (`LINE_LANGS`).
 - Text fitting (`ngui.fitText`) shrinks, then wraps at separators and between words (`Intl.Segmenter` in the text's
   language), keeping the CJK line-breaking rules; `ngui.fitLabel` also widens the label to the fitted width. A
   control's caption is never ellipsized. Options side by side share one size (`ngui.fitGroup`), each option measured

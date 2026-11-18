@@ -58,7 +58,7 @@ export function container({ x = 0, y = 0, w, h, padding = 0 }) {
 }
 
 /**
- * The 12-column grid of a box (the Bootstrap model).
+ * The 12-column grid of a box (the Bootstrap chibi).
  * @param {{columns?: number, gutter?: number}} [options] The column count and the gutter between columns.
  * @returns {{pitch: number, column: number, at: (n: number) => number, span: (n: number, offset?: number) =>
  *     Box}} The

@@ -1,10 +1,10 @@
-// chrome-motion.js: the top bar and the bottom menu on UILobby's UIAni_Lobby curves (ui-tokens.js LOBBY_ENTRY), their
+// chrome-motion.js: the top bar and the bottom menu on UILobby's UIAni_Lobby curves (ui-tokens.js HOME_ENTRY), their
 // entry after the first screen, their absence in immersive scenes and their return at the window's edge. A fake DOM,
 // clock, frame queue and timers; viewport 960 x 540, so the stage's scale is 0.5.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
-import { LOBBY_ENTRY } from "../../src/bmpt/web/js/ui/ui-tokens.js";
+import { HOME_ENTRY } from "../../src/bmpt/web/js/ui/ui-tokens.js";
 
 const source = readFileSync(new URL("../../src/bmpt/web/js/window/chrome-motion.js", import.meta.url), "utf8")
   .replace('import { reflowCorners } from "./corner-layout.js";', "const reflowCorners = () => {};")
@@ -13,8 +13,8 @@ const source = readFileSync(new URL("../../src/bmpt/web/js/window/chrome-motion.
     "const rpc = (...call) => { globalThis.motionRpc.push(call); return Promise.resolve(); };",
   )
   .replace(
-    'import { LOBBY_ENTRY } from "../ui/ui-tokens.js";',
-    `import { LOBBY_ENTRY } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";`,
+    'import { HOME_ENTRY } from "../ui/ui-tokens.js";',
+    `import { HOME_ENTRY } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";`,
   );
 globalThis.motionRpc = [];
 const M = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
@@ -111,7 +111,7 @@ function harness({ native = false, lights = true } = {}) {
 const motions = (h) => h.calls.filter((c) => c.name === "window.motion").map((c) => c.value);
 
 test("the clip's Hermite keys: values at the keys, no overshoot, the share left falls from 1 to 0", () => {
-  for (const keys of [LOBBY_ENTRY.top, LOBBY_ENTRY.bottom]) {
+  for (const keys of [HOME_ENTRY.top, HOME_ENTRY.bottom]) {
     for (const [t, v] of keys) near(M.hermite(keys, t), v);
     let last = 1;
     for (let t = 0; t <= M.duration(keys) + 1e-9; t += 0.005) {
@@ -122,14 +122,14 @@ test("the clip's Hermite keys: values at the keys, no overshoot, the share left 
     near(M.remaining(keys, M.duration(keys)), 0);
   }
   // 0.2 s into the clip the top bar is 28.55 units from its rest, the menu 31.52
-  near(M.hermite(LOBBY_ENTRY.top, 0.2), 28.55);
-  near(M.hermite(LOBBY_ENTRY.bottom, 0.2), -31.52);
-  const list = M.frames(LOBBY_ENTRY.top, 100, 0);
+  near(M.hermite(HOME_ENTRY.top, 0.2), 28.55);
+  near(M.hermite(HOME_ENTRY.bottom, 0.2), -31.52);
+  const list = M.frames(HOME_ENTRY.top, 100, 0);
   assert.equal(list.length, 27);
   assert.equal(list[0], 100);
   assert.equal(list.at(-1), 0);
-  near(M.entryDistance(LOBBY_ENTRY.top, 0.5), 333.7 * S * 0.5);
-  near(M.entryDistance(LOBBY_ENTRY.bottom, 0.5), 1045 * S * 0.5);
+  near(M.entryDistance(HOME_ENTRY.top, 0.5), 333.7 * S * 0.5);
+  near(M.entryDistance(HOME_ENTRY.bottom, 0.5), 1045 * S * 0.5);
 });
 
 test("before the first screen both bars wait where the clip starts, hidden and out of reach", () => {
@@ -181,7 +181,7 @@ test("an immersive scene sends both bars away, as far as their painted edges, an
   h.motion.enter();
   h.run(500);
   h.header.inert = true;
-  h.nav.inert = true; // the scene holds them, as Hall and detail fullscreen do
+  h.nav.inert = true; // the scene holds them, as Student Hall and detail fullscreen do
   h.motion.setImmersive(true);
   assert.equal(h.motion.hidden("top"), true);
   h.run(500);

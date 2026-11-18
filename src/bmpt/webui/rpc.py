@@ -7,7 +7,7 @@ import logging
 from typing import Any, Callable
 
 from ..core.errors import ServiceError, log_service_error
-from .contract import rpc_params, wire_error, wire_resource_map, wire_value
+from .contract import rpc_params, wire_value
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class RpcRegistry:
         """Create an empty registry.
 
         Args:
-            current: Apply the web API vocabulary to library input and output.
+            current: Use JSON field spelling for the web API.
             on_exception: Called with ``(type, value, traceback)`` for an unexpected exception from a method, for
                 the crash report; None reports nothing.
             translate: Maps an exception to the ``ServiceError`` it stands for (an environment fault the user can
@@ -70,7 +70,7 @@ class RpcRegistry:
         def failed(error: ServiceError) -> dict[str, Any]:
             log_service_error(logger, error)
             payload = error.to_json()
-            return {"error": wire_error(payload) if self.current else payload}
+            return {"error": wire_value(payload) if self.current else payload}
 
         fn = self._methods.get(name)
         if fn is None:
@@ -78,9 +78,9 @@ class RpcRegistry:
         params = params or {}
         if not isinstance(params, dict):
             return failed(ServiceError("bad_params", method=name))
-        if self.current:
-            params = rpc_params(name, params)
         try:
+            if self.current:
+                params = rpc_params(name, params)
             inspect.signature(fn).bind(**params)
         except TypeError as e:
             return failed(ServiceError("bad_params", method=name, error=str(e)))
@@ -97,21 +97,7 @@ class RpcRegistry:
                 self.on_exception(type(e), e, e.__traceback__)
             return failed(ServiceError("internal", method=name, error=f"{type(e).__name__}: {e}"))
         converted = to_json(result)
-        if self.current:
-            if name == "ui.preview" and isinstance(converted, dict):
-                converted = wire_resource_map(converted)
-            elif name == "jobs.get" and isinstance(converted, dict):
-                converted = {
-                    key: item
-                    if key == "kind"
-                    else wire_error(item)
-                    if key == "error" and isinstance(item, dict)
-                    else wire_value(item)
-                    for key, item in converted.items()
-                }
-            else:
-                converted = wire_value(converted)
-        return {"result": converted}
+        return {"result": wire_value(converted) if self.current else converted}
 
 
 def to_json(value: Any) -> Any:

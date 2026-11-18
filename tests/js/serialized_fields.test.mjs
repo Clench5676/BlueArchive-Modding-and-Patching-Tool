@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readSerialized } from "../../src/bmpt/web/js/core/serialized-fields.js";
 
-test("an exported NGUI node and its widgets read into the page's node model", () => {
+test("an exported NGUI node and its widgets read into the page's node chibi", () => {
   const node = readSerialized({
     name: "Root",
     active: true,
@@ -39,7 +39,7 @@ test("an exported NGUI node and its widgets read into the page's node model", ()
   assert.deepEqual(node.children[0].pos, [0, 0]);
 });
 
-test("a lobby's clips and hit boxes read their full serialized names; other fields keep theirs", () => {
+test("a memorial lobby's clips and hit boxes read their full serialized names; other fields keep theirs", () => {
   const doc = readSerialized({
     clips: {
       idle: {
@@ -68,7 +68,7 @@ test("a lobby's clips and hit boxes read their full serialized names; other fiel
   assert.deepEqual(doc.fx.main.rotation, [0, 0, 1], "a particle's rotation is not a hit box's");
 });
 
-test("a document already in the page's model passes through unchanged", () => {
+test("a document already in the page's chibi passes through unchanged", () => {
   const tree = { name: "A", pos: [1, 2], widgets: [{ cls: "UISprite", sprite: "S", w_: 1, h_: 2 }] };
   assert.deepEqual(readSerialized(tree), tree);
 });

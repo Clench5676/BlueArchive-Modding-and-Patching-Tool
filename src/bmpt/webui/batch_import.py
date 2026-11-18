@@ -38,7 +38,6 @@ from .batch_candidates import (
     source_file,
     staging_name,
 )
-from .contract import stored_import_options, import_options_from_storage
 from .batch_judge import JudgeMixin
 
 
@@ -97,8 +96,10 @@ class BatchImport(JudgeMixin):
     def options(self) -> dict:
         """Return the saved import options over the defaults; the defaults alone when the saved ones are invalid."""
         defaults = self.defaults()
+        saved = self.services.state.get(PREF, {})
+        options = {key: saved[key] for key in defaults if key in saved} if isinstance(saved, dict) else {}
         try:
-            return options_of(import_options_from_storage(self.services.state.get(PREF, {})), defaults)
+            return options_of(options, defaults)
         except ServiceError:
             return options_of({}, defaults)
 
@@ -116,8 +117,7 @@ class BatchImport(JudgeMixin):
         """
         options = options_of(value, self.defaults())
         previous = self.services.state.get(PREF, {})
-        legacy = stored_import_options(options)
-        self.services.state.set(PREF, {**previous, **legacy} if isinstance(previous, dict) else legacy)
+        self.services.state.set(PREF, {**previous, **options} if isinstance(previous, dict) else options)
         return options
 
     def pick(self, folder: bool = False, recursive: bool = False, directory: str | None = None) -> dict:
@@ -203,7 +203,7 @@ class BatchImport(JudgeMixin):
                     candidate.source_override = dict(override[1])
                 assignment = self._assignments.get(candidate.entry["id"])
                 if assignment and assignment[0] == candidate.identity:
-                    candidate.entry["assignment"] = assignment[1]
+                    candidate.entry["assigned_alt"] = assignment[1]
                 self._judge(candidate, library, pin, log)
                 self._recognize_legacy(candidate, library)
                 self._restore_completed(candidate, library, pin)
@@ -233,7 +233,7 @@ class BatchImport(JudgeMixin):
         return self.services.submit("import.analyze", analyze, writes="library", library=library)
 
     def _register_preview(self, candidate: Candidate, revision: int, previews: dict) -> None:
-        if candidate.entry["core"] and candidate.entry["kind"] in ("spr", "lobby", "model"):
+        if candidate.entry["core"] and candidate.entry["resource_type"] in ("portrait", "memorialLobby", "chibi"):
             try:
                 stamp = spine_revision(list(candidate.files.values()))
                 key = hashlib.sha256(f"{revision}:{candidate.entry['id']}:{stamp}".encode()).hexdigest()
@@ -262,32 +262,32 @@ class BatchImport(JudgeMixin):
         Assets the install lacks stay absent in the picker.
 
         Returns:
-            ``families``, each with its ``key``, ``base`` names, ``aliases``, ``school`` and ``variants``.
+            ``students``, each with its ``key``, ``base`` names, ``aliases``, ``school`` and ``alts``.
         """
-        families = []
-        for family in self.services.catalog.assignment_families():
-            variants = []
-            for variant in family.variants:
-                value = variant.to_json()
+        students = []
+        for student in self.services.catalog.assignment_students():
+            alts = []
+            for alt in student.alts:
+                value = alt.to_json()
                 value["fileId"] = value.pop("file_id")
-                variants.append(value)
-            families.append(
+                alts.append(value)
+            students.append(
                 {
-                    "key": family.key,
-                    "base": family.names,
-                    "aliases": family.aliases,
-                    "school": family.school,
-                    "variants": variants,
+                    "key": student.key,
+                    "studentNames": student.names,
+                    "aliases": student.aliases,
+                    "school": student.school,
+                    "alts": alts,
                 }
             )
-        return {"families": families}
+        return {"students": students}
 
-    def assign_alt(self, id: str, variant: str) -> str:
+    def assign_alt(self, id: str, alt: str) -> str:
         """Assign a row to a student of the user's choice, for a mod whose target the files do not give.
 
         Args:
             id: The row's id.
-            variant: The student's variant key, which may be one the install lacks.
+            alt: The student's alt key, which may be one the install lacks.
 
         Returns:
             The id of the job that analyzes the row again, as ``set_source`` returns it.
@@ -296,16 +296,16 @@ class BatchImport(JudgeMixin):
             ServiceError: ``bad_params`` for an unknown row or one that is done; the row's own error when it is
                 blocked for another reason than its target.
         """
-        if not isinstance(id, str) or not isinstance(variant, str):
-            raise ServiceError("bad_params", key="variant")
-        selected = self.services.catalog.assignment_variant(variant)
+        if not isinstance(id, str) or not isinstance(alt, str):
+            raise ServiceError("bad_params", key="alt")
+        selected = self.services.catalog.assignment_alt(alt)
         with self._lock:
             candidate = self._latest.get(id)
             if candidate is None or candidate.entry["state"] in ("done", "library", "installed"):
                 raise ServiceError("bad_params", key="id")
             if candidate.error not in (None, "mod_target_unknown", "mod_target_ambiguous", "unsupported"):
                 raise blocked_error(candidate)
-            candidate.entry["assignment"] = selected.key
+            candidate.entry["assigned_alt"] = selected.key
             self._assignments[id] = (candidate.identity, selected.key)
         target = candidate.entry.get("source") or candidate.entry["target"]
         return self.set_source(
@@ -389,9 +389,9 @@ class BatchImport(JudgeMixin):
         if candidate.entry["state"] != "convert" or not candidate.provenance:
             return
         try:
-            mod_id = library.find_legacy_import_source(candidate.provenance, candidate.entry["kind"])
+            mod_id = library.find_legacy_import_source(candidate.provenance, candidate.entry["resource_type"])
             if not mod_id:
-                snapshot = library.legacy_import_snapshot(candidate.entry["kind"], candidate.entry["variant"])
+                snapshot = library.legacy_import_snapshot(candidate.entry["resource_type"], candidate.entry["alt"])
                 if not snapshot:
                     return
                 options = {
@@ -421,7 +421,7 @@ class BatchImport(JudgeMixin):
                         mod_id = library.find_import_output(paths, {item[0] for item in snapshot}) if paths else None
                     originals = (
                         candidate.originals
-                        if candidate.entry["kind"] == "other"
+                        if candidate.entry["resource_type"] == "other"
                         else library.official_bundles(candidate.entry["core"], pin=self._pin)
                     )
                     if (
@@ -429,7 +429,10 @@ class BatchImport(JudgeMixin):
                         != candidate.provenance
                     ):
                         return
-                    if library.legacy_import_snapshot(candidate.entry["kind"], candidate.entry["variant"]) != snapshot:
+                    if (
+                        library.legacy_import_snapshot(candidate.entry["resource_type"], candidate.entry["alt"])
+                        != snapshot
+                    ):
                         return
                     if len(self._legacy_checks) >= 128:
                         self._legacy_checks.clear()
@@ -486,7 +489,10 @@ class BatchImport(JudgeMixin):
         # preview keeps every official part and leaves the other types of the source files out, so it shows what the
         # game will. Whole-file imports (ready) and 3D previews compose the source files whole.
         types = set(self.options()["assetTypes"])
-        transfers = candidate.entry["state"] in ("update", "convert") and candidate.entry["kind"] in ("spr", "lobby")
+        transfers = candidate.entry["state"] in ("update", "convert") and candidate.entry["resource_type"] in (
+            "portrait",
+            "memorialLobby",
+        )
         left = set() if "ALL" in types or not transfers else set(PREVIEW_TYPES) - types
         try:
             originals = (
@@ -681,11 +687,14 @@ class BatchImport(JudgeMixin):
                                         check_current()
                                         added = (
                                             library.add_assigned_files(
-                                                fresh.files, fresh.entry["assignment"], fresh.entry["kind"], pin=pin
+                                                fresh.files,
+                                                fresh.entry["assigned_alt"],
+                                                fresh.entry["resource_type"],
+                                                pin=pin,
                                             )
-                                            if fresh.entry.get("assignment")
+                                            if fresh.entry.get("assigned_alt")
                                             else library.add_files(
-                                                fresh.entry["kind"], paths, pin=pin, direct=bool(fresh.direct)
+                                                fresh.entry["resource_type"], paths, pin=pin, direct=bool(fresh.direct)
                                             )
                                         )
                                     entries = [*added, *added.duplicates]
@@ -701,10 +710,14 @@ class BatchImport(JudgeMixin):
                                         library.remember_import_source(mod.id, fresh.provenance)
                                 if mod is not None:
                                     result.cores.update(core_of(name) for name in fresh.files)
-                                    result.kinds.add(mod.kind)
-                                    if options["previewAfterImport"] and pin and mod.kind in ("spr", "lobby", "model"):
+                                    result.resource_types.add(mod.resource_type)
+                                    if (
+                                        options["previewAfterImport"]
+                                        and pin
+                                        and mod.resource_type in ("portrait", "memorialLobby", "chibi")
+                                    ):
                                         self.services.state.set_preview_source(
-                                            pin.key, mod.target, mod.kind, f"mod:{mod.id}"
+                                            pin.key, mod.target, mod.resource_type, f"mod:{mod.id}"
                                         )
                                         item["previewSelected"] = True
                                     if options["enableAfterImport"] and fresh.entry.get("libraryOnly"):
@@ -723,7 +736,7 @@ class BatchImport(JudgeMixin):
                                             applied = library.apply_import(
                                                 mod.target,
                                                 f"mod:{mod.id}",
-                                                kind=mod.kind,
+                                                resource_type=mod.resource_type,
                                                 pin=pin,
                                                 settings=settings,
                                                 backup=options["createBackup"],
@@ -784,13 +797,14 @@ class BatchImport(JudgeMixin):
                                 self._stored(candidate, item["libraryId"])
                                 # A failed install can still have saved the choice. Report both facts.
                                 try:
-                                    if mod.kind == "other":
+                                    if mod.resource_type == "other":
                                         item["configured"] = any(
                                             row["id"] == mod.id and row["selected"] for row in library.other_mods(pin)
                                         )
                                     else:
                                         item["configured"] = (
-                                            library.configured(mod.target, pin).get(mod.kind) == f"mod:{mod.id}"
+                                            library.configured(mod.target, pin).get(mod.resource_type)
+                                            == f"mod:{mod.id}"
                                         )
                                 except (ServiceError, OSError):
                                     item["configured"] = False
@@ -876,7 +890,7 @@ class BatchImport(JudgeMixin):
             spine = replace(spine, target_version=candidate.spine_version)
         groups = {}
         for target in targets:
-            prefix = parse_filename(target.name).prefix if entry["kind"] == "other" else ""
+            prefix = parse_filename(target.name).prefix if entry["resource_type"] == "other" else ""
             groups.setdefault(prefix, []).append(target)
         generated, unchanged = {}, True
         for prefix, group in groups.items():

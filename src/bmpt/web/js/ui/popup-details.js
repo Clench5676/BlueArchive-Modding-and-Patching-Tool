@@ -101,7 +101,7 @@ const MORE = "…";
  *     loading].
  * @param {NguiNode|null} [portraitTexture] The portrait picture node, for an upright picture beside the stacked
  *     fields.
- * @param {string|null} [kind] The kind of cards: "model" or "photo" give a square picture.
+ * @param {string|null} [kind] The kind of cards: "chibi" or "thumbnail" give a square picture.
  * @param {{l: number, r: number, t: number, b: number}} [panel]
  * @param {{truncate?: boolean}} [options] truncate: each field's value on one line, a "..." button opening it
  *     whole where it is cut (tree.more lists them).
@@ -150,10 +150,10 @@ export function detailsTree(
   );
   kids.push(titleNode);
   bands.push({ name: "Title_Bg", w, h: titleH });
-  // A 3D model's picture spans the panel, its name, chips and fields under it, one size for every candidate
-  // (model); a photograph's square the same (photo), its picture filling the window (cover) where a model's still
+  // A chibi's picture spans the panel, its name, chips and fields under it, one size for every candidate
+  // (chibi); a thumbnail's square the same (thumbnail), its picture filling the window (cover) where a chibi's still
   // is shown whole (contain).
-  const model = !portraitTexture && (kind === "chibi" || kind === "photo");
+  const chibi = !portraitTexture && (kind === "chibi" || kind === "thumbnail");
   const columns = grid(content),
     pictureColumn = portraitTexture ? columns.span(5) : content;
   const infoColumn = portraitTexture ? columns.span(7, 5) : content;
@@ -199,11 +199,11 @@ export function detailsTree(
   }
   const chipFloor = squeezed ? CHIP_TIERS.XS.fsMin : chip.fsMin;
   const chipsW = chipW.reduce((n, cw) => n + cw, 0) + chipGaps;
-  // the chips beside a one-line name when the line holds both, else on their own row under it; a 3D model's beside its
+  // the chips beside a one-line name when the line holds both, else on their own row under it; a chibi's beside its
   // picture always under the name
   // a portrait's name always centred on its own line, its chips under it
   const beside =
-    !model &&
+    !chibi &&
     !portraitTexture &&
     chips.length > 0 &&
     !nameFit.text.includes("\n") &&
@@ -362,7 +362,7 @@ export function detailsTree(
   if (fieldBand) info.push(fieldBand);
   const infoStack = layoutStack(info, { w: infoW, gap: SPACE.m });
 
-  // The picture takes the room the title, the actions and the rest leave (the 3D model's square is one size for
+  // The picture takes the room the title, the actions and the rest leave (the chibi's square is one size for
   // every candidate: what fields with the file name on three lines and the others on one leave, its 10 degree
   // incline within its column; only longer fields shrink it).
   // The actions go in rows of as many XS buttons as the panel holds at their minimum width (the narrower panel,
@@ -383,9 +383,9 @@ export function detailsTree(
   const actionsH = actionRows ? actionRows * BTN.h + (actionRows - 1) * actionGap : 0;
   const roomFor = (otherH, others) =>
     content.h - titleH - otherH - actionsH - SPACE.m * (1 + others + (actions.length ? 1 : 0));
-  // a model's picture as large as the most its name (two lines) and fields (the file name on three lines unless
+  // a chibi's picture as large as the most its name (two lines) and fields (the file name on three lines unless
   // truncated) leave, whatever this candidate's hold
-  const reference = model
+  const reference = chibi
     ? infoStack.h -
       name.h +
       Math.max(
@@ -403,11 +403,11 @@ export function detailsTree(
     native = texture?.widgets.find((widget) => "texture" in widget);
   // the portrait card keeps its native aspect in its preview column
   const portraitCard = texture && switchGrid("portrait").card;
-  const aspect = portraitCard ? portraitCard.w / portraitCard.h : model ? 1 : 16 / 9;
+  const aspect = portraitCard ? portraitCard.w / portraitCard.h : chibi ? 1 : 16 / 9;
   let pictureW;
   if (portraitTexture) pictureW = Math.max(0, Math.min(pictureColumn.w, roomFor(0, 0) * aspect));
-  // a model's square beside the reference and the most room actions take (two rows of XS bodies): one size for all
-  else if (model)
+  // a chibi's square beside the reference and the most room actions take (two rows of XS bodies): one size for all
+  else if (chibi)
     pictureW = Math.max(
       0,
       Math.min(

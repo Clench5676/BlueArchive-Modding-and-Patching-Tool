@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-const source = await readFile(new URL("../../src/bmpt/web/js/photography/feedback.js", import.meta.url), "utf8");
+const source = await readFile(new URL("../../src/bmpt/web/js/thumbnail-capture/feedback.js", import.meta.url), "utf8");
 const { stageRect, flightTransform } = await import(
   "data:text/javascript;base64," + Buffer.from(source).toString("base64")
 );

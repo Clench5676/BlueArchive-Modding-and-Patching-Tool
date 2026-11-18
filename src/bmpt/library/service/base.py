@@ -32,13 +32,13 @@ from ..judge import (
     classify,
     core_of,
     date_of,
-    kind_of_file,
+    resource_type_of_file,
     now,
     part_of,
     says_official,
     seconds,
 )
-from ..models import Pin
+from ..records import Pin
 from ..storage import (
     atomic_json,
     read_tail,
@@ -60,7 +60,7 @@ COSTUME_PREVIEWS = 4  # costume previews kept in built/previews (one folder per 
 COSTUME_BUILD_TRIES = 3
 POINTER_CACHE = 256  # files whose cross-bundle pointers, and game files whose objects, are kept in memory
 COSTUME_VERDICTS = 4000  # costume verdicts kept in costume-verdicts.json, newest first
-WORN_VERDICTS = 1000  # models' worn-item verdicts kept in worn-items.json, newest first
+WORN_VERDICTS = 1000  # chibis' worn-item verdicts kept in worn-items.json, newest first
 WORN_LOCK_WAIT = 2.0  # seconds a build waits for worn-items.json's lock before it leaves the verdict unsaved
 # the startup rig archive (archive_rigs) works only once no other caller used the library for this long
 RIG_ARCHIVE_QUIET = 1.0
@@ -282,7 +282,7 @@ class _Reading:
     held records); ``error`` is set for ``corrupt``, ``newer`` and ``io``.
     """
 
-    kind: str
+    resource_type: str
     state: tuple | None = None
     error: ServiceError | None = None
 
@@ -318,23 +318,23 @@ class _CostumeInputs:
     """What a costume build reads of the library, gathered under the library lock.
 
     ``ModLibrary._costume_inputs`` gathers it so the build itself can run without the lock (``costume_preview``). It
-    holds the bytes to stage for each part of the model slot, the source model's files, the CAB index, the slot's dev
+    holds the bytes to stage for each part of the chibi slot, the source chibi's files, the CAB index, the slot's dev
     name, and the rule that gives the official copy of a dependency the build finds (``_official_or_current``: not
     serialized, as for the preview reads).
     """
 
     originals: dict[Path, Path]  # the slot's game files -> the official (else current) copy staged for it
-    dev: str  # the source model's dev name
+    dev: str  # the source chibi's dev name
     chosen: set[str]  # the names of the source's files that hold its prefab
-    sources: list[Path]  # the official (else current, for a preview) copies of the source model's files
+    sources: list[Path]  # the official (else current, for a preview) copies of the source chibi's files
     cabs: CabIndex
     target_dev: str
     official: Callable[[Path], Path]
-    revisions: dict[str, str] = field(default_factory=dict)  # dev name -> its model's game revision (_revision)
+    revisions: dict[str, str] = field(default_factory=dict)  # dev name -> its chibi's game revision (_revision)
 
 
 def _revision(files: Iterable[tuple[Path, Path]]) -> str:
-    """Return a model's game revision.
+    """Return a chibi's game revision.
 
     It is the names of its game files (an official name holds its CRC) and the sizes of the copies read for them.
     """
@@ -355,16 +355,17 @@ def _item_fraction(
 
 
 class _WornVerdicts:
-    """The worn-item verdict of each model a costume build measures (``model_props.WornStore``).
+    """The worn-item verdict of each chibi a costume build measures (``chibi_props.WornStore``).
 
-    Verdicts are kept in worn-items.json beside the costume verdicts, keyed by the costume rule's version, the model and
-    its game revision. Builds run outside the library and model locks, two at once at times: a write reads, changes and
+    Verdicts are kept in worn-items.json beside the costume verdicts, keyed by the costume rule's version, the chibi and
+    its game revision. Builds run outside the library and chibi locks, two at once at times: a write reads, changes and
     writes the file under a lock of its own (this process's and the lock file's, for other processes), and the atomic
     write keeps every read whole. A file that cannot be read or written, or a lock not had within ``WORN_LOCK_WAIT``,
-    only means the model is measured again.
+    only means the chibi is measured again.
     """
 
     _lock = threading.Lock()
+    _VERSION = 2
 
     def __init__(self, path: Path, revisions: Mapping[str, str]):
         self.path, self.revisions = path, dict(revisions)
@@ -380,8 +381,8 @@ class _WornVerdicts:
             data = json.loads(self.path.read_text())
         except (OSError, ValueError):
             return {}
-        models = data.get("models") if isinstance(data, dict) and data.get("version") == 1 else None
-        return {k: v for k, v in (models or {}).items() if isinstance(k, str) and isinstance(v, dict)}
+        chibis = data.get("chibis") if isinstance(data, dict) and data.get("version") == self._VERSION else None
+        return {k: v for k, v in (chibis or {}).items() if isinstance(k, str) and isinstance(v, dict)}
 
     def get(self, dev: str) -> Mapping | None:
         key = self._key(dev)
@@ -395,12 +396,12 @@ class _WornVerdicts:
             return
         try:
             with self._lock, file_lock(self.path.with_name(self.path.name + ".lock"), timeout=WORN_LOCK_WAIT):
-                models = self._read()
-                models[key] = {"worn": verdict, "at": now()}
+                chibis = self._read()
+                chibis[key] = {"worn": verdict, "at": now()}
                 kept = dict(
-                    sorted(models.items(), key=lambda item: str(item[1].get("at", "")), reverse=True)[:WORN_VERDICTS]
+                    sorted(chibis.items(), key=lambda item: str(item[1].get("at", "")), reverse=True)[:WORN_VERDICTS]
                 )
-                atomic_json(self.path, {"version": 1, "models": kept})
+                atomic_json(self.path, {"version": self._VERSION, "chibis": kept})
         except (OSError, TimeoutError) as error:
             log_failure(logger, logging.WARNING, "Could not save a worn-item verdict", error)
 
@@ -412,7 +413,7 @@ class _Part:
     path: Path
     size: int
     mtime: int
-    carried: str  # "official", "unknown", "damaged", "removed", "mod:<id>", "variant:<key>"
+    carried: str  # "official", "unknown", "damaged", "removed", "mod:<id>", "alt:<key>"
     official: bool  # the file holds official bytes
     matched: bool  # unchanged since the library's record of it
     changed: bool  # a record exists and the file changed since
@@ -428,8 +429,8 @@ class _Entry:
 
     pin: Pin
     core: str
-    kind: str
-    variant: str
+    resource_type: str
+    alt: str
     parts: list[_Part]
     carried: str
     configured: str | None
@@ -445,7 +446,7 @@ class _Entry:
         return self.pin.key, self.core
 
     def item(self) -> dict[str, str]:
-        return {"install": self.pin.key, "core": self.core, "variant": self.variant, "kind": self.kind}
+        return {"install": self.pin.key, "core": self.core, "alt": self.alt, "resource_type": self.resource_type}
 
 
 def _rebuilt(index: dict[str, list[Path]], path: Path) -> Path | None:
@@ -488,7 +489,7 @@ class _View:
     game files it may read:
 
     - ``scan``: headers and tails of any file (the scan consent is given);
-    - ``family``: the same, for the files the detail screen shows (no consent needed);
+    - ``student``: the same, for the files the detail screen shows (no consent needed);
     - ``recorded``: only the files the library wrote to (no consent); another file raises _Unread;
     - ``full``: write strength, every file the library cannot show unchanged is hashed in full (switching).
     """
@@ -547,7 +548,7 @@ class _View:
             self._sizes[name] = size
         return self._sizes[name]
 
-    def source_exists(self, source: str, key: str, kind: str, *, held: bool = True) -> bool:
+    def source_exists(self, source: str, key: str, resource_type: str, *, held: bool = True) -> bool:
         """Tell whether the library has a source.
 
         A held record (kept in state.json but not usable now) counts: its configuration and the game files carrying it
@@ -558,15 +559,17 @@ class _View:
             return True
         if source.startswith("mod:"):
             return source[4:] in self.mods or (held and source[4:] in self.held)
-        if source.startswith("variant:"):
-            if kind == "model":  # a costume: any other model of the student, field-mode ones (no slot) included
+        if source.startswith("alt:"):
+            if (
+                resource_type == "chibi"
+            ):  # a costume: any other chibi of the student, field-mode ones (no slot) included
                 try:
-                    other = self.library._variant(source[8:])
+                    other = self.library._alt(source[4:])
                 except ServiceError:
                     return False
-                return bool(getattr(other, "model", None) or getattr(other, "field_model", None))
+                return bool(getattr(other, "chibi", None) or getattr(other, "field_chibi", None))
             cores = self.maps.get(key)
-            return bool(cores and cores.core(source[8:], kind))
+            return bool(cores and cores.core(source[4:], resource_type))
         return False
 
     def records_of(self, pin: Pin, core: str) -> list[tuple[Path, dict]]:
@@ -595,16 +598,16 @@ class _View:
         expected = self.official_size(name)
         return trailing == 0 and (expected is None or size == expected)
 
-    def part(self, path: Path, pin: Pin, kind: str) -> _Part:
+    def part(self, path: Path, pin: Pin, resource_type: str) -> _Part:
         """One file judged as ``allow`` permits. A file whose size or date changed while it was read is read again."""
-        part = self._part(path, pin, kind)
+        part = self._part(path, pin, resource_type)
         if self.allow != "full" and not part.matched:
             stat = path.stat()
             if (stat.st_size, stat.st_mtime_ns) != (part.size, part.mtime):
-                part = self._part(path, pin, kind)
+                part = self._part(path, pin, resource_type)
         return part
 
-    def _part(self, path: Path, pin: Pin, kind: str) -> _Part:
+    def _part(self, path: Path, pin: Pin, resource_type: str) -> _Part:
         record = self.applied.get(str(path.resolve()))
         stat = path.stat()
         size, mtime = stat.st_size, stat.st_mtime_ns
@@ -634,7 +637,7 @@ class _View:
             source = record.get("source", "")
             if record.get("removed"):
                 carried = "removed"
-            elif not self.source_exists(source, pin.key, kind):
+            elif not self.source_exists(source, pin.key, resource_type):
                 # Preserve bytes of a missing source by offering them for adoption.
                 carried = "official" if flag else "unknown"
             else:
@@ -758,9 +761,9 @@ class _View:
 
     def entry(self, pin: Pin, core: str) -> _Entry:
         core = self.maps[pin.key].slot(core)
-        kind = self.library._kind(core, pin) or "spr"
+        resource_type = self.library._resource_type(core, pin) or "portrait"
         files = [path for value in self.maps[pin.key].slot_cores(core) for path in self.indexes[pin.key].get(value, [])]
-        parts = [self.part(path, pin, kind) for path in files]
+        parts = [self.part(path, pin, resource_type) for path in files]
         folder = self.folder(pin.key)
         config = self.configured(pin.key, core)
         configured = config["source"] if config else None
@@ -797,8 +800,8 @@ class _View:
                 carried,
                 files=bool(files),
                 damaged=damaged,
-                configured_exists=self.source_exists(source, pin.key, kind) if source else True,
-                carried_exists=self.source_exists(carried, pin.key, kind)
+                configured_exists=self.source_exists(source, pin.key, resource_type) if source else True,
+                carried_exists=self.source_exists(carried, pin.key, resource_type)
                 if carried.startswith(LIBRARY_SOURCES)
                 else True,
                 drifted_present=drifted_present,
@@ -826,14 +829,14 @@ class _View:
             any(not part.official and part.carried != "damaged" and copies[str(part.path)] is None for part in parts)
             and self.allow != "recorded"
         )
-        variant = self.maps[pin.key].key(core) or (config or {}).get("variant") or core
-        if kind == "other" and files:
-            variant = parse_filename(files[0].name).core
+        alt = self.maps[pin.key].key(core) or (config or {}).get("alt") or core
+        if resource_type == "other" and files:
+            alt = parse_filename(files[0].name).core
         entry = _Entry(
             pin,
             core,
-            kind,
-            variant,
+            resource_type,
+            alt,
             parts,
             carried,
             configured,
@@ -847,21 +850,24 @@ class _View:
         return entry
 
     def dismissed(self, entry: _Entry) -> bool:
-        kind = "drift" if entry.state in ("reset", "updated") else "untracked"
-        stored = ((self.folder(entry.pin.key).get("dismissed") or {}).get(kind) or {}).get(entry.core)
+        resource_type = "drift" if entry.state in ("reset", "updated") else "untracked"
+        stored = ((self.folder(entry.pin.key).get("dismissed") or {}).get(resource_type) or {}).get(entry.core)
         return bool(stored) and sorted(map(tuple, stored)) == signature(entry.parts)
 
     def cores(self, pin: Pin) -> set[str]:
         """List every core of an install the judgement covers.
 
-        These are the portrait and lobby cores of its index, the configured ones and the ones the library recorded files
+        These are the portrait and memorial lobby cores of its index, the configured ones and the ones the library
+        recorded files
         of.
         """
-        cores = {core for core in self.indexes[pin.key] if self.library._kind(core, pin)}
+        cores = {core for core in self.indexes[pin.key] if self.library._resource_type(core, pin)}
         cores.update(self.folder(pin.key).get("configured") or {})
         for folder in pin.dirs:
             cores.update(
-                core_of(path.name) for path, _record in self.by_folder.get(folder, []) if kind_of_file(path.name)
+                core_of(path.name)
+                for path, _record in self.by_folder.get(folder, [])
+                if resource_type_of_file(path.name)
             )
         return {self.maps[pin.key].slot(core) for core in cores}
 
@@ -875,7 +881,7 @@ class _View:
     ) -> list[_Entry]:
         """List every entry that is configured, not in its intended state, or overwritten.
 
-        A ``background`` pass (the scan, outside the library lock) pauses while a model preview is exported; callers
+        A ``background`` pass (the scan, outside the library lock) pauses while a chibi preview is exported; callers
         holding the library lock never pause, since a preview may need that lock.
         """
         out = []
@@ -944,14 +950,14 @@ def _merge(base: dict, mine: dict, disk: dict) -> dict:
     return out
 
 
-def _combine(kind: str, base: tuple, mine: tuple, disk: tuple) -> tuple[dict, set, dict, set]:
+def _combine(resource_type: str, base: tuple, mine: tuple, disk: tuple) -> tuple[dict, set, dict, set]:
     """Apply this instance's changes since ``base`` (``mine``) to the state read from disk.
 
     Returns (records, favourites, applied, migrations). The previous copy of an unreadable state.json (``kind``
     ``prev``) is older than what this instance holds, so it adds to ``mine`` and drops nothing but what this instance
     removed since ``base``.
     """
-    if kind == "prev":
+    if resource_type == "prev":
         records, applied = {**disk[0], **mine[0]}, {**disk[2], **mine[2]}
         for key in base[0].keys() - mine[0].keys():
             records.pop(key, None)
@@ -999,15 +1005,15 @@ class _ChoiceChange:
     entries back as they were, and the built copies the new choice replaced are deleted only once it stands (``close``).
     """
 
-    def __init__(self, library: "ModLibrary", pin: Pin, variant_key: str, source: str):
-        self.library, self.pin, self.variant_key, self.source = library, pin, variant_key, source
+    def __init__(self, library: "ModLibrary", pin: Pin, alt_id: str, source: str):
+        self.library, self.pin, self.alt_id, self.source = library, pin, alt_id, source
         self.saved: dict[str, dict[str, Any]] = {}
         self.dropped: list[dict] = []
 
-    def configure(self, kinds: dict[str, str]) -> None:
-        for core_name, parts in self.library._saved_choices(self.pin, kinds).items():
+    def configure(self, resource_types: dict[str, str]) -> None:
+        for core_name, parts in self.library._saved_choices(self.pin, resource_types).items():
             self.saved.setdefault(core_name, parts)
-        self.library._configure(self.pin, self.variant_key, kinds, self.source, dropped=self.dropped)
+        self.library._configure(self.pin, self.alt_id, resource_types, self.source, dropped=self.dropped)
 
     def refused(self, error: BaseException) -> bool:
         """Whether ``error`` is a refusal of the moment; the saved entries are put back then."""

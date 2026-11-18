@@ -105,7 +105,7 @@ export function hitButton(host, [l, t, w, h], fn, name, z = 50) {
   return b;
 }
 
-// recruitable marker: the game's recruitment (gacha) icon from the lobby
+// recruitable marker: the game's recruitment (gacha) icon from the memorialLobby
 export const RECRUIT = { sprite: "Common_Icon_Gacha2", atlas: "Common", ratio: 143 / 126 };
 /**
  * The recruitment icon as a node.

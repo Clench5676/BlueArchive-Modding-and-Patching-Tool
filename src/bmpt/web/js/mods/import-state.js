@@ -464,7 +464,7 @@ export function createImportState({ rpc, waitJob, changed = () => {}, suggest = 
   };
 }
 
-// Import Mod's missing-file prompts and feedback, over the real import session model.
+// Import Mod's missing-file prompts and feedback, over the real import session state.
 
 /** The string of what a missing-files prompt says. */
 export const missingText = (key, params = {}) => T(`import.missing.${key}`, params);
@@ -504,7 +504,7 @@ export const promptLines = (entry, { student, kind, text = missingText }) => [
  *     reveal the entry, say whether the page is active and report a failure.
  */
 export function createMissingFlow({
-  model,
+  importState,
   identify,
   kindName,
   ask,
@@ -520,10 +520,10 @@ export function createMissingFlow({
     shown = new Set();
   const key = (entry) =>
     JSON.stringify([entry.paths.slice().sort(), entry.missing.found.map((file) => file.path).sort()]);
-  const fillable = () => model.state.entries.filter(hasFound);
+  const fillable = () => importState.state.entries.filter(hasFound);
   async function promptRow(entry) {
     shown.add(key(entry));
-    const revision = model.state.analysisRevision;
+    const revision = importState.state.analysisRevision;
     if (
       !(await ask({
         title: typeof title === "function" ? title() : title,
@@ -532,23 +532,26 @@ export function createMissingFlow({
       }))
     )
       return false;
-    if (model.state.analysisRevision !== revision || !model.state.entries.includes(entry)) return false;
-    return model.add(entry.missing.found.map((file) => file.path));
+    if (importState.state.analysisRevision !== revision || !importState.state.entries.includes(entry)) return false;
+    return importState.add(entry.missing.found.map((file) => file.path));
   }
   async function fillAll(rows = fillable()) {
-    const revision = model.state.analysisRevision;
-    if (!rows.length || model.busy()) return false;
+    const revision = importState.state.analysisRevision;
+    if (!rows.length || importState.busy()) return false;
     rows.forEach((entry) => shown.add(key(entry)));
     const lines = rows.map((entry) =>
       text("fillLine", { student: identify(entry), kind: kindName(entry.resourceType), n: entry.missing.found.length }),
     );
     if (!(await ask({ title: text("fillAll", { n: rows.length }), lines, ok: text("addTogether") }))) return false;
-    if (model.state.analysisRevision !== revision || !rows.every((row) => model.state.entries.includes(row)))
+    if (
+      importState.state.analysisRevision !== revision ||
+      !rows.every((row) => importState.state.entries.includes(row))
+    )
       return false;
-    return model.add(rows.flatMap((entry) => entry.missing.found.map((file) => file.path)));
+    return importState.add(rows.flatMap((entry) => entry.missing.found.map((file) => file.path)));
   }
   function onChange(state) {
-    if (!state.entries.length && !model.busy()) {
+    if (!state.entries.length && !importState.busy()) {
       seen = null;
       incomplete = [];
       shown.clear();
@@ -565,7 +568,7 @@ export function createMissingFlow({
     );
     incomplete = state.entries.filter(isIncomplete);
     if (completed) {
-      model.select(completed.id);
+      importState.select(completed.id);
       reveal(completed.id);
     }
     // Rows not asked about yet prompt by themselves: one row with its files, several with one list confirmation.
@@ -576,9 +579,9 @@ export function createMissingFlow({
       defer(() => {
         if (
           active() &&
-          !model.busy() &&
-          model.state.analysisRevision === revision &&
-          rows.every((entry) => model.state.entries.includes(entry))
+          !importState.busy() &&
+          importState.state.analysisRevision === revision &&
+          rows.every((entry) => importState.state.entries.includes(entry))
         )
           (rows.length === 1 ? promptRow(rows[0]) : fillAll(rows)).catch(failed);
       });

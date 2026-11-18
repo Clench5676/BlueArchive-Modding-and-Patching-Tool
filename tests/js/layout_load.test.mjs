@@ -15,7 +15,7 @@ const flush = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 };
 
-test("a cold layout export survives a long lobby teardown and shares its request with subtrees", async (t) => {
+test("a cold layout export survives a long memorial lobby teardown and shares its request with subtrees", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const response = deferred(),
     body = deferred(),

@@ -1,10 +1,10 @@
-// Tests for the fullscreen lobby's wheel handling (web/js/lobby/lobby-touch.js): a mouse wheel zooms and a trackpad
-// swipe pans, in WebKit (the macOS app's WKWebView: wheelDeltaY is 3 x deltaY for every device) and in Chromium
-// (WebView2: notches of 120). Run by tests/test_lobby_view.py with Node's test runner.
+// Tests for the fullscreen memorial lobby's wheel handling (web/js/memorial-lobby/memorial-lobby-touch.js): a mouse
+// wheel zooms and a trackpad swipe pans, in WebKit (the macOS app's WKWebView: wheelDeltaY is 3 x deltaY for every
+// device) and in Chromium (WebView2: notches of 120). Run by tests/test_lobby_view.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import * as Touch from "../../src/bmpt/web/js/lobby/lobby-touch.js";
+import * as Touch from "../../src/bmpt/web/js/memorial-lobby/memorial-lobby-touch.js";
 
 globalThis.document ??= { addEventListener() {}, removeEventListener() {} };
 
@@ -57,11 +57,11 @@ test("one event: notches, trackpad steps and the ones that could be either", () 
   assert.equal(Touch.wheelStep({ deltaMode: 0, deltaX: 0, deltaY: 4.5, wheelDeltaY: -5 }), "smooth");
 });
 
-// a lobby whose zoom and pan are recorded, a host of the stage's size, and a clock the test moves
+// a memorial lobby whose zoom and pan are recorded, a host of the stage's size, and a clock the test moves
 function rig() {
   const calls = [];
   let target = { x: 0, y: 0, w: 2960, h: 1665 };
-  const lobby = {
+  const memorialLobby = {
     zoomAt: (f, sx, sy) => {
       calls.push(["zoom", f]);
       target = { ...target, w: target.w / f };
@@ -82,7 +82,7 @@ function rig() {
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 1920, height: 1080 }),
     classList: { toggle() {}, remove() {} },
   };
-  Touch.setup(lobby);
+  Touch.setup(memorialLobby);
   Touch.attach(host);
   let now = 10000;
   const real = performance.now;

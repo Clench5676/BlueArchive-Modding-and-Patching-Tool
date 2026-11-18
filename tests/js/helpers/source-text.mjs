@@ -115,18 +115,18 @@ export const POPUP_MODULES = [
   "popup-message.js",
 ];
 
-// The memorial lobby's code: lobby.js, which builds each instance, and the parts of an instance, paths under
-// web/js/lobby.
-export const LOBBY_MODULES = [
-  "lobby.js",
-  "lobby-measure.js",
-  "lobby-layers.js",
-  "lobby-view.js",
-  "lobby-scene.js",
-  "lobby-geometry.js",
-  "lobby-clips.js",
-  "lobby-talk.js",
-  "lobby-players.js",
+// The memorial lobby's code: memorial-lobby.js, which builds each instance, and the parts of an instance, paths under
+// web/js/memorial-lobby.
+export const MEMORIAL_LOBBY_MODULES = [
+  "memorial-lobby.js",
+  "memorial-lobby-measure.js",
+  "memorial-lobby-layers.js",
+  "memorial-lobby-view.js",
+  "memorial-lobby-scene.js",
+  "memorial-lobby-geometry.js",
+  "memorial-lobby-clips.js",
+  "memorial-lobby-talk.js",
+  "memorial-lobby-players.js",
 ];
 
 // The batch import page's code: batch-import.js and the modules that take its page state, paths under web/js/mods.
@@ -143,11 +143,11 @@ export const DETAIL_MODULES = [
   "detail-switchers.js",
   "detail-aliases.js",
   "detail-files.js",
-  "detail-lobby-tab.js",
-  "detail-model-tab.js",
+  "detail-memorial-lobby-tab.js",
+  "detail-chibi-tab.js",
   "detail-fullscreen.js",
   "detail-changes.js",
-  "detail-photo.js",
+  "detail-thumbnail.js",
 ];
 
 // The relative specifier a web UI module writes to import another, as a regular expression source matching only that

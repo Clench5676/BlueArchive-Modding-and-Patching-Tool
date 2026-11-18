@@ -10,8 +10,8 @@ read from the user's own install at runtime and never shipped with the program.
   Mods already in use
 - [`front-end.md`](front-end.md): Student list, Quit, Bottom navigation, Student Hall, Portrait, Popups, Bar motion,
   Design tokens, Loading screen, Pointer and touch effect
-- [`model-actions.md`](model-actions.md): the 3D tab's action bar and action lists, clip names, clips on demand
-- [`lobby-and-photography.md`](lobby-and-photography.md): memorial lobby, camera framing, dialogue, and student thumbnails
+- [`chibi-actions.md`](chibi-actions.md): the 3D tab's action bar and action lists, clip names, clips on demand
+- [`memorial-lobby-and-thumbnails.md`](memorial-lobby-and-thumbnails.md): memorial lobby, camera framing, dialogue, and student thumbnails
 - [`desktop.md`](desktop.md): One instance per data directory, Classic window, Tray, Local error reports and startup
   recovery, Release notes and feature tours
 
@@ -20,8 +20,8 @@ read from the user's own install at runtime and never shipped with the program.
 Composed screens take their sizes, gaps and alignment from the design system ([`design-system/`](../design-system/README.md):
 the scales in `ui-tokens.js`, the layout primitives in `ui-grid.js`).
 
-- Screens: consent popup, Student Hall, student roster, Import Mod (Batch Import), student detail (Portrait, Memorial
-  Lobby and 3D tabs), the switch popups (portrait, memorial lobby, 3D model) and the alt picker. The lobby is
+- Screens: consent popup, Student Hall, student list, Import Mod (Batch Import), student detail (Portrait, Memorial
+  Memorial Lobby and 3D tabs), the switch popups (portrait, memorial lobby, 3D chibi) and the alt picker. The memorial lobby is
   framed and touched like the game, plays its intro timeline when entered (a tap skips it; the settings' L2D tab
   turns it off) and plays its dialogue with voices and the lines in the UI language; the 3D tab shows the alt's
   chibi, exported from the install or a selected library Mod. A tab can remain available for a library-only Mod even

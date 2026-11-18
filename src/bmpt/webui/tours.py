@@ -25,8 +25,8 @@ PUBLISHED_TOURS: tuple[dict, ...] = (
                 "copy": "webui.tours.v0_6_0.student-thumbnails",
             },
             {
-                "id": "hall-viewing-zoom",
-                "copy": "webui.tours.v0_6_0.hall-viewing-zoom",
+                "id": "student-hall-viewing-zoom",
+                "copy": "webui.tours.v0_6_0.student-hall-viewing-zoom",
             },
         ],
     },

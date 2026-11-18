@@ -1,12 +1,12 @@
-// Dragging the roster list (web/js/roster/roster.js): the window listeners run in the capture phase, a cancelled
-// pointer ends the drag, and so does a move with no button held (the button was released outside the window), as Hall's
-// drag does.
+// Dragging the student list list (web/js/student-list/student-list.js): the window listeners run in the capture phase,
+// a cancelled pointer ends the drag, and so does a move with no button held (the button was released outside the
+// window), as Student Hall's drag does.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("../../src/bmpt/web/js/roster/roster.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/student-list/student-list.js", import.meta.url), "utf8");
 const code = source.slice(source.indexOf("// dragging the list:"), source.indexOf("// --- toolbar layout"));
 
 function harness() {

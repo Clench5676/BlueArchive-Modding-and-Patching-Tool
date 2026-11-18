@@ -197,7 +197,7 @@ test("a load whose own loop an owner stopped still reaches its success hook whil
     {},
     { timeout: 2000 },
   );
-  load.player.stopRendering(); // e.g. the hall's setActive(false) while this player loads
+  load.player.stopRendering(); // e.g. the Student Hall's setActive(false) while this player loads
   assert.equal(await load.ready, load.player);
   assert.ok(draws >= 2);
 });

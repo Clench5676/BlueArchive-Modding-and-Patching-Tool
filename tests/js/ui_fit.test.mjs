@@ -1,4 +1,4 @@
-// Text fit of the Batch Import header and name plate, the option rows, the roster's cards and the Show in
+// Text fit of the Batch Import header and name plate, the option rows, the student list's cards and the Show in
 // Explorer button, in every shipped language: the real locale strings through the fit logic of web/js/ui/ngui.js
 // against the prefabs' numbers (a stand-in canvas, see helpers/fit_canvas.mjs: what is asserted is the logic,
 // not a font).
@@ -306,10 +306,10 @@ for (const locale of LOCALES)
       text(locale, "display.fav.off"),
       text(locale, "status.original"),
       text(locale, "status.replaced"),
-      text(locale, "model.has"),
-      text(locale, "model.none"),
-      text(locale, "model.has"),
-      text(locale, "model.none"),
+      text(locale, "chibi.has"),
+      text(locale, "chibi.none"),
+      text(locale, "chibi.has"),
+      text(locale, "chibi.none"),
     ];
     for (const [texts, fsMax, fsMin, room] of [
       [sorts, 48, 34, 360],
@@ -333,7 +333,7 @@ const catalog = JSON.parse(readFileSync(new URL("../../src/bmpt/catalog/data/cat
 const NAME_KEY = { "en-US": "en", "zh-CN": "zh-CN", "zh-TW": "zh-TW", "ja-JP": "ja", "ko-KR": "ko", "th-TH": "th" };
 // every alt's full name in a locale's language (Thai falls back to the English names, as the app does)
 const namesOf = (locale) =>
-  Object.values(catalog.variants)
+  Object.values(catalog.alts)
     .map((v) => v.names?.[NAME_KEY[locale]]?.full || v.names?.en?.full)
     .filter(Boolean);
 const separator = (locale) => (/^(zh|ja)/.test(locale) ? "、" : ", ");
@@ -437,7 +437,7 @@ test("the prompt cards draw the pieces this test measures", () => {
 for (const locale of LOCALES)
   test(`dropping the kind from a prompt card's label never makes its text smaller, over every catalog name in ${locale}`, () => {
     page.lang = locale;
-    const kind = text(locale, "tab.lobby"),
+    const kind = text(locale, "tab.memorialLobby"),
       fit = (label) => markedLabel(label, { fs: 34, fsMin: 24, color: "#fff", maxW: 250 - 56, maxLines: 2 });
     let under = 0,
       wasUnder = 0,
@@ -455,12 +455,12 @@ for (const locale of LOCALES)
     assert.ok(under < wasUnder, `${locale}: ${under} names under 24 now against ${wasUnder} with the kind`);
   });
 
-// the Hall's student cards (student-hall-ui.js formationCardTree: 36 down to 24, two lines, 190 wide)
-const hall = await (async () => {
-  let source = readFileSync(new URL("../../src/bmpt/web/js/hall/student-hall-ui.js", import.meta.url), "utf8");
+// the Student Hall's student cards (student-hall-ui.js formationCardTree: 36 down to 24, two lines, 190 wide)
+const studentHall = await (async () => {
+  let source = readFileSync(new URL("../../src/bmpt/web/js/student-hall/student-hall-ui.js", import.meta.url), "utf8");
   const { POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, XS_BUTTON } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
   const { stack: layoutStack } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
-  globalThis.hallHarness = {
+  globalThis.studentHallHarness = {
     NGUI,
     Popup: {},
     clone: structuredClone,
@@ -476,10 +476,10 @@ const hall = await (async () => {
     layoutStack,
   };
   source = source.replace(/^import [^;]*;$/gm, "");
-  source = `const { Popup, clone, NGUI, Loading, withTimeout, T, POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, XS_BUTTON, layoutStack } = globalThis.hallHarness; const S = 1920 / 2960;\n${source}\n//# sourceURL=hall-ui-fit.js`;
+  source = `const { Popup, clone, NGUI, Loading, withTimeout, T, POPUP, POPUP_FRAME, CONTROL, TYPE, SPACE, XS_BUTTON, layoutStack } = globalThis.studentHallHarness; const S = 1920 / 2960;\n${source}\n//# sourceURL=student-hall-ui-fit.js`;
   return import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 })();
-const hallLabel = (name) => {
+const studentHallLabel = (name) => {
   const n = (nodeName, children = [], widgets = []) => ({
     name: nodeName,
     children,
@@ -501,17 +501,17 @@ const hallLabel = (name) => {
   let formation = card;
   for (const key of ["UIFormationCharSlotGroup", "Grid", "Scroll View", "Inbox", "RightBg", "Popup", "Center"])
     formation = n(key, [formation]);
-  const tree = hall.formationCardTree(n("Root", [formation]), { key: "a", name, thumb: "portrait" }, false);
+  const tree = studentHall.formationCardTree(n("Root", [formation]), { key: "a", name, thumb: "portrait" }, false);
   return find(tree, "Sprite/Type_2 (1)/Text").widgets[0];
 };
 for (const locale of LOCALES)
-  test(`a Terror form's name wraps at its asterisk inside the Hall card at 24 or more in ${locale}`, () => {
+  test(`a Terror form's name wraps at its asterisk inside the Student Hall card at 24 or more in ${locale}`, () => {
     page.lang = locale;
     // the bare Terror names: character, asterisk, form, no brackets
     const bare = namesOf(locale).filter((name) => /^[^*＊（(]+[*＊][^（(]+$/.test(name));
     assert.ok(bare.length >= 1, "the catalog has a bare Terror name");
     for (const name of bare) {
-      const w = hallLabel(name);
+      const w = studentHallLabel(name);
       assert.ok(w.fontSize >= 24, `${name}: ${w.fontSize}`);
       assert.ok(lines(w.text).length <= 2);
       assert.equal(w.text.replace(/\s/g, ""), name.replace(/\s/g, ""));

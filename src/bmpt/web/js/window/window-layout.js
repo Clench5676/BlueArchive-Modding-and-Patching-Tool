@@ -21,15 +21,15 @@ export function headerGeometry(width, height, nativeBottom = 0, immersive = fals
 }
 
 /**
- * Whether the page is in an immersive scene: the detail portrait and L2D share fullscreen; photography also
- * owns an independent root flag while preparing or switching those two renderers. The Hall is separate.
+ * Whether the page is in an immersive scene: the detail portrait and L2D share fullscreen; thumbnail capture also
+ * owns an independent root flag while preparing or switching those two renderers. The Student Hall is separate.
  * @param {Set<string>|string[]} stageClasses The stage's classes.
  * @param {Set<string>|string[]} rootClasses The root element's classes.
  */
 export function isImmersive(stageClasses, rootClasses) {
   const stage = new Set(stageClasses),
     root = new Set(rootClasses);
-  return stage.has("fullscreen") || stage.has("hall-fullscreen") || root.has("photo-active");
+  return stage.has("fullscreen") || stage.has("student-hall-fullscreen") || root.has("thumbnail-active");
 }
 
 /**
@@ -56,11 +56,11 @@ export function rowLayout({
   captionWidth,
   compact = false,
   modsVisible = true,
-  hall = false,
+  studentHall = false,
 }) {
   const shift = Math.max(0, nativeLeft + (nativeLeft ? 8 : 0) - 38 * scale);
-  // Reuse the former title slot; Hall owns the Back/title slot.
-  const modsLeft = (hall ? 38 : 160) * scale + shift;
+  // Reuse the former title slot; Student Hall owns the Back/title slot.
+  const modsLeft = (studentHall ? 38 : 160) * scale + shift;
   const available = Math.max(0, rightStart - 64 - modsLeft);
   const hideCaption = modsVisible && (compact ? modsWidth + 16 > available : modsWidth > available);
   const mods = modsVisible ? modsWidth - (hideCaption ? captionWidth : 0) : 0;

@@ -7,8 +7,8 @@ import {
   studentChoices,
   memorialChoices,
   contentBounds,
-} from "../../src/bmpt/web/js/hall/student-hall-model.js";
-import { normalizeView } from "../../src/bmpt/web/js/roster/roster-order.js";
+} from "../../src/bmpt/web/js/student-hall/student-hall-chibi.js";
+import { normalizeView } from "../../src/bmpt/web/js/student-list/student-list-order.js";
 const saved = () => ({
   revision: 0,
   mode: "portraits",
@@ -244,13 +244,13 @@ test("legacy memorial repeats keep first position and preserve an active duplica
 
 test("picker Has Mod, No Mod and mod-count sorting are scoped to the selected asset kind", () => {
   const choices = [];
-  for (const alt of ["spr_only", "lobby_only", "both", "none"]) {
+  for (const alt of ["spr_only", "memorial_lobby_only", "both", "none"]) {
     for (const kind of ["portrait", "memorialLobby"])
       choices.push(source(alt, kind, { student: alt, source: "official", mods: 99 }));
   }
   choices.push(
     source("spr_only", "portrait", { student: "spr_only", mods: 99 }),
-    source("lobby_only", "memorialLobby", { student: "lobby_only", mods: 99 }),
+    source("memorial_lobby_only", "memorialLobby", { student: "memorial_lobby_only", mods: 99 }),
     source("both", "portrait", { student: "both", mods: 99 }),
     source("both", "memorialLobby", { student: "both", mods: 99 }),
     source("both", "memorialLobby", { student: "both", source: "mod:second", mods: 99 }),
@@ -265,13 +265,13 @@ test("picker Has Mod, No Mod and mod-count sorting are scoped to the selected as
   );
   assert.deepEqual(
     pick("memorialLobby", "mods").map((s) => s.key),
-    ["both", "lobby_only"],
+    ["both", "memorial_lobby_only"],
   );
   assert.deepEqual(
     pick("portrait", "none")
       .map((s) => s.key)
       .sort(),
-    ["lobby_only", "none"],
+    ["memorial_lobby_only", "none"],
   );
   assert.deepEqual(
     pick("memorialLobby", "none")
@@ -284,7 +284,7 @@ test("picker Has Mod, No Mod and mod-count sorting are scoped to the selected as
   assert.equal(
     studentChoices(choices, normalizeView({ mods: "mods" }), "", label, "en").length,
     4,
-    "unscoped roster semantics retain reported totals",
+    "unscoped student list semantics retain reported totals",
   );
 });
 
@@ -307,23 +307,23 @@ test("merged picker students aggregate only the current resource kind", () => {
       "",
       label,
       "en",
-      "lobby",
+      "memorialLobby",
     ).length,
     0,
   );
 });
 
-import { portraitReplacements } from "../../src/bmpt/web/js/hall/student-hall-model.js";
+import { portraitReplacements } from "../../src/bmpt/web/js/student-hall/student-hall-chibi.js";
 const swapChoices = [
   { alt: "base", student: "hero", resourceType: "portrait", source: "mod:current" },
   { alt: "base", student: "hero", resourceType: "portrait", source: "official" },
   { alt: "other", student: "hero", resourceType: "portrait", source: "official" },
   { alt: "base", student: "hero", resourceType: "portrait", source: "mod:another" },
   { alt: "other", student: "hero", resourceType: "portrait", source: "mod:placed" },
-  { alt: "other", student: "hero", resourceType: "memorialLobby", source: "mod:lobby" },
+  { alt: "other", student: "hero", resourceType: "memorialLobby", source: "mod:memorialLobby" },
   { alt: "other", student: "stranger", resourceType: "portrait", source: "mod:wrong-student" },
 ];
-test("portrait replacements include the student's official art and same-student mods, excluding self, placed and lobby art", () => {
+test("portrait replacements include the student's official art and same-student mods, excluding self, placed and memorial lobby art", () => {
   const entry = { id: "a", alt: "base", source: "mod:current" },
     placed = [entry, { alt: "other", source: "mod:placed" }];
   assert.deepEqual(

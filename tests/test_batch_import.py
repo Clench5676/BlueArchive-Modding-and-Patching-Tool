@@ -25,7 +25,7 @@ from bmpt.webui.api import build_api
 from bmpt.webui.services import Services
 from bmpt.webui.state import UiState
 
-from test_library import FakeVariant, game_bundle, make_mod, setup_library
+from test_library import FakeAlt, game_bundle, make_mod, setup_library
 from test_library_model import model_bundle, model_env
 from test_library_other import other_env
 
@@ -105,7 +105,7 @@ def test_entry_shapes_grouping_stable_ids_and_recursive_scan(env):
     text_target = game_bundle(env.game_dir, part="textassets", payload=b"official text")
     text = make_mod(text_target, texture.parent, payload=b"mod text")
     lobby_target = game_bundle(env.game_dir, "test_home_gl")
-    lobby = make_mod(lobby_target, texture.parent / "nested", payload=b"lobby mod")
+    memorial_lobby = make_mod(lobby_target, texture.parent / "nested", payload=b"lobby mod")
     (texture.parent / "readme.txt").write_text("not a bundle")
     shallow = analyze(env, [texture.parent])
     (entry,) = shallow["entries"]
@@ -142,7 +142,7 @@ def test_entry_shapes_grouping_stable_ids_and_recursive_scan(env):
     deep = analyze(env, [texture.parent], recursive=True)
     assert len(deep["entries"]) == 2
     assert {e["resourceType"] for e in deep["entries"]} == {"portrait", "memorialLobby"}
-    assert next(e for e in deep["entries"] if e["resourceType"] == "memorialLobby")["paths"] == [str(lobby)]
+    assert next(e for e in deep["entries"] if e["resourceType"] == "memorialLobby")["paths"] == [str(memorial_lobby)]
     assert not env.library.mods()
 
 
@@ -275,11 +275,13 @@ def test_blocked_reasons_are_codes_and_failures_do_not_hide_other_entries(env, m
 
 def test_library_capability_api_rejects_an_unsupported_kind(env, monkeypatch):
     seen = []
-    monkeypatch.setattr(env.library, "supports_kind", lambda kind: seen.append(kind) or False, raising=False)
+    monkeypatch.setattr(
+        env.library, "supports_resource_type", lambda resource_type: seen.append(resource_type) or False, raising=False
+    )
     source = game_bundle(env.tmp / "input", "ch0242", category="characters")
     (entry,) = analyze(env, [source])["entries"]
     assert (entry["resourceType"], entry["reason"]) == ("chibi", "unsupported")
-    assert seen == ["model"]
+    assert seen == ["chibi"]
 
 
 @pytest.mark.parametrize("outdated", [False, True])
@@ -309,14 +311,14 @@ def test_model_prefab_and_dependencies_analyze_update_add_and_apply(batch_model_
     assert result["outcome"] == ("updated" if outdated else "imported")
     assert result["applied"] and len(calls) == int(outdated)
     (mod,) = env.library.mods()
-    assert (mod.kind, mod.target, result["libraryId"]) == ("model", "hoshino", mod.id)
-    assert env.library.configured("hoshino")["model"] == f"mod:{mod.id}"
+    assert (mod.resource_type, mod.target, result["libraryId"]) == ("chibi", "hoshino", mod.id)
+    assert env.library.configured("hoshino")["chibi"] == f"mod:{mod.id}"
     assert all(path.read_bytes() != env.official[path] for path in env.parts[:2])
     if not outdated:
         assert env.parts[2].read_bytes() == env.official[env.parts[2]]
     (completed,) = analyze(env, sources)["entries"]
     assert (completed["state"], completed["libraryId"]) == ("library" if outdated else "done", mod.id)
-    env.library.restore("hoshino", kind="model")
+    env.library.restore("hoshino", resource_type="chibi")
     assert all(path.read_bytes() == original for path, original in env.official.items())
 
 
@@ -344,11 +346,11 @@ def test_old_model_mesh_updates_when_prefab_has_a_newer_release(batch_model_env,
     assert len(calls) == 1 and calls[0][1]["source_paths"] == [source]
     assert [path.name for path in calls[0][1]["target_paths"]] == [mesh.name]
     (mod,) = env.library.mods()
-    assert (mod.kind, mod.target) == ("model", "hoshino")
+    assert (mod.resource_type, mod.target) == ("chibi", "hoshino")
     assert mesh.read_bytes() == mod.file.read_bytes()
     assert newer_prefab.read_bytes() == env.official[prefab]
     assert texture.read_bytes() == env.official[texture]
-    env.library.restore("hoshino", kind="model")
+    env.library.restore("hoshino", resource_type="chibi")
     assert mesh.read_bytes() == env.official[mesh]
 
 
@@ -356,14 +358,14 @@ def mock_spine_contents(monkeypatch, inspect):
     def load(path, *args):
         contents = inspect(path)
         objects = []
-        for kind, names in (
+        for resource_type, names in (
             (AssetType.TextAsset, [*contents.skeletons, *contents.atlases]),
             (AssetType.Texture2D, contents.textures),
         ):
             for name in names:
                 objects.append(
                     SimpleNamespace(
-                        type=kind,
+                        type=resource_type,
                         container=f"Assets/{name}",
                         path_id=len(objects) + 1,
                         peek_name=lambda name=name: name,
@@ -867,24 +869,27 @@ def test_update_then_add_then_apply_forwards_every_classic_option_and_reports_ev
     assert any(event == "mods.state" for event, _ in seen)
 
 
-def import_targets(env, kind):
-    if kind == "spr":
+def import_targets(env, resource_type):
+    if resource_type == "portrait":
         return [env.original]
-    if kind == "lobby":
+    if resource_type == "memorialLobby":
         return [game_bundle(env.game_dir, "test_home_gl")]
     return env.parts
 
 
 @pytest.mark.parametrize(
-    "fixture,kind", [("env", "spr"), ("env", "lobby"), ("batch_model_env", "model"), ("batch_other_env", "other")]
+    "fixture,resource_type",
+    [("env", "portrait"), ("env", "memorialLobby"), ("batch_model_env", "chibi"), ("batch_other_env", "other")],
 )
 @pytest.mark.parametrize("switch", [False, True])
 @pytest.mark.parametrize("enable", [False, True])
-def test_enable_after_import_configures_every_kind_and_defers_game_writes(request, fixture, kind, switch, enable):
+def test_enable_after_import_configures_every_kind_and_defers_game_writes(
+    request, fixture, resource_type, switch, enable
+):
     env = request.getfixturevalue(fixture)
     if not switch:
         assert not env.library.toggle(False, True).failed
-    targets = import_targets(env, kind)
+    targets = import_targets(env, resource_type)
     sources = [make_mod(target, env.tmp / "input", payload=f"mod {i}".encode()) for i, target in enumerate(targets)]
     before = {target: target.read_bytes() for target in targets}
     (entry,) = analyze(env, sources)["entries"]
@@ -892,10 +897,10 @@ def test_enable_after_import_configures_every_kind_and_defers_game_writes(reques
     assert result["outcome"] == "imported" and result["applied"] is (enable and switch)
     assert result.get("configured", False) is enable
     (mod,) = env.library.mods()
-    if kind == "other":
+    if resource_type == "other":
         assert rpc(env, "mods.other")[0]["selected"] is enable
     else:
-        assert env.library.configured(mod.target)[kind] == (f"mod:{mod.id}" if enable else None)
+        assert env.library.configured(mod.target)[resource_type] == (f"mod:{mod.id}" if enable else None)
     for target, source in zip(targets, sources):
         assert target.read_bytes() == (source.read_bytes() if switch and enable else before[target])
         assert not target.with_name(target.name + ".backup").exists()
@@ -909,16 +914,17 @@ def test_enable_after_import_configures_every_kind_and_defers_game_writes(reques
 
 
 @pytest.mark.parametrize(
-    "fixture,kind", [("env", "spr"), ("env", "lobby"), ("batch_model_env", "model"), ("batch_other_env", "other")]
+    "fixture,resource_type",
+    [("env", "portrait"), ("env", "memorialLobby"), ("batch_model_env", "chibi"), ("batch_other_env", "other")],
 )
 @pytest.mark.parametrize("switch", [False, True])
-def test_several_mods_for_one_variant_configure_in_request_order_last_wins_and_reenter_done(
-    request, fixture, kind, switch, monkeypatch
+def test_several_mods_for_one_alt_configure_in_request_order_last_wins_and_reenter_done(
+    request, fixture, resource_type, switch, monkeypatch
 ):
     env = request.getfixturevalue(fixture)
     if not switch:
         assert not env.library.toggle(False, True).failed
-    targets = import_targets(env, kind)
+    targets = import_targets(env, resource_type)
     before = {target: target.read_bytes() for target in targets}
     sources = [
         make_mod(target, env.tmp / name, payload=f"{name} {i}".encode())
@@ -934,10 +940,10 @@ def test_several_mods_for_one_variant_configure_in_request_order_last_wins_and_r
         result["outcome"] == "imported" and result["applied"] is switch and result["configured"] for result in results
     )
     last = next(mod for mod in env.library.mods() if mod.id == results[-1]["libraryId"])
-    if kind == "other":
+    if resource_type == "other":
         assert [row["id"] for row in rpc(env, "mods.other") if row["selected"]] == [last.id]
     else:
-        assert env.library.configured(last.target)[kind] == f"mod:{last.id}"
+        assert env.library.configured(last.target)[resource_type] == f"mod:{last.id}"
     for target in targets:
         assert target.read_bytes() == ((last.file.parent / target.name).read_bytes() if switch else before[target])
     assert all(candidate.entry["state"] == "done" for candidate in env.services.batch_import._latest.values())
@@ -987,7 +993,7 @@ def test_import_skips_a_duplicate_created_since_analysis(env, monkeypatch, dupli
         (stored,) = stored
     assert result["outcome"] == "unchanged" and not result["applied"] and not result["configured"]
     assert result["libraryId"] == stored.id and len(env.library.mods()) == 1
-    assert env.library.configured("test").get("spr") != f"mod:{stored.id}"
+    assert env.library.configured("test").get("portrait") != f"mod:{stored.id}"
     assert env.original.read_bytes() == before
     (completed,) = analyze(env, [source])["entries"]
     assert (completed["state"], completed["libraryId"]) == (
@@ -1040,7 +1046,7 @@ def test_enable_after_import_applies_to_the_pinned_install_when_already_installe
     assert result["outcome"] == "imported" and result["applied"]
     assert env.original.read_bytes() == source.read_bytes()
     assert other.read_bytes() == source.read_bytes()
-    assert env.library.configured("test")["spr"] == f"mod:{result['libraryId']}"
+    assert env.library.configured("test")["portrait"] == f"mod:{result['libraryId']}"
 
 
 @pytest.mark.parametrize("phase", ["update", "add", "apply"])
@@ -1069,10 +1075,10 @@ def test_per_entry_failures_keep_successful_imports_and_error_codes(env, monkeyp
     else:
         apply = env.library.apply_import
 
-        def fail(variant, *args, **kwargs):
-            if variant == "test":
+        def fail(alt, *args, **kwargs):
+            if alt == "test":
                 raise ServiceError("game_running")
-            return apply(variant, *args, **kwargs)
+            return apply(alt, *args, **kwargs)
 
         monkeypatch.setattr(env.library, "apply_import", fail)
         code = "game_running"
@@ -1448,7 +1454,7 @@ def test_options_persist_in_app_prefs_and_default_to_classic_settings(env, manag
     }
     assert rpc(env, "import.setOptions", **changed) == changed
     state = UiState(env.services.state.path)
-    assert batch_import.import_options_from_storage(state.get(batch_import.PREF)) == changed
+    assert state.get(batch_import.PREF) == changed
     env.services.state = state
     assert rpc(env, "import.options") == changed
     assert not env.settings.path.exists()
@@ -1540,7 +1546,7 @@ def test_integration_official_bundle_preflight_uses_only_copies(tmp_path, monkey
     shutil.copy2(chosen, source)
     settings = Settings(tmp_path / "config.toml")
     settings.set("game_resource_dir", str(game))
-    catalog = FakeCatalog(FakeVariant("test", core_name))
+    catalog = FakeCatalog(FakeAlt("test", core_name))
     library = ModLibrary(tmp_path / "library", catalog, object(), settings)
     services = Services(settings, tmp_path / "app", cache=object(), game=object(), catalog=catalog, library=library)
     try:
@@ -1765,8 +1771,8 @@ def test_failed_install_result_keeps_set_note_and_error(env, monkeypatch):
     (result,) = run(env, [entry])
     assert result["outcome"] == "failed" and result["reason"] == "game_file_locked"
     assert result["configured"] and not result["applied"]
-    assert env.library.configured("test")["spr"] == f"mod:{result['libraryId']}"
-    assert not env.library.selection("test")["spr"]["installed"]
+    assert env.library.configured("test")["portrait"] == f"mod:{result['libraryId']}"
+    assert not env.library.selection("test")["portrait"]["installed"]
 
 
 def forbid(*args, **kwargs):
@@ -1991,7 +1997,7 @@ def test_a_stored_mod_whose_install_fails_stays_in_the_library_row(env, monkeypa
     (entry,) = analyze(env, [source])["entries"]
 
     def refuse(*args, **kwargs):
-        raise ServiceError("mod_target_mismatch", id="x", variant="test")
+        raise ServiceError("mod_target_mismatch", id="x", alt="test")
 
     monkeypatch.setattr(env.library, "apply_import", refuse)
     (result,) = run(env, [entry])
@@ -2154,7 +2160,7 @@ def test_official_3d_slot_with_one_file_omitted_then_completed_on_clones(tmp_pat
     from bmpt.gameassets import AssetCache, GameAssets
     from bmpt.gameassets.cabs import CabIndex
     from bmpt.library import ModLibrary
-    from bmpt.library.judge import core_of, kind_of_file
+    from bmpt.library.judge import core_of, resource_type_of_file
     from bmpt.library.storage import atomic_clone
     from ba_modding_toolkit.searching import get_search_dirs
 
@@ -2166,7 +2172,7 @@ def test_official_3d_slot_with_one_file_omitted_then_completed_on_clones(tmp_pat
         path
         for directory in directories
         for path in directory.glob("*.bundle")
-        if kind_of_file(path.name) == "model" and core_of(path.name) in {"ch0258_02", "ch0258"}
+        if resource_type_of_file(path.name) == "chibi" and core_of(path.name) in {"ch0258_02", "ch0258"}
     )
     assert len(official) >= 12
     inspection = integrity.Inspection()

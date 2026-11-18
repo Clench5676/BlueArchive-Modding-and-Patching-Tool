@@ -1,4 +1,4 @@
-// Tests for web/js/model/chibi-materials.js (the game's shaders on the 3D chibi): which textures, colours and alts
+// Tests for web/js/chibi/chibi-materials.js (the game's shaders on the 3D chibi): which textures, colours and alts
 // a material gets. Run by tests/test_chibi_materials.py with Node's test runner; "three" resolves to the bundled copy.
 import assert from "node:assert/strict";
 import { register } from "node:module";
@@ -21,7 +21,7 @@ const {
   outlineMaterial,
   slotSpace,
   trilightProbe,
-} = await import("../../src/bmpt/web/js/model/chibi-materials.js");
+} = await import("../../src/bmpt/web/js/chibi/chibi-materials.js");
 
 const near = (a, b, eps = 1e-4) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 const linear = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));

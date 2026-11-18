@@ -9,7 +9,7 @@ globalThis.document = {
 const calls = [];
 globalThis.fetch = async (url, options) => {
   calls.push({ url, options });
-  // Model a browser entry that is still fresh under a max-age policy.
+  // Chibi a browser entry that is still fresh under a max-age policy.
   return {
     ok: true,
     json: async () =>

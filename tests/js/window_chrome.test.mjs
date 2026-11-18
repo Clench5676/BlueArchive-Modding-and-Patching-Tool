@@ -288,10 +288,10 @@ test("native and fallback controllers hide and restore every immersive scene; th
     for (const [stageFlags, rootFlags] of [
       [["fullscreen"], []],
       [["fullscreen"], []],
-      [["fullscreen"], ["photo-active"]],
-      [["fullscreen"], ["photo-active", "photo-lobby"]],
-      [["hall-fullscreen"], []],
-      [[], ["photo-active"]],
+      [["fullscreen"], ["thumbnail-active"]],
+      [["fullscreen"], ["thumbnail-active", "thumbnail-memorial-lobby"]],
+      [["student-hall-fullscreen"], []],
+      [[], ["thumbnail-active"]],
     ]) {
       stage.classList = new Classes(stageFlags);
       root.classList = new Classes(rootFlags);
@@ -354,7 +354,7 @@ test("native and fallback controllers hide and restore every immersive scene; th
   assert.equal(body.classList.has("native-chrome"), false);
   assert.equal(lockedRows.size, 0, "back in the stage, the bar is locked with the stage");
   assert.equal(body.descendants().filter((el) => el.id === "native-controls").length, 1);
-  root.classList.add("photo-active");
+  root.classList.add("thumbnail-active");
   await change();
   assert.ok(body.classList.has("window-immersive"));
   assert.equal(body.querySelectorAll(".window-drag-region").length, 0);
@@ -494,7 +494,7 @@ test("an unfinished ink alignment no longer keeps the bar undraggable after an i
   await change();
   let release;
   alignmentGate = new Promise((resolve) => (release = resolve));
-  stage.classList.add("hall-fullscreen");
+  stage.classList.add("student-hall-fullscreen");
   await change();
   assert.deepEqual(payload().drag, []);
   stage.classList.clear();

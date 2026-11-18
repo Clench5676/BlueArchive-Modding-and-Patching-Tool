@@ -1,4 +1,4 @@
-"""Costume switches of 3D models: staging, verdicts, Optimize Physics and costume previews."""
+"""Costume switches of 3D chibis: staging, verdicts, Optimize Physics and costume previews."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from bmpt.engine import (
     no_log,
 )
 from ...core.errors import ServiceError
-from ...gameassets.discovery import cab_names, may_hold_model_root, own_bundle
+from ...gameassets.discovery import cab_names, may_hold_chibi_root, own_bundle
 from ...core.logging_utils import log_failure
 from ...core.openfiles import remove_tree, temporary_directory
 from .. import toggle_timing
@@ -31,12 +31,12 @@ from ..judge import (
     core_of,
     now,
 )
-from ..models import Pin
+from ..records import Pin
 from ..storage import (
     atomic_copy,
     atomic_json,
 )
-from ..variants import adapt_variant_sources
+from ..alts import adapt_alt_sources
 from .base import (
     COSTUME_BUILD_TRIES,
     COSTUME_PREVIEWS,
@@ -51,10 +51,12 @@ from .base import (
 
 
 logger = logging.getLogger(__package__)
+# costume-verdicts.json format; a derived cache, dropped when this changes
+COSTUME_VERDICTS_VERSION = 2
 
 
 class CostumesMixin:
-    """Costume switches of 3D models: staging, verdicts, Optimize Physics and costume previews."""
+    """Costume switches of 3D chibis: staging, verdicts, Optimize Physics and costume previews."""
 
     def _stage_adapted(
         self, sources: list[Path], targets: list[Path], directory: Path, log: LogFunc, pin: Pin
@@ -63,7 +65,7 @@ class CostumesMixin:
         output = directory / "output"
         output.mkdir(parents=True)
         with toggle_timing.stage("build_crc"):
-            adapted = adapt_variant_sources(
+            adapted = adapt_alt_sources(
                 sources, list(staged.values()), directory / "sources", self.settings.asset_types(), log
             )
         result = rebuild(
@@ -87,25 +89,25 @@ class CostumesMixin:
         return replacements
 
     def _costume_files(self, other: str, pin: Pin) -> tuple[str, list[Path], list[Path]]:
-        """Find another variant's model as a costume source.
+        """Find another alt's chibi as a costume source.
 
-        That is its dev name, the game files that hold its prefab and every game file of its own (the model slot; for a
-        slot of the variant's own dependency bundles, a story-only or UI-only model, the parts that can hold it; for a
-        variant with a model but no slot, the field character bundles, which hold other students' field models as well,
+        That is its dev name, the game files that hold its prefab and every game file of its own (the chibi slot; for a
+        slot of the alt's own dependency bundles, a story-only or UI-only chibi, the parts that can hold it; for a
+        alt with a chibi but no slot, the field character bundles, which hold other students' field chibis as well,
         and those parts of its own bundles).
         """
-        variant = self._variant(other)
-        core = getattr(variant, "model", None)
+        alt = self._alt(other)
+        core = getattr(alt, "chibi", None)
         if core:
-            files = self._game_files(other, "model", pin)
+            files = self._game_files(other, "chibi", pin)
             prefabs = [path for path in files if path.name.startswith("character-")]
             if prefabs:
                 return core.lower(), prefabs, files
-            # no prefab bundle: a model of its own dependency bundles (Arona's)
-            owned = sorted((path for path in files if may_hold_model_root(path.name)), key=lambda path: path.name)
+            # no prefab bundle: a chibi of its own dependency bundles (Arona's)
+            owned = sorted((path for path in files if may_hold_chibi_root(path.name)), key=lambda path: path.name)
             if owned:
                 return core.lower(), owned, owned
-        dev = getattr(variant, "field_model", None)
+        dev = getattr(alt, "field_chibi", None)
         if dev:
             names = self._names(pin)
             files = sorted(
@@ -113,16 +115,16 @@ class CostumesMixin:
                     path
                     for name, path in names.items()
                     if name.startswith("field-character-_mxload")
-                    or (own_bundle(name, dev) and may_hold_model_root(name))
+                    or (own_bundle(name, dev) and may_hold_chibi_root(name))
                 ),
                 key=lambda path: path.name,
             )
             if files:
                 return dev.lower(), files, files
-        raise ServiceError("game_file_not_found", variant=other)
+        raise ServiceError("game_file_not_found", alt=other)
 
     def _costume_source(self, other: str, pin: Pin, *, preview: bool = False) -> tuple[str, list[Path]]:
-        """The dev name and the official copies of another variant's model files (the build's inputs)."""
+        """The dev name and the official copies of another alt's chibi files (the build's inputs)."""
         dev, _, files = self._costume_files(other, pin)
         resolve = self._official_or_current if preview else self._official_for
         return dev, [resolve(path, pin) for path in files]
@@ -130,7 +132,7 @@ class CostumesMixin:
     def _costume_inputs(self, other: str, targets: list[Path], pin: Pin, *, preview: bool = False) -> _CostumeInputs:
         """Gather what ``_stage_costume`` reads of the library for a costume build.
 
-        The build is of ``other``'s costume on the model slot ``targets``. This runs under the library lock (path
+        The build is of ``other``'s costume on the chibi slot ``targets``. This runs under the library lock (path
         lookups only, no bundle is opened).
         """
         originals = {path: self._official_or_current(path, pin) for path in targets}
@@ -138,7 +140,7 @@ class CostumesMixin:
         resolve = self._official_or_current if preview else self._official_for
         sources = [resolve(path, pin) for path in files]
         target_dev = self._core_map(pin).slot(core_of(targets[0].name))
-        try:  # what keys each model's worn items (model_props), cached in worn-items.json
+        try:  # what keys each chibi's worn items (chibi_props), cached in worn-items.json
             revisions = {dev: _revision(zip(files, sources)), target_dev: _revision(originals.items())}
         except OSError:
             revisions = {}
@@ -182,11 +184,11 @@ class CostumesMixin:
         step: Callable[[], None] | None = None,
         fraction: Callable[[float], None] | None = None,
     ) -> dict[Path, Path]:
-        """Build the model slot ``targets`` (official copies) carrying the costume of ``other``'s model.
+        """Build the chibi slot ``targets`` (official copies) carrying the costume of ``other``'s chibi.
 
         Changed parts are built into ``directory``, the others are staged official copies. Reads official bytes only:
-        the slot's own parts, the source model's files, and any other bundle the CAB index finds. Every costume, the
-        same student's too, carries its halo or hides the slot's. The build takes no model lock (``model_adapt.adapt``
+        the slot's own parts, the source chibi's files, and any other bundle the CAB index finds. Every costume, the
+        same student's too, carries its halo or hides the slot's. The build takes no chibi lock (``chibi_adapt.adapt``
         reads its bundles from memory), so exports run beside it. The changed parts are saved in threads
         (``bundle_saves.save_bundles``), at most half the cores; the same bytes as one after another.
 
@@ -198,10 +200,10 @@ class CostumesMixin:
         - ``step``: called between its steps (``adapt``'s, then before each part's save starts); only for a
           build without the library lock (``costume_preview``), whose job yields there to the foreground
           previews.
-        - ``fraction``: told how far the build is (0..1, its phases weighted by ``model_adapt.COSTUME_PHASES``),
+        - ``fraction``: told how far the build is (0..1, its phases weighted by ``chibi_adapt.COSTUME_PHASES``),
           at most every 0.2 s (``progress_meter``); the job's progress for its item (``_item_fraction``).
         """
-        from ...gameassets.model_adapt import adapt, costume_weights
+        from ...gameassets.chibi_adapt import adapt, costume_weights
         from ...gameassets.costume_cache import PoseStore
 
         meter = Meter(fraction, costume_weights(physics))
@@ -284,8 +286,8 @@ class CostumesMixin:
             replacements[target] = path
         return replacements
 
-    def _costume_signature(self, variant_key: str, other: str, pin: Pin) -> tuple[str, list[Path]]:
-        """Give the build signature of another variant's costume on a variant's model slot, and the slot's files.
+    def _costume_signature(self, alt_id: str, other: str, pin: Pin) -> tuple[str, list[Path]]:
+        """Give the build signature of another alt's costume on an alt's chibi slot, and the slot's files.
 
         The signature is the preview's, from official bytes where there are any, else the current ones. It is keyed by
         the costume rule's version rather than the program's: a new program build keeps the verdicts and previews of the
@@ -294,13 +296,13 @@ class CostumesMixin:
         from ...gameassets.costume_rule import COSTUME_RULE
 
         rule = f"costume-rule:{COSTUME_RULE}"
-        self._variant(variant_key)
-        if other == variant_key:
-            raise ServiceError("source_unsupported", source=f"variant:{other}")
-        self._variant(other)
-        targets = self._game_files(variant_key, "model", pin)
+        self._alt(alt_id)
+        if other == alt_id:
+            raise ServiceError("source_unsupported", source=f"alt:{other}")
+        self._alt(other)
+        targets = self._game_files(alt_id, "chibi", pin)
         if not targets:
-            raise ServiceError("game_file_not_found", variant=variant_key)
+            raise ServiceError("game_file_not_found", alt=alt_id)
         _, inputs = self._costume_source(other, pin, preview=True)
         try:
             return self._build_signature(inputs, targets, pin, rule), targets
@@ -326,7 +328,9 @@ class CostumesMixin:
             data = json.loads(path.read_text())
         except (OSError, ValueError):
             return {}
-        verdicts = data.get("verdicts") if isinstance(data, dict) and data.get("version") == 1 else None
+        verdicts = (
+            data.get("verdicts") if isinstance(data, dict) and data.get("version") == COSTUME_VERDICTS_VERSION else None
+        )
         return {
             key: value
             for key, value in (verdicts or {}).items()
@@ -343,7 +347,7 @@ class CostumesMixin:
         preview: bool = False,
         cautions: Iterable[str] = (),
     ) -> dict[str, Any]:
-        """``cautions``: what the built pair may draw differently in the game (``model_adapt.Result.cautions``)."""
+        """``cautions``: what the built pair may draw differently in the game (``chibi_adapt.Result.cautions``)."""
         cautions = sorted({str(c) for c in cautions})
         verdict = {
             "ok": ok,
@@ -359,32 +363,34 @@ class CostumesMixin:
             sorted(verdicts.items(), key=lambda item: str(item[1].get("at", "")), reverse=True)[:COSTUME_VERDICTS]
         )
         try:
-            atomic_json(self.cache_root / "costume-verdicts.json", {"version": 1, "verdicts": kept})
+            atomic_json(
+                self.cache_root / "costume-verdicts.json", {"version": COSTUME_VERDICTS_VERSION, "verdicts": kept}
+            )
         except OSError as error:  # the verdict is still returned; the pair is checked again next time
             log_failure(logger, logging.WARNING, "Could not save a costume verdict", error)
         return verdict
 
     @_serialized
-    def costume_verdict(self, variant_key: str, other: str, pin: Pin | None = None) -> dict[str, Any] | None:
+    def costume_verdict(self, alt_id: str, other: str, pin: Pin | None = None) -> dict[str, Any] | None:
         """Read a costume pair's verdict for the current build signature.
 
         The verdict records whether the pair was built and exported for the current build
-        signature (the program, the official bytes of both models, the save options): {"ok", "reason", "detail",
+        signature (the program, the official bytes of both chibis, the save options): {"ok", "reason", "detail",
         "at"}, plus "preview" for a pair past the stretch limit (still offered), or None when not judged
-        yet. A pair the Switch 3D Model card offers has one with ok or preview.
+        yet. A pair the Switch Chibi card offers has one with ok or preview.
 
         Args:
-            variant_key: Variant key whose model slot receives the costume.
-            other: Variant key supplying the costume to fit onto that slot.
+            alt_id: alt key whose chibi slot receives the costume.
+            other: alt key supplying the costume to fit onto that slot.
             pin: Game install and server the operation is fixed to; None uses the current install.
         """
-        signature, _ = self._costume_signature(variant_key, other, self._current(pin))
+        signature, _ = self._costume_signature(alt_id, other, self._current(pin))
         return self._verdicts().get(signature)
 
     @_serialized
     def record_costume_verdict(
         self,
-        variant_key: str,
+        alt_id: str,
         other: str,
         ok: bool,
         reason: str | None = None,
@@ -394,14 +400,14 @@ class CostumesMixin:
         """Save a completed costume check with any cautions recorded by its preview build.
 
         Args:
-            variant_key: Variant key whose model slot was checked.
-            other: Variant key supplying the costume that was built/exported or refused.
+            alt_id: alt key whose chibi slot was checked.
+            other: alt key supplying the costume that was built/exported or refused.
             ok: Whether the pair completed the compatibility check successfully.
             reason: Failure category, or None for a successful check without a refusal reason.
             detail: Structured failure evidence, or None when the verdict needs none.
             pin: Game install and server the operation is fixed to; None uses the current install.
         """
-        signature, _ = self._costume_signature(variant_key, other, self._current(pin))
+        signature, _ = self._costume_signature(alt_id, other, self._current(pin))
         return self._save_verdict(signature, ok, reason, detail, cautions=self._preview_cautions(signature))
 
     def _preview_cautions(self, signature: str) -> list[str]:
@@ -415,20 +421,20 @@ class CostumesMixin:
 
     @_serialized
     def optimize_costume(
-        self, variant_key: str, source: str, name: str, pin: Pin | None = None, progress: ProgressCallback | None = None
+        self, alt_id: str, source: str, name: str, pin: Pin | None = None, progress: ProgressCallback | None = None
     ) -> dict[str, Any]:
-        """Store a costume swap with skirt-chain physics as a reusable model mod.
+        """Store a costume swap with skirt-chain physics as a reusable chibi mod.
 
-        The variant's model slot carrying ``source``'s costume ("variant:<key>") is built with
-        the physics rules (Rule B, the skirt chains as new bones), kept as a model mod of the variant named after
+        The alt's chibi slot carrying ``source``'s costume ("alt:<key>") is built with
+        the physics rules (Rule B, the skirt chains as new bones), kept as a chibi mod of the alt named after
         ``name`` (the costume as the screen shows it): {"mod": id}, the copy made before when there is one. {"unneeded":
-        True, "reason": ...} when there is nothing to build: "official" for the official model, whose own clips move its
+        True, "reason": ...} when there is nothing to build: "official" for the official chibi, whose own clips move its
         skirt, and "no_gain" for a costume that no physics rule improves within the stretch limit. The copy records the
         costume rule it was built under.
 
         Args:
-            variant_key: Variant key whose model slot receives the optimized costume.
-            source: variant:<key> costume source; official returns an unneeded result.
+            alt_id: alt key whose chibi slot receives the optimized costume.
+            source: alt:<key> costume source; official returns an unneeded result.
             name: Costume label from the UI, trimmed to 200 characters; blank falls back to the source key.
             pin: Game install and server the operation is fixed to; None uses the current install.
             progress: Receives build fraction and phase dictionaries; None disables reporting.
@@ -436,13 +442,13 @@ class CostumesMixin:
         from ...gameassets.costume_rule import COSTUME_RULE
 
         pin = self._current(pin)
-        self._variant(variant_key)
+        self._alt(alt_id)
         if source == "official":
             return {"unneeded": True, "reason": "official"}
-        if not isinstance(source, str) or not source.startswith("variant:"):
+        if not isinstance(source, str) or not source.startswith("alt:"):
             raise ServiceError("source_unsupported", source=str(source))
-        other = source[8:]
-        signature, targets = self._costume_signature(variant_key, other, pin)
+        other = source[4:]
+        signature, targets = self._costume_signature(alt_id, other, pin)
         verdict = self._verdicts().get(signature)
         if not self._costume_allowed(verdict):  # refused: never built for the game
             raise ServiceError("source_unsupported", source=verdict.get("reason") or source)
@@ -451,8 +457,8 @@ class CostumesMixin:
                 record
                 for record in self._records.values()
                 if self._optimized_from(record) == source
-                and record["kind"] == "model"
-                and self._target_of(record) == variant_key
+                and record["resource_type"] == "chibi"
+                and self._target_of(record) == alt_id
             ),
             None,
         )
@@ -464,7 +470,7 @@ class CostumesMixin:
             replacements = self._stage_costume(
                 other,
                 targets,
-                Path(temporary) / "model",
+                Path(temporary) / "chibi",
                 no_log,
                 pin,
                 report=report,
@@ -477,17 +483,17 @@ class CostumesMixin:
             record = self._store(
                 built,
                 label,
-                variant_key,
-                "model",
+                alt_id,
+                "chibi",
                 metadata={"optimized_from": source, "costume_rule": COSTUME_RULE},
                 built_against=self._built_against(built, pin, "import"),
             )
         return {"mod": record["id"]}
 
     def costume_preview(
-        self, variant_key: str, other: str, pin: Pin | None = None, *, cancelled: Callable[[], bool] | None = None
+        self, alt_id: str, other: str, pin: Pin | None = None, *, cancelled: Callable[[], bool] | None = None
     ) -> list[Path]:
-        """Build and cache a variant's model slot carrying another variant's costume for preview.
+        """Build and cache an alt's chibi slot carrying another alt's costume for preview.
 
         Build once per signature into built/previews/<signature> and retain the newest
         few, whose paths key the export cache. Read official bytes where available,
@@ -497,17 +503,17 @@ class CostumesMixin:
         and a build takes seconds. Only its short steps hold the library lock: the signature, the kept preview and
         the build's inputs (``_costume_preview_start``), then storing the result (``_costume_preview_store``); the
         staging and the build run without it, so the page's reads never queue behind a build. The build holds no
-        model lock either: exports, the shown model's and its clips, run beside it. A build whose signature changed
+        chibi lock either: exports, the shown chibi's and its clips, run beside it. A build whose signature changed
         meanwhile (the game files or the kept originals changed) is discarded and built again.
-        Class 2 for the costume check: between the build's steps (most under 0.5 s, ``model_adapt.adapt``) it yields
+        Class 2 for the costume check: between the build's steps (most under 0.5 s, ``chibi_adapt.adapt``) it yields
         to the foreground previews, at most 20 s a step (``preview_gate.step``); a preview's own build does not. A
         preview waiting for a build of the same pair waits outside its own time (``preview_gate.waiting``).
         ``cancelled`` (the costume check's ``jobs.cancel``): once set, the build stops at its next step (``busy``)
         and no verdict is saved; a build that ended is still kept.
 
         Args:
-            variant_key: Variant key whose model slot receives the preview costume.
-            other: Variant key supplying the costume to fit.
+            alt_id: alt key whose chibi slot receives the preview costume.
+            other: alt key supplying the costume to fit.
             pin: Game install and server the operation is fixed to; None uses the current install.
             cancelled: Returns True to stop at a build step without saving a verdict;
                 None allows the build to finish.
@@ -530,7 +536,7 @@ class CostumesMixin:
 
         with _errors("costume_preview"):
             for _ in range(COSTUME_BUILD_TRIES):
-                start = self._costume_preview_start(variant_key, other, pin, verdicts=not stopped())
+                start = self._costume_preview_start(alt_id, other, pin, verdicts=not stopped())
                 if isinstance(start, list):
                     return start
                 signature, targets, built_pin, inputs = start
@@ -550,7 +556,7 @@ class CostumesMixin:
                             replacements = self._stage_costume(
                                 other,
                                 targets,
-                                Path(temporary) / "model",
+                                Path(temporary) / "chibi",
                                 no_log,
                                 built_pin,
                                 preview=True,
@@ -561,15 +567,15 @@ class CostumesMixin:
                         except ServiceError as error:
                             if error.code == "source_unsupported" and not stopped():
                                 # the rule cannot carry this pair: never offered again
-                                self._costume_preview_refused(variant_key, other, pin, signature, error)
+                                self._costume_preview_refused(alt_id, other, pin, signature, error)
                             raise
                         built = [path for path in replacements.values() if path.parent.name == "output"]
                         parts = self._costume_preview_store(
-                            variant_key, other, pin, signature, built, report, verdicts=not stopped()
+                            alt_id, other, pin, signature, built, report, verdicts=not stopped()
                         )
                     if parts is not None:
                         return parts
-                    logger.info("Costume preview %s <- %s changed while it was built: built again", variant_key, other)
+                    logger.info("Costume preview %s <- %s changed while it was built: built again", alt_id, other)
                 finally:
                     self._costume_build_done(signature)
             raise ServiceError("busy")
@@ -593,7 +599,7 @@ class CostumesMixin:
 
     @_serialized
     def _costume_preview_start(
-        self, variant_key: str, other: str, pin: Pin | None, *, verdicts: bool = True
+        self, alt_id: str, other: str, pin: Pin | None, *, verdicts: bool = True
     ) -> list[Path] | tuple[str, list[Path], Pin, _CostumeInputs]:
         """Take ``costume_preview``'s first step, under the library lock.
 
@@ -601,7 +607,7 @@ class CostumesMixin:
         unless ``verdicts`` is False), else (signature, the slot's files, the install, the build's inputs).
         """
         pin = self._current(pin)
-        signature, targets = self._costume_signature(variant_key, other, pin)
+        signature, targets = self._costume_signature(alt_id, other, pin)
         folder = self.cache_root / "built" / "previews" / signature
         done = folder / "parts.json"
         if done.is_file():
@@ -627,16 +633,16 @@ class CostumesMixin:
 
     @_serialized
     def _costume_preview_refused(
-        self, variant_key: str, other: str, pin: Pin | None, signature: str, error: ServiceError
+        self, alt_id: str, other: str, pin: Pin | None, signature: str, error: ServiceError
     ) -> None:
         """Save the rule's refusal of a pair built without the lock, when its signature is still the current one."""
-        if self._costume_signature(variant_key, other, self._current(pin))[0] == signature:
+        if self._costume_signature(alt_id, other, self._current(pin))[0] == signature:
             self._save_verdict(signature, False, error.params.get("source"), error.params)
 
     @_serialized
     def _costume_preview_store(
         self,
-        variant_key: str,
+        alt_id: str,
         other: str,
         pin: Pin | None,
         signature: str,
@@ -651,7 +657,7 @@ class CostumesMixin:
         found (unless ``verdicts`` is False), and the older previews are pruned; None, keeping nothing, when the pair's
         current signature differs from ``signature``.
         """
-        if self._costume_signature(variant_key, other, self._current(pin))[0] != signature:
+        if self._costume_signature(alt_id, other, self._current(pin))[0] != signature:
             return None
         folder = self.cache_root / "built" / "previews" / signature
         folder.mkdir(parents=True, exist_ok=True)

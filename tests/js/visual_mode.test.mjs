@@ -102,10 +102,10 @@ function screen() {
     (n) => stage.appendChild(new Node(n)),
   );
   const zoom = left.appendChild(new Node("button"));
-  const lobbyTab = right.appendChild(new Node("button"));
+  const memorialLobbyTab = right.appendChild(new Node("button"));
   const player = { currentViewport: { ...DETAIL, padLeft: 0, padRight: 0, padTop: 0, padBottom: 0 } };
   const out = [left, right, topbar, nav];
-  return { stage, out, left, right, topbar, nav, bgHost, uiHost, zoom, lobbyTab, player };
+  return { stage, out, left, right, topbar, nav, bgHost, uiHost, zoom, memorialLobbyTab, player };
 }
 // the visual mode without its prefab (no background, no buttons): the touch area and Escape
 function openVisual(s, onBack = () => {}, alive, options = {}) {
@@ -213,8 +213,8 @@ test("leaving fullscreen closes the visual mode even after the tab changed under
   assert.equal(s.uiHost.children[0].className, "visual-touch");
   drawFrames(s);
   assert.equal(Visual.state().glide, null, "the portrait shows the whole art");
-  // the lobby tab cannot be reached: it is inert, and so is every other control of the detail screen
-  assert.ok(s.lobbyTab.closest("[inert]"));
+  // the memorial lobby tab cannot be reached: it is inert, and so is every other control of the detail screen
+  assert.ok(s.memorialLobbyTab.closest("[inert]"));
   // Escape is the game's back key: the caller leaves fullscreen (detail.js setFullscreen(false)), which closes the
   // visual mode whatever the tab is by then; the portrait's player is gone when the tab changed, so the glide back
   // may never be drawn and the timer ends it

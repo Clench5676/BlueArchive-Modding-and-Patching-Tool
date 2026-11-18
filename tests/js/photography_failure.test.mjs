@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-const source = readFileSync(new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../src/bmpt/web/js/thumbnail-capture/controller.js", import.meta.url), "utf8");
 const code = source.slice(source.indexOf("function errorText("), source.indexOf("function node("));
 function setup() {
   const popups = [],
@@ -30,14 +30,14 @@ function setup() {
     },
   };
 }
-test("a photography failure without a code reaches the diagnostics report as well as the popup", async () => {
+test("a thumbnail capture failure without a code reaches the diagnostics report as well as the popup", async () => {
   const h = setup();
   try {
-    const failure = new Error("Lobby image unavailable: /asset/spine/mod/x/fx_a.png");
+    const failure = new Error("MemorialLobby image unavailable: /asset/spine/mod/x/fx_a.png");
     await h.safe(async () => {
       throw failure;
     })();
-    assert.deepEqual(h.forwarded, [[failure, "photography"]]);
+    assert.deepEqual(h.forwarded, [[failure, "thumbnailCapture"]]);
     assert.deepEqual(
       h.popups.map((popup) => popup.lines),
       [["P:captureFailed"]],
@@ -46,14 +46,14 @@ test("a photography failure without a code reaches the diagnostics report as wel
     h.restore();
   }
 });
-test("coded and cancelled photography failures stay out of the report", async () => {
+test("coded and cancelled thumbnail capture failures stay out of the report", async () => {
   const h = setup();
   try {
     await h.safe(async () => {
       throw Object.assign(new Error("Renderer did not recover"), { code: "thumbnail_capture_unavailable" });
     })();
     await h.safe(async () => {
-      throw new DOMException("Photography ended", "AbortError");
+      throw new DOMException("Thumbnail capture ended", "AbortError");
     })();
     assert.deepEqual(h.forwarded, []);
     assert.deepEqual(

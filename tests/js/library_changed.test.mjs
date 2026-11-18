@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { hasAsset } from "../../src/bmpt/web/js/mods/switch-sources.js";
-import { visit } from "../../src/bmpt/web/js/roster/roster-order.js";
+import { visit } from "../../src/bmpt/web/js/student-list/student-list-order.js";
 
 // Run the event coalescing and refresh with a detail page already on screen.
 const source = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
@@ -14,7 +14,7 @@ function harness({ shown = "screen-detail", writing = () => false } = {}) {
     routes = [];
   let invalidated = 0;
   const env = {
-    ctx: { invalidateRoster: () => invalidated++ },
+    ctx: { invalidateStudentList: () => invalidated++ },
     BatchImport: { invalidate() {} },
     Detail: { filesChanged: (change) => refreshed.push(change) },
     $: (id) => ({ hidden: id !== shown }),
@@ -91,10 +91,10 @@ test("a visit records the selected background alongside a portrait in its studen
       { key: "special:arona_workpage", portrait: null, memorialLobby: "arona_workpage" },
     ],
   };
-  const rosterData = { students: [shownStudent] };
+  const studentListData = { students: [shownStudent] };
   const code = source.slice(source.indexOf("function visited("), source.indexOf("function showScreen("));
-  const visited = new Function("rosterData", "hasAsset", "visit", `${code}; return visited;`)(
-    rosterData,
+  const visited = new Function("studentListData", "hasAsset", "visit", `${code}; return visited;`)(
+    studentListData,
     hasAsset,
     visit,
   );
@@ -103,8 +103,8 @@ test("a visit records the selected background alongside a portrait in its studen
   assert.equal(shownStudent.alts[0].recent, undefined);
 });
 
-test("the Hall and the list wait for a watched write to end before they are drawn again; its own end draws at once", async () => {
-  for (const shown of ["screen-hall", "screen-roster"]) {
+test("the Student Hall and the list wait for a watched write to end before they are drawn again; its own end draws at once", async () => {
+  for (const shown of ["screen-student-hall", "screen-student-list"]) {
     let busy = true;
     const h = harness({ shown, writing: () => busy });
     // Enable Mods flips midway through its job: the shown screen stays under Now Loading

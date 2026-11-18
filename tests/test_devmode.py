@@ -288,7 +288,7 @@ class _Library:
         return []
 
     def add_and_apply(self, paths):
-        from bmpt.library.models import AddResult
+        from bmpt.library.records import AddResult
 
         self.added.append(paths)
         return AddResult()
@@ -518,9 +518,9 @@ def _switch_env(game_dir: Path, data: Path, monkeypatch):
     (game_dir / name).write_bytes(official)
     (data / "import").mkdir(parents=True)
     (data / "import" / name).write_bytes(_header_bundle(b"modded!!"))
-    variant = SimpleNamespace(key="test", spr="test_spr", lobby=None, family="test")
+    variant = SimpleNamespace(key="test", portrait="test_spr", memorial_lobby=None, student="test")
     catalog = SimpleNamespace(
-        variant=lambda key: variant, variant_for_core=lambda core: variant if core == "test_spr" else None
+        alt=lambda key: variant, alt_for_core=lambda core: variant if core == "test_spr" else None
     )
     settings = config.Settings(data / "config.toml")
     settings.set("game_resource_dir", str(game_dir))

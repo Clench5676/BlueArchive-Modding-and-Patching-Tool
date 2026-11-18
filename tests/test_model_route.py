@@ -15,10 +15,10 @@ from bmpt.webui.state import UiState
 
 
 class RouteCatalog:
-    def variant(self, key):
+    def alt(self, key):
         if key not in ("ch0242", "ch0252"):
             raise ServiceError("catalog_alt_not_found", key=key)
-        return SimpleNamespace(key=key, model="ch0242" if key == "ch0242" else None)
+        return SimpleNamespace(key=key, chibi="ch0242" if key == "ch0242" else None)
 
 
 class RouteGame:
@@ -27,7 +27,7 @@ class RouteGame:
     def __init__(self):
         self.asked = []
 
-    def model_glb(self, core):
+    def chibi_glb(self, core):
         self.asked.append(core)
         return b"glTF model"
 
@@ -76,15 +76,15 @@ def test_model_route_uses_verified_official_or_own_mod_sources(tmp_path):
     mod_parts = [tmp_path / "assets-_mx-characters-ch0242-_mxdependency-2026-01-01_004_assets_all_1.bundle"]
     calls = []
     game = RouteGame()
-    game.model_glb = lambda core, overrides=(), reads=None: calls.append((core, list(overrides), reads)) or b"glTF"
+    game.chibi_glb = lambda core, overrides=(), reads=None: calls.append((core, list(overrides), reads)) or b"glTF"
     library = SimpleNamespace(
         official_bundles=lambda core, **kwargs: official,
         preview_bundles=lambda mod_id: mod_parts,
         preview_reads=lambda policy: "reads:" + policy,
         mods=lambda: [
-            SimpleNamespace(id="own", kind="model", target="ch0242"),
-            SimpleNamespace(id="foreign", kind="model", target="ch0252"),
-            SimpleNamespace(id="portrait", kind="spr", target="ch0242"),
+            SimpleNamespace(id="own", resource_type="chibi", target="ch0242"),
+            SimpleNamespace(id="foreign", resource_type="chibi", target="ch0252"),
+            SimpleNamespace(id="portrait", resource_type="portrait", target="ch0242"),
         ],
         costume_preview=lambda target, other: costume(target, other),
         costume_verdict=lambda target, other: None,
@@ -93,7 +93,7 @@ def test_model_route_uses_verified_official_or_own_mod_sources(tmp_path):
 
     def costume(target, other):  # another variant's costume on the slot; the library refuses the rest
         if (target, other) != ("ch0242", "ch0242_swimsuit"):
-            raise ServiceError("source_unsupported", source=f"variant:{other}")
+            raise ServiceError("source_unsupported", source=f"alt:{other}")
         return costume_parts
 
     s = Services(
@@ -127,9 +127,9 @@ def test_indexed_npc_model_can_preview_without_a_student_entry(tmp_path):
     import pytest
 
     game = RouteGame()
-    game.model_cores = lambda: {"en0002"}
+    game.chibi_cores = lambda: {"en0002"}
     calls = []
-    game.model_glb = lambda core, overrides=(), reads=None: calls.append((core, list(overrides), reads)) or b"glTF npc"
+    game.chibi_glb = lambda core, overrides=(), reads=None: calls.append((core, list(overrides), reads)) or b"glTF npc"
     sources = [tmp_path / "assets-_mx-npcs-en0002-_mxdependency-2026-01-01_004_assets_all_1.bundle"]
     s = Services(
         Settings(tmp_path / "config.toml"),
@@ -155,7 +155,7 @@ def test_indexed_npc_model_can_preview_without_a_student_entry(tmp_path):
 def test_prefab_overrides_keep_every_dated_prefab_bundle_of_a_slot():
     """Yuuka's prefabs span two dated bundles of one slot; the official copies of both stand in for each
     one, and a mod of another release for the newest only."""
-    from bmpt.gameassets.model_service import prefab_overrides
+    from bmpt.gameassets.chibi_service import prefab_overrides
 
     old = Path("character-yuuka_original-_mxload-2024-11-18_assets_all_3807259161.bundle")
     new = Path("character-yuuka_original-_mxload-2025-07-25_assets_all_3996351917.bundle")
@@ -176,7 +176,7 @@ class CostumeCatalog:
     """Hina's family: her model, the Dress's, the Pajamas' field-mode model; Momoi elsewhere, and Midori without a
     model."""
 
-    variants = {
+    alts = {
         "hina": ("hina_original", None, "hina"),
         "ch0230": ("ch0230", None, "hina"),
         "np0009": (None, "np0009", "hina"),
@@ -185,11 +185,13 @@ class CostumeCatalog:
     }
     portraits = {"hina": "hina_spr", "ch0230": "ch0230_spr", "momoi": "momoi_spr"}
 
-    def variant(self, key):
-        if key not in self.variants:
+    def alt(self, key):
+        if key not in self.alts:
             raise ServiceError("catalog_alt_not_found", key=key)
-        model, field, family = self.variants[key]
-        return SimpleNamespace(key=key, model=model, field_model=field, family=family, spr=self.portraits.get(key))
+        chibi, field, student = self.alts[key]
+        return SimpleNamespace(
+            key=key, chibi=chibi, field_chibi=field, student=student, portrait=self.portraits.get(key)
+        )
 
 
 def _costume_services(tmp_path, outcomes, export_error=None):
@@ -217,7 +219,7 @@ def _costume_services(tmp_path, outcomes, export_error=None):
         return b"glTF"
 
     game = RouteGame()
-    game.model_glb = glb
+    game.chibi_glb = glb
     library = SimpleNamespace(
         costume_verdict=lambda target, other: saved.get(other),
         costume_preview=preview,
@@ -342,7 +344,7 @@ def test_costume_cautions_name_what_offered_pairs_may_draw_differently_in_the_ga
     saved.update(
         np0009={"ok": True, "cautions": ["ex_parts"]},
         momoi={"ok": False, "preview": True, "cautions": ["carried_shader", "ex_parts"]},
-        ch0230={"ok": False, "reason": "static model", "cautions": ["ex_parts"]},
+        ch0230={"ok": False, "reason": "static chibi", "cautions": ["ex_parts"]},
         midori={"ok": True},
     )
     api = build_api(s)
@@ -360,8 +362,8 @@ def test_optimize_physics_runs_as_a_library_job_on_the_official_model_or_a_costu
     s, _, _, _ = _costume_services(tmp_path, {})
     asked = []
 
-    def optimize(variant, source, name, pin=None, progress=None):
-        asked.append((variant, source, name, pin))
+    def optimize(alt, source, name, pin=None, progress=None):
+        asked.append((alt, source, name, pin))
         return {"unneeded": True, "reason": "official"} if source == "official" else {"mod": "copy"}
 
     s.library.optimize_costume = optimize
@@ -376,7 +378,7 @@ def test_optimize_physics_runs_as_a_library_job_on_the_official_model_or_a_costu
         ):
             job = api.call("chibi.optimize", {"alt": "hina", "source": source, "name": "Pajamas"})["result"]
             assert s.jobs.wait(job, 10) and s.jobs.get(job).result == result
-        assert asked == [("hina", "official", "Pajamas", "pin"), ("hina", "variant:np0009", "Pajamas", "pin")]
+        assert asked == [("hina", "official", "Pajamas", "pin"), ("hina", "alt:np0009", "Pajamas", "pin")]
         for bad in (
             {"alt": "hina", "source": "", "name": ""},
             {"alt": "hina", "source": "official", "name": "x" * 201},
@@ -391,7 +393,7 @@ def test_optimize_physics_runs_as_a_library_job_on_the_official_model_or_a_costu
             )
         assert len(asked) == 2
         job = api.call("chibi.optimize", {"alt": "hina", "source": "alt:momoi", "name": "Momoi"})["result"]
-        assert s.jobs.wait(job, 10) and asked[-1] == ("hina", "variant:momoi", "Momoi", "pin")
+        assert s.jobs.wait(job, 10) and asked[-1] == ("hina", "alt:momoi", "Momoi", "pin")
     finally:
         s.close()
 
@@ -430,7 +432,7 @@ def test_another_students_model_is_a_preview_source_and_past_the_stretch_limit_s
             == "bad_params"
         )
         # a refusal stays one for another student's model too
-        saved["momoi"] = {"ok": False, "reason": "static model", "detail": {}}
+        saved["momoi"] = {"ok": False, "reason": "static chibi", "detail": {}}
         assert api.call("chibi.costumes", {"alt": "hina", "others": ["momoi"]})["result"] == {"momoi": "refused"}
         import pytest
 
@@ -447,7 +449,7 @@ def test_every_preview_asset_counts_as_foreground(tmp_path):
     seen = []
 
     class Game(RouteGame):
-        def model_glb(self, core):
+        def chibi_glb(self, core):
             seen.append(("model", preview_gate._count))
             return b"glTF model"
 

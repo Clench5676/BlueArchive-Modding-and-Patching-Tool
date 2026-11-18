@@ -15,7 +15,7 @@ from bmpt.core.errors import ServiceError
 from bmpt.gameassets.discovery import resource_version
 from bmpt.library import tested_build
 
-from test_library import FakeVariant, game_bundle, make_mod, setup_library  # noqa: F401
+from test_library import FakeAlt, game_bundle, make_mod, setup_library  # noqa: F401
 
 
 # --- the data ---
@@ -87,14 +87,14 @@ def test_an_apply_onto_a_core_the_update_changed_waits_for_a_confirmation(setup_
     assert env.library.untested_version(pin) == env.library.resource_version(pin)
 
     params = refusal(lambda: env.library.apply("test", f"mod:{mod.id}"))
-    assert params["entries"] == [{"install": key(env), "core": "test_spr", "variant": "test", "kind": "spr"}]
+    assert params["entries"] == [{"install": key(env), "core": "test_spr", "alt": "test", "resource_type": "portrait"}]
     assert params["confirm"] == {key(env): {"version": env.library.resource_version(pin), "cores": ["test_spr"]}}
-    assert env.original.read_bytes() == official and not env.library.configured("test", pin).get("spr")
+    assert env.original.read_bytes() == official and not env.library.configured("test", pin).get("portrait")
 
     env.library.confirm_untested(params["confirm"])
     env.library.apply("test", f"mod:{mod.id}")
     assert env.original.read_bytes() == mod.file.read_bytes()
-    assert env.library.configured("test", pin).get("spr") == f"mod:{mod.id}"
+    assert env.library.configured("test", pin).get("portrait") == f"mod:{mod.id}"
     env.library.restore("test")  # back to official: never asked
     assert env.original.read_bytes() == official
 
@@ -134,7 +134,7 @@ def test_mods_on_waits_for_a_confirmation_and_mods_off_never_does(setup_library,
     assert env.library.apply("test", f"mod:{mod.id}").deferred  # while off an apply only configures
 
     params = refusal(lambda: env.library.toggle(True, False))
-    assert params["entries"] == [{"install": key(env), "core": "test_spr", "variant": "test", "kind": "spr"}]
+    assert params["entries"] == [{"install": key(env), "core": "test_spr", "alt": "test", "resource_type": "portrait"}]
     assert env.library.intent()["enabled"] is False and env.original.read_bytes() == official  # nothing changed
 
     env.library.confirm_untested(params["confirm"])

@@ -9,7 +9,7 @@ function pixels(width, height, [left, top, right, bottom], color = [255, 255, 25
 const bodyPixels = pixels(48, 48, [6, 0, 42, 33]);
 const originals = {
   pencil: pixels(50, 50, [1, 2, 48, 49]),
-  photo: pixels(120, 104, [0, 0, 120, 104]),
+  thumbnail: pixels(120, 104, [0, 0, 120, 104]),
   students: pixels(80, 80, [4, 13, 78, 68]),
   cycle: pixels(116, 84, [1, 1, 115, 83]),
   skip: pixels(87, 51, [1, 0, 87, 51]),
@@ -38,9 +38,12 @@ globalThis.iconHarness = {
     },
   },
 };
-let source = await readFile(new URL("../../src/bmpt/web/js/hall/student-hall-icons.js", import.meta.url), "utf8");
+let source = await readFile(
+  new URL("../../src/bmpt/web/js/student-hall/student-hall-icons.js", import.meta.url),
+  "utf8",
+);
 source = source.replace(/^import [^;]*;$/gm, "");
-source = `const {NGUI,spriteUrl,document}=globalThis.iconHarness;\n${source}\n//# sourceURL=hall-icons-fixture.js`;
+source = `const {NGUI,spriteUrl,document}=globalThis.iconHarness;\n${source}\n//# sourceURL=student-hall-icons-fixture.js`;
 const Icons = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);
 function view(sprite) {
@@ -77,7 +80,7 @@ test("original alpha padding is excluded and background shadow is excluded from 
   assert.ok(center.y < 52, "the visible button body is above the shadow-inclusive widget center");
 });
 test("rendered toolbar icons have equal visible height and matching visible-body centers despite different transparent padding", async () => {
-  for (const sprite of ["pencil", "photo", "students", "cycle"]) {
+  for (const sprite of ["pencil", "thumbnail", "students", "cycle"]) {
     const target = view(sprite);
     await Icons.alignIcon(target, "Icon", "Bg", { height: 64, maxWidth: 104 });
     const style = target.icon.style,
@@ -144,7 +147,7 @@ test("full-stack outline alignment includes translucent backplates instead of ce
   close(parseFloat(style.top) + ((whole.top + whole.bottom) / 2) * scale, center.y);
   close((whole.bottom - whole.top) * scale, 48);
 });
-test("measured native duty and photo outlines center independently of their asymmetric alpha mass", () => {
+test("measured native duty and thumbnail outlines center independently of their asymmetric alpha mass", () => {
   // Derived from runtime pixels; all four authored atlas padding fields are zero for both sprites.
   const duty = {
     width: 80,
@@ -156,7 +159,7 @@ test("measured native duty and photo outlines center independently of their asym
     centerX: 37.283737535584834,
     centerY: 44.074586204750865,
   };
-  const photo = {
+  const thumbnail = {
     width: 120,
     height: 104,
     left: 0,
@@ -168,7 +171,7 @@ test("measured native duty and photo outlines center independently of their asym
   };
   for (const [ink, height] of [
     [duty, 48],
-    [photo, 48 * 1.08],
+    [thumbnail, 48 * 1.08],
   ]) {
     const fitted = Icons.fitInk(ink, { x: 100, y: 200 }, { height, center: "bounds" }),
       scale = fitted.height / ink.height;

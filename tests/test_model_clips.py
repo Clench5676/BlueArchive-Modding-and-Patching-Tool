@@ -1,4 +1,4 @@
-"""One clip of a chibi exported on its own (model.export_clip, GameAssets.model_glb's clip, the model route's ?clip=):
+"""One clip of a chibi exported on its own (model.export_clip, GameAssets.chibi_glb's clip, the model route's ?clip=):
 the names the model's GLB lists, the clip's GLB bound to the model's nodes, its cache entry, and the route's sources."""
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ import pytest
 
 from bmpt.host.config import Settings
 from bmpt.gameassets import AssetCache, AssetNotFound, GameAssets
-from bmpt.gameassets import model
-from bmpt.gameassets import model_glb
+from bmpt.gameassets import chibi
+from bmpt.gameassets import chibi_glb
 from bmpt.webui.services import Services
 from bmpt.webui.state import UiState
 from ba_modding_toolkit.searching import get_search_dirs
@@ -43,7 +43,7 @@ def test_a_clips_toggles_name_the_renderers_gameobject_and_bring_what_the_model_
         *_game_object(40, "Props", [], children=(50,)),
         *_game_object(50, "Prop", [_object(52, "SkinnedMeshRenderer", m_Enabled=1)]),
     )
-    exporter = model._ClipExporter(graph, "ch0145")
+    exporter = chibi._ClipExporter(graph, "ch0145")
     exporter.visit(graph.objects[1], None, "", True)
     exporter.drawn = {node for node, _, _ in exporter.renderers}
     brought = []
@@ -61,7 +61,7 @@ def test_a_clips_toggles_name_the_renderers_gameobject_and_bring_what_the_model_
             ]
         },
     }
-    decoded = model_glb.DecodedClip(1.0, [0.0, 0.5, 1.0], {0: [1.0, 0.0, 0.0], 1: [0.0, 1.0, 1.0], 2: [1.0]})
+    decoded = chibi_glb.DecodedClip(1.0, [0.0, 0.5, 1.0], {0: [1.0, 0.0, 0.0], 1: [0.0, 1.0, 1.0], 2: [1.0]})
     toggles = exporter.toggles(tt, decoded, by_hash)
     assert toggles == [
         {"node": nodes["Face"], "keys": [[0.0, 1], [0.5, 0]]},
@@ -77,29 +77,29 @@ def test_model_glb_exports_a_clip_from_the_models_files_and_caches_it_per_clip(t
     game, resources = _game(tmp_path, prefab)
     calls = []
     monkeypatch.setattr(
-        model, "export_chibi", lambda graph, bundles, dev, **_: calls.append(("model", dev)) or b"glTF model"
+        chibi, "export_chibi", lambda graph, bundles, dev, **_: calls.append(("model", dev)) or b"glTF model"
     )
 
     def export_clip(graph, bundles, dev, clip, **_):
         calls.append(("clip", dev, [p.name for p in bundles], clip))
         return b"glTF " + clip.encode()
 
-    monkeypatch.setattr(model, "export_clip", export_clip)
-    assert game.model_glb("ch0242") == b"glTF model"
-    assert game.model_glb("ch0242", clip="CH0242_Exs") == b"glTF CH0242_Exs"
-    assert game.model_glb("ch0242", clip="CH0242_Exs") == b"glTF CH0242_Exs"  # cached
-    assert game.model_glb("ch0242", clip="CH0242_Formation Pickup") == b"glTF CH0242_Formation Pickup"
+    monkeypatch.setattr(chibi, "export_clip", export_clip)
+    assert game.chibi_glb("ch0242") == b"glTF model"
+    assert game.chibi_glb("ch0242", clip="CH0242_Exs") == b"glTF CH0242_Exs"
+    assert game.chibi_glb("ch0242", clip="CH0242_Exs") == b"glTF CH0242_Exs"  # cached
+    assert game.chibi_glb("ch0242", clip="CH0242_Formation Pickup") == b"glTF CH0242_Formation Pickup"
     assert calls == [
         ("model", "ch0242"),
         ("clip", "ch0242", [prefab], "CH0242_Exs"),
         ("clip", "ch0242", [prefab], "CH0242_Formation Pickup"),
     ]
     os.utime(resources / prefab, ns=(1, 1))  # the model's files changed: the clip is read again
-    assert game.model_glb("ch0242", clip="CH0242_Exs") == b"glTF CH0242_Exs" and len(calls) == 4
+    assert game.chibi_glb("ch0242", clip="CH0242_Exs") == b"glTF CH0242_Exs" and len(calls) == 4
     # a name is only compared with the model's clip names: anything else is refused before a file is opened
     for name in ["../x", "a/b", "", "x" * 129, "CH0242_Exs\n"]:
         with pytest.raises(AssetNotFound):
-            game.model_glb("ch0242", clip=name)
+            game.chibi_glb("ch0242", clip=name)
     assert len(calls) == 4 and not (tmp_path / "cache").exists()
 
 
@@ -108,7 +108,7 @@ def test_the_model_route_reads_a_clip_from_every_source_the_model_takes(tmp_path
     costume_parts = [tmp_path / "character-ch0242-_mxload-2026-01-01_assets_all_2.bundle"]
     calls = []
     game = RouteGame()
-    game.model_glb = lambda core, overrides=(), reads=None, clip=None: (
+    game.chibi_glb = lambda core, overrides=(), reads=None, clip=None: (
         calls.append((core, list(overrides), reads, clip)) or b"glTF"
     )
     library = SimpleNamespace(
@@ -156,7 +156,7 @@ def real_game(tmp_path_factory):
 
 def test_real_clip_names_per_model(real_game):
     # Hifumi: the cover sets, the attack, the EX and the normal skill; the base controller's bare names are not hers
-    hifumi = _doc(real_game.model_glb("hihumi_original"))["extras"]["clips"]
+    hifumi = _doc(real_game.chibi_glb("hihumi_original"))["extras"]["clips"]
     own = OWN("hihumi_original", hifumi)
     for suffix in (
         "Normal_Attack_Start",
@@ -170,19 +170,19 @@ def test_real_clip_names_per_model(real_game):
         assert f"Hihumi_Original_{suffix}" in own
     assert len(own) >= 40 and len(hifumi) == len(set(hifumi))
     # Hoshino (Swimsuit): two battle forms, numbered on different words
-    hoshino = OWN("hoshino_swimsuit", _doc(real_game.model_glb("hoshino_swimsuit"))["extras"]["clips"])
+    hoshino = OWN("hoshino_swimsuit", _doc(real_game.chibi_glb("hoshino_swimsuit"))["extras"]["clips"])
     assert {"Hoshino_Swimsuit_Vital_Death01", "Hoshino_Swimsuit_Vital_Death02"} <= set(hoshino)
     assert any(re.search(r"Normal0?1_Idle|Normal_Idle0?1", n) for n in hoshino)
     assert any(re.search(r"Normal0?2_Idle|Normal_Idle0?2", n) for n in hoshino)
     # Ayane (a Special student): her own few clips only
-    ayane = _doc(real_game.model_glb("ayane_original"))["extras"]["clips"]
+    ayane = _doc(real_game.chibi_glb("ayane_original"))["extras"]["clips"]
     assert set(OWN("ayane_original", ayane)) >= {"Ayane_Original_Formation_Idle", "Ayane_Original_Cafe_Idle"}
     assert not any("Normal_Attack" in n for n in OWN("ayane_original", ayane))
 
 
 def test_real_clip_export_binds_the_models_nodes(real_game):
-    base = _doc(real_game.model_glb("hihumi_original"))
-    data = real_game.model_glb("hihumi_original", clip="Hihumi_Original_Kneel_Attack_Start")
+    base = _doc(real_game.chibi_glb("hihumi_original"))
+    data = real_game.chibi_glb("hihumi_original", clip="Hihumi_Original_Kneel_Attack_Start")
     doc = _doc(data)
     count = doc["extras"]["hierarchy"]
     assert doc["extras"]["clip"] == "Hihumi_Original_Kneel_Attack_Start" and count > 50
@@ -197,17 +197,17 @@ def test_real_clip_export_binds_the_models_nodes(real_game):
     assert {"Bip001", "Bip001 Head", "Bip001 L Calf"} <= bones
     assert 10_000 < len(data) < 1_000_000
     # cached per clip: asked again, the same bytes
-    assert real_game.model_glb("hihumi_original", clip="Hihumi_Original_Kneel_Attack_Start") is data
-    assert real_game.model_glb("hihumi_original", clip="Hihumi_Original_Exs") != data
+    assert real_game.chibi_glb("hihumi_original", clip="Hihumi_Original_Kneel_Attack_Start") is data
+    assert real_game.chibi_glb("hihumi_original", clip="Hihumi_Original_Exs") != data
     with pytest.raises(AssetNotFound):
-        real_game.model_glb("hihumi_original", clip="Hoshino_Swimsuit_Exs")  # not a clip this model plays
+        real_game.chibi_glb("hihumi_original", clip="Hoshino_Swimsuit_Exs")  # not a clip this model plays
 
 
 def test_real_ex_skill_brings_the_face_the_model_leaves_out(real_game):
-    if "ch0145" not in real_game.model_cores():
+    if "ch0145" not in real_game.chibi_cores():
         pytest.skip("Miyu not in this install")
-    base = _doc(real_game.model_glb("ch0145"))
-    doc = _doc(real_game.model_glb("ch0145", clip="CH0145_Exs"))
+    base = _doc(real_game.chibi_glb("ch0145"))
+    doc = _doc(real_game.chibi_glb("ch0145", clip="CH0145_Exs"))
     count = doc["extras"]["hierarchy"]
     toggles = doc["animations"][0]["extras"]["toggles"]
     assert toggles and all(t["node"] < count for t in toggles)
@@ -219,13 +219,13 @@ def test_real_ex_skill_brings_the_face_the_model_leaves_out(real_game):
 
 def _library_with_build(monkeypatch, adapt, root):
     """A library under ``root`` whose costume build is ``adapt`` (model_adapt.adapt), with nothing to stage."""
-    from bmpt.gameassets import model_adapt
+    from bmpt.gameassets import chibi_adapt
     from bmpt.library import service as library_service
 
     library = object.__new__(library_service.ModLibrary)
     library.root = root
     library.cache_root = root / "cache"
-    monkeypatch.setattr(model_adapt, "adapt", adapt)
+    monkeypatch.setattr(chibi_adapt, "adapt", adapt)
     monkeypatch.setattr(library_service.ModLibrary, "_official_or_current", lambda self, path, pin: path)
     monkeypatch.setattr(library_service.ModLibrary, "_stage_copies", lambda self, originals, folder: {})
     monkeypatch.setattr(library_service.ModLibrary, "_costume_files", lambda self, other, pin: ("dev", [], []))
@@ -243,7 +243,7 @@ def test_a_clip_export_starts_at_once_while_a_long_costume_build_runs(tmp_path, 
     import time
 
     from bmpt.core import preview_gate
-    from bmpt.gameassets import model_adapt
+    from bmpt.gameassets import chibi_adapt
 
     prefab = "character-ch0242-_mxload-2024-11-18_assets_all_1.bundle"
     game, _ = _game(tmp_path, prefab)
@@ -256,7 +256,7 @@ def test_a_clip_export_starts_at_once_while_a_long_costume_build_runs(tmp_path, 
             kwargs["step"]()
             steps.append(time.monotonic())
             time.sleep(0.05)
-        raise model_adapt.refuse("rest pose")
+        raise chibi_adapt.refuse("rest pose")
 
     def export_clip(graph, bundles, dev, clip, **_):
         before = len(steps)
@@ -264,7 +264,7 @@ def test_a_clip_export_starts_at_once_while_a_long_costume_build_runs(tmp_path, 
         during.append(len(steps) - before)
         return b"glTF " + clip.encode()
 
-    monkeypatch.setattr(model, "export_clip", export_clip)
+    monkeypatch.setattr(chibi, "export_clip", export_clip)
     library = _library_with_build(monkeypatch, adapt, tmp_path)
     target = tmp_path / "character-hina_original-_mxload-2026-01-01_assets_all_1.bundle"
     failure = []
@@ -284,7 +284,7 @@ def test_a_clip_export_starts_at_once_while_a_long_costume_build_runs(tmp_path, 
         time.sleep(0.2)
         started = time.monotonic()
         with preview_gate.foreground():
-            assert game.model_glb("ch0242", clip="CH0242_Exs") == b"glTF CH0242_Exs"
+            assert game.chibi_glb("ch0242", clip="CH0242_Exs") == b"glTF CH0242_Exs"
         took = time.monotonic() - started
     finally:
         worker.join(10)
@@ -298,11 +298,11 @@ def test_a_clip_export_starts_at_once_while_a_long_costume_build_runs(tmp_path, 
 def test_arms_pushed_out_count_as_an_optimize_physics_gain(tmp_path, monkeypatch, arms, gain):
     """Optimize Physics keeps a build whose only change is the arms pushed out of a bulkier costume; without any
     physics rule it reports no gain."""
-    from bmpt.gameassets import model_adapt
+    from bmpt.gameassets import chibi_adapt
 
     def adapt(**kwargs):
-        plan = model_adapt.Plan({}, {}, 1.0, 1.0)
-        return model_adapt.Result({}, plan, 1, None, arms=arms)
+        plan = chibi_adapt.Plan({}, {}, 1.0, 1.0)
+        return chibi_adapt.Result({}, plan, 1, None, arms=arms)
 
     library = _library_with_build(monkeypatch, adapt, tmp_path)
     report = {}

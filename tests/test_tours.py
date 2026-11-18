@@ -63,7 +63,7 @@ def test_review_manifest_matches_locales_and_is_text_only(current):
     for lang in tours.LOCALES:
         available = tours.published(current, lang)
         assert [t["version"] for t in available] == ["0.6.0"]
-        assert [p["id"] for p in available[0]["pages"]] == ["student-thumbnails", "hall-viewing-zoom"]
+        assert [p["id"] for p in available[0]["pages"]] == ["student-thumbnails", "student-hall-viewing-zoom"]
         for page in available[0]["pages"]:
             localized = strings.ui_strings(lang, fallback=False)
             key = f"webui.tours.v0_6_0.{page['id']}"

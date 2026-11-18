@@ -1,6 +1,6 @@
 // First-launch consent for caching light game assets. Before consent the UI reads every game asset straight from
 // the install (in memory). After consent light UI assets (atlas sprites, UI textures, prefab layouts) are cached
-// in the user data directory; previews and exports of portraits, memorial lobbies, backgrounds and 3D models
+// in the user data directory; previews and exports of portraits, memorial lobbies, backgrounds and chibis
 // follow the Preview Cache setting (on by default, bounded); voices are always read from the game files. The
 // scan consent (scan()) is a separate question: whether the app may check the game files on its own and read
 // Steam's records on this device (the install location to find the game, the update status, the file lists that

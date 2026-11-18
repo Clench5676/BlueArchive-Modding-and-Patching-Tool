@@ -1,16 +1,16 @@
 # Front end
 
-`ngui.js` (prefab renderer), the roster, the detail screen, the popups, the consent popup and the lobby player, as ES
-modules under `web/js/`, one page with a hash router (`#/roster`, `#/student/<student>/<alt>`). The modules sit in
+`ngui.js` (prefab renderer), the student list, the detail screen, the popups, the consent popup and the memorial lobby player, as ES
+modules under `web/js/`, one page with a hash router (`#/student-list`, `#/student/<student>/<alt>`). The modules sit in
 folders by screen area: `app/` (start-up, navigation, loading, updates, prompts), `window/` (window chrome and top bar),
-`core/` (RPC, strings, shared helpers), `ui/` (NGUI, popups, shared widgets and tokens), `roster/`, `detail/`, `mods/`
-(mod switching and import), `spine/`, `lobby/`, `model/` (3D), `hall/`, `settings/` and `photography/`. Data comes from
+`core/` (RPC, strings, shared helpers), `ui/` (NGUI, popups, shared widgets and tokens), `student-list/`, `detail/`, `mods/`
+(mod switching and import), `spine/`, `memorial-lobby/`, `chibi/` (3D), `student-hall/`, `settings/` and `thumbnails/`. Data comes from
 the RPC methods, art from `/asset/...`, strings from the locale files. Invisible buttons over drawn controls carry their
 accessible names from the locale files; a control that picks one of several carries `aria-pressed`.
 
 ## Student list
 
-`roster-order.js` decides which cards the list shows and in what order; `roster.js` draws them and `display.js` is the game's display settings popup.
+`student-list-order.js` decides which cards the list shows and in what order; `student-list.js` draws them and `display.js` is the game's display settings popup.
 
 - One card per alt, or per student with "Group Alts". Cards with Mods appear before the "No Mod" bar;
   favourites lead each group whatever the sort.
@@ -30,7 +30,7 @@ accessible names from the locale files; a control that picks one of several carr
 
 ## Quit
 
-The student list quits the app as the PC client's back key does in the lobby (`quit.js`): the top
+The student list quits the app as the PC client's back key does in the memorial lobby (`quit.js`): the top
 bar's round back button and Escape on the list open the game's quit prompt (Cancel / Confirm; Enter and Space confirm
 while the prompt holds the focus, per the PC client's key mapping). Escape is left alone when another handler took the
 key, while an input method composes, for a held key's repeat, with a modifier, while any popup is open, behind the
@@ -40,7 +40,7 @@ runs); in browser mode the page shows Closed after the server stops.
 ## Bottom navigation
 
 `nav-items.js` lists the bottom bar's entries and decides what a click does; `nav.js` draws them.
-Student Hall (`#/hall`) is the root page, followed by Students and Batch Import; `route-history.js` records committed
+Student Hall (`#/student-hall`) is the root page, followed by Students and Batch Import; `route-history.js` records committed
 page entries in memory (failed transitions do not become history; direct-entry routes fall back to Student Hall). An
 entry is greyed exactly when it has a classic tab and no web screen: it keeps the game's disabled tint (read from
 UILobby's locked entry, else NGUI's default grey), stays a focusable button (`aria-disabled`), and a click opens the
@@ -57,13 +57,13 @@ uses one shared canvas and camera; each instance has independent animation state
 picks actors by posed attachment vertices against cached atlas-page alpha (decoded off the main thread; until a page
 is read its attachments count as opaque); dragging moves, hover controls remove, reorder and mirror, and a selection
 pins the toolbar (a gold outline from the game's `SelectLine`). Each portrait toolbar has its own size slider and
-Reset; a global size slider (25–150 %) edits the draft. The Add Portraits modal lists library portraits with roster
+Reset; a global size slider (25–150 %) edits the draft. The Add Portraits modal lists library portraits with student list
 semantics. Layout changes stay drafts until Save. Memorial mode has an ordered playlist with pointer-capture
-reordering (touch holds, edge scrolling, cancellation) and runs each source through the existing lobby renderer, in one
-lobby instance per slot (`createLobby()`: the current scene and a hidden replacement).
+reordering (touch holds, edge scrolling, cancellation) and runs each source through the existing memorial lobby renderer, in one
+memorial lobby instance per slot (`createMemorialLobby()`: the current scene and a hidden replacement).
 `student_hall.py` validates state stored under `student_hall` in UI preferences; revision checks prevent a stale
 window from overwriting another's arrangement, and dirty exits prompt. `student-hall-dialogue.js` draws the game's
-`ChatDialog/Talk` balloon for portrait dialogue, with a Hall-wide turn lock, bounded caches and per-click aborts; no
+`ChatDialog/Talk` balloon for portrait dialogue, with a Student Hall-wide turn lock, bounded caches and per-click aborts; no
 voice is written to disk. `student-hall-camera.js` owns a temporary non-editing scene view (100–300 %; wheel and
 pinch zoom, two-finger swipes pan, reusing the detail viewer's wheel classification); camera updates do not reload
 actors or mutate saved state, and the renderer steps the camera at the top of its frame so portraits, background and
@@ -102,7 +102,7 @@ modules split from it on a stand-in DOM) reads its prefabs once and provides:
   design system's ([`design-system/`](../design-system/README.md)). **`message({...})`**: lines of text, optional line
   buttons, checkbox, `plain`, `scroll`; resolves with `{button, checked}` however it closes; without the frame's
   prefab (no game folder) the same message draws plain and answers the same way. **`listPopup({...})`**: details on
-  the left, cards in a framed list on the right, single or multi selection, optional roster tools.
+  the left, cards in a framed list on the right, single or multi selection, optional student list tools.
 
 **Start sequence** (`main.js`, `Popup.sequence`), run once per session when a game folder is known: the start popups
 come one at a time after the first screen is revealed, each only when due — the one-time notice of the first start
@@ -120,21 +120,21 @@ that opens the same notice without changing state.
 
 **Switch popups** (Switch Portrait / Memorial Lobby / Chibi). The sources (`switch-sources.js`):
 the alt's own files and its added mods; for the portrait also the other alts' own and added ones (other
-alts' lobbies are not offered — untested in the game). Save changes only the preview (persisted per install and
+alts' memorial lobbies are not offered — untested in the game). Save changes only the preview (persisted per install and
 alt in `webui.json`, exposed as `previewSources`); Apply updates the manifest through `actions.apply` (with Mods
 off it only updates the intended source). On an overwritten resource type, Official is greyed with the Overwritten treatment;
 greyed cards can still be previewed. Delete always confirms with the mod's name and explains affected entries.
 Duplicates show Already in the Mod Library; exact outside game content is adopted without reapplying. Unseen mods
-mark their alt chip, tab and roster card; opening a switch popup marks what it offers as seen (`mods.seen`,
+mark their alt chip, tab and student list card; opening a switch popup marks what it offers as seen (`mods.seen`,
 independent of the library's legacy flags). **Aliases** (the pencil on the nameplate): the user's own search aliases,
 edited in the game's input rows, IME-safe. **Details** (the info bars' button): the shown tab's game files, one row
 per bundle with size, date, CRC state and contents.
 
 ## Bar motion
 
-`chrome-motion.js` moves the top bar and the bottom menu as the game's lobby moves them (UILobby's `UIAni_Lobby`
-clip, kept as `LOBBY_ENTRY` in `ui-tokens.js`): both bars come in on the clip's curves once the first screen shows;
-immersive scenes (detail and Hall fullscreen, photography) send them away, a pointer near the window's edge brings
+`chrome-motion.js` moves the top bar and the bottom menu as the game's home screen moves them (UILobby's `UIAni_Lobby`
+clip, kept as `MEMORIAL_LOBBY_ENTRY` in `ui-tokens.js`): both bars come in on the clip's curves once the first screen shows;
+immersive scenes (detail and Student Hall fullscreen, thumbnail capture) send them away, a pointer near the window's edge brings
 that edge's bar back, and `corner-layout.js` places corner controls around the revealed bars. With the native macOS
 toolbar the motion also drives the window buttons (`window.motion`, `CocoaHost.slide`).
 

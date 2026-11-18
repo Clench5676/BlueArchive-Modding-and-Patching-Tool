@@ -252,7 +252,7 @@ class Variant:
 
 
 class Catalog:
-    def variant(self, key):
+    def alt(self, key):
         return Variant()
 
 

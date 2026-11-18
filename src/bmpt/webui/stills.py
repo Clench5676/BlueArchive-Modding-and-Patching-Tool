@@ -15,31 +15,30 @@ from pathlib import Path
 from ..core.errors import ServiceError
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
-
 # paths below web/; vendor files by their versioned path (the import map and spine-runtime.js name them)
 RENDERERS: dict[str, tuple[str, ...]] = {
-    # the square 3D still of a Switch 3D Model card (model-still.js) and the viewer that draws it
-    "model": (
-        "js/model/model-still.js",
-        "js/model/model.js",
-        "js/model/model-camera.js",
+    # the square 3D still of a Switch Chibi card (chibi-still.js) and the viewer that draws it
+    "chibi": (
+        "js/chibi/chibi-still.js",
+        "js/chibi/chibi.js",
+        "js/chibi/chibi-camera.js",
         "js/core/png-decode.js",
-        "js/model/chibi-materials.js",
-        # the halo's particle effects (model-fx.js) with the lobby simulation and programs they run on
-        "js/model/model-fx.js",
-        "js/lobby/particles.js",
-        "js/lobby/particles-geometry.js",
-        "js/lobby/particles-gl.js",
+        "js/chibi/chibi-materials.js",
+        # the halo's particle effects (chibi-fx.js) with the memorial lobby simulation and programs they run on
+        "js/chibi/chibi-fx.js",
+        "js/memorial-lobby/particles.js",
+        "js/memorial-lobby/particles-geometry.js",
+        "js/memorial-lobby/particles-gl.js",
         "js/app/touch-fx.js",
         "vendor/three-0.160.0/build/three.module.min.js",
         "vendor/three-0.160.0/examples/jsm/loaders/GLTFLoader.js",
         "vendor/three-0.160.0/examples/jsm/utils/BufferGeometryUtils.js",
     ),
-    # portrait, lobby and collection stills drawn with the Spine player (thumbs.js)
+    # portrait, memorial lobby and collection stills drawn with the Spine player (thumbs.js)
     "spine": (
         "js/detail/thumbs.js",
-        "js/lobby/lobby-still.js",
-        "js/lobby/lobby-health.js",
+        "js/memorial-lobby/memorial-lobby-still.js",
+        "js/memorial-lobby/memorial-lobby-health.js",
         "js/spine/rest-pose.js",
         "js/detail/special-view.js",
         "js/spine/spine-load.js",
@@ -55,16 +54,16 @@ NOT_PIXELS = frozenset(
         "js/core/async.js",
         "js/core/capture-priority.js",
         "js/core/capture-retries.js",
-        "js/lobby/lobby-touch.js",
+        "js/memorial-lobby/memorial-lobby-touch.js",
         "js/ui/ngui.js",
         "js/detail/preview-cache.js",
         "js/detail/preview-error.js",
         "js/detail/preview-lifecycle.js",
         "js/mods/switch-sources.js",
         "vendor/three-0.160.0/examples/jsm/controls/OrbitControls.js",
-        # particles-gl.js's lobby drawing only (create()): the 3D model view uses its shader sources alone
+        # particles-gl.js's memorial lobby drawing only (create()): the 3D chibi view uses its shader sources alone
         "js/core/linear.js",
-        "js/lobby/mesh-fx.js",
+        "js/memorial-lobby/mesh-fx.js",
     }
 )
 

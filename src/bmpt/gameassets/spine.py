@@ -10,10 +10,16 @@ from pathlib import Path
 from typing import Iterable, Mapping
 
 from PIL import Image
+from bmpt.engine import spine_kind
 
 from ..unity.texture_guard import texture_image
 from .errors import AssetNotFound
 from .unity import open_bundle
+
+
+def spine_resource_type(core: str, category: str | None = None) -> str | None:
+    """Use the engine's bundle classification to identify an App resource type."""
+    return {"spr": "portrait", "lobby": "memorialLobby"}.get(spine_kind(core, category))
 
 
 def spine_stamps(bundles: list[Path]) -> list[tuple[str, int, int, int]]:
@@ -139,7 +145,8 @@ def extract_spine(bundles: list[Path], skip: Mapping[Path, frozenset[str]] | Non
                         result[data.m_Name] = data.m_Script.encode("utf-8", "surrogateescape")
                 elif obj.type.name == "Texture2D":
                     data = obj.read()
-                    # served from the same machine and held in memory only: level 1 encodes a lobby's large pages
+                    # served from the same machine and held in memory only: level 1 encodes a memorial lobby's large
+                    # pages
                     # several times faster than the default and the larger bytes cost nothing on loopback
                     textures[data.m_Name] = png_bytes(texture_image(data, path.name).convert("RGBA"), level=1)
     for name, data in textures.items():

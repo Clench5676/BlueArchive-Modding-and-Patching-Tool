@@ -135,7 +135,7 @@ def test_local_audio_lookup_is_scoped_and_decodes_original_samples_in_memory(tmp
 def dialogue_services(services, monkeypatch):
     variant = services.catalog.v
     variant.page_id, variant.schale_id = "123", 10005
-    monkeypatch.setattr(services.library, "variant_metadata", lambda key: variant, raising=False)
+    monkeypatch.setattr(services.library, "alt_metadata", lambda key: variant, raising=False)
     requests = []
 
     def fetch(self, url):
@@ -219,10 +219,10 @@ def test_missing_audio_keeps_official_text_and_refuses_unrelated_clip(app, servi
 
 
 def test_viewed_order_is_per_source_and_does_not_mutate_hall_or_game(app, services, dialogue_services, monkeypatch):
-    services.catalog.v.lobby = "hoshino_home"
+    services.catalog.v.memorial_lobby = "hoshino_home"
     mods = [
-        SimpleNamespace(id="one", target="hoshino", kind="lobby"),
-        SimpleNamespace(id="two", target="hoshino", kind="lobby"),
+        SimpleNamespace(id="one", target="hoshino", resource_type="memorialLobby"),
+        SimpleNamespace(id="two", target="hoshino", resource_type="memorialLobby"),
     ]
     monkeypatch.setattr(services.library, "mods", lambda: mods)
     initial = services.state.get("student_hall")
@@ -237,58 +237,59 @@ def test_viewed_order_is_per_source_and_does_not_mutate_hall_or_game(app, servic
 def test_last_memorial_cannot_be_removed_after_first_saved_entry(tmp_path):
     from uuid import uuid4
     from bmpt.webui.state import UiState
-    from bmpt.webui.student_hall import empty_hall, save_hall
+    from bmpt.webui.student_hall import empty_student_hall, save_student_hall
 
     state = UiState(tmp_path / "ui.json")
-    initial = save_hall(state, empty_hall(), 0)
-    initial["memorials"] = [{"id": str(uuid4()), "variant": "hoshino", "source": "official"}]
-    kept = save_hall(state, initial, 1)
+    initial = save_student_hall(state, empty_student_hall(), 0)
+    initial["memorialLobbies"] = [{"id": str(uuid4()), "alt": "hoshino", "source": "official"}]
+    kept = save_student_hall(state, initial, 1)
     previous = state.path.read_bytes()
-    empty = {**kept, "memorials": [], "active": None}
+    empty = {**kept, "memorialLobbies": [], "active": None}
     with pytest.raises(ServiceError, match="student_hall_last_memorial"):
-        save_hall(state, empty, 2)
+        save_student_hall(state, empty, 2)
     assert state.path.read_bytes() == previous
     assert state.get("student_hall") == kept
 
 
 def test_exact_portrait_source_duplicates_are_rejected_but_other_resources_and_memorials_remain_valid(tmp_path):
     from uuid import uuid4
-    from bmpt.webui.student_hall import empty_hall, validate_hall
+    from bmpt.webui.student_hall import empty_student_hall, validate_student_hall
 
-    first = {"id": str(uuid4()), "variant": "hoshino", "source": "mod:one"}
+    first = {"id": str(uuid4()), "alt": "hoshino", "source": "mod:one"}
     second = {**first, "id": str(uuid4())}
-    value = {**empty_hall(), "portraits": [first, second]}
+    value = {**empty_student_hall(), "portraits": [first, second]}
     with pytest.raises(ServiceError, match="student_hall_duplicate_portrait"):
-        validate_hall(value)
+        validate_student_hall(value)
     second["source"] = "mod:two"
-    value["memorials"] = [{**first, "id": str(uuid4())}, {**first, "id": str(uuid4())}]
+    value["memorialLobbies"] = [{**first, "id": str(uuid4())}, {**first, "id": str(uuid4())}]
     with pytest.raises(ServiceError, match="student_hall_duplicate_memorial"):
-        validate_hall(value)
-    value["memorials"][1]["source"] = "mod:two"
-    clean = validate_hall(value)
-    assert len(clean["portraits"]) == 2 and len(clean["memorials"]) == 2
+        validate_student_hall(value)
+    value["memorialLobbies"][1]["source"] = "mod:two"
+    clean = validate_student_hall(value)
+    assert len(clean["portraits"]) == 2 and len(clean["memorialLobbies"]) == 2
 
 
 def test_native_portrait_anchor_only_fills_missing_coordinates():
     from uuid import uuid4
-    from bmpt.webui.student_hall import empty_hall, validate_hall, PORTRAIT_ORIGIN
+    from bmpt.webui.student_hall import empty_student_hall, validate_student_hall, PORTRAIT_ORIGIN
 
-    fresh = {"id": str(uuid4()), "variant": "hoshino", "source": "mod:one"}
-    placed = {"id": str(uuid4()), "variant": "hoshino", "source": "mod:two", "x": 960, "y": 1120, "scale": 1.7}
-    result = validate_hall({**empty_hall(), "portraits": [fresh, placed]})["portraits"]
+    fresh = {"id": str(uuid4()), "alt": "hoshino", "source": "mod:one"}
+    placed = {"id": str(uuid4()), "alt": "hoshino", "source": "mod:two", "x": 960, "y": 1120, "scale": 1.7}
+    result = validate_student_hall({**empty_student_hall(), "portraits": [fresh, placed]})["portraits"]
     assert (result[0]["x"], result[0]["y"]) == PORTRAIT_ORIGIN
-    assert result[1] == {**placed, "mirror": False}
+    assert result[1] == {**placed, "flipHorizontal": False}
 
 
 def test_legacy_duplicate_read_keeps_first_uuid_and_cas_revision_without_disk_migration(app, services):
     from uuid import uuid4
-    from bmpt.webui.student_hall import empty_hall
+    from bmpt.webui.student_hall import empty_student_hall
 
     first = {"id": str(uuid4()), "variant": "hoshino", "source": "mod:one", "x": 400, "y": 1120, "scale": 1}
     duplicate = {**first, "id": str(uuid4()), "x": 1200}
     other = {**first, "id": str(uuid4()), "source": "mod:two", "x": 800}
-    legacy = {**empty_hall(), "revision": 7, "portraits": [first, duplicate, other]}
-    services.state.set("student_hall", legacy)
+    legacy = {**empty_student_hall(), "revision": 7, "portraits": [first, duplicate, other]}
+    legacy["memorials"] = legacy.pop("memorialLobbies")
+    services.state.path.write_text(json.dumps({"prefs": {"student_hall": legacy}}))
     before = services.state.path.read_bytes()
     snapshot = rpc(app, "studentHall.get")["result"]
     portraits = [
@@ -300,10 +301,10 @@ def test_legacy_duplicate_read_keeps_first_uuid_and_cas_revision_without_disk_mi
     saved = rpc(app, "studentHall.update", value={**snapshot, "mode": "memorialLobby"}, revision=7)["result"]
     assert saved["revision"] == 8 and saved["portraits"] == [{**entry, "flipHorizontal": False} for entry in portraits]
     assert services.state.get("student_hall") == {
-        **legacy,
-        "mode": "memorial",
+        **snapshot,
+        "mode": "memorialLobby",
         "revision": 8,
-        "portraits": [{**entry, "mirror": False} for entry in (first, other)],
+        "portraits": [{**entry, "flipHorizontal": False} for entry in portraits],
     }
 
 
@@ -322,7 +323,7 @@ def test_slow_kivo_does_not_gate_ready_official_text_and_finishes_in_the_existin
 
     monkeypatch.setattr(PortraitVoices, "lines", delayed)
     with ThreadPoolExecutor(max_workers=1) as pool:
-        pending = pool.submit(rpc, app, "studentHall.lines", variant="hoshino", lang="en")
+        pending = pool.submit(rpc, app, "studentHall.lines", alt="hoshino", lang="en")
         assert entered.wait(2)
         try:
             result = pending.result(timeout=1)["result"]
@@ -417,14 +418,14 @@ def test_missing_dialogue_catalog_mapping_is_normal_absence_but_unexpected_catal
     def missing(_):
         raise ServiceError("catalog_alt_not_found")
 
-    monkeypatch.setattr(services.library, "variant_metadata", missing, raising=False)
+    monkeypatch.setattr(services.library, "alt_metadata", missing, raising=False)
     response = rpc(app, "studentHall.lines", alt="unmapped", lang="zh-CN")
     assert "error" not in response and response["result"]["unavailable"] is True
 
     def broken(_):
         raise ServiceError("catalog_data_invalid")
 
-    monkeypatch.setattr(services.library, "variant_metadata", broken)
+    monkeypatch.setattr(services.library, "alt_metadata", broken)
     assert rpc(app, "studentHall.lines", alt="unmapped")["error"]["code"] == "catalog_data_invalid"
 
 
@@ -494,7 +495,7 @@ def test_ready_official_rows_do_not_finish_a_chinese_request_before_its_ready_tr
     services.global_lines._table = {}
     services.global_lines._portraits = {10005: {1: [{"ja": "Original", "en": "English", "zh-TW": "Traditional"}]}}
     with ThreadPoolExecutor(max_workers=1) as pool:
-        pending = pool.submit(rpc, app, "studentHall.lines", variant="hoshino", lang="zh-CN")
+        pending = pool.submit(rpc, app, "studentHall.lines", alt="hoshino", lang="zh-CN")
         assert entered.wait(1)
         assert not pending.done()
         release.set()

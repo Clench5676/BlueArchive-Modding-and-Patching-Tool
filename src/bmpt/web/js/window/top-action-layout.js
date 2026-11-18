@@ -1,20 +1,20 @@
 /**
- * Place the top bar's actions: reuse the game's sibling boxes; only the Hall's Settings position changes.
+ * Place the top bar's actions: reuse the game's sibling boxes; only the Student Hall's Settings position changes.
  * @param {{home: number[], option: number[], line: number[]}} boxes The boxes [right, top, width, height] of
  *     the Home, Settings and divider controls.
- * @param {boolean} hall Whether the Student Hall is shown: Settings takes Home's place.
+ * @param {boolean} Student Hall Whether the Student Hall is shown: Settings takes Home's place.
  * @param {number} [safeRight] The right inset the native window controls need.
  * @returns {{home: number[], option: number[], line: number[]}} The placed boxes.
  */
-export function topActionLayout(boxes, hall, safeRight = 0) {
+export function topActionLayout(boxes, studentHall, safeRight = 0) {
   const result = structuredClone(boxes),
     home = boxes.home;
-  if (hall) {
+  if (studentHall) {
     const option = result.option;
     option[0] = home[0] + (home[2] - option[2]) / 2;
     option[1] = home[1] + (home[3] - option[3]) / 2;
   }
-  const shift = Math.max(0, safeRight - (hall ? result.option[0] : home[0]));
+  const shift = Math.max(0, safeRight - (studentHall ? result.option[0] : home[0]));
   for (const box of Object.values(result)) box[0] += shift;
   return result;
 }

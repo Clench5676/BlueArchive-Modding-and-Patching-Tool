@@ -1,4 +1,4 @@
-// The photography toolbar's text buttons (Occlusion Guide, Grid) share one caption size and wrap inside their bodies in
+// The thumbnail capture toolbar's text buttons (Occlusion Guide, Grid) share one caption size and wrap inside their bodies in
 // every shipped language; the ink centring needs no computed style. Run by tests/test_photography_js.py.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -27,13 +27,16 @@ globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
 const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
 const { CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON } = await import("../../src/bmpt/web/js/ui/ui-tokens.js");
 const { row } = await import("../../src/bmpt/web/js/ui/ui-grid.js");
-const controller = await readFile(new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url), "utf8");
+const controller = await readFile(
+  new URL("../../src/bmpt/web/js/thumbnail-capture/controller.js", import.meta.url),
+  "utf8",
+);
 const layoutCode = controller.slice(
-  controller.indexOf("function photographyToolbarLayout("),
+  controller.indexOf("function thumbnailCaptureToolbarLayout("),
   controller.indexOf("async function whiteButton("),
 );
 const S = 1920 / 2960;
-const { photographyToolbarLayout, toolbarCaptions } = new Function(
+const { thumbnailCaptureToolbarLayout, toolbarCaptions } = new Function(
   "CONTROL",
   "XS_BUTTON",
   "SPACE",
@@ -42,10 +45,10 @@ const { photographyToolbarLayout, toolbarCaptions } = new Function(
   "S",
   "NGUI",
   "P",
-  `${layoutCode}; return {photographyToolbarLayout,toolbarCaptions};`,
+  `${layoutCode}; return {thumbnailCaptureToolbarLayout,toolbarCaptions};`,
 )(CONTROL, XS_BUTTON, SPACE, FULLSCREEN_BUTTON, row, S, NGUI, (key) => strings[key]);
 let strings;
-const geometry = photographyToolbarLayout(),
+const geometry = thumbnailCaptureToolbarLayout(),
   OCCLUSION_BUTTON = geometry.occlusion;
 const TOOLBAR_CAPTION = { ...geometry.caption, width: geometry.caption.width * S, height: geometry.caption.height * S };
 const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
@@ -53,7 +56,7 @@ const LOCALES = ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"];
 for (const locale of LOCALES)
   test(`the toolbar captions share one size and fit the 196px by 136-unit bodies in ${locale}`, async () => {
     const ui = JSON.parse(await readFile(new URL(`../../src/bmpt/locales/${locale}.json`, import.meta.url), "utf8"))
-      .webui.photo;
+      .webui.thumbnail;
     document.documentElement.lang = locale;
     strings = ui;
     const captions = [ui.occlusion, ui.gridOn, ui.gridOff];
@@ -102,17 +105,20 @@ test("the text button uses a buttonS body and caption insets", () => {
 });
 
 test("the toolbar button code no longer depends on computed style", async () => {
-  const source = await readFile(new URL("../../src/bmpt/web/js/photography/controller.js", import.meta.url), "utf8");
+  const source = await readFile(
+    new URL("../../src/bmpt/web/js/thumbnail-capture/controller.js", import.meta.url),
+    "utf8",
+  );
   assert.doesNotMatch(source, /getComputedStyle/);
   assert.match(source, /inkShift/);
   assert.match(source, /fitGroup/);
 });
 
 for (const locale of LOCALES)
-  test(`photography toolbar buttons use shared bodies and scaled gaps in ${locale}`, async () => {
+  test(`thumbnail capture toolbar buttons use shared bodies and scaled gaps in ${locale}`, async () => {
     document.documentElement.lang = locale;
     const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`),
-      g = photographyToolbarLayout();
+      g = thumbnailCaptureToolbarLayout();
     near(g.grid[0] - g.occlusion[0] - g.occlusion[2], SPACE.m * S);
     near(g.mode[0] - g.grid[0] - g.grid[2], SPACE.m * S);
     near(g.choices[0] - g.playback[0] - g.playback[2], SPACE.m * S);

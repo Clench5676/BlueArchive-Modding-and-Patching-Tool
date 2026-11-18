@@ -37,8 +37,8 @@
 		"info": {
 			"title": {
 				"portrait": "ข้อมูลภาพตัวละคร",
-				"lobby": "ข้อมูลล็อบบี้ความทรงจำ",
-				"model": "ข้อมูลโมเดล 3D"
+				"memorialLobby": "ข้อมูลล็อบบี้ความทรงจำ",
+				"chibi": "ข้อมูลโมเดล 3D"
 			},
 			"details": "รายละเอียด",
 			"current": "ปัจจุบัน",
@@ -49,30 +49,30 @@
 		"row": {
 			"box": {
 				"portrait": "ภาพตัวละคร",
-				"lobby": "ล็อบบี้ความทรงจำ",
-				"model": "โมเดล 3D"
+				"memorialLobby": "ล็อบบี้ความทรงจำ",
+				"chibi": "โมเดล 3D"
 			},
 			"switch": {
 				"portrait": "เปลี่ยนภาพตัวละคร",
-				"lobby": "เปลี่ยนล็อบบี้ความทรงจำ",
-				"model": "เปลี่ยนโมเดล 3D"
+				"memorialLobby": "เปลี่ยนล็อบบี้ความทรงจำ",
+				"chibi": "เปลี่ยนโมเดล 3D"
 			},
 			"add": {
 				"portrait": "เพิ่มภาพตัวละคร",
-				"lobby": "เพิ่มล็อบบี้ความทรงจำ",
-				"model": "เพิ่มโมเดล 3D"
+				"memorialLobby": "เพิ่มล็อบบี้ความทรงจำ",
+				"chibi": "เพิ่มโมเดล 3D"
 			},
 			"four": {
 				"portrait": "สีหน้า",
-				"lobby": "บทสนทนา",
-				"model": "ท่าทาง"
+				"memorialLobby": "บทสนทนา",
+				"chibi": "ท่าทาง"
 			}
 		},
 		"detail": {
 			"copyFailed": "คัดลอกชื่อไม่สำเร็จ",
 			"failed": "ไม่มีตัวอย่าง"
 		},
-		"lobby": {
+		"memorialLobby": {
 			"original": "ทางการ",
 			"fullscreen": "เต็มหน้าจอ",
 			"playAll": "เล่นบทสนทนาทั้งหมด",
@@ -84,7 +84,7 @@
 			"cameraAlbum": "อัลบั้ม",
 			"cameraName": "กล้อง {n}"
 		},
-		"model": {
+		"chibi": {
 			"original": "ทางการ",
 			"has": "มี",
 			"none": "ไม่มี",
@@ -185,7 +185,7 @@
 			"classic": "{label} - UI คลาสสิก",
 			"import": "นำเข้า Mod"
 		},
-		"roster": {
+		"studentList": {
 			"title": "รายชื่อนักเรียน",
 			"merge": "รวมชุด",
 			"search": "ค้นหา",
@@ -224,9 +224,9 @@
 			}
 		},
 		"band": {
-			"modCounts": "ภาพตัวละคร: {portraits}, ล็อบบี้ความทรงจำ: {lobbies}",
+			"modCounts": "ภาพตัวละคร: {portraits}, ล็อบบี้ความทรงจำ: {memorialLobbies}",
 			"portrait": "ภาพตัวละคร",
-			"lobby": "ล็อบบี้",
+			"memorialLobby": "ล็อบบี้",
 			"replaced": "แทนที่แล้ว"
 		},
 		"bar": {
@@ -234,8 +234,8 @@
 		},
 		"tab": {
 			"portrait": "ภาพตัวละคร",
-			"lobby": "ล็อบบี้ความทรงจำ",
-			"model": "โมเดล 3D"
+			"memorialLobby": "ล็อบบี้ความทรงจำ",
+			"chibi": "โมเดล 3D"
 		},
 		"status": {
 			"original": "ทางการของเกม",
@@ -621,8 +621,8 @@
 			"thumbnail_in_use": "ภาพย่อกำลังใช้งาน",
 			"thumbnail_library_invalid": "ไม่สามารถอ่านคลังภาพย่อ",
 			"thumbnail_target_unavailable": "ไม่พบภาพในรายชื่อนักเรียน",
-			"lobby_camera_unsupported": "ใช้กล้องกับล็อบบี้ความทรงจำนี้ไม่ได้",
-			"lobby_camera_failed": "บันทึกกล้องไม่สำเร็จ",
+			"memorial_lobby_camera_unsupported": "ใช้กล้องกับล็อบบี้ความทรงจำนี้ไม่ได้",
+			"memorial_lobby_camera_failed": "บันทึกกล้องไม่สำเร็จ",
 			"thumbnail_apply_failed": "ใช้ภาพย่อไม่สำเร็จ",
 			"student_hall_last_portrait": "ต้องเหลือภาพตัวละครอย่างน้อยหนึ่งภาพ",
 			"native_only": "ใช้งานได้ในแอปเดสก์ท็อป"
@@ -843,18 +843,18 @@
 			"changes": "การเปลี่ยนแปลง:",
 			"autoUpdate": "อัปเดตอัตโนมัติได้:",
 			"remapUpdate": "จัดพื้นผิวของ Mod ใหม่ตามไฟล์ .atlas ปัจจุบัน",
-			"graft": "คงไฟล์ .skel ของ Mod และเพิ่มสีหน้าใหม่ของต้นฉบับ",
-			"graftOldRig": "ใช้ไฟล์ .skel และไฟล์ .atlas ที่ Mod ใช้ตอนวาด และเพิ่มสีหน้าใหม่ของต้นฉบับ",
-			"graftAction": "เพิ่มสีหน้า",
+			"addExpressions": "คงไฟล์ .skel ของ Mod และเพิ่มสีหน้าใหม่ของต้นฉบับ",
+			"addExpressionsOldRig": "ใช้ไฟล์ .skel และไฟล์ .atlas ที่ Mod ใช้ตอนวาด และเพิ่มสีหน้าใหม่ของต้นฉบับ",
+			"addExpressionsAction": "เพิ่มสีหน้า",
 			"converterAction": "เพิ่มด้วยเครื่องมือแปลง",
 			"converterTitle": "ดาวน์โหลด SpineSkeletonDataConverter",
 			"converterLicence": "เครื่องมือของบุคคลที่สาม, PolyForm Noncommercial 1.0.0, ใช้เพื่อการไม่แสวงหากำไรเท่านั้น",
 			"converterMac": "เวอร์ชัน macOS ต้องคอมไพล์เอง",
 			"converterDownload": "ดาวน์โหลด",
 			"converterPage": "หน้าโปรเจกต์",
-			"graftAnimations": "คงไฟล์ .skel ของ Mod และเพิ่มแอนิเมชันใหม่ของต้นฉบับ",
-			"graftAnimationsAction": "เพิ่มแอนิเมชัน",
-			"graftRefused": "{name}, แอนิเมชันที่เพิ่มไม่ได้: {names}",
+			"addAnimations": "คงไฟล์ .skel ของ Mod และเพิ่มแอนิเมชันใหม่ของต้นฉบับ",
+			"addAnimationsAction": "เพิ่มแอนิเมชัน",
+			"addAnimationsRefused": "{name}, แอนิเมชันที่เพิ่มไม่ได้: {names}",
 			"refusedAnimation": "{name} ({why})",
 			"why": {
 				"bone": "ไม่มีกระดูก {name}",
@@ -893,23 +893,23 @@
 			"zoomOut": "ย่อ",
 			"marks": "ทำเครื่องหมายส่วนที่เปลี่ยน",
 			"oldRig": "ใช้ไฟล์ .skel และไฟล์ .atlas เดิม: {names}",
-			"grafted": "สีหน้าที่เพิ่ม: {n}",
-			"graftCorrected": "แก้ไขอัตโนมัติ: {n}",
-			"graftUnfixed": "ต้องซ่อมด้วยตนเอง: {n}",
-			"graftRefused": "แอนิเมชันที่ไม่ได้เพิ่ม: {n}",
-			"graftGrown": "ขยายพื้นผิว {n} px",
-			"graftUnanchored": "สีหน้าใหม่อยู่ในตำแหน่งต้นฉบับ",
+			"addedExpressions": "สีหน้าที่เพิ่ม: {n}",
+			"addAnimationsCorrected": "แก้ไขอัตโนมัติ: {n}",
+			"addAnimationsUnfixed": "ต้องซ่อมด้วยตนเอง: {n}",
+			"addAnimationsRefused": "แอนิเมชันที่ไม่ได้เพิ่ม: {n}",
+			"addAnimationsGrown": "ขยายพื้นผิว {n} px",
+			"addExpressionsUnanchored": "สีหน้าใหม่อยู่ในตำแหน่งต้นฉบับ",
 			"expression": "สีหน้า {name} ({n}/{total})",
 			"previousExpression": "สีหน้าก่อนหน้า",
 			"nextExpression": "สีหน้าถัดไป",
-			"graftDone": "เพิ่มสีหน้าแล้ว",
-			"graftPartial": "เพิ่มสีหน้าแล้ว บางส่วนต้องตรวจสอบ",
-			"graftedAnimations": "แอนิเมชันที่เพิ่ม: {n}",
+			"addExpressionsDone": "เพิ่มสีหน้าแล้ว",
+			"addExpressionsPartial": "เพิ่มสีหน้าแล้ว บางส่วนต้องตรวจสอบ",
+			"addedAnimations": "แอนิเมชันที่เพิ่ม: {n}",
 			"animation": "แอนิเมชัน {name} ({n}/{total})",
 			"previousAnimation": "แอนิเมชันก่อนหน้า",
 			"nextAnimation": "แอนิเมชันถัดไป",
-			"graftAnimationsDone": "เพิ่มแอนิเมชันแล้ว",
-			"graftAnimationsPartial": "เพิ่มแอนิเมชันแล้ว บางส่วนไม่ได้เพิ่ม"
+			"addAnimationsDone": "เพิ่มแอนิเมชันแล้ว",
+			"addAnimationsPartial": "เพิ่มแอนิเมชันแล้ว บางส่วนไม่ได้เพิ่ม"
 		},
 		"spine": {
 			"license": {
@@ -1055,9 +1055,9 @@
 				"add": "เพิ่มในคลัง Mod",
 				"apply": "ใช้ Mod",
 				"export": "ส่งออกไฟล์",
-				"readModel": "อ่านโมเดล",
+				"readChibi": "อ่านโมเดล",
 				"fitCostume": "ปรับชุด",
-				"buildModel": "สร้างโมเดล",
+				"buildChibi": "สร้างโมเดล",
 				"write": "เขียนไฟล์เกม",
 				"restore": "คืนค่าไฟล์ทางการ"
 			},
@@ -1127,7 +1127,7 @@
 			"success": "ส่งออกสำเร็จ เปิดโฟลเดอร์หรือไม่?",
 			"openFolder": "เปิดโฟลเดอร์"
 		},
-		"hall": {
+		"studentHall": {
 			"title": "ล็อบบี้นักเรียน",
 			"portraits": "ภาพตัวละคร",
 			"memorial": "ล็อบบี้ความทรงจำ",
@@ -1181,12 +1181,12 @@
 			"layerBack": "ย้ายไปชั้นล่างสุด",
 			"flipHorizontal": "พลิกแนวนอน"
 		},
-		"photo": {
+		"thumbnail": {
 			"open": "ถ่ายภาพย่อ",
 			"title": "ถ่ายภาพย่อ",
 			"back": "กลับ",
 			"portrait": "ภาพตัวละคร",
-			"lobby": "เมโมเรียลล็อบบี้",
+			"memorialLobby": "เมโมเรียลล็อบบี้",
 			"gridOn": "ซ่อนตาราง",
 			"gridOff": "แสดงตาราง",
 			"capture": "ถ่ายภาพ",
@@ -1210,7 +1210,7 @@
 			"captureFailed": "ถ่ายภาพไม่สำเร็จ",
 			"noAssets": "ไม่มีทรัพยากรที่ใช้ได้",
 			"natural": "ปกติ",
-			"photoLabel": "ภาพย่อ",
+			"thumbnailLabel": "ภาพย่อ",
 			"next": "ถัดไป",
 			"previous": "ก่อนหน้า",
 			"applied": "ใช้งานแล้ว",
@@ -1238,7 +1238,7 @@
 					"title": "ภาพย่อนักเรียน",
 					"body": "ถ่ายภาพย่อได้จากรายละเอียดนักเรียนแบบเต็มจอ"
 				},
-				"hall-viewing-zoom": {
+				"student-hall-viewing-zoom": {
 					"title": "ขยายล็อบบี้นักเรียน",
 					"body": "หมุนล้อหรือจีบนิ้วเพื่อขยายฉากภาพยืน แล้วเลื่อนดู"
 				}

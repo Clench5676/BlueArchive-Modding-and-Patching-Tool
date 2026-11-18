@@ -18,13 +18,16 @@ const flush = async () => {
   for (let i = 0; i < 30; i++) await Promise.resolve();
 };
 
-function harness(initial = "roster") {
+function harness(initial = "student-list") {
   const student = deferred(),
     preview = deferred(),
     rows = deferred(),
-    rosterData = deferred();
+    studentListData = deferred();
   const screens = Object.fromEntries(
-    ["hall", "detail", "roster", "import"].map((key) => [`screen-${key}`, { hidden: key !== initial, style: {} }]),
+    ["student-hall", "detail", "student-list", "import"].map((key) => [
+      `screen-${key}`,
+      { hidden: key !== initial, style: {} },
+    ]),
   );
   const details = [],
     events = [],
@@ -34,8 +37,8 @@ function harness(initial = "roster") {
     generation = 0,
     detailOpen = initial === "detail";
   let leave = () => true,
-    hallHides = 0,
-    hallSettles = 0,
+    studentHallHides = 0,
+    studentHallSettles = 0,
     quitResult = "cancel";
   const env = {
     ROOT_ROUTE,
@@ -43,13 +46,13 @@ function harness(initial = "roster") {
     StudentHall: {
       canLeave: () => leave(),
       settleView: async () => {
-        hallSettles++;
+        studentHallSettles++;
       },
       hide() {
-        hallHides++;
+        studentHallHides++;
       },
       show: async () => {
-        events.push("build-hall");
+        events.push("build-student-hall");
         await rows.promise;
       },
     },
@@ -67,9 +70,9 @@ function harness(initial = "roster") {
       },
     },
     ctx: {},
-    rosterData: null,
+    studentListData: null,
     stepCards: null,
-    roster: () => rosterData.promise,
+    studentList: () => studentListData.promise,
     BatchImport: {
       hide() {},
       show: async () => {
@@ -122,12 +125,12 @@ function harness(initial = "roster") {
       stepFailed() {},
       currentAlt: () => (detailOpen ? "ibuki" : null),
     },
-    Roster: {
+    StudentList: {
       invalidate() {},
-      hide: () => events.push("hide-roster"),
+      hide: () => events.push("hide-student-list"),
       order: () => [],
       show: async () => {
-        events.push("build-roster");
+        events.push("build-student-list");
         await rows.promise;
       },
     },
@@ -144,7 +147,7 @@ function harness(initial = "roster") {
     student,
     preview,
     rows,
-    rosterData,
+    studentListData,
     details,
     events,
     timeouts,
@@ -158,47 +161,47 @@ function harness(initial = "roster") {
     setQuit(value) {
       quitResult = value;
     },
-    hallHides: () => hallHides,
-    hallSettles: () => hallSettles,
+    studentHallHides: () => studentHallHides,
+    studentHallSettles: () => studentHallSettles,
   };
 }
 
 test("the empty launch route opens Student Hall before exposing its controls", async () => {
-  const h = harness("hall");
+  const h = harness("student-hall");
   h.location.hash = "";
   const opening = h.route();
   await flush();
   assert.equal(h.covered(), true);
-  assert.ok(h.events.includes("build-hall"));
+  assert.ok(h.events.includes("build-student-hall"));
   h.rows.resolve();
   await opening;
-  assert.equal(h.screens["screen-hall"].hidden, false);
+  assert.equal(h.screens["screen-student-hall"].hidden, false);
   assert.equal(h.navigation.current(), ROOT_ROUTE);
 });
 
-test("entering Student Hall releases the detail renderer before loading the hall scene", async () => {
+test("entering Student Hall releases the detail renderer before loading the Student Hall scene", async () => {
   const h = harness("detail");
   h.location.hash = ROOT_ROUTE;
   const opening = h.route();
   await flush();
-  assert.ok(h.events.indexOf("hide-detail") < h.events.indexOf("build-hall"));
+  assert.ok(h.events.indexOf("hide-detail") < h.events.indexOf("build-student-hall"));
   h.rows.resolve();
   await opening;
   assert.equal(
     h.events.filter((event) => event === "hide-detail").length,
     1,
-    "a second detail teardown would dispose the new hall memorial renderer",
+    "a second detail teardown would dispose the new Student Hall memorial renderer",
   );
-  assert.equal(h.events.at(-1), "hall");
+  assert.equal(h.events.at(-1), "student-hall");
 });
 
 test("Back returns from an imported student's detail to the same import page", async () => {
-  const h = harness("hall");
+  const h = harness("student-hall");
   h.location.hash = "#/import";
-  h.rosterData.resolve({ students: [] });
+  h.studentListData.resolve({ students: [] });
   h.rows.resolve();
   await h.route();
-  h.location.hash = "#/student/ibuki/ibuki/lobby";
+  h.location.hash = "#/student/ibuki/ibuki/memorialLobby";
   h.student.resolve({ key: "ibuki" });
   h.preview.resolve();
   await h.route();
@@ -210,14 +213,14 @@ test("Back returns from an imported student's detail to the same import page", a
   assert.equal(h.location.hash, ROOT_ROUTE);
 });
 
-test("a canceled hall draft exit restores the address without hiding or rebuilding the scene", async () => {
-  const h = harness("hall"),
+test("a canceled Student Hall draft exit restores the address without hiding or rebuilding the scene", async () => {
+  const h = harness("student-hall"),
     gate = deferred();
   h.location.hash = "#/import";
   h.setLeave(() => gate.promise);
   const leaving = h.route();
   await flush();
-  assert.equal(h.hallHides(), 0);
+  assert.equal(h.studentHallHides(), 0);
   assert.equal(h.covered(), false);
   gate.resolve(false);
   await leaving;
@@ -226,44 +229,44 @@ test("a canceled hall draft exit restores the address without hiding or rebuildi
   assert.deepEqual(h.navigation.entries(), [ROOT_ROUTE]);
 });
 
-test("an accepted hall draft exit only releases the hall after the decision", async () => {
-  const h = harness("hall"),
+test("an accepted Student Hall draft exit only releases the Student Hall after the decision", async () => {
+  const h = harness("student-hall"),
     gate = deferred();
   h.location.hash = "#/import";
   h.setLeave(() => gate.promise);
-  h.rosterData.resolve({ students: [] });
+  h.studentListData.resolve({ students: [] });
   h.rows.resolve();
   const leaving = h.route();
   await flush();
-  assert.equal(h.hallHides(), 0);
+  assert.equal(h.studentHallHides(), 0);
   gate.resolve(true);
   await leaving;
-  assert.equal(h.hallHides(), 1);
+  assert.equal(h.studentHallHides(), 1);
   assert.equal(h.screens["screen-import"].hidden, false);
 });
 
-test("a stale hall-exit rejection cannot overwrite a later accepted destination", async () => {
-  const h = harness("hall"),
+test("a stale student-hall-exit rejection cannot overwrite a later accepted destination", async () => {
+  const h = harness("student-hall"),
     first = deferred(),
     second = deferred();
   const gates = [first, second];
   h.setLeave(() => gates.shift().promise);
   h.location.hash = "#/import";
   const older = h.route();
-  h.location.hash = "#/roster";
+  h.location.hash = "#/student-list";
   const newer = h.route();
-  h.rosterData.resolve({ students: [] });
+  h.studentListData.resolve({ students: [] });
   h.rows.resolve();
   second.resolve(true);
   await newer;
   first.resolve(false);
   await older;
-  assert.equal(h.location.hash, "#/roster");
-  assert.equal(h.screens["screen-roster"].hidden, false);
+  assert.equal(h.location.hash, "#/student-list");
+  assert.equal(h.screens["screen-student-list"].hidden, false);
 });
 
-test("an older hall render cannot commit while a later exit decision is pending", async () => {
-  const h = harness("hall"),
+test("an older Student Hall render cannot commit while a later exit decision is pending", async () => {
+  const h = harness("student-hall"),
     decision = deferred();
   h.location.hash = ROOT_ROUTE;
   const older = h.route();
@@ -274,36 +277,36 @@ test("an older hall render cannot commit while a later exit decision is pending"
   await flush();
   h.rows.resolve();
   await older;
-  assert.ok(!h.events.includes("hall"), "the obsolete renderer cannot reveal or commit a route");
+  assert.ok(!h.events.includes("student-hall"), "the obsolete renderer cannot reveal or commit a route");
   decision.resolve(false);
   await newer;
   assert.equal(h.location.hash, ROOT_ROUTE);
-  assert.equal(h.screens["screen-hall"].hidden, false);
-  assert.equal(h.screens["screen-hall"].style.visibility, "");
+  assert.equal(h.screens["screen-student-hall"].hidden, false);
+  assert.equal(h.screens["screen-student-hall"].style.visibility, "");
   assert.deepEqual(h.navigation.entries(), [ROOT_ROUTE]);
 });
 
 test("a stale Home permission cannot execute after a newer route wins", async () => {
-  const h = harness("hall"),
+  const h = harness("student-hall"),
     first = deferred();
   h.location.hash = ROOT_ROUTE;
   h.setLeave(() => first.promise);
   const home = h.goHome();
   h.setLeave(() => true);
-  h.location.hash = "#/roster";
+  h.location.hash = "#/student-list";
   h.rows.resolve();
-  h.rosterData.resolve({ students: [] });
+  h.studentListData.resolve({ students: [] });
   await h.route();
   first.resolve(true);
   await home;
-  assert.equal(h.location.hash, "#/roster");
-  assert.equal(h.navigation.current(), "#/roster");
+  assert.equal(h.location.hash, "#/student-list");
+  assert.equal(h.navigation.current(), "#/student-list");
 });
 
-test("Home reaches the hall and resets history after its scene commits", async () => {
-  const h = harness("hall");
+test("Home reaches the Student Hall and resets history after its scene commits", async () => {
+  const h = harness("student-hall");
   h.location.hash = "#/import";
-  h.rosterData.resolve({ students: [] });
+  h.studentListData.resolve({ students: [] });
   h.rows.resolve();
   await h.route();
   h.location.hash = "#/student/ibuki/ibuki";
@@ -314,11 +317,11 @@ test("Home reaches the hall and resets history after its scene commits", async (
   await h.route();
   assert.equal(h.location.hash, ROOT_ROUTE);
   assert.deepEqual(h.navigation.entries(), [ROOT_ROUTE]);
-  assert.equal(h.screens["screen-hall"].hidden, false);
+  assert.equal(h.screens["screen-student-hall"].hidden, false);
 });
 
-test("canceled Back and Home leave a dirty hall's return stack intact", async () => {
-  const h = harness("hall");
+test("canceled Back and Home leave a dirty Student Hall's return stack intact", async () => {
+  const h = harness("student-hall");
   h.location.hash = ROOT_ROUTE;
   h.navigation.commit("#/import");
   h.navigation.commit(ROOT_ROUTE);
@@ -327,35 +330,35 @@ test("canceled Back and Home leave a dirty hall's return stack intact", async ()
   await h.goHome();
   assert.equal(h.location.hash, ROOT_ROUTE);
   assert.deepEqual(h.navigation.entries(), [ROOT_ROUTE, "#/import", ROOT_ROUTE]);
-  assert.equal(h.hallHides(), 0);
+  assert.equal(h.studentHallHides(), 0);
 });
 
-test("Home already in the hall settles accepted draft visuals without reopening the route", async () => {
-  const h = harness("hall");
+test("Home already in the Student Hall settles accepted draft visuals without reopening the route", async () => {
+  const h = harness("student-hall");
   h.location.hash = ROOT_ROUTE;
   await h.goHome();
-  assert.equal(h.hallSettles(), 1);
-  assert.ok(!h.events.includes("build-hall"));
-  assert.equal(h.hallHides(), 0);
+  assert.equal(h.studentHallSettles(), 1);
+  assert.ok(!h.events.includes("build-student-hall"));
+  assert.equal(h.studentHallHides(), 0);
 });
 
-test("canceling quit restores the hall after an accepted draft exit", async () => {
-  const h = harness("hall");
+test("canceling quit restores the Student Hall after an accepted draft exit", async () => {
+  const h = harness("student-hall");
   h.location.hash = ROOT_ROUTE;
   await h.goBack();
-  assert.equal(h.hallSettles(), 1);
+  assert.equal(h.studentHallSettles(), 1);
   h.setQuit("quit");
   await h.goBack();
-  assert.equal(h.hallSettles(), 1, "no new scene is started after quitting");
+  assert.equal(h.studentHallSettles(), 1, "no new scene is started after quitting");
 });
 
-for (const initial of ["roster", "detail"])
+for (const initial of ["student-list", "detail"])
   test(`${initial} to student stays covered through the preview's first frame`, async () => {
     const h = harness(initial);
     const route = h.route();
     await flush();
     assert.equal(h.covered(), true);
-    assert.ok(h.events.includes("hide-roster"), "abandon list thumbnails before the detail work starts");
+    assert.ok(h.events.includes("hide-student-list"), "abandon list thumbnails before the detail work starts");
     assert.equal(h.details.length, 0, "the student has not arrived");
     h.student.resolve({ key: "ibuki" });
     await flush();
@@ -368,9 +371,9 @@ for (const initial of ["roster", "detail"])
 
 for (const [kind, tab] of [
   ["portrait", "portrait"],
-  ["memorialLobby", "lobby"],
-  ["chibi", "model"],
-  ["lobby", "lobby"],
+  ["memorialLobby", "memorialLobby"],
+  ["chibi", "chibi"],
+  ["memorialLobby", "memorialLobby"],
 ])
   test(`imported ${kind} navigation requests its ${tab} detail tab`, async () => {
     const h = harness("import");
@@ -384,20 +387,20 @@ for (const [kind, tab] of [
     assert.deepEqual(h.details, [{ inPlace: false, kind: tab }]);
   });
 
-test("Back covers detail teardown and reveals the roster only after its rows finish", async () => {
+test("Back covers detail teardown and reveals the student list only after its rows finish", async () => {
   const h = harness("detail");
-  h.location.hash = "#/roster";
+  h.location.hash = "#/student-list";
   const route = h.route();
   await flush();
   assert.equal(h.covered(), true);
-  assert.deepEqual(h.events, ["suspend-detail"], "release the detail before a potentially blocked roster RPC");
-  h.rosterData.resolve({ students: [] });
+  assert.deepEqual(h.events, ["suspend-detail"], "release the detail before a potentially blocked student list RPC");
+  h.studentListData.resolve({ students: [] });
   await flush();
   assert.equal(h.covered(), true);
-  assert.equal(h.screens["screen-roster"].hidden, true);
+  assert.equal(h.screens["screen-student-list"].hidden, true);
   h.rows.resolve();
   await route;
-  assert.equal(h.screens["screen-roster"].hidden, false);
+  assert.equal(h.screens["screen-student-list"].hidden, false);
   assert.equal(h.covered(), false);
 });
 
@@ -423,7 +426,7 @@ test("Back takes over a pending student RPC without a late student reveal", asyn
   const h = harness();
   const student = h.route();
   await flush();
-  h.location.hash = "#/roster";
+  h.location.hash = "#/student-list";
   const back = h.route();
   await flush();
   await student;
@@ -431,10 +434,10 @@ test("Back takes over a pending student RPC without a late student reveal", asyn
   h.student.resolve({ key: "ibuki" });
   await flush();
   assert.equal(h.details.length, 0);
-  h.rosterData.resolve({ students: [] });
+  h.studentListData.resolve({ students: [] });
   h.rows.resolve();
   await back;
-  assert.equal(h.screens["screen-roster"].hidden, false);
+  assert.equal(h.screens["screen-student-list"].hidden, false);
   assert.equal(h.covered(), false);
 });
 
@@ -445,7 +448,7 @@ test("Batch Import releases detail previews and stays covered until its screen i
   await flush();
   assert.equal(h.covered(), true);
   assert.ok(h.events.includes("suspend-detail"));
-  h.rosterData.resolve({ students: [] });
+  h.studentListData.resolve({ students: [] });
   await flush();
   assert.ok(h.events.includes("build-import"));
   assert.equal(h.screens["screen-import"].hidden, true);
@@ -462,7 +465,7 @@ test("a failed import returns to the last student route and rebuilds its release
   h.preview.resolve();
   await h.route();
   h.location.hash = "#/import";
-  h.rosterData.resolve({ students: [] });
+  h.studentListData.resolve({ students: [] });
   const importing = h.route();
   await flush();
   assert.ok(h.events.includes("suspend-detail"));
@@ -479,7 +482,7 @@ test("a failed import returns to the last student route and rebuilds its release
 test("a late import failure cannot redirect a newer student navigation", async (t) => {
   t.mock.method(console, "error", () => {});
   const h = harness("detail");
-  h.rosterData.resolve({ students: [] });
+  h.studentListData.resolve({ students: [] });
   h.location.hash = "#/import";
   const importing = h.route();
   await flush();
@@ -660,29 +663,29 @@ for (const options of [{ compiled: false }, { startupUpdate: false }])
     assert.ok(!h.events.includes("update-check"));
   });
 
-test("roster remains visible while detail builds and only a completed detail is swapped in", async () => {
-  const h = harness("roster");
+test("studentList remains visible while detail builds and only a completed detail is swapped in", async () => {
+  const h = harness("student-list");
   const route = h.route();
   await flush();
   h.student.resolve({ key: "ibuki" });
   await flush();
-  assert.equal(h.screens["screen-roster"].hidden, false);
+  assert.equal(h.screens["screen-student-list"].hidden, false);
   assert.equal(h.screens["screen-detail"].style?.visibility, "hidden");
   assert.ok(!h.events.includes("detail"), "no visible showScreen before the first-frame barrier");
   h.preview.resolve();
   await route;
-  assert.equal(h.screens["screen-roster"].hidden, true);
+  assert.equal(h.screens["screen-student-list"].hidden, true);
   assert.equal(h.screens["screen-detail"].hidden, false);
   assert.equal(h.screens["screen-detail"].style.visibility, "");
 });
 
 test("cancelling a hidden detail build clears its staging state and prevents a late reveal", async () => {
-  const h = harness("roster");
+  const h = harness("student-list");
   const student = h.route();
   h.student.resolve({ key: "ibuki" });
   await flush();
   assert.equal(h.screens["screen-detail"].style.visibility, "hidden");
-  h.location.hash = "#/roster";
+  h.location.hash = "#/student-list";
   const back = h.route();
   await flush();
   await student;
@@ -690,10 +693,10 @@ test("cancelling a hidden detail build clears its staging state and prevents a l
   assert.equal(h.screens["screen-detail"].style.visibility, "");
   assert.equal(h.screens["screen-detail"].inert, false);
   h.preview.resolve();
-  h.rosterData.resolve({ students: [] });
+  h.studentListData.resolve({ students: [] });
   h.rows.resolve();
   await back;
-  assert.equal(h.screens["screen-roster"].hidden, false);
+  assert.equal(h.screens["screen-student-list"].hidden, false);
   assert.equal(h.screens["screen-detail"].hidden, true);
 });
 

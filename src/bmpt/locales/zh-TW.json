@@ -37,8 +37,8 @@
 		"info": {
 			"title": {
 				"portrait": "立繪資訊",
-				"lobby": "紀念大廳資訊",
-				"model": "3D 模型資訊"
+				"memorialLobby": "紀念大廳資訊",
+				"chibi": "3D 模型資訊"
 			},
 			"details": "詳情",
 			"current": "目前",
@@ -49,30 +49,30 @@
 		"row": {
 			"box": {
 				"portrait": "立繪",
-				"lobby": "紀念大廳",
-				"model": "3D 模型"
+				"memorialLobby": "紀念大廳",
+				"chibi": "3D 模型"
 			},
 			"switch": {
 				"portrait": "切換立繪",
-				"lobby": "切換紀念大廳",
-				"model": "切換 3D 模型"
+				"memorialLobby": "切換紀念大廳",
+				"chibi": "切換 3D 模型"
 			},
 			"add": {
 				"portrait": "新增立繪",
-				"lobby": "新增紀念大廳",
-				"model": "新增 3D 模型"
+				"memorialLobby": "新增紀念大廳",
+				"chibi": "新增 3D 模型"
 			},
 			"four": {
 				"portrait": "差分",
-				"lobby": "對話",
-				"model": "動作"
+				"memorialLobby": "對話",
+				"chibi": "動作"
 			}
 		},
 		"detail": {
 			"copyFailed": "複製名稱失敗。",
 			"failed": "預覽無法使用"
 		},
-		"lobby": {
+		"memorialLobby": {
 			"original": "原版",
 			"fullscreen": "全螢幕",
 			"playAll": "播放全部對話",
@@ -84,7 +84,7 @@
 			"cameraAlbum": "相簿",
 			"cameraName": "鏡頭 {n}"
 		},
-		"model": {
+		"chibi": {
 			"original": "原版",
 			"has": "有",
 			"none": "無",
@@ -185,7 +185,7 @@
 			"classic": "{label} - 經典介面",
 			"import": "匯入Mod"
 		},
-		"roster": {
+		"studentList": {
 			"title": "學生清單",
 			"merge": "合併換皮",
 			"search": "搜尋",
@@ -224,9 +224,9 @@
 			}
 		},
 		"band": {
-			"modCounts": "立繪：{portraits}、紀念大廳：{lobbies}",
+			"modCounts": "立繪：{portraits}、紀念大廳：{memorialLobbies}",
 			"portrait": "立繪",
-			"lobby": "大廳",
+			"memorialLobby": "大廳",
 			"replaced": "已替換"
 		},
 		"bar": {
@@ -234,8 +234,8 @@
 		},
 		"tab": {
 			"portrait": "立繪",
-			"lobby": "紀念大廳",
-			"model": "3D 模型"
+			"memorialLobby": "紀念大廳",
+			"chibi": "3D 模型"
 		},
 		"status": {
 			"original": "遊戲原版",
@@ -621,8 +621,8 @@
 			"thumbnail_in_use": "縮圖使用中",
 			"thumbnail_library_invalid": "無法讀取縮圖庫",
 			"thumbnail_target_unavailable": "學生名單縮圖資源無法使用",
-			"lobby_camera_unsupported": "此紀念大廳無法使用鏡頭",
-			"lobby_camera_failed": "鏡頭儲存失敗",
+			"memorial_lobby_camera_unsupported": "此紀念大廳無法使用鏡頭",
+			"memorial_lobby_camera_failed": "鏡頭儲存失敗",
 			"thumbnail_apply_failed": "縮圖套用失敗",
 			"student_hall_last_portrait": "至少保留一個立繪",
 			"native_only": "請在桌面應用程式中使用"
@@ -843,18 +843,18 @@
 			"changes": "變動：",
 			"autoUpdate": "可自動更新：",
 			"remapUpdate": "依目前 .atlas 檔案重新排列 Mod 貼圖",
-			"graft": "保留 Mod 的 .skel 檔案，補上原版新增差分",
-			"graftOldRig": "沿用 Mod 繪製時的 .skel 檔案與 .atlas 檔案，補上原版新增差分",
-			"graftAction": "補上新差分",
+			"addExpressions": "保留 Mod 的 .skel 檔案，補上原版新增差分",
+			"addExpressionsOldRig": "沿用 Mod 繪製時的 .skel 檔案與 .atlas 檔案，補上原版新增差分",
+			"addExpressionsAction": "補上新差分",
 			"converterAction": "用轉換工具補上",
 			"converterTitle": "下載 SpineSkeletonDataConverter",
 			"converterLicence": "第三方工具，授權 PolyForm Noncommercial 1.0.0，僅限非商業用途",
 			"converterMac": "需自行編譯 mac 版",
 			"converterDownload": "下載",
 			"converterPage": "專案頁面",
-			"graftAnimations": "保留 Mod 的 .skel 檔案，補上原版新增動畫",
-			"graftAnimationsAction": "補上新動畫",
-			"graftRefused": "{name}，無法補上的動畫：{names}",
+			"addAnimations": "保留 Mod 的 .skel 檔案，補上原版新增動畫",
+			"addAnimationsAction": "補上新動畫",
+			"addAnimationsRefused": "{name}，無法補上的動畫：{names}",
 			"refusedAnimation": "{name}（{why}）",
 			"why": {
 				"bone": "缺少骨骼 {name}",
@@ -893,23 +893,23 @@
 			"zoomOut": "縮小",
 			"marks": "標出變更",
 			"oldRig": "沿用舊 .skel 檔案與 .atlas 檔案：{names}",
-			"grafted": "新增差分：{n}",
-			"graftCorrected": "已自動校正：{n}",
-			"graftUnfixed": "需手動修復：{n}",
-			"graftRefused": "未補上的動畫：{n}",
-			"graftGrown": "貼圖加高 {n} 像素",
-			"graftUnanchored": "新差分依原版位置放置",
+			"addedExpressions": "新增差分：{n}",
+			"addAnimationsCorrected": "已自動校正：{n}",
+			"addAnimationsUnfixed": "需手動修復：{n}",
+			"addAnimationsRefused": "未補上的動畫：{n}",
+			"addAnimationsGrown": "貼圖加高 {n} 像素",
+			"addExpressionsUnanchored": "新差分依原版位置放置",
 			"expression": "差分 {name}（{n}/{total}）",
 			"previousExpression": "上一個差分",
 			"nextExpression": "下一個差分",
-			"graftDone": "已補上新差分",
-			"graftPartial": "已補上新差分，部分需核對",
-			"graftedAnimations": "新增動畫：{n}",
+			"addExpressionsDone": "已補上新差分",
+			"addExpressionsPartial": "已補上新差分，部分需核對",
+			"addedAnimations": "新增動畫：{n}",
 			"animation": "動畫 {name}（{n}/{total}）",
 			"previousAnimation": "上一個動畫",
 			"nextAnimation": "下一個動畫",
-			"graftAnimationsDone": "已補上新動畫",
-			"graftAnimationsPartial": "已補上新動畫，部分未補上"
+			"addAnimationsDone": "已補上新動畫",
+			"addAnimationsPartial": "已補上新動畫，部分未補上"
 		},
 		"spine": {
 			"license": {
@@ -1055,9 +1055,9 @@
 				"add": "加入 Mod 倉庫",
 				"apply": "套用 Mod",
 				"export": "匯出檔案",
-				"readModel": "讀取模型",
+				"readChibi": "讀取模型",
 				"fitCostume": "適配服裝",
-				"buildModel": "生成模型",
+				"buildChibi": "生成模型",
 				"write": "寫入遊戲檔案",
 				"restore": "還原官方檔案"
 			},
@@ -1127,7 +1127,7 @@
 			"success": "匯出成功。開啟資料夾？",
 			"openFolder": "開啟資料夾"
 		},
-		"hall": {
+		"studentHall": {
 			"title": "學生大廳",
 			"portraits": "立繪",
 			"memorial": "紀念大廳",
@@ -1181,12 +1181,12 @@
 			"layerBack": "移至最下層",
 			"flipHorizontal": "水平翻轉"
 		},
-		"photo": {
+		"thumbnail": {
 			"open": "拍攝縮圖",
 			"title": "縮圖攝影",
 			"back": "返回",
 			"portrait": "立繪",
-			"lobby": "回憶大廳",
+			"memorialLobby": "回憶大廳",
 			"gridOn": "隱藏九宮格",
 			"gridOff": "顯示九宮格",
 			"capture": "拍攝",
@@ -1210,7 +1210,7 @@
 			"captureFailed": "拍攝失敗",
 			"noAssets": "暫無可用資源",
 			"natural": "自然",
-			"photoLabel": "縮圖",
+			"thumbnailLabel": "縮圖",
 			"next": "下一頁",
 			"previous": "上一頁",
 			"applied": "已套用",
@@ -1238,7 +1238,7 @@
 					"title": "學生大頭照",
 					"body": "學生詳情全螢幕後增加大頭照拍攝功能"
 				},
-				"hall-viewing-zoom": {
+				"student-hall-viewing-zoom": {
 					"title": "縮放學生大廳",
 					"body": "滾輪、捏合放大立繪場景，平移查看"
 				}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdPopupCaptures } from "../../src/bmpt/web/js/core/capture-priority.js";
-import { createModelStills, modelStillKey, modelStillVersion } from "../../src/bmpt/web/js/model/model-still.js";
+import { createChibiStills, chibiStillKey, chibiStillVersion } from "../../src/bmpt/web/js/chibi/chibi-still.js";
 const turn = () => new Promise(setImmediate);
 const fixture = (capture = async (url) => `blob:${url}`) => {
   const loads = [],
@@ -9,7 +9,7 @@ const fixture = (capture = async (url) => `blob:${url}`) => {
     reports = [];
   let contexts = 0,
     maxContexts = 0;
-  const thumb = createModelStills({
+  const thumb = createChibiStills({
     report: (...args) => reports.push(args),
     renderer: async () => ({
       createStillView() {
@@ -33,7 +33,7 @@ const fixture = (capture = async (url) => `blob:${url}`) => {
   return { thumb, loads, disposed, reports, maxContexts: () => maxContexts };
 };
 
-test("card, info panel and detail switch share a render; original, Mods, models and versions never share entries", async () => {
+test("card, info panel and detail switch share a render; original, Mods, chibis and versions never share entries", async () => {
   const f = fixture(),
     options = { version: "install-a" };
   const a = f.thumb("hina", "official", options),
@@ -50,17 +50,17 @@ test("card, info panel and detail switch share a render; original, Mods, models 
   assert.equal(f.loads.length, 5);
   assert.equal(f.disposed.length, 5);
   assert.equal(f.maxContexts(), 1);
-  assert.notEqual(modelStillKey("hina", "official", "a"), modelStillKey("hina", "mod:official", "a"));
+  assert.notEqual(chibiStillKey("hina", "official", "a"), chibiStillKey("hina", "mod:official", "a"));
 });
 
-test("cache revisions include installation, model parts, Mod updates and explicit invalidation", () => {
+test("cache revisions include installation, chibi parts, Mod updates and explicit invalidation", () => {
   const alt = {
-    model: "hina",
+    chibi: "hina",
     chibiFiles: [{ path: "/game-a/hina", crc: 1 }],
     modList: [{ id: "m", resourceType: "chibi", files: [{ hash: "old" }] }],
   };
   const student = { version: "a", alts: [alt] };
-  const key = () => modelStillVersion(student, alt);
+  const key = () => chibiStillVersion(student, alt);
   const a = key();
   Object.assign(alt.modList[0], { fresh: false, alias: "Owner label", label: "Original label" });
   assert.equal(key(), a, "display metadata cannot invalidate source bytes");
@@ -72,7 +72,7 @@ test("cache revisions include installation, model parts, Mod updates and explici
   const c = key();
   alt.modList[0].files[0].hash = "new";
   assert.notEqual(key(), c);
-  assert.notEqual(key(), modelStillVersion(student, alt, 1));
+  assert.notEqual(key(), chibiStillVersion(student, alt, 1));
 });
 
 for (const error of [new Error("shader compilation failed"), null])
@@ -90,7 +90,7 @@ for (const error of [new Error("shader compilation failed"), null])
     assert.ok(request.failure());
     assert.equal(f.reports.length, 1);
     assert.match(f.reports[0][1], /pajamas.glb\?source=mod%3Aown/);
-    assert.equal(f.reports[0][2], "thumbnail:model");
+    assert.equal(f.reports[0][2], "thumbnail:chibi");
     assert.equal(f.disposed.length, 1);
     failed = false;
     assert.equal(await f.thumb("pajamas", "mod:own"), "blob:recovered");
@@ -207,7 +207,7 @@ test("timeouts have three retries with increasing backoff; every attempt is repo
   }
 });
 
-test("closing a model popup during backoff cancels its retry", async (t) => {
+test("closing a chibi popup during backoff cancels its retry", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const f = fixture(() => new Promise(() => {})),
     scope = new AbortController();
@@ -228,7 +228,7 @@ test("closing a model popup during backoff cancels its retry", async (t) => {
 
 test("cancellation during lazy import never allocates a late WebGL context", async () => {
   let finish;
-  const thumb = createModelStills({
+  const thumb = createChibiStills({
     renderer: () =>
       new Promise((resolve) => {
         finish = resolve;
@@ -243,7 +243,7 @@ test("cancellation during lazy import never allocates a late WebGL context", asy
   await turn();
 });
 
-test("model popups preempt background captures, hold priority while open and resume after close", async (t) => {
+test("chibi popups preempt background captures, hold priority while open and resume after close", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const pending = [],
     popup = new AbortController(),
@@ -281,7 +281,7 @@ test("model popups preempt background captures, hold priority while open and res
   }
 });
 
-test("a busy model queue grants each still its own timeout and starts backoff only after draining", async (t) => {
+test("a busy chibi queue grants each still its own timeout and starts backoff only after draining", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const pending = [],
     scope = new AbortController();

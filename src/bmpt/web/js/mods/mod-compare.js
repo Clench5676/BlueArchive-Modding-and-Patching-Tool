@@ -88,10 +88,10 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
     const drawings = result.drawings || {};
     const drawn = !!(drawings.original?.length || drawings.repaired?.length);
     // Both sides are looked at through one view: the wheel zooms at the pointer, a drag moves the picture, a double
-    // click goes back to where it started. A lobby starts filling its frame, a portrait whole.
+    // click goes back to where it started. A memorial lobby starts filling its frame, a portrait whole.
     const views = [],
       marked = []; // marked: per picture, where its rings go and what tells them
-    let expression = null; // the graft's expression the pictures show
+    let expression = null; // the added expression the pictures show
     let view = { ...PanZoom.REST },
       rest = view,
       framed = review.kind !== "memorialLobby",
@@ -174,7 +174,7 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
       host.addEventListener("dblclick", () => show(rest));
       return el;
     };
-    // the first picture drawn tells its proportions: a lobby then fills the frame it is in
+    // the first picture drawn tells its proportions: a memorial lobby then fills the frame it is in
     const fill = (host, picture) => {
       if (framed) return;
       framed = true;
@@ -218,7 +218,7 @@ export async function show(result, title = T("act.compare"), hostId = "popup", r
       }
     }
     part("repair-verdict", notes, T(review.verdict || (review.partial ? "remap.partial" : "remap.preview")));
-    // a graft's expressions (review.steps "animation": animations), one at a time on both pictures (a picture
+    // the added expressions (review.steps "animation": animations), one at a time on both pictures (a picture
     // without it stays in its rest pose)
     if (review.expressions?.length) {
       const row = part("repair-steps", notes),

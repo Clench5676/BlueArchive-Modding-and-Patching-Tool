@@ -1,14 +1,15 @@
-// Tests for the memorial lobby's camera framing: the views it allows (web/js/lobby/lobby-measure.js framingView:
-// centred across, no cell past the art that some pose leaves bare), what the shutter keeps (cameraParams) and where the
-// intro has its skeletons at a time (web/js/lobby/lobby-intro.js sampler). Run with Node's test runner.
+// Tests for the memorial lobby's camera framing: the views it allows (web/js/memorial-lobby/memorial-lobby-measure.js
+// framingView: centred across, no cell past the art that some pose leaves bare), what the shutter keeps (cameraParams)
+// and where the intro has its skeletons at a time (web/js/memorial-lobby/memorial-lobby-intro.js sampler). Run with
+// Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const Lobby = await import("../../src/bmpt/web/js/lobby/lobby.js");
-const Intro = await import("../../src/bmpt/web/js/lobby/lobby-intro.js");
+const MemorialLobby = await import("../../src/bmpt/web/js/memorial-lobby/memorial-lobby.js");
+const Intro = await import("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-intro.js");
 
 const G = { x: -1480, y: -832.5, w: 2960, h: 1665 };
-const C = Lobby.FRAMING_CELL;
+const C = MemorialLobby.FRAMING_CELL;
 const near = (a, b, eps = 1e-6, what = "") => assert.ok(Math.abs(a - b) <= eps, `${what} ${a} != ${b}`);
 // a grid three game views across, every cell bad except those whose centre is inside `art` (and the game's view)
 function limitsWith(art) {
@@ -22,18 +23,18 @@ function limitsWith(art) {
       const inArt = x >= art.x0 && x <= art.x1 && y >= art.y0 && y <= art.y1;
       bad[j * grid.gw + i] = inG || inArt ? 0 : 1;
     }
-  return Lobby.framingLimits(G, grid, bad);
+  return MemorialLobby.framingLimits(G, grid, bad);
 }
 
 test("art no wider than the game's view keeps the camera inside it", () => {
   const lim = limitsWith({ x0: G.x, x1: G.x + G.w, y0: G.y, y1: G.y + G.h });
   assert.ok(lim.wMax >= G.w && lim.wMax < G.w + C, `widest ${lim.wMax}`);
-  const v = Lobby.framingView({ x: -3000, y: -2000, w: 6000, h: 3375 }, lim);
+  const v = MemorialLobby.framingView({ x: -3000, y: -2000, w: 6000, h: 3375 }, lim);
   near(v.w, lim.wMax);
   near(v.x + v.w / 2, 0);
   near(v.y + v.h / 2, G.y + G.h / 2, C, "y");
   // zoomed in, the view moves up and down inside the game's view, and stays centred across
-  const z = Lobby.framingView({ x: 400, y: 300, w: G.w / 2, h: G.h / 2 }, lim);
+  const z = MemorialLobby.framingView({ x: 400, y: 300, w: G.w / 2, h: G.h / 2 }, lim);
   near(z.x, -G.w / 4);
   assert.ok(z.y + z.h <= G.y + G.h + C / 2 && z.y >= G.y - C / 2, `${z.y} ${z.h}`);
 });
@@ -44,7 +45,7 @@ test("wider art lets the camera zoom out as far as it reaches on its narrower si
   const lim = limitsWith(art);
   // centred across: half a view may reach 1480 + 200 units at most (to a cell)
   assert.ok(Math.abs(lim.wMax - 2 * (1480 + 200)) <= 2 * C, `widest ${lim.wMax}`);
-  const v = Lobby.framingView({ x: -5000, y: -3000, w: 10000, h: 5625 }, lim);
+  const v = MemorialLobby.framingView({ x: -5000, y: -3000, w: 10000, h: 5625 }, lim);
   near(v.w, lim.wMax);
   near(v.x + v.w / 2, 0);
   assert.ok(v.y >= art.y0 - C && v.y + v.h <= art.y1 + C);
@@ -55,54 +56,54 @@ test("a view that would show past the art moves to the nearest height that does 
   const lim = limitsWith(art);
   const w = G.w + 400,
     h = (w * 9) / 16;
-  const v = Lobby.framingView({ x: -w / 2, y: G.y - 200, w, h }, lim); // asked lower than the art goes
+  const v = MemorialLobby.framingView({ x: -w / 2, y: G.y - 200, w, h }, lim); // asked lower than the art goes
   near(v.w, w);
   assert.ok(v.y >= G.y - C / 2, `bottom ${v.y}`);
   assert.ok(v.y + v.h <= art.y1 + C, `top ${v.y + v.h}`);
 });
 
-test("the shutter keeps the lobby scaled about the screen centre and moved so the view fills the screen", () => {
-  near(Lobby.cameraParams(G, G).scale, 1);
+test("the shutter keeps the memorial lobby scaled about the screen centre and moved so the view fills the screen", () => {
+  near(MemorialLobby.cameraParams(G, G).scale, 1);
   assert.deepEqual(
-    Lobby.cameraParams(G, G).offset.map((v) => Math.abs(v)),
+    MemorialLobby.cameraParams(G, G).offset.map((v) => Math.abs(v)),
     [0, 0],
   );
   const w = 3552,
     h = (w * 9) / 16,
     V = { x: -w / 2, y: -h / 2 + 150, w, h };
-  const p = Lobby.cameraParams(V, G);
+  const p = MemorialLobby.cameraParams(V, G);
   near(p.scale, G.w / w);
   near(p.offset[0], 0);
   near(p.offset[1], -p.scale * 150);
-  // a point of the lobby at V's top edge lands on the screen's top edge
+  // a point of the memorial lobby at V's top edge lands on the screen's top edge
   const top = V.y + V.h;
   near(p.scale * top + p.offset[1], G.y + G.h, 1e-6, "top edge");
 });
 
-test("a camera's still shows the art the framed view showed, as its lobby does", async () => {
-  const { lobbyStillViewport } = await import("../../src/bmpt/web/js/lobby/lobby-still.js");
+test("a camera's still shows the art the framed view showed, as its memorial lobby does", async () => {
+  const { memorialLobbyStillViewport } = await import("../../src/bmpt/web/js/memorial-lobby/memorial-lobby-still.js");
   // the official prefab's main layer, and a view framed on it: zoomed in and moved up and to the left
   const official = { name: "hero", x: 0, y: -1017.5, scale: 1.05769 };
   const w = 1600,
     h = (w * 9) / 16,
     V = { x: -900, y: -120, w, h };
-  const { scale: k, offset } = Lobby.cameraParams(V, G);
-  // the camera's prefab places the layer by p -> k p + offset, its scale times k (library/lobby_camera.py); the
-  // framing.json of a camera answers that layer and the game's view (webui/services_assets.py)
+  const { scale: k, offset } = MemorialLobby.cameraParams(V, G);
+  // the camera's prefab places the layer by p -> k p + offset, its scale times k (library/memorial_lobby_camera.py);
+  // the framing.json of a camera answers that layer and the game's view (webui/services_assets.py)
   const camera = {
     name: "hero",
     x: k * official.x + offset[0],
     y: k * official.y + offset[1],
     scale: official.scale * k,
   };
-  const still = lobbyStillViewport({ view: G, layer: camera }, 16 / 9);
+  const still = memorialLobbyStillViewport({ view: G, layer: camera }, 16 / 9);
   // in skeleton units: the art the framed view showed with the official prefab
   near(still.x, (V.x - official.x) / official.scale, 1e-6, "x");
   near(still.y, (V.y - official.y) / official.scale, 1e-6, "y");
   near(still.width, V.w / official.scale, 1e-6, "width");
   near(still.height, V.h / official.scale, 1e-6, "height");
   // the official prefab's still is the game's view
-  const plain = lobbyStillViewport({ view: G, layer: official }, 16 / 9);
+  const plain = memorialLobbyStillViewport({ view: G, layer: official }, 16 / 9);
   near(plain.x, (G.x - official.x) / official.scale);
   near(plain.width, G.w / official.scale);
 });
@@ -170,7 +171,7 @@ test("the intro sampler places a moved skeleton by its timeline and plays its cl
 // --- a saved camera is a Memorial Lobby choice of the student ---
 const { modName } = await import("../../src/bmpt/web/js/core/names.js");
 const Sources = await import("../../src/bmpt/web/js/mods/switch-sources.js");
-const words = { "lobby.original": "Original", "lobby.cameraName": "Camera {n}" };
+const words = { "memorialLobby.original": "Original", "memorialLobby.cameraName": "Camera {n}" };
 const translate = (key, params = {}) => (words[key] || key).replace(/\{(\w+)\}/g, (_, k) => params[k]);
 
 test("a camera is named after its source, then its number", () => {
@@ -192,7 +193,7 @@ test("a camera is named after its source, then its number", () => {
   assert.equal(modName({ ...framed, alias: "Close" }, entries, translate), "Close");
 });
 
-test("Switch Memorial Lobby lists the cameras with the lobby mods and starts on the chosen one", () => {
+test("Switch Memorial Lobby lists the cameras with the memorial lobby mods and starts on the chosen one", () => {
   const camera = {
     id: "c1",
     resourceType: "memorialLobby",

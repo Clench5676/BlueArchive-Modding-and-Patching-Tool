@@ -82,15 +82,15 @@ def serialized(setup_library, monkeypatch):
 def test_other_build_targets_refuse_the_whole_upload(serialized, platform):
     env, register = serialized
     valid = register(make_mod(env.original, env.tmp / "good"))
-    lobby = game_bundle(env.tmp / "bad", "test_home_gl", payload=b"mobile lobby")
+    memorial_lobby = game_bundle(env.tmp / "bad", "test_home_gl", payload=b"mobile lobby")
     spec = fixture("another_platform")
     spec["platforms"] = [platform]
-    register(lobby, spec)
+    register(memorial_lobby, spec)
     before = env.original.read_bytes()
     with pytest.raises(ServiceError) as caught:
-        env.library.add([valid, lobby])
+        env.library.add([valid, memorial_lobby])
     assert caught.value.code == "mod_platform_mismatch"
-    assert caught.value.params == {"file": lobby.name, "platform": platform, "expected": "StandaloneWindows64"}
+    assert caught.value.params == {"file": memorial_lobby.name, "platform": platform, "expected": "StandaloneWindows64"}
     assert env.library.mods() == [] and env.original.read_bytes() == before
 
 
@@ -174,19 +174,19 @@ def test_partial_mod_can_use_current_official_dependencies(serialized):
     assert texture.read_bytes() != source.read_bytes()
 
 
-@pytest.mark.parametrize("kind", ["spr", "model"])
+@pytest.mark.parametrize("kind", ["portrait", "chibi"])
 def test_outdated_import_defers_stale_cab_checks_until_rebuilt_output_is_added(serialized, kind):
     env, register = serialized
-    if kind == "model":
+    if kind == "chibi":
         env.original = game_bundle(env.game_dir, "test_model", category="characters")
-        env.catalog.variants["test"].model = "test_model"
-        env.catalog.variant_for_model_core = lambda core: env.catalog.variants["test"] if core == "test_model" else None
+        env.catalog.alts["test"].chibi = "test_model"
+        env.catalog.alt_for_chibi_core = lambda core: env.catalog.alts["test"] if core == "test_model" else None
     register(env.original, {"references": ["CAB-current-shared"]})
     source = register(
         game_bundle(
             env.tmp / "old",
-            "test_spr" if kind == "spr" else "test_model",
-            category="spinecharacters" if kind == "spr" else "characters",
+            "test_spr" if kind == "portrait" else "test_model",
+            category="spinecharacters" if kind == "portrait" else "characters",
             date="2025-01-01",
             payload=b"old mod",
         ),
@@ -398,7 +398,7 @@ def test_compatibility_uses_the_variant_core_after_its_installed_core_changes(se
         env.library._save()
     env.library.rename(entry.id, "\u8317\u732b")
     env.original.unlink()
-    env.catalog.variants["test"].spr = "current_spr"
+    env.catalog.alts["test"].portrait = "current_spr"
     register(
         game_bundle(env.game_dir, "current_spr", payload=b"current official"),
         {
@@ -471,7 +471,7 @@ def test_add_uses_the_normal_switch_or_configures_while_disabled(setup_library, 
     source = make_mod(env.original, env.tmp / "input")
     report = env.library.add_and_apply([source])
     (entry,) = report
-    assert env.library.configured("test")["spr"] == f"mod:{entry.id}"
+    assert env.library.configured("test")["portrait"] == f"mod:{entry.id}"
     assert env.original.read_bytes() == (source.read_bytes() if enabled else original)
     assert (report.applied if enabled else report.configured) == [entry]
     assert not report.failed
@@ -486,7 +486,7 @@ def test_add_keeps_the_source_and_reports_a_refused_switch(setup_library, monkey
     monkeypatch.setattr(env.library, "apply", refuse)
     report = env.library.add_and_apply([make_mod(env.original, env.tmp / "input")])
     assert report.failed == [{"id": report[0].id, "code": "game_running", "ref": "E2009", "params": {}}]
-    assert env.library.configured("test")["spr"] is None
+    assert env.library.configured("test")["portrait"] is None
     assert not report.applied
 
 
@@ -500,7 +500,7 @@ def test_a_mod_recognized_in_another_install_still_switches_the_current_install(
     (entry,) = report
     assert report.installed == report.applied == [entry]
     assert env.original.read_bytes() == source.read_bytes()
-    assert env.library.configured("test")["spr"] == f"mod:{entry.id}"
+    assert env.library.configured("test")["portrait"] == f"mod:{entry.id}"
 
 
 def test_comparison_without_an_official_copy_is_incomplete(serialized):
@@ -613,17 +613,17 @@ def checks(env, monkeypatch):
 @pytest.mark.parametrize(
     "kind,core,category",
     [
-        ("spr", "test_spr", "spinecharacters"),
-        ("lobby", "test_home_gl", "spinelobbies"),
-        ("model", "test_model", "characters"),
+        ("portrait", "test_spr", "spinecharacters"),
+        ("memorialLobby", "test_home_gl", "spinelobbies"),
+        ("chibi", "test_model", "characters"),
     ],
 )
 def test_coexisting_dates_pass_each_part_and_complete_set_in_add_and_batch(checks, kind, core, category):
     e = checks
-    if kind == "model":
-        e.catalog.variants["test"].model = core
-        e.catalog.variant_for_model_core = lambda name: e.catalog.variants["test"] if name == core else None
-    first = e.original if kind == "spr" else game_bundle(e.game_dir, core, category=category, payload=b"first")
+    if kind == "chibi":
+        e.catalog.alts["test"].chibi = core
+        e.catalog.alt_for_chibi_core = lambda name: e.catalog.alts["test"] if name == core else None
+    first = e.original if kind == "portrait" else game_bundle(e.game_dir, core, category=category, payload=b"first")
     second = game_bundle(e.game_dir, core, category=category, date="2026-02-01", payload=b"second")
     e.register(first, cab="cab-a", references={"cab-b"})
     e.register(second, cab="cab-b", references={"cab-a"})
@@ -656,7 +656,7 @@ def test_coexisting_dates_pass_each_part_and_complete_set_in_add_and_batch(check
     (group,) = e.library._plan(e.library._record(mod.id), lambda text: None, pin)
     assert group.files[0].existing_path == first and not group.target_paths
     before = second.read_bytes()
-    e.library.apply("test", f"mod:{mod.id}", kind=kind)
+    e.library.apply("test", f"mod:{mod.id}", resource_type=kind)
     assert first.read_bytes() == alternate.read_bytes() and second.read_bytes() == before
 
 
@@ -788,11 +788,11 @@ def test_add_and_batch_keep_known_names_despite_conflicting_content(checks, monk
     monkeypatch.setattr(
         "bmpt.library.identity.content_cores", lambda path: pytest.fail("known filenames identify without content")
     )
-    expected = (source.name, "test", "spr")
+    expected = (source.name, "test", "portrait")
     assert e.library.identify_import(source, source.name) == expected
     (row,) = analyze(e, [source])["entries"]
     (mod,) = e.library.add([source])
-    assert (mod.file.name, mod.target, mod.kind) == expected
+    assert (mod.file.name, mod.target, mod.resource_type) == expected
     assert (Path(row["files"][0]["path"]).name, row["alt"], row["resourceType"]) == (source.name, "test", "portrait")
 
 
@@ -800,34 +800,34 @@ def test_model_content_keeps_its_dependency_core_even_when_variant_model_differs
     e = checks
     dependency = e.register(game_bundle(e.game_dir, "ch0258", category="characters", payload=b"dependency"))
     source = e.register(make_mod(dependency, e.tmp / "upload"))
-    variant = SimpleNamespace(key="ch0258", model="ch0258_02", spr=None, lobby=None, family="test")
-    e.catalog.variants["ch0258"] = variant
+    variant = SimpleNamespace(key="ch0258", chibi="ch0258_02", portrait=None, memorial_lobby=None, student="test")
+    e.catalog.alts["ch0258"] = variant
     e.register(game_bundle(e.game_dir, "ch0258_02", category="character", payload=b"prefab"), cab="cab-prefab")
-    e.catalog.variant_for_model_core = lambda core: variant if core in {"ch0258", "ch0258_02"} else None
-    monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: {"model:ch0258"})
-    assert identify(source, source.name, e.catalog) == (source.name, "ch0258", "model")
-    assert e.library.identify_import(source, source.name) == (source.name, "ch0258", "model")
+    e.catalog.alt_for_chibi_core = lambda core: variant if core in {"ch0258", "ch0258_02"} else None
+    monkeypatch.setattr("bmpt.library.identity.content_cores", lambda path: {"chibi:ch0258"})
+    assert identify(source, source.name, e.catalog) == (source.name, "ch0258", "chibi")
+    assert e.library.identify_import(source, source.name) == (source.name, "ch0258", "chibi")
     (mod,) = e.library.add([source])
-    assert (mod.core, mod.target, mod.kind) == ("ch0258", "ch0258", "model")
-    assert e.library.model_cores("ch0258") == ["ch0258_02", "ch0258"]
-    result = e.library.apply("ch0258", f"mod:{mod.id}", kind="model")
+    assert (mod.core, mod.target, mod.resource_type) == ("ch0258", "ch0258", "chibi")
+    assert e.library.chibi_cores("ch0258") == ["ch0258_02", "ch0258"]
+    result = e.library.apply("ch0258", f"mod:{mod.id}", resource_type="chibi")
     assert result.files == [dependency]
 
 
 @pytest.mark.parametrize(
     "kind,core,category",
     [
-        ("spr", "test_spr", "spinecharacters"),
-        ("lobby", "test_home_gl", "spinelobbies"),
-        ("model", "test_model", "characters"),
+        ("portrait", "test_spr", "spinecharacters"),
+        ("memorialLobby", "test_home_gl", "spinelobbies"),
+        ("chibi", "test_model", "characters"),
     ],
 )
 def test_pre_split_older_bundle_keeps_all_update_targets_in_add_and_batch(checks, monkeypatch, kind, core, category):
     e = checks
-    if kind == "model":
-        e.catalog.variants["test"].model = core
-        e.catalog.variant_for_model_core = lambda name: e.catalog.variants["test"] if name == core else None
-    if kind != "spr":
+    if kind == "chibi":
+        e.catalog.alts["test"].chibi = core
+        e.catalog.alt_for_chibi_core = lambda name: e.catalog.alts["test"] if name == core else None
+    if kind != "portrait":
         e.original = game_bundle(e.game_dir, core, category=category, payload=b"part 003")
     targets = [e.register(e.original, cab="cab-003")]
     targets += [
@@ -860,7 +860,7 @@ def test_pre_split_older_bundle_keeps_all_update_targets_in_add_and_batch(checks
     assert next(path.name for path in targets if "_001_" in path.name) == caught.value.params["files"]
     e.register(old, cab="cab-old", names={"com.nexon.bluearchive"})
     (row,) = analyze(e, [old])["entries"]
-    resource_type = {"spr": "portrait", "lobby": "memorialLobby", "model": "chibi"}[kind]
+    resource_type = {"portrait": "portrait", "memorialLobby": "memorialLobby", "chibi": "chibi"}[kind]
     assert (row["resourceType"], row["state"], row["reason"]) == (resource_type, "update", None)
     assert any(sources == [old] and set(candidates) == set(targets) for sources, candidates in matches)
     assert set(e.services.batch_import._latest[row["id"]].targets) == set(targets)

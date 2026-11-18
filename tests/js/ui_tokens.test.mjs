@@ -108,16 +108,19 @@ test("stopped memorial sites explicitly retain their existing button boxes and c
     );
     assert.ok(labelOf(tree).fontSize <= fs, `${w} x ${h}`);
   }
-  const hall = src("js/hall/student-hall-ui.js");
+  const studentHall = src("js/student-hall/student-hall-ui.js");
   assert.match(
-    hall,
+    studentHall,
     /retainedButtonSize = .*NGUI\.fitGroup\(captions, 40, 26, width \/ S - 60, 2, \{ maxH: height \/ S - 20 \}\)/,
   );
-  assert.match(hall, /actions.map\(\(action, index\) => retainedButton/);
-  assert.match(hall, /kind === "portrait" \? button : retainedButton/);
+  assert.match(studentHall, /actions.map\(\(action, index\) => retainedButton/);
+  assert.match(studentHall, /kind === "portrait" \? button : retainedButton/);
   // the queue's Remove is a trash button over the card
-  assert.match(src("js/hall/student-hall-picker.js"), /UI\.trashButton\(box, `Remove/);
-  assert.match(src("js/hall/student-hall-portrait-toolbar.js"), /UI\.button\(destination, "HallPortraitScaleReset"/);
+  assert.match(src("js/student-hall/student-hall-picker.js"), /UI\.trashButton\(box, `Remove/);
+  assert.match(
+    src("js/student-hall/student-hall-portrait-toolbar.js"),
+    /UI\.button\(destination, "StudentHallPortraitScaleReset"/,
+  );
 });
 
 // --- item F: colours from the game's own prefabs, each in one place ---
@@ -286,8 +289,8 @@ test("the plain popup and its parts sit on the ladder, and the three fallback bu
     assert.doesNotMatch(declarations, /skew|transform|box-shadow|text-shadow/);
   }
   assert.deepEqual([B.fill, B.ink, B.radiusPx], ["#8de4ff", "#314665", 6.49]);
-  // The lobby draws the prefab balloon; its CSS host has only geometry and motion.
-  assert.doesNotMatch(ruleStarting(css, ".lobby-subtitle"), /border-radius|background|color|font|padding/);
+  // The memorial lobby draws the prefab balloon; its CSS host has only geometry and motion.
+  assert.doesNotMatch(ruleStarting(css, ".memorial-lobby-subtitle"), /border-radius|background|color|font|padding/);
   assert.match(css, /\.loading-fallback i \{[^}]*border-radius: 50%/);
 });
 
@@ -375,7 +378,7 @@ for (const locale of locales)
     }
   });
 
-// Hall modals use the shared footer; the memorial editor hits its full-row stop rule.
+// Student Hall modals use the shared footer; the memorial editor hits its full-row stop rule.
 const footerSource = read("js/ui/popup-footer.js");
 const footerHelpers = new Function(
   "CONTROL",
@@ -412,7 +415,7 @@ const footerHelpers = new Function(
   Tokens.SMALL_BUTTON,
   Tokens.XS_BUTTON,
 );
-test("Hall modal footers use the default XS for one, two and three actions", () => {
+test("StudentHall modal footers use the default XS for one, two and three actions", () => {
   const M = Tokens.CONTROL.buttonXS;
   for (const n of [1, 2, 3]) {
     // the slots of a row of bodies the control's minimum wide (footerLayout widens them with the captions)
@@ -428,8 +431,8 @@ test("Hall modal footers use the default XS for one, two and three actions", () 
     assert.equal(footerHelpers.footerBottom(), Tokens.POPUP_FOOTER.bottom, "the prefab's 102 under 176, scaled to 104");
   }
 });
-const { SORTS } = await import("../../src/bmpt/web/js/roster/roster-order.js");
-const toolbarSource = read("js/roster/roster-widgets.js");
+const { SORTS } = await import("../../src/bmpt/web/js/student-list/student-list-order.js");
+const toolbarSource = read("js/student-list/student-list-widgets.js");
 const toolbarFor = (web) =>
   new Function(
     "NGUI",
@@ -459,7 +462,7 @@ const toolbarFor = (web) =>
     row,
   );
 const modalLayoutFor = (web) => {
-  const source = read("js/hall/student-hall-ui.js");
+  const source = read("js/student-hall/student-hall-ui.js");
   return new Function(
     "Popup",
     "POPUP",
@@ -487,7 +490,7 @@ const modalLayoutFor = (web) => {
   );
 };
 for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
-  test(`Hall modal content keeps its gaps and clears the compact footer, keeping full rows in both search states in ${locale}`, () => {
+  test(`StudentHall modal content keeps its gaps and clears the compact footer, keeping full rows in both search states in ${locale}`, () => {
     document.documentElement.lang = locale;
     const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui;
     const layout = modalLayoutFor(web),
@@ -551,8 +554,8 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
     assert.ok(bg[1] >= 540 - (Tokens.POPUP.frameY + 1450 / 2 - 132) * S);
     assert.ok(bg[3] >= 280);
     assert.ok(bg[1] + bg[3] + Tokens.POPUP.clearance * S <= 540 - footerHelpers.footerTop(1450, 2) * S + 1e-9);
-    assert.match(src("js/hall/student-hall-picker.js"), /UI\.portraitPickerLayout\(view, searching\)\.list/);
-    assert.match(src("js/hall/student-hall.js"), /UI\.backgroundPickerBox\(\)/);
+    assert.match(src("js/student-hall/student-hall-picker.js"), /UI\.portraitPickerLayout\(view, searching\)\.list/);
+    assert.match(src("js/student-hall/student-hall.js"), /UI\.backgroundPickerBox\(\)/);
   });
 test("the memorial modal keeps its retained footer: XS-high buttons at the frame's bottom right, under its fixed queue", () => {
   // the queue panel ends at 915 px; the retained buttons (the XS body) stand under it
@@ -561,35 +564,35 @@ test("the memorial modal keeps its retained footer: XS-high buttons at the frame
   assert.ok(bottom >= 720 + 195, `${bottom}`);
   // each as wide as its caption needs, their right edge on the panels'
   assert.match(
-    src("js/hall/student-hall-ui.js"),
+    src("js/student-hall/student-hall-ui.js"),
     /const bodyH = CONTROL\.buttonXS\.h \* S, captions = actions\.map\(\(action\) => action\.label\);/,
   );
-  assert.match(src("js/hall/student-hall-ui.js"), /let x = WIDE\.left \+ WIDE\.width - widths\.reduce/);
-  assert.match(src("js/hall/student-hall-picker.js"), /memorial \? \{ retainedFooter: true \}/);
+  assert.match(src("js/student-hall/student-hall-ui.js"), /let x = WIDE\.left \+ WIDE\.width - widths\.reduce/);
+  assert.match(src("js/student-hall/student-hall-picker.js"), /memorial \? \{ retainedFooter: true \}/);
   // the queue across WIDE, the L class's content
-  assert.match(src("js/hall/student-hall-picker.js"), /queuePanel\(layer, \[wideLeft, 720, wideW, 195\]/);
+  assert.match(src("js/student-hall/student-hall-picker.js"), /queuePanel\(layer, \[wideLeft, 720, wideW, 195\]/);
 });
-const HALL_FOOTERS = [
-  ["popup.cancel", "hall.savePlaylist"],
-  ["hall.doneAdding"],
+const STUDENT_HALL_FOOTERS = [
+  ["popup.cancel", "studentHall.savePlaylist"],
+  ["studentHall.doneAdding"],
   ["popup.cancel"],
-  ["popup.cancel", "hall.useBackground"],
-  ["hall.keepEditing", "hall.discard", "hall.saveLeave"],
+  ["popup.cancel", "studentHall.useBackground"],
+  ["studentHall.keepEditing", "studentHall.discard", "studentHall.saveLeave"],
 ];
 // The default M footer's bodies follow the captions, so no caption needs a named allowance below the footer's
 // floor.
 for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
-  test(`Hall footer captions share one size, keep every character and need no allowance in ${locale}`, () => {
+  test(`StudentHall footer captions share one size, keep every character and need no allowance in ${locale}`, () => {
     const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui;
     document.documentElement.lang = locale;
-    for (const keys of HALL_FOOTERS) {
+    for (const keys of STUDENT_HALL_FOOTERS) {
       const captions = keys.map((key) => key.split(".").reduce((value, part) => value[part], web));
       const site =
-        keys[0] === "hall.doneAdding"
-          ? "hall.doneAdding"
-          : keys[0] === "hall.keepEditing"
-            ? "hall.unsavedChanges"
-            : "hall.modal";
+        keys[0] === "studentHall.doneAdding"
+          ? "studentHall.doneAdding"
+          : keys[0] === "studentHall.keepEditing"
+            ? "studentHall.unsavedChanges"
+            : "studentHall.modal";
       const widgets = captions.map(() => ({})),
         { kind, room } = footerHelpers.footerLayout(captions, 2800),
         { caption } = kind;
@@ -612,31 +615,38 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
   });
 test("a named caption allowance only lowers a floor, for its own site and locale", () => {
   const { captionMinimum } = Tokens;
-  assert.equal(captionMinimum("hall.add", "th-TH", 28), 16);
-  assert.equal(captionMinimum("hall.add", "en-US", 28), 28, "another locale");
-  assert.equal(captionMinimum("hall.other", "th-TH", 28), 28, "another site");
-  assert.equal(captionMinimum("hall.doneAdding", "th-TH", 34), 34, "an allowance above the floor changes nothing");
-  assert.equal(captionMinimum("hall.scaleReset", "th-TH", 28), 28);
+  assert.equal(captionMinimum("studentHall.add", "th-TH", 28), 16);
+  assert.equal(captionMinimum("studentHall.add", "en-US", 28), 28, "another locale");
+  assert.equal(captionMinimum("studentHall.other", "th-TH", 28), 28, "another site");
+  assert.equal(
+    captionMinimum("studentHall.doneAdding", "th-TH", 34),
+    34,
+    "an allowance above the floor changes nothing",
+  );
+  assert.equal(captionMinimum("studentHall.scaleReset", "th-TH", 28), 28);
   document.documentElement.lang = "th-TH";
   const web = JSON.parse(readSync(new URL("th-TH.json", LOCALE_DIR), "utf8")).webui;
   for (const [site, captions] of [
-    ["hall.doneAdding", [web.hall.doneAdding]],
-    ["hall.unsavedChanges", [web.hall.keepEditing, web.hall.discard, web.hall.saveLeave]],
+    ["studentHall.doneAdding", [web.studentHall.doneAdding]],
+    ["studentHall.unsavedChanges", [web.studentHall.keepEditing, web.studentHall.discard, web.studentHall.saveLeave]],
   ]) {
     const { kind, room } = footerHelpers.footerLayout(captions, 2800);
     assert.doesNotThrow(() => footerHelpers.footerFit(captions, { site, width: room, caption: kind.caption }));
   }
-  assert.match(src("js/hall/student-hall-picker.js"), /memorial \? \{ retainedFooter: true \} : UI\.PORTRAIT_FRAME/);
-  assert.match(src("js/hall/student-hall.js"), /captionSite: "hall.unsavedChanges"/);
+  assert.match(
+    src("js/student-hall/student-hall-picker.js"),
+    /memorial \? \{ retainedFooter: true \} : UI\.PORTRAIT_FRAME/,
+  );
+  assert.match(src("js/student-hall/student-hall.js"), /captionSite: "studentHall.unsavedChanges"/);
   assert.match(
     read("js/ui/popup-message.js"),
     /popupFrame\(title, w, height, \{ ok, cancel, buttons, close: dismissable, captionSite, footer \}\)/,
   );
 });
 
-const hallUiSource = read("js/hall/student-hall-ui.js");
+const studentHallUiSource = read("js/student-hall/student-hall-ui.js");
 const { COMPACT_BUTTON_H, COMPACT_FOOTER_W } = modalLayoutFor({});
-const hallControls = new Function(
+const studentHallControls = new Function(
   "NGUI",
   "Buttons",
   "Popup",
@@ -649,8 +659,11 @@ const hallControls = new Function(
   "captionMinimum",
   "COMPACT_BUTTON_H",
   "COMPACT_FOOTER_W",
-  `${hallUiSource
-    .slice(hallUiSource.indexOf("export function buttonBox"), hallUiSource.indexOf("export async function caption"))
+  `${studentHallUiSource
+    .slice(
+      studentHallUiSource.indexOf("export function buttonBox"),
+      studentHallUiSource.indexOf("export async function caption"),
+    )
     .replaceAll("export ", "")}; return {buttonBox, buttonSize, compactButtonSize, compactFooterWidth, button};`,
 )(
   {
@@ -673,7 +686,7 @@ const hallControls = new Function(
   COMPACT_BUTTON_H,
   COMPACT_FOOTER_W,
 );
-test("Hall small buttons retain centres and widths, use the minimum width and token height", async () => {
+test("StudentHall small buttons retain centres and widths, use the minimum width and token height", async () => {
   const S = 1920 / 2960,
     B = Tokens.XS_BUTTON;
   for (const box of [
@@ -681,13 +694,13 @@ test("Hall small buttons retain centres and widths, use the minimum width and to
     [0, 0, 100, 66],
     [100, 200, 300, 68],
   ]) {
-    const placed = hallControls.buttonBox(box);
+    const placed = studentHallControls.buttonBox(box);
     assert.equal(placed[0] + placed[2] / 2, box[0] + box[2] / 2);
     assert.equal(placed[1] + placed[3] / 2, box[1] + box[3] / 2);
     assert.equal(placed[2], Math.max(box[2], B.minW * S));
     assert.equal(placed[3], B.h * S);
     const host = {},
-      hit = await hallControls.button(host, "FirstRun", "Add Portraits", box, () => {}, { enabled: false });
+      hit = await studentHallControls.button(host, "FirstRun", "Add Portraits", box, () => {}, { enabled: false });
     assert.equal(hit.disabled, true);
     assert.equal(bodyOf(host.tree)?.h_ || NGUI.find(host.tree, "BG (1)").widgets[0].h_, B.h);
     assert.deepEqual([labelOf(host.tree).w_, labelOf(host.tree).h_], [placed[2] / S - B.boxInsetW, B.h - B.boxInsetH]);
@@ -702,17 +715,23 @@ test("portrait rows and their virtual strips grow together for the compact Add b
   const maxBar = 22 + 2 * 34 * 1.2;
   near(row.height, 138 + (300 + 10 + maxBar) * 0.46 + 8 + (Tokens.CONTROL.buttonXS.h / 2) * S + Tokens.SPACE.m * S);
   assert.equal(row.pitch, row.height + 4);
-  assert.match(src("js/hall/student-hall-picker.js"), /groups.length, rowLayout.pitch/);
-  assert.match(src("js/hall/student-hall-picker.js"), /rowPlate\(rowHost, \[rowLayout.width, rowLayout.height\]/);
-  assert.match(src("js/hall/student-hall-picker.js"), /row.student.name, rowLayout.name/);
-  assert.match(src("js/hall/student-hall-picker.js"), /\[rowLayout.stripX, 0, rowLayout.stripW, rowLayout.height\]/);
+  assert.match(src("js/student-hall/student-hall-picker.js"), /groups.length, rowLayout.pitch/);
+  assert.match(
+    src("js/student-hall/student-hall-picker.js"),
+    /rowPlate\(rowHost, \[rowLayout.width, rowLayout.height\]/,
+  );
+  assert.match(src("js/student-hall/student-hall-picker.js"), /row.student.name, rowLayout.name/);
+  assert.match(
+    src("js/student-hall/student-hall-picker.js"),
+    /\[rowLayout.stripX, 0, rowLayout.stripW, rowLayout.height\]/,
+  );
 });
 test("portrait Add and Select keep horizontal centres and widths below both one- and two-line names", async () => {
-  const source = read("js/hall/student-hall-ui.js"),
+  const source = read("js/student-hall/student-hall-ui.js"),
     S = 1920 / 2960;
   let drawn;
   const draw = async (host, name, caption, box, action, opts) => {
-    drawn = { box: hallControls.buttonBox(box, opts.height), opts };
+    drawn = { box: studentHallControls.buttonBox(box, opts.height), opts };
   };
   for (const barH of [88, 22 + 2 * 34 * 1.2])
     for (const fitAdd of [false, true]) {
@@ -747,8 +766,8 @@ test("portrait Add and Select keep horizontal centres and widths below both one-
         () => {},
         draw,
         () => assert.fail("portrait still retained"),
-        hallControls.buttonSize,
-        hallControls.compactButtonSize,
+        studentHallControls.buttonSize,
+        studentHallControls.compactButtonSize,
         () => {},
         Tokens.CONTROL.buttonXS,
         COMPACT_BUTTON_H,
@@ -780,25 +799,25 @@ test("portrait Add and Select keep horizontal centres and widths below both one-
     }
 });
 for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
-  test(`Hall button captions fit XS_BUTTON without cutting in ${locale}`, () => {
+  test(`StudentHall button captions fit XS_BUTTON without cutting in ${locale}`, () => {
     const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui;
     document.documentElement.lang = locale;
     const B = Tokens.XS_BUTTON,
       S = 1920 / 2960;
     for (let [keys, width, bodyH = B.h] of [
-      [["hall.addPortraits", "hall.adjust"], 460],
-      [["hall.scaleReset"], 156, 104],
-      [["hall.remove"], 190],
-      [["hall.add", "hall.added", "import.select"], (320 - 22) * 0.46, COMPACT_BUTTON_H],
-      [["hall.doneAdding"], "footer", COMPACT_BUTTON_H],
+      [["studentHall.addPortraits", "studentHall.adjust"], 460],
+      [["studentHall.scaleReset"], 156, 104],
+      [["studentHall.remove"], 190],
+      [["studentHall.add", "studentHall.added", "import.select"], (320 - 22) * 0.46, COMPACT_BUTTON_H],
+      [["studentHall.doneAdding"], "footer", COMPACT_BUTTON_H],
       [["popup.cancel"], "footer", COMPACT_BUTTON_H],
-      [["hall.add", "hall.added"], (720 - 22) * 0.39],
+      [["studentHall.add", "studentHall.added"], (720 - 22) * 0.39],
     ]) {
       const captions = keys.map((key) => key.split(".").reduce((value, part) => value[part], web));
       // the footer's body is as wide as its caption needs, never under COMPACT_FOOTER_W and never wider than the
       // buttonL footer
       if (width === "footer") {
-        width = hallControls.compactFooterWidth(captions);
+        width = studentHallControls.compactFooterWidth(captions);
         assert.ok(
           width >= COMPACT_FOOTER_W * S && width <= Tokens.CONTROL.buttonL.minW * S,
           `${locale} ${keys}: footer width ${width / S}`,
@@ -811,16 +830,16 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
       });
       const size =
         bodyH === B.h
-          ? hallControls.buttonSize(captions, width)
+          ? studentHallControls.buttonSize(captions, width)
           : bodyH === COMPACT_BUTTON_H
-            ? hallControls.compactButtonSize(captions, width)
+            ? studentHallControls.compactButtonSize(captions, width)
             : fits[0].fs;
       assert.equal(new Set(fits.map((f) => f.fs)).size, 1);
       for (const [i, f] of fits.entries()) {
         assert.equal(f.fs, size);
-        if (locale === "th-TH" && keys[0] === "hall.add" && bodyH === COMPACT_BUTTON_H)
+        if (locale === "th-TH" && keys[0] === "studentHall.add" && bodyH === COMPACT_BUTTON_H)
           assert.ok(
-            f.fs >= Tokens.CAPTION_EXCEPTIONS["hall.add"]["th-TH"] && f.fs <= B.fs,
+            f.fs >= Tokens.CAPTION_EXCEPTIONS["studentHall.add"]["th-TH"] && f.fs <= B.fs,
             "Named Thai compact Add allowance",
           );
         else assert.ok(f.fs >= floor && f.fs <= B.fs, `${locale} ${keys.join("/")} needs ${f.fs}`);
@@ -833,14 +852,14 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
     }
     // The first-run memorial button clears its existing empty/missing caption at the same centre.
     for (const key of ["empty", "missing"]) {
-      const fit = NGUI.fitText(web.hall[key], 40, 26, 900 / S, 3);
+      const fit = NGUI.fitText(web.studentHall[key], 40, 26, 900 / S, 3);
       const captionBottom = 500 + (fit.fs * 1.25 * fit.lines * S) / 2;
-      assert.ok(captionBottom <= hallControls.buttonBox([730, 560, 460, 70])[1]);
+      assert.ok(captionBottom <= studentHallControls.buttonBox([730, 560, 460, 70])[1]);
     }
   });
 
-test("Hall first-run body and caption bounds scale together at supported window sizes and densities", () => {
-  const box = hallControls.buttonBox([730, 560, 460, 70]),
+test("StudentHall first-run body and caption bounds scale together at supported window sizes and densities", () => {
+  const box = studentHallControls.buttonBox([730, 560, 460, 70]),
     S = 1920 / 2960,
     B = Tokens.XS_BUTTON;
   for (const [w, h] of [
@@ -857,11 +876,11 @@ test("Hall first-run body and caption bounds scale together at supported window 
     }
 });
 
-// Design system, the Hall's toolbars and selectors (student-hall-ui.js): a Hall button is a buttonS control,
-// buttons of one row share one height and one caption size, and the portrait picker and its rows are stacks laid
-// out flush.
+// Design system, the Student Hall's toolbars and selectors (student-hall-ui.js): a Student Hall button is a buttonS
+// control, buttons of one row share one height and one caption size, and the portrait picker and its rows are stacks
+// laid out flush.
 for (const locale of ["en-US", "zh-CN"])
-  test(`Hall buttons are buttonS controls with one caption size per row, and the picker and its rows are stacks in ${locale}`, () => {
+  test(`StudentHall buttons are buttonS controls with one caption size per row, and the picker and its rows are stacks in ${locale}`, () => {
     const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui,
       S = 1920 / 2960,
       C = Tokens.CONTROL.buttonXS;
@@ -871,28 +890,28 @@ for (const locale of ["en-US", "zh-CN"])
       [0, 0, 100, 66],
       [264, 74, 300, 100],
     ]) {
-      const placed = hallControls.buttonBox(box);
+      const placed = studentHallControls.buttonBox(box);
       assert.equal(placed[3], C.h * S, "a buttonS control's height");
       assert.ok(placed[2] >= C.minW * S, "its least width");
     }
     assert.equal(
-      hallControls.buttonBox([0, 0, 300, 100], 104 * S)[3],
+      studentHallControls.buttonBox([0, 0, 300, 100], 104 * S)[3],
       104 * S,
       "a site whose neighbour sets the height keeps it",
     );
     assert.equal(
-      hallControls.buttonBox([0, 0, 300, 100], COMPACT_BUTTON_H * S)[3],
+      studentHallControls.buttonBox([0, 0, 300, 100], COMPACT_BUTTON_H * S)[3],
       (C.h / 2) * S,
       "the picker's Add and Done are half a buttonS body",
     );
     // the buttons of one row share one size, within the body role's range
     for (const [keys, width] of [
-      [["hall.addPortraits", "hall.adjust"], 460],
-      [["hall.add", "hall.added", "import.select"], (320 - 22) * 0.46],
-      [["hall.remove"], 190],
+      [["studentHall.addPortraits", "studentHall.adjust"], 460],
+      [["studentHall.add", "studentHall.added", "import.select"], (320 - 22) * 0.46],
+      [["studentHall.remove"], 190],
     ]) {
       const captions = keys.map((key) => key.split(".").reduce((value, part) => value[part], web));
-      const size = hallControls.buttonSize(captions, width),
+      const size = studentHallControls.buttonSize(captions, width),
         fits = NGUI.fitGroup(
           captions,
           C.fs,
@@ -944,19 +963,19 @@ test("caption exceptions are exactly the named sites and apply only in Thai", ()
   assert.deepEqual(
     { ...Tokens.CAPTION_EXCEPTIONS },
     {
-      "hall.doneAdding": { "th-TH": 44 },
-      "hall.unsavedChanges": { "th-TH": 36 },
-      "hall.scaleReset": { "th-TH": 30 },
-      "hall.add": { "th-TH": 16 },
+      "studentHall.doneAdding": { "th-TH": 44 },
+      "studentHall.unsavedChanges": { "th-TH": 36 },
+      "studentHall.scaleReset": { "th-TH": 30 },
+      "studentHall.add": { "th-TH": 16 },
     },
   );
   for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"]) {
-    assert.equal(Tokens.captionMinimum("hall.other", locale, 48), 48);
+    assert.equal(Tokens.captionMinimum("studentHall.other", locale, 48), 48);
     for (const [site, minimum] of [
-      ["hall.doneAdding", 34],
-      ["hall.unsavedChanges", 34],
-      ["hall.scaleReset", 28],
-      ["hall.add", 24],
+      ["studentHall.doneAdding", 34],
+      ["studentHall.unsavedChanges", 34],
+      ["studentHall.scaleReset", 28],
+      ["studentHall.add", 24],
     ])
       if (locale !== "th-TH") assert.equal(Tokens.captionMinimum(site, locale, minimum), minimum);
   }
@@ -967,10 +986,17 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
     const web = JSON.parse(readSync(new URL(`${locale}.json`, LOCALE_DIR), "utf8")).webui,
       host = {};
     const row = (104 * 1920) / 2960;
-    await hallControls.button(host, "HallPortraitScaleReset", web.hall.scaleReset, [264, 74, 156, row], () => {}, {
-      captionSite: "hall.scaleReset",
-      height: row,
-    });
+    await studentHallControls.button(
+      host,
+      "StudentHallPortraitScaleReset",
+      web.studentHall.scaleReset,
+      [264, 74, 156, row],
+      () => {},
+      {
+        captionSite: "studentHall.scaleReset",
+        height: row,
+      },
+    );
     const label = labelOf(host.tree);
     assert.ok(
       Math.abs((bodyOf(host.tree)?.h_ || NGUI.find(host.tree, "BG (1)").widgets[0].h_) - 104) < 1e-9,
@@ -978,6 +1004,6 @@ for (const locale of ["en-US", "th-TH", "zh-CN", "zh-TW", "ja-JP", "ko-KR"])
     );
     assert.equal(host.origin[1], 74 + row / 2, "centred on the slider's row");
     assert.ok(label.fontSize >= Tokens.XS_BUTTON.fsMin, "the small button's floor, no allowance needed any more");
-    assert.equal(label.text.replace(/\s/g, ""), web.hall.scaleReset.replace(/\s/g, ""));
-    assert.match(src("js/hall/student-hall-portrait-toolbar.js"), /captionSite: "hall.scaleReset"/);
+    assert.equal(label.text.replace(/\s/g, ""), web.studentHall.scaleReset.replace(/\s/g, ""));
+    assert.match(src("js/student-hall/student-hall-portrait-toolbar.js"), /captionSite: "studentHall.scaleReset"/);
   });

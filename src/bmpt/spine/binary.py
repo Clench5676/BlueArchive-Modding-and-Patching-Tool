@@ -31,7 +31,7 @@ The layout is that of spine-runtimes, branch 4.2 (``SkeletonBinary`` of spine-ts
 This module is a direct derivative of the Spine Runtimes and is licensed under the Spine Runtimes License Agreement
 above, not under the GPLv3 (the README's GPLv3 section 7 additional permission covers the combination). It runs only
 after the user has confirmed holding a Spine licence. The App's own design on top of it (what to carry between two
-skeletons, by name) is in ``bmpt.spine.graft``, under the GPLv3.
+skeletons, by name) is in ``bmpt.spine.add_animations``, under the GPLv3.
 
 What it gives: the sections (shared strings, bones, slots, constraints, skins with their attachments, events,
 animations) with their byte positions, every varint that refers to a shared string, bone, slot, skin, event or

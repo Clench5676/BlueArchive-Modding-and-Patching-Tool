@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { clearUnseen, hasUnseen, shownUnseen, switchUnseen } from "../../src/bmpt/web/js/detail/unseen-assets.js";
-import { DEFAULT_VIEW, normalizeView, order } from "../../src/bmpt/web/js/roster/roster-order.js";
+import { DEFAULT_VIEW, normalizeView, order } from "../../src/bmpt/web/js/student-list/student-list-order.js";
 
 const mod = (id, target, kind) => ({ id, targetAlt: target, resourceType: kind, fresh: true });
 const alt = (key, mods = []) => ({
   key,
   portrait: `${key}_spr`,
   memorialLobby: `${key}_home`,
-  chibi: `${key}_model`,
+  chibi: `${key}_chibi`,
   names: { en: { full: key } },
   fresh: mods.length > 0,
   modList: mods,
@@ -59,7 +59,7 @@ test("showing a repaired import clears its original asset's dot", () => {
   assert.equal(a.fresh, false);
 });
 
-test("a configured alternate lobby core is seen even when it is not offered by the switch", () => {
+test("a configured alternate memorial lobby core is seen even when it is not offered by the switch", () => {
   const a = alt("a", [{ ...mod("global", "a", "memorialLobby"), core: "a_home_gl" }]),
     f = student(a);
   a.configured = { memorialLobby: "mod:global" };
@@ -68,11 +68,11 @@ test("a configured alternate lobby core is seen even when it is not offered by t
   assert.equal(a.fresh, false);
 });
 
-test("viewing the only imported lobby clears both separate and merged roster marks", () => {
+test("viewing the only imported memorial lobby clears both separate and merged student list marks", () => {
   const a = alt("a"),
-    b = alt("b", [mod("lobby", "b", "memorialLobby")]),
+    b = alt("b", [mod("memorialLobby", "b", "memorialLobby")]),
     f = student(a, b);
-  b.state.files = [{ resourceType: "memorialLobby", applied: "mod:lobby", official: false }];
+  b.state.files = [{ resourceType: "memorialLobby", applied: "mod:memorialLobby", official: false }];
   const marks = (merged) =>
     order({ students: [f] }, normalizeView({ ...DEFAULT_VIEW, groupAlts: merged }), {
       label: (names) => names?.en,
@@ -84,23 +84,23 @@ test("viewing the only imported lobby clears both separate and merged roster mar
   assert.deepEqual(marks(true), [false]);
 });
 
-test("clearing one kind preserves the other tab and the merged roster dot", () => {
-  const a = alt("a", [mod("portrait", "a", "portrait"), mod("lobby", "a", "memorialLobby")]),
+test("clearing one kind preserves the other tab and the merged student list dot", () => {
+  const a = alt("a", [mod("portrait", "a", "portrait"), mod("memorialLobby", "a", "memorialLobby")]),
     f = student(a);
-  clearUnseen(f, ["lobby"]);
-  assert.equal(hasUnseen(a, "lobby"), false);
+  clearUnseen(f, ["memorialLobby"]);
+  assert.equal(hasUnseen(a, "memorialLobby"), false);
   assert.equal(hasUnseen(a, "portrait"), true);
   assert.equal(a.fresh, true);
 });
 
 test("unapplied assets stay unseen on tab visits and clear only when their switch popup offers them", () => {
-  const a = alt("a", [mod("portrait", "a", "portrait"), mod("lobby", "a", "memorialLobby")]),
+  const a = alt("a", [mod("portrait", "a", "portrait"), mod("memorialLobby", "a", "memorialLobby")]),
     f = student(a);
   assert.deepEqual(shownIds(f, a, "portrait"), []);
   assert.deepEqual(shownIds(f, a, "memorialLobby"), []);
   assert.equal(switchUnseen(f, a, "portrait"), true);
   assert.equal(switchUnseen(f, a, "memorialLobby"), true);
-  clearUnseen(f, ["lobby"]);
+  clearUnseen(f, ["memorialLobby"]);
   assert.equal(switchUnseen(f, a, "memorialLobby"), false);
   assert.equal(a.fresh, true);
 });

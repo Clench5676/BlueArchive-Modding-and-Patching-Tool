@@ -14,7 +14,7 @@ import { withCode } from "../app/error-codes.js";
 import { customAliases, studentName } from "../core/names.js";
 import { spineAllowed } from "../spine/spine-runtime.js";
 import { thumbnailScope } from "../detail/thumbs.js";
-import { modelThumbnail } from "../model/model-still.js";
+import { chibiThumbnail } from "../chibi/chibi-still.js";
 import { S } from "../core/util.js";
 import { XS_BUTTON, SPACE, CONTROL } from "../ui/ui-tokens.js";
 import { row as layoutRow } from "../ui/ui-grid.js";
@@ -32,7 +32,7 @@ import {
   NOTE_LEFT,
   noteRoom,
 } from "./import-state.js";
-import { characterPicker } from "../roster/character-picker.js";
+import { characterPicker } from "../student-list/character-picker.js";
 import { scrollbar as gameScrollbar } from "../ui/scrollbar.js";
 import { createImportControls, el, place } from "./import-controls.js";
 import { createImportList, KIND_KEYS, LIST_BOTTOM, LIST_TOP, LIST_W, LIST_X, REASONS } from "./import-list.js";
@@ -43,7 +43,7 @@ export { DIALOG_AREA, DIALOG_H } from "./import-dialogs.js";
 const baseName = (path) => path?.split(/[\\/]/).pop() || "";
 
 /**
- * The roster's alts as a flat list, each with its student.
+ * The student list's alts as a flat list, each with its student.
  * @param {{students?: object[]}} data The data of students.list.
  */
 export function catalogEntries(data) {
@@ -97,7 +97,7 @@ export function createImportPage({
   ui = NGUI,
   popups = Popup,
   thumbnails = thumbnailScope,
-  modelThumbnails = modelThumbnail,
+  chibiThumbnails = chibiThumbnail,
   allowed = spineAllowed,
   suggest = suggestImports,
   loading = Loading,
@@ -138,11 +138,11 @@ export function createImportPage({
     waiters: new Set(),
     scrollBars: new Map(),
   };
-  const model = createImportState({
+  const importState = createImportState({
     rpc: call,
     waitJob: jobs,
     suggest,
-    changed: () => P.context?.invalidateRoster?.(),
+    changed: () => P.context?.invalidateStudentList?.(),
   });
   const showError = (message, error) =>
     Popup.isRefusal(error)
@@ -153,13 +153,13 @@ export function createImportPage({
     P.waiters.clear();
   };
   const waiting = () =>
-    model.state.phase !== "picking" &&
-    (P.drawings.size || ["analyzing", "running", "saving"].includes(model.state.phase));
+    importState.state.phase !== "picking" &&
+    (P.drawings.size || ["analyzing", "running", "saving"].includes(importState.state.phase));
   function importProgress() {
-    const { phase, progress: p, reconnecting } = model.state;
+    const { phase, progress: p, reconnecting } = importState.state;
     if (phase === "running") {
       const done = p?.completed ?? p?.done ?? 0,
-        total = p?.total || model.state.taskEntries.length;
+        total = p?.total || importState.state.taskEntries.length;
       if (reconnecting)
         return T("import.completedProgress", {
           done,
@@ -169,7 +169,7 @@ export function createImportPage({
           name: "",
           step: "",
         }).trim();
-      const current = model.state.taskEntries.find((entry) => entry.id === p?.current);
+      const current = importState.state.taskEntries.find((entry) => entry.id === p?.current);
       const action = ["update", "convert", "add", "apply"].includes(p?.phase)
         ? `import.phase.${p.phase}`
         : "job.running";
@@ -327,11 +327,11 @@ export function createImportPage({
     return P.identities.get(entry);
   };
   const list = createImportList(P, {
-    model,
+    importState,
     ui,
     popups,
     allowed,
-    modelThumbnails,
+    chibiThumbnails,
     controls,
     identified,
     report,
@@ -343,12 +343,12 @@ export function createImportPage({
   });
   const { layoutList, renderRows, renderPreview, prepareVisibleRows, refreshCurrentPreviews, refreshAppliedPreviews } =
     list;
-  const dialogs = createImportDialogs(P, { model, ui, popups, controls, list, identified, report });
+  const dialogs = createImportDialogs(P, { importState, ui, popups, controls, list, identified, report });
   const { dialog, openOptions, results } = dialogs;
 
   function build() {
     P.root = el("div", "import-page");
-    P.root.dataset.phase = model.state.phase;
+    P.root.dataset.phase = importState.state.phase;
     P.dom.background = el("div", "import-background");
     P.root.appendChild(P.dom.background);
     paint(P.dom.background, P.art.background(), { origin: [960, 540] });
@@ -415,7 +415,7 @@ export function createImportPage({
     P.dom.start = button(T("import.action", { n: 0 }), "start", { width: rowWidth, scale: rowScale, primary: true });
     shareSizes();
     P.dom.fillAll = button(missingText("fillAll", { n: 1 }), "fillAll", { width: wide, scale: rowScale });
-    // As on the roster/detail screens, reserve the nav's entire 104 px area, with 24 px above it. One row,
+    // As on the student-list/detail screens, reserve the nav's entire 104 px area, with 24 px above it. One row,
     // right-aligned: the count's room ends before Fill All (hidden until a row can be filled), which stands left of
     // Advanced Options.
     const bar = layoutRow(
@@ -441,7 +441,7 @@ export function createImportPage({
       const target = event.target.closest?.("[data-action]");
       if (!target || target.disabled) return;
       const actions = {
-        files: () => model.pick(false),
+        files: () => importState.pick(false),
         folder: pickFolder,
         filter: openFilter,
         searchToggle: () => {
@@ -456,15 +456,15 @@ export function createImportPage({
           renderToolbar();
           renderRows();
         },
-        all: () => model.checkAll(true),
-        none: () => model.checkAll(false),
-        remove: () => model.remove(),
-        removeImported: () => model.removeImported(),
-        clear: () => model.clear(),
+        all: () => importState.checkAll(true),
+        none: () => importState.checkAll(false),
+        remove: () => importState.remove(),
+        removeImported: () => importState.removeImported(),
+        clear: () => importState.clear(),
         options: openOptions,
         fillAll: () => missingFlow.fillAll(),
-        recheck: () => model.recheck(),
-        start: () => (model.state.phase === "done" ? results() : start()),
+        recheck: () => importState.recheck(),
+        start: () => (importState.state.phase === "done" ? results() : start()),
       };
       Promise.resolve(actions[target.dataset.action]?.()).catch((error) => {
         showError(report(error), error);
@@ -472,12 +472,12 @@ export function createImportPage({
     });
     P.root.addEventListener("dragover", (event) => {
       event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = model.busy() ? "none" : "copy";
+      if (event.dataTransfer) event.dataTransfer.dropEffect = importState.busy() ? "none" : "copy";
     });
     P.root.addEventListener("drop", (event) => {
       event.preventDefault();
       const paths = [...(event.dataTransfer?.files || [])].map((file) => file.path).filter(Boolean);
-      if (paths.length) model.add(paths);
+      if (paths.length) importState.add(paths);
       // Browser File objects do not expose native paths; the native window drop event handles them in the app.
       else if (!P.context?.info?.native) showError(T("error.native_unavailable"), { code: "native_unavailable" });
     });
@@ -492,7 +492,7 @@ export function createImportPage({
     if (P.countsKey === key) return;
     P.countsKey = key;
     P.dom.filter.setAttribute("aria-label", caption);
-    P.dom.order.setAttribute("aria-label", T(P.ascending ? "roster.asc" : "roster.desc"));
+    P.dom.order.setAttribute("aria-label", T(P.ascending ? "studentList.asc" : "studentList.desc"));
     paint(
       P.dom.header,
       P.art.header(1272 / S, T("import.list"), caption, P.filter !== "all", P.ascending, P.searchOpen),
@@ -505,7 +505,7 @@ export function createImportPage({
           ]) {
             place(P.dom[key], ...Popup.nodeRect(view, `BG_Top_Widget/${path}`));
           }
-          // as on the roster's top menu: the toggle follows the title, ending a gap before the first tool
+          // as on the student list's top menu: the toggle follows the title, ending a gap before the first tool
           const [x, y, , h] = Popup.nodeRect(
               view,
               `BG_Top_Widget/SearchBtn/${P.searchOpen ? "Btn_Pressed" : "Btn_Normal"}`,
@@ -520,9 +520,9 @@ export function createImportPage({
     );
   }
   const filterOptions = () => {
-    const counts = countsOf(model.state.entries);
+    const counts = countsOf(importState.state.entries);
     return [
-      ["all", T("import.filterCount", { state: T("seg.all"), n: model.state.entries.length })],
+      ["all", T("import.filterCount", { state: T("seg.all"), n: importState.state.entries.length })],
       ...STATES.map((state) => [
         state,
         T("import.filterCount", {
@@ -562,9 +562,9 @@ export function createImportPage({
   }
 
   async function openCharacter(entry) {
-    if (model.busy()) return;
+    if (importState.busy()) return;
     const data = await call("import.catalog");
-    // Installed entries supply the same aliases, favourites and Mod counts as the main roster.
+    // Installed entries supply the same aliases, favourites and Mod counts as the main student list.
     const current = new Map(P.catalog.map((alt) => [alt.key, alt]));
     for (const student of data.students)
       student.alts = student.alts.map((alt) => ({ ...alt, ...current.get(alt.key) }));
@@ -581,14 +581,14 @@ export function createImportPage({
       radioOptions,
       emptyNote: (host, caption) => textWidget(host, caption, "empty", { scale: 0.5, origin: [685, 50] }),
       refresh: syncBar,
-      onSelect: (alt) => model.assignAlt(entry.id, alt),
+      onSelect: (alt) => importState.assignAlt(entry.id, alt),
     });
   }
 
   function render() {
     if (!P.visible || !P.root) return;
-    const state = model.state,
-      busy = model.busy();
+    const state = importState.state,
+      busy = importState.busy();
     P.root.dataset.phase = state.phase;
     P.root.setAttribute("aria-busy", String(busy));
     renderToolbar();
@@ -604,10 +604,10 @@ export function createImportPage({
     P.dom.recheck.disabled ||= !state.entries.length && !state.error;
     P.dom.all.disabled ||= !state.valid || state.phase === "done" || !state.entries.some(eligible);
     P.dom.none.disabled ||= !state.valid || state.phase === "done" || !state.checked.size;
-    P.dom.start.disabled = busy || (state.phase !== "done" && (!state.valid || !model.selected().length));
+    P.dom.start.disabled = busy || (state.phase !== "done" && (!state.valid || !importState.selected().length));
     setCaption(
       P.dom.start,
-      state.phase === "done" ? T("import.results") : T("import.action", { n: model.selected().length }),
+      state.phase === "done" ? T("import.results") : T("import.action", { n: importState.selected().length }),
     );
     for (const key of ["files", "folder", "options", "clear", "remove", "removeImported", "all", "none", "recheck"])
       P.dom[key].refresh();
@@ -669,7 +669,7 @@ export function createImportPage({
     render();
   }
 
-  const start = () => model.start();
+  const start = () => importState.start();
   // Popup.message adds UIPopup_GachaCharList/Btn_Checkbox to the same Sort frame for recursive scanning.
   async function pickFolder() {
     const result = await popups.message({
@@ -679,11 +679,11 @@ export function createImportPage({
       ok: T("picker.ok"),
       cancel: T("popup.cancel"),
     });
-    if (P.visible && result.button === "ok") await model.pick(true, result.checked);
+    if (P.visible && result.button === "ok") await importState.pick(true, result.checked);
   }
 
   async function reveal(id) {
-    const entry = model.state.entries.find((entry) => entry.id === id);
+    const entry = importState.state.entries.find((entry) => entry.id === id);
     if (entry && ((P.filter !== "all" && entry.state !== P.filter) || !identified(entry).search.includes(P.query))) {
       P.filter = "all";
       P.query = "";
@@ -699,7 +699,7 @@ export function createImportPage({
       ?.row.scrollIntoView?.({ block: "nearest" });
   }
   const missingFlow = createMissingFlow({
-    model,
+    importState,
     identify: (entry) => identified(entry).name,
     kindName: (kind) => T(KIND_KEYS[kind]),
     title: () => T("nav.import"),
@@ -718,8 +718,8 @@ export function createImportPage({
         })
       ).button === "ok",
   });
-  model.subscribe(() => {
-    if (P.liveRefreshPending && !model.busy()) {
+  importState.subscribe(() => {
+    if (P.liveRefreshPending && !importState.busy()) {
       P.liveRefreshPending = false;
       refreshCurrentPreviews();
     }
@@ -728,10 +728,10 @@ export function createImportPage({
     wake();
     holdArtwork();
     loading.refresh?.();
-    missingFlow.onChange(model.state);
+    missingFlow.onChange(importState.state);
   });
   return {
-    model,
+    importState,
     async show(ctx, data) {
       P.leave();
       wake();
@@ -756,7 +756,7 @@ export function createImportPage({
       P.rowsKey = P.previewKey = null;
       render();
       // The page is usable while these read; a failed options read can be retried from Advanced Options or Import.
-      model.loadOptions();
+      importState.loadOptions();
       await Promise.all([...P.drawings]);
       await ui.decoded(P.root, 15000);
     },
@@ -767,14 +767,14 @@ export function createImportPage({
       wake();
       P.scope?.cancel();
       P.dialogClose?.();
-      model.leave();
+      importState.leave();
     },
     invalidate() {
-      if (model.state.phase !== "running") P.liveRefreshPending = true;
-      model.invalidate();
+      if (importState.state.phase !== "running") P.liveRefreshPending = true;
+      importState.invalidate();
     },
     drop(paths) {
-      return model.add(paths);
+      return importState.add(paths);
     },
     openOptions,
     results,

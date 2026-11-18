@@ -1,4 +1,4 @@
-"""Vertex positions, normals and tangents rewritten in a Mesh typetree (gameassets.model_geometry)."""
+"""Vertex positions, normals and tangents rewritten in a Mesh typetree (gameassets.chibi_geometry)."""
 
 import struct
 from types import SimpleNamespace
@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 from UnityPy.helpers.PackedBitVector import unpack_floats, unpack_ints
 
-from bmpt.gameassets import model_geometry as mg
-from bmpt.gameassets.model_hems import pack_bits
+from bmpt.gameassets import chibi_geometry as mg
+from bmpt.gameassets.chibi_hems import pack_bits
 
 
 def _turn(degrees):

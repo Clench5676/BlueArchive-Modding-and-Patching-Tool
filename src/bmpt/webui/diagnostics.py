@@ -24,6 +24,7 @@ from typing import Any
 from urllib.parse import unquote
 
 from ..host import steam_records, updater
+from ..host.store_formats import RESOURCE_TYPES as LEGACY_RESOURCE_TYPES
 from ..core import devmode, spans
 from ..core.error_codes import code_of
 from bmpt.engine import UI_LANGUAGES, i18n_manager
@@ -42,7 +43,7 @@ _ASSET_FIELD = re.compile(r"(?:[^\r\n\"'=,;<>]|(?<=\w)'(?=\w))+")
 _ASSET_EXTENSION = re.compile(r"(?i)\.(" + _EXTENSIONS + r")(?![\w.])")
 _ASSET_VALUE = re.compile(r"(?is)^.+?\.(" + _EXTENSIONS + r")$")
 _HOME = re.compile(r"(?i)(?:[A-Z]:[/\\](?:Users|Documents and Settings)[/\\]|/(?:Users|home)/)[^/\\\r\n\"']+")
-# The game's own names stay: official bundle file names, CAB ids and the App's model URLs (a variant key). They name
+# The game's own names stay: official bundle file names, CAB ids and the App's chibi URLs (an alt key). They name
 # game data, never the user, and a report without them cannot tell which game file a check refused. Official bundles
 # end in _assets_all_<n> or _scenes_all_<n>, or are Unity's built-in shaders (<32 hex>_unitybuiltinshaders_<n>); an
 # apostrophe occurs only inside a name (a raid scene, "netzach's"), so quotes around a name stay outside it. A match
@@ -72,7 +73,7 @@ def private_text(text: str, secrets: set[str]) -> str:
     Returns:
         The text with the home folder as ``~``, user names as ``[user]``, host names as ``[host]``, credentials
         redacted and file names reduced to ``[asset].<extension>``. The game's own names (official bundles, CAB
-        ids, model URLs) stay, as a report cannot tell which game file a check refused without them.
+        ids, chibi URLs) stay, as a report cannot tell which game file a check refused without them.
     """
     # Normalize common log encodings before scrubbing; the caller encodes only the sanitized result.
     for _ in range(3):
@@ -266,7 +267,10 @@ def import_row(entry: dict, secrets: set[str]) -> dict:
         with_ref(
             {
                 "id": entry.get("id"),
-                "kind": entry.get("kind"),
+                "kind": next(
+                    (old for old, current in LEGACY_RESOURCE_TYPES.items() if current == entry.get("resource_type")),
+                    None,
+                ),
                 "state": entry.get("state"),
                 "reason": entry.get("reason"),
                 "code": detail.get("code")
@@ -490,15 +494,17 @@ class Reports:
         """Count the library's mods per kind from its state file, without taking the library lock.
 
         Returns:
-            The counts of ``spr``, ``lobby``, ``model`` and ``other`` mods; None without services, without a state
-            file or when it cannot be read.
+            Counts by resource type in the report's original format. None when state is unavailable.
         """
         s = self.services
         if s is None:
             return None
         # Read persisted metadata only; taking the library lock could hang a report during failed work.
         try:
-            if hasattr(s.state, "diagnostic_state"):
+            committed = getattr(s, "committed", None)
+            if committed is not None:
+                folder = committed.library_epoch
+            elif hasattr(s.state, "diagnostic_state"):
                 cached = s.state.diagnostic_state()
                 if cached is None:
                     return None
@@ -514,8 +520,12 @@ class Reports:
             data = json.loads(raw)
             mods = data.get("mods", {})
             items = mods.values() if isinstance(mods, dict) else mods
-            counts = Counter(m.get("kind", "other") for m in items if isinstance(m, dict))
-            return {kind: counts.get(kind, 0) for kind in ("spr", "lobby", "model", "other")}
+            counts = Counter(
+                m.get("resource_type", LEGACY_RESOURCE_TYPES.get(m.get("kind", "other")))
+                for m in items
+                if isinstance(m, dict)
+            )
+            return {old: counts[current] for old, current in LEGACY_RESOURCE_TYPES.items()}
         except (OSError, ValueError, TypeError, AttributeError):
             return None
 

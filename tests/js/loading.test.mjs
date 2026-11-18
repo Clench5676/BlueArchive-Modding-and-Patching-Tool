@@ -920,7 +920,7 @@ test("a newer hold without progress keeps an older job's line instead of the gen
   update({ label: "Updating", current: 2, total: 40 });
   const line = () => h.stage.children[0].querySelector(".loading-progress").textContent;
   assert.equal(line(), "Updating (2/40)");
-  // a screen reloading beneath the job (the hall's scene) holds input with no line of its own
+  // a screen reloading beneath the job (the Student Hall's scene) holds input with no line of its own
   const newer = h.loading.hold(() => screen.promise);
   await flush();
   assert.equal(line(), "Updating (2/40)");

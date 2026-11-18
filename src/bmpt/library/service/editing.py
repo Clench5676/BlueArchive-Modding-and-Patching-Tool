@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..records import stored_target
+
 import base64
 import io
 import time
@@ -24,9 +26,9 @@ from ..rebuild import rebuild
 from ..judge import (
     core_of,
     date_of,
-    kind_of_file,
+    resource_type_of_file,
 )
-from ..models import (
+from ..records import (
     Pin,
     RemapResult,
 )
@@ -98,7 +100,7 @@ class EditingMixin:
         sizes = {name: image.size for name, image in view.textures.items()}
         misfit = {name for name, data in mixed.items() if atlas_remap.page_size_mismatch({name: data}, sizes)}
         layout = fingerprint.changed_layouts(self._read_built_against(record), mixed)
-        if kind_of_file(paths[0].name) == "spr":
+        if resource_type_of_file(paths[0].name) == "portrait":
             # the rig the archive keeps for textures no record covers, as compatibility finds it
             unrecorded = {
                 name: data
@@ -236,13 +238,13 @@ class EditingMixin:
         pin = self._current(pin)
         record = self._record(mod_id)
         paths = self._paths(record)
-        if kind_of_file(paths[0].name) != "spr":
+        if resource_type_of_file(paths[0].name) != "portrait":
             return {"redrawn": False, "overlap": 1.0}
         if not isinstance(geometry, dict):
             raise ServiceError("bad_params", key="geometry")
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
-            raise ServiceError("game_file_not_found", variant=record["target"])
+            raise ServiceError("game_file_not_found", alt=stored_target(record))
         originals = {target: self._official_for(target, pin) for target in targets}
         lowest = 1.0
         try:
@@ -328,7 +330,7 @@ class EditingMixin:
         """
         pin = self._current(pin)
         record = self._record(mod_id)
-        if record.get("repaired_from") or self._repaired_id(record):
+        if record.get("repair_source_id") or self._repaired_id(record):
             raise ServiceError("entry_changed")
         self._remap_previews = {
             token: preview
@@ -336,13 +338,13 @@ class EditingMixin:
             if preview["expires"] > time.monotonic() and preview["source"] != mod_id
         }
         paths = self._paths(record)
-        portrait = kind_of_file(paths[0].name) == "spr"
+        portrait = resource_type_of_file(paths[0].name) == "portrait"
         if portrait and not isinstance(geometry, dict):
             raise ServiceError("bad_params", key="geometry")
         identity = self._identity({path.name: path for path in paths})
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
-            raise ServiceError("game_file_not_found", variant=record["target"])
+            raise ServiceError("game_file_not_found", alt=stored_target(record))
 
         def step(key: str, current: int = 1) -> None:
             if progress:
@@ -451,7 +453,7 @@ class EditingMixin:
         """
         pin = self._current(pin)
         record = self._record(mod_id)
-        if record.get("repaired_from") or self._repaired_id(record):
+        if record.get("repair_source_id") or self._repaired_id(record):
             raise ServiceError("entry_changed")
         self._remap_previews = {
             token: preview
@@ -459,12 +461,12 @@ class EditingMixin:
             if preview["expires"] > time.monotonic() and preview["source"] != mod_id
         }
         paths = self._paths(record)
-        if kind_of_file(paths[0].name) != "spr":
+        if resource_type_of_file(paths[0].name) != "portrait":
             raise ServiceError("recorded_rig_unavailable")
         identity = self._identity({path.name: path for path in paths})
         targets = self._spine_parts(core_of(paths[0].name), pin)
         if not targets:
-            raise ServiceError("game_file_not_found", variant=record["target"])
+            raise ServiceError("game_file_not_found", alt=stored_target(record))
 
         def step(key: str, current: int = 1) -> None:
             if progress:
@@ -673,7 +675,7 @@ class EditingMixin:
         """Store the exact prepared repair bytes once, linking source and copy in one state write.
 
         Args:
-            preview: Unexpired token returned by remap, old_rig, or a completed graft check.
+            preview: Unexpired token returned by remap, old_rig, or a completed animation transfer check.
 
         Raises:
             ServiceError: The token expired or the source bytes or repair links changed (entry_changed).
@@ -684,7 +686,7 @@ class EditingMixin:
             raise ServiceError("entry_changed")
         record = self._record(prepared["source"])
         if (
-            record.get("repaired_from")
+            record.get("repair_source_id")
             or self._repaired_id(record)
             or prepared["identity"] != self._identity({path.name: path for path in self._paths(record)})
         ):
@@ -698,9 +700,9 @@ class EditingMixin:
             stored = self._store(
                 files,
                 self._label(record),
-                record["target"],
-                record["kind"],
-                repaired_from=record["id"],
+                stored_target(record),
+                record["resource_type"],
+                repair_source_id=record["id"],
                 built_against=prepared.get("built_against"),
             )
         self._remap_previews.pop(preview, None)

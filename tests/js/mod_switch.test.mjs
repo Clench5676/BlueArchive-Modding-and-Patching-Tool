@@ -1602,13 +1602,13 @@ test("a prompt's cards: the name, the kind and install chips, No Official Copy, 
     [c.key, c.label, c.full, c.chips, c.disabled, c.size],
     [`${GLOBAL}|airi_spr`, "Airi", "Airi", [S("tab.portrait")], false, 100],
   );
-  // the label is the name alone (the kind is the details panel's first chip); a portrait and a lobby are told
+  // the label is the name alone (the kind is the details panel's first chip); a portrait and a memorial lobby are told
   // apart there
   assert.equal(P.card(entry("hina_home", "reset"), { nameOf }).label, "Hina");
-  assert.deepEqual(P.card(entry("hina_home", "reset"), { nameOf }).chips, [S("tab.lobby")]);
-  // two installs: the install chip; an alternate lobby core: its suffix after the kind
+  assert.deepEqual(P.card(entry("hina_home", "reset"), { nameOf }).chips, [S("tab.memorialLobby")]);
+  // two installs: the install chip; an alternate memorial lobby core: its suffix after the kind
   const j = P.card(entry("hina_home_gl", "untracked", { install: JAPAN, overwritten: true }), { state: two, nameOf });
-  assert.deepEqual(j.chips, [`${S("tab.lobby")} gl`, "Japan", S("mods.copy.none")]);
+  assert.deepEqual(j.chips, [`${S("tab.memorialLobby")} gl`, "Japan", S("mods.copy.none")]);
   assert.equal(j.badge.text, S("mods.copy.none"));
   // damaged: listed apart, never ticked, drawn dim
   const d = P.card(entry("yuzu_spr", "damaged"), { state: base(), nameOf });
@@ -2072,11 +2072,11 @@ test("scan, cache cleanup and both switch directions name their action in every 
   }
 });
 
-test("the toggle flushes the event delay and awaits the visible detail or roster redraw", async () => {
+test("the toggle flushes the event delay and awaits the visible detail or student list redraw", async () => {
   const main = readFileSync(new URL("../../src/bmpt/web/js/app/main.js", import.meta.url), "utf8");
   const changed = main.slice(main.indexOf("let heldChange,"), main.indexOf("// the window back in front"));
   assert.match(main, /refreshPage: refreshAfterToggle/, "the switch uses the awaited refresh");
-  for (const screen of ["detail", "roster"]) {
+  for (const screen of ["detail", "student-list"]) {
     const ready = deferred();
     let refreshed = false,
       invalidated = 0,
@@ -2085,7 +2085,7 @@ test("the toggle flushes the event delay and awaits the visible detail or roster
     const env = {
       $: (id) => ({ hidden: id !== `screen-${screen}` }),
       ctx: {
-        invalidateRoster: () => {
+        invalidateStudentList: () => {
           invalidated++;
         },
       },
@@ -2939,7 +2939,7 @@ test("the drift prompt asks the impacts of the mods its entries are configured w
       const Pop = await import("../../src/bmpt/web/js/ui/popup.js");
       const { switchGrid } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
       const { TAN10 } = await import("../../src/bmpt/web/js/core/util.js");
-      for (const kind of [null, "portrait", "lobby", "model"]) {
+      for (const kind of [null, "portrait", "memorialLobby", "chibi"]) {
         const card = switchGrid(kind, Pop.listCardBox(Pop.listLayout(false, kind)).w).card;
         const room = Pop.badgeRoom(card);
         const fit = NGUI.fitText(ui.mods.heldBadge, 26, 20, room - 24, 1);

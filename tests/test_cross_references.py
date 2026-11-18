@@ -109,33 +109,33 @@ def test_whole_model_file_must_point_at_objects_the_game_holds(batch_model_env, 
     source = body(env.tmp / "input" / target.name, 5, name="Modded")
     if change in ("moved", "retyped"):
         with pytest.raises(ServiceError, match="mod_release_mismatch") as refused:
-            env.library.add_files("model", [source], direct=True)
+            env.library.add_files("chibi", [source], direct=True)
         assert refused.value.params["file"] == source.name
         assert not env.library.mods()
     else:
         # the game's own file points there too: not held against the mod
-        env.library.add_files("model", [source], direct=True)
+        env.library.add_files("chibi", [source], direct=True)
         (stored,) = env.library.mods()
         assert stored.file.read_bytes() == source.read_bytes()
-        env.library.apply("hoshino", f"mod:{stored.id}", kind="model")
+        env.library.apply("hoshino", f"mod:{stored.id}", resource_type="chibi")
         assert target.read_bytes() == source.read_bytes()
 
 
 def mod_with_pointers(env, monkeypatch, kind, *, same_name=False):
     """A whole-file mod with a material and a transferable TextAsset, before the shared shader is removed."""
-    if kind != "model":
+    if kind != "chibi":
         env.parts = []
     generated(env, monkeypatch)
     # With both shaders present, the official body may already use 6 while the mod still uses 5. Removing 5 then
     # leaves the body's name and bytes unchanged, including its build signature and any kept copy of the mod.
     held = [(5, SHADER), (6, SHADER)] if same_name else [(5, SHADER)]
     env.original = rename_crc(shared(env.original, held))
-    if kind == "model":
+    if kind == "chibi":
         target = model_bundle(env.game_dir, part="004")
     else:
         core, category = {
-            "spr": ("test_spr", "spinecharacters"),
-            "lobby": ("test_home_gl", "spinelobbies"),
+            "portrait": ("test_spr", "spinecharacters"),
+            "memorialLobby": ("test_home_gl", "spinelobbies"),
             "other": ("common", "ui"),
         }[kind]
         target = game_bundle(env.game_dir, core, category=category, part="004")
@@ -154,21 +154,21 @@ def move_shader(env, target, *, same_name=False):
     return target
 
 
-@pytest.mark.parametrize("kind", ["spr", "lobby", "model", "other"])
+@pytest.mark.parametrize("kind", ["portrait", "memorialLobby", "chibi", "other"])
 @pytest.mark.parametrize("entry_point", ["apply", "toggle"])
 @pytest.mark.parametrize("same_name", [False, True])
 def test_apply_updates_a_file_whose_pointers_a_game_update_left_dangling(
     request, monkeypatch, caplog, kind, entry_point, same_name
 ):
-    env = request.getfixturevalue("batch_model_env" if kind == "model" else "env")
+    env = request.getfixturevalue("batch_model_env" if kind == "chibi" else "env")
     target, mod = mod_with_pointers(env, monkeypatch, kind, same_name=same_name)
     if entry_point == "toggle":
         assert not env.library.toggle(False, True).failed
-        assert env.library.apply(mod.target, f"mod:{mod.id}", kind=kind).deferred
+        assert env.library.apply(mod.target, f"mod:{mod.id}", resource_type=kind).deferred
     target = move_shader(env, target, same_name=same_name)
     with caplog.at_level(logging.INFO, logger="bmpt.library.service"):
         if entry_point == "apply":
-            result = env.library.apply(mod.target, f"mod:{mod.id}", kind=kind)
+            result = env.library.apply(mod.target, f"mod:{mod.id}", resource_type=kind)
             assert target in result.files
         else:
             assert not env.library.toggle(True, False).failed
@@ -181,13 +181,13 @@ def test_apply_updates_a_file_whose_pointers_a_game_update_left_dangling(
     assert len(demotions) == 1 and mod.file.name in demotions[0]
 
 
-@pytest.mark.parametrize("kind", ["spr", "lobby", "model"])
+@pytest.mark.parametrize("kind", ["portrait", "memorialLobby", "chibi"])
 @pytest.mark.parametrize("entry_point", ["apply", "toggle"])
 @pytest.mark.parametrize("needs_crc_fix", [False, True])
 def test_apply_checks_references_after_restoring_omitted_official_parts(
     request, monkeypatch, caplog, kind, entry_point, needs_crc_fix
 ):
-    env = request.getfixturevalue("batch_model_env" if kind == "model" else "env")
+    env = request.getfixturevalue("batch_model_env" if kind == "chibi" else "env")
     target, mod = mod_with_pointers(env, monkeypatch, kind, same_name=True)
     move_shader(env, target, same_name=True)
     # The omitted shared part belongs to this entry, so the write restores its official copy. The install still
@@ -208,13 +208,13 @@ def test_apply_checks_references_after_restoring_omitted_official_parts(
         prune=False,
     )
     if entry_point == "toggle":
-        assert env.library.apply(mod.target, f"mod:{mod.id}", kind=kind).deferred
+        assert env.library.apply(mod.target, f"mod:{mod.id}", resource_type=kind).deferred
     assert not env.library._is_official(env.original)
     monkeypatch.setattr(env.settings, "crc_needed", lambda path: needs_crc_fix)
     assert env.library._needs_crc_fix(mod.file, target) is needs_crc_fix
     with caplog.at_level(logging.DEBUG, logger="bmpt.library.service"):
         if entry_point == "apply":
-            result = env.library.apply(mod.target, f"mod:{mod.id}", kind=kind)
+            result = env.library.apply(mod.target, f"mod:{mod.id}", resource_type=kind)
             assert target in result.files
         else:
             result = env.library.toggle(True, False)
@@ -280,10 +280,10 @@ def test_lobby_update_preserves_official_animation_event_references(
     assert integrity.replacement_key(sources[2].name) == integrity.replacement_key(parts[4].name)
     assert sources[2].name != parts[4].name
     assert integrity.Inspection().structure(sources[2]) == integrity.Inspection().structure(parts[4])
-    (mod,) = env.library.add_files("lobby", sources, direct=True)
+    (mod,) = env.library.add_files("memorialLobby", sources, direct=True)
     if entry_point != "apply":
         assert not env.library.toggle(False, True).failed
-        assert env.library.apply(mod.target, f"mod:{mod.id}", kind="lobby").deferred
+        assert env.library.apply(mod.target, f"mod:{mod.id}", resource_type="memorialLobby").deferred
     parts[0].unlink()
     parts[0] = rename_crc(shared(parts[0], [(6, 114)]))
     pin = env.library.current_pin()
@@ -302,7 +302,7 @@ def test_lobby_update_preserves_official_animation_event_references(
     assert env.library._needs_crc_fix(sources[2], target) is needs_crc_fix
     with caplog.at_level(logging.INFO, logger="bmpt.library.service"):
         if entry_point == "apply":
-            assert target in env.library.apply(mod.target, f"mod:{mod.id}", kind="lobby").files
+            assert target in env.library.apply(mod.target, f"mod:{mod.id}", resource_type="memorialLobby").files
         else:
             result = (
                 env.library.retry_failed()
@@ -312,9 +312,12 @@ def test_lobby_update_preserves_official_animation_event_references(
             assert result is not None and not result.failed and result.done, result
             assert "error" not in env.library.profiles.read()["folders"][pin.key]["configured"][core]
 
-    intro, idle, text = Bundle.load(target).env.objects
-    assert intro.read_typetree()["m_Events"][0]["objectReferenceParameter"] == {"m_FileID": 1, "m_PathID": 6}
-    assert intro.read_typetree()["m_SampleRate"] == 30
+    memorial_lobby_intro, idle, text = Bundle.load(target).env.objects
+    assert memorial_lobby_intro.read_typetree()["m_Events"][0]["objectReferenceParameter"] == {
+        "m_FileID": 1,
+        "m_PathID": 6,
+    }
+    assert memorial_lobby_intro.read_typetree()["m_SampleRate"] == 30
     assert idle.read_typetree()["m_SampleRate"] == 60
     assert text.read().m_Script == "modded"
     demotions = [
@@ -326,7 +329,7 @@ def test_lobby_update_preserves_official_animation_event_references(
 
 
 def test_plan_logs_an_uncheckable_whole_file(env, monkeypatch, caplog):
-    _, mod = mod_with_pointers(env, monkeypatch, "lobby", same_name=True)
+    _, mod = mod_with_pointers(env, monkeypatch, "memorialLobby", same_name=True)
     omitted = rename_crc(unity_bundle(game_bundle(env.game_dir, "test_home_gl", part="001"), payload=b"omitted" * 8))
     record = env.library._record(mod.id)
     original = env.library._official_for
@@ -345,9 +348,9 @@ def test_plan_logs_an_uncheckable_whole_file(env, monkeypatch, caplog):
 
 @pytest.mark.parametrize("entry_point", ["cached_build", "built_replacements"])
 def test_a_stale_kept_copy_rebuilds_by_updating_its_source(env, monkeypatch, caplog, entry_point):
-    target, mod = mod_with_pointers(env, monkeypatch, "lobby", same_name=True)
+    target, mod = mod_with_pointers(env, monkeypatch, "memorialLobby", same_name=True)
     official = target.read_bytes()
-    env.library.apply(mod.target, f"mod:{mod.id}", kind="lobby")
+    env.library.apply(mod.target, f"mod:{mod.id}", resource_type="memorialLobby")
     assert not env.library.toggle(False, True).failed
     if entry_point == "cached_build":
         assert not env.library.toggle(True, False).failed
@@ -356,7 +359,7 @@ def test_a_stale_kept_copy_rebuilds_by_updating_its_source(env, monkeypatch, cap
     move_shader(env, target, same_name=True)
     with caplog.at_level(logging.INFO, logger="bmpt.library.service"):
         if entry_point == "cached_build":
-            env.library.apply(mod.target, f"mod:{mod.id}", kind="lobby")
+            env.library.apply(mod.target, f"mod:{mod.id}", resource_type="memorialLobby")
         else:
             assert not env.library.toggle(True, False).failed
     assert "points at objects the game no longer holds, rebuilding" in caplog.text
@@ -367,12 +370,12 @@ def test_a_stale_kept_copy_rebuilds_by_updating_its_source(env, monkeypatch, cap
 
 def test_apply_still_refuses_a_dangling_pointer_transferred_by_replace_all(batch_model_env, monkeypatch):
     env = batch_model_env
-    target, mod = mod_with_pointers(env, monkeypatch, "model")
+    target, mod = mod_with_pointers(env, monkeypatch, "chibi")
     target = move_shader(env, target)
     official = target.read_bytes()
     env.settings.set("replace_all", True)
     with pytest.raises(ServiceError, match="mod_release_mismatch"):
-        env.library.apply(mod.target, f"mod:{mod.id}", kind="model")
+        env.library.apply(mod.target, f"mod:{mod.id}", resource_type="chibi")
     assert target.read_bytes() == official
 
 
@@ -381,11 +384,11 @@ def test_a_demoted_file_with_no_update_target_keeps_the_existing_error(batch_mod
     env.original = rename_crc(shared(env.original, [(5, SHADER), (6, SHADER)]))
     target = rename_crc(body(model_bundle(env.game_dir, part="004"), 6))
     source = body(env.tmp / "input" / target.name, 5, name="Modded", payload="modded")
-    (mod,) = env.library.add_files("model", [source], direct=True)
+    (mod,) = env.library.add_files("chibi", [source], direct=True)
     move_shader(env, target, same_name=True)
     official = target.read_bytes()
     with pytest.raises(ServiceError, match="game_file_not_found"):
-        env.library.apply(mod.target, f"mod:{mod.id}", kind="model")
+        env.library.apply(mod.target, f"mod:{mod.id}", resource_type="chibi")
     assert target.read_bytes() == official
 
 
@@ -401,9 +404,9 @@ def test_a_whole_file_uses_objects_supplied_by_the_same_write(batch_model_env, m
     ]
     if crc_name:
         sources[0] = rename_crc(sources[0])
-    (mod,) = env.library.add_files("model", sources, direct=True)
+    (mod,) = env.library.add_files("chibi", sources, direct=True)
     with caplog.at_level(logging.INFO, logger="bmpt.library.service"):
-        env.library.apply(mod.target, f"mod:{mod.id}", kind="model")
+        env.library.apply(mod.target, f"mod:{mod.id}", resource_type="chibi")
     assert target.read_bytes() == sources[0].read_bytes()
     assert dependency.read_bytes() == sources[1].read_bytes()
     assert "updating it as a file of an older release" not in caplog.text

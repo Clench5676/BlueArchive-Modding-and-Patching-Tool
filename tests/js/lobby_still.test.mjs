@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { lobbyStillViewport } from "../../src/bmpt/web/js/lobby/lobby-still.js";
+import { memorialLobbyStillViewport } from "../../src/bmpt/web/js/memorial-lobby/memorial-lobby-still.js";
 // Coordinates derived from Ui's UILobbyElement / CH0169_home, with no game assets.
 const ui = { view: { x: -1480, y: -832.5, w: 2960, h: 1665 }, layer: { x: 0, y: -962, scale: 1 } };
 for (const aspect of [16 / 9, 384 / 352, 1, 480 / 880])
   test(`Ui's ${aspect} still contains only the game camera`, () => {
-    const v = lobbyStillViewport(ui, aspect),
+    const v = memorialLobbyStillViewport(ui, aspect),
       layer = ui.layer;
     const rect = {
       x: v.x * layer.scale + layer.x,
@@ -35,7 +35,7 @@ for (const aspect of [16 / 9, 384 / 352, 1, 480 / 880])
   });
 
 test("a custom prefab layer transform changes skeleton coordinates, never the visible camera", () => {
-  const v = lobbyStillViewport({ ...ui, layer: { x: 37.5, y: -880, scale: 0.72 } }, 16 / 9);
+  const v = memorialLobbyStillViewport({ ...ui, layer: { x: 37.5, y: -880, scale: 0.72 } }, 16 / 9);
   assert.ok(Math.abs(v.x * 0.72 + 37.5 + 1480) < 1e-8);
   assert.ok(Math.abs(v.y * 0.72 - 880 + 832.5) < 1e-8);
 });

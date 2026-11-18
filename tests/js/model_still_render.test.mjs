@@ -9,9 +9,9 @@ register(
   if (spec.startsWith("three/addons/")) return { url: ${JSON.stringify(VENDOR + "examples/jsm/")} + spec.slice(13), shortCircuit: true };
   return next(spec, ctx); }`)}`,
 );
-const { createStillView } = await import("../../src/bmpt/web/js/model/model.js");
-const { FORMATION_VIEW, visibleStillFrame } = await import("../../src/bmpt/web/js/model/model-camera.js");
-const { OUTLINE } = await import("../../src/bmpt/web/js/model/chibi-materials.js");
+const { createStillView } = await import("../../src/bmpt/web/js/chibi/chibi.js");
+const { FORMATION_VIEW, visibleStillFrame } = await import("../../src/bmpt/web/js/chibi/chibi-camera.js");
+const { OUTLINE } = await import("../../src/bmpt/web/js/chibi/chibi-materials.js");
 const vertices = new Float32Array([-0.3, 0, 0, 0.3, 0, 0, 0, 1.1, 0]);
 const fixture = new TextEncoder().encode(
   JSON.stringify({
@@ -109,7 +109,7 @@ function gpu({ blank = false, lost = false, blankAfterFit = false, lostAfterFit 
   };
 }
 
-test("a source-specific model uses the detail shaders and redraws its visible bounds at full resolution", async () => {
+test("a source-specific chibi uses the detail shaders and redraws its visible bounds at full resolution", async () => {
   const renderer = gpu(),
     view = createStillView({ renderer }),
     controller = new AbortController();

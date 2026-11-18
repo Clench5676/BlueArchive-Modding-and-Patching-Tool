@@ -12,7 +12,7 @@ import pytest
 from PIL import Image
 
 from bmpt.core.errors import ServiceError
-from bmpt.library.models import Pin, PhotographApplyResult
+from bmpt.library.records import Pin, ThumbnailApplyResult
 from bmpt.webui.server import MAX_BODY
 from test_webui import app, call, rpc, services
 
@@ -20,38 +20,38 @@ from test_webui import app, call, rpc, services
 @pytest.fixture
 def photography_env(services, tmp_path):
     library, game = services.library, services.game
-    library.photographs = services.thumbnail_store
+    library.thumbnails = services.thumbnail_store
     pin = Pin("install", tmp_path / "game", (tmp_path / "game",), "global")
     library.pins = [pin]
-    services.catalog.v.portrait = "Student_Portrait_Test_Collection"
+    services.catalog.v.official_thumbnail = "Student_Portrait_Test_Collection"
     descriptor = {
-        "name": services.catalog.v.portrait,
+        "name": services.catalog.v.official_thumbnail,
         "bundle": "uis-01_common-14_charactercollect-_mxload-2024-01-01_000_assets_all_1.bundle",
         "cab": "CAB-test",
         "pid": 1,
     }
     game.collection_target = lambda name: dict(descriptor)
     chosen = {"id": None, "known": True, "enabled": True}
-    library.photograph_choice = lambda target, selected: dict(chosen)
-    library.photograph_removal_info = lambda variant, key: {"official": key == "official", "used": chosen["id"] == key}
+    library.thumbnail_choice = lambda target, selected: dict(chosen)
+    library.thumbnail_removal_info = lambda alt, key: {"official": key == "official", "used": chosen["id"] == key}
 
-    def delete(variant, key, confirm=False, log=None):
+    def delete(alt, key, confirm=False, log=None):
         if key == chosen["id"]:
             if not confirm:
                 raise ServiceError("asset_delete_confirm")
             chosen["id"] = None
-        return services.thumbnail_store.delete(variant, key)
+        return services.thumbnail_store.delete(alt, key)
 
-    library.delete_photograph = delete
+    library.delete_thumbnail = delete
 
-    def apply(variant, key, target, pin=None, log=None, progress=None):
+    def apply(alt, key, target, pin=None, log=None, progress=None):
         assert pin.key == "install" and target["name"] == descriptor["name"]
         chosen["id"] = key
-        return PhotographApplyResult(
-            variant, "official" if key is None else "mod:photo", [], deferred=not library.enabled, cores=["other:test"]
+        return ThumbnailApplyResult(
+            alt, "official" if key is None else "mod:photo", [], deferred=not library.enabled, cores=["other:test"]
         )
 
-    library.apply_photograph = apply
+    library.apply_thumbnail = apply
     stream = io.BytesIO()
     Image.new("RGBA", (202, 228), (10, 130, 200, 240)).save(stream, format="PNG")
     return {
@@ -72,15 +72,15 @@ def done(services, key):
     return job.result
 
 
-def test_save_select_asset_and_roster_thumbnail(app, services, photography_env):
+def test_save_select_asset_and_student_list_thumbnail(app, services, photography_env):
     env = photography_env
     saved = rpc(app, "thumbnails.save", alt="hoshino", png=env["png"], mode="portrait")["result"]
     key = saved["saved"]
     selected = rpc(app, "thumbnails.select", alt="hoshino", id=key)["result"]
     url = selected["thumbnails"][0]["url"]
     assert call(app, url)[2] == env["raw"]
-    roster = rpc(app, "students.list")["result"]
-    assert roster["students"][0]["alts"][0]["thumbnail"] == url
+    student_list = rpc(app, "students.list")["result"]
+    assert student_list["students"][0]["alts"][0]["thumbnail"] == url
     assert rpc(app, "student.get", key="hoshino")["result"]["alts"][0]["thumbnail"] == url
     current = rpc(app, "thumbnails.list", alt="hoshino")["result"]
     assert current["default"].startswith("/asset/thumbnails/default/")
@@ -90,43 +90,43 @@ def test_save_select_asset_and_roster_thumbnail(app, services, photography_env):
 @pytest.mark.parametrize("enabled", [True, False])
 def test_applied_is_scoped_to_the_shown_skin_but_deletion_checks_every_skin(app, services, photography_env, enabled):
     original = services.catalog.v
-    alternative = replace(original, key="hoshino_swimsuit", portrait="Student_Portrait_Test_swimsuit_Collection")
-    services.catalog.f.variants.append(alternative)
+    alternative = replace(
+        original, key="hoshino_swimsuit", official_thumbnail="Student_Portrait_Test_swimsuit_Collection"
+    )
+    services.catalog.f.alts.append(alternative)
     keys = [
         rpc(app, "thumbnails.save", alt=v.key, png=photography_env["png"], mode="portrait")["result"]["saved"]
         for v in (original, alternative)
     ]
-    choices = dict(zip([v.portrait for v in (original, alternative)], keys))
+    choices = dict(zip([v.official_thumbnail for v in (original, alternative)], keys))
     services.game.collection_target = lambda name: {**photography_env["descriptor"], "name": name}
-    services.library.photograph_choice = lambda descriptor, pin: {
+    services.library.thumbnail_choice = lambda descriptor, pin: {
         "id": choices[descriptor["name"]],
         "known": True,
         "enabled": enabled,
         "pending": not enabled,
     }
 
-    def removal_info(variant, key):
-        targets = sorted(v.key for v in (original, alternative) if choices[v.portrait] == key)
+    def removal_info(alt, key):
+        targets = sorted(v.key for v in (original, alternative) if choices[v.official_thumbnail] == key)
         return {
             "official": False,
             "used": bool(targets),
-            "used_here": variant in targets,
-            "used_elsewhere": any(target != variant for target in targets),
+            "used_here": alt in targets,
+            "used_elsewhere": any(target != alt for target in targets),
             "targets": targets,
         }
 
-    services.library.photograph_removal_info = removal_info
-    for variant, own, other in [(original, keys[0], keys[1]), (alternative, keys[1], keys[0])]:
-        result = rpc(app, "thumbnails.list", alt=variant.key)["result"]
+    services.library.thumbnail_removal_info = removal_info
+    for alt, own, other in [(original, keys[0], keys[1]), (alternative, keys[1], keys[0])]:
+        result = rpc(app, "thumbnails.list", alt=alt.key)["result"]
         assert {entry["alt"] for entry in result["thumbnails"]} == {original.key, alternative.key}
         assert {entry["id"] for entry in result["thumbnails"] if entry["applied"]} == {own}
         assert result["game"]["id"] == own and result["game"]["enabled"] == enabled
         for key in (own, other):
-            assert rpc(app, "thumbnails.removalInfo", alt=variant.key, id=key)["result"] == removal_info(
-                variant.key, key
-            )
+            assert rpc(app, "thumbnails.removalInfo", alt=alt.key, id=key)["result"] == removal_info(alt.key, key)
     # Returning to official must not mark the other skin's persisted photo Applied.
-    choices[original.portrait] = None
+    choices[original.official_thumbnail] = None
     result = rpc(app, "thumbnails.list", alt=original.key)["result"]
     assert result["game"]["id"] == "official" and not any(entry["applied"] for entry in result["thumbnails"])
     assert rpc(app, "thumbnails.removalInfo", alt=original.key, id=keys[1])["result"]["used"]
@@ -139,7 +139,7 @@ def test_unavailable_or_unknown_target_has_no_applied_photo(app, services, photo
     if unavailable == "game":
         services.library.pins = []
     elif unavailable == "target":
-        services.catalog.v.portrait = None
+        services.catalog.v.official_thumbnail = None
     result = rpc(app, "thumbnails.list", alt="hoshino")["result"]
     assert not any(entry["applied"] for entry in result["thumbnails"])
 
@@ -176,7 +176,7 @@ def test_capture_upload_has_a_bounded_larger_limit_without_widening_other_rpcs(a
 
 
 def test_missing_original_keeps_app_photography_and_default_restore_available(app, services, photography_env):
-    services.catalog.v.portrait = None
+    services.catalog.v.official_thumbnail = None
     saved = rpc(app, "thumbnails.save", alt="hoshino", png=photography_env["png"], mode="portrait")["result"]
     current = rpc(app, "thumbnails.list", alt="hoshino")["result"]
     assert not current["applicable"] and current["default"] is None
@@ -208,7 +208,7 @@ def test_saving_does_not_wait_for_an_unrelated_game_status_read(app, services, p
     def blocked(*args):
         raise AssertionError("A capture must not request game status")
 
-    services.library.photograph_choice = blocked
+    services.library.thumbnail_choice = blocked
     saved = rpc(app, "thumbnails.save", alt="hoshino", png=photography_env["png"], mode="portrait")["result"]
     assert services.thumbnail_store.image("hoshino", saved["saved"]) == photography_env["raw"]
 
@@ -226,7 +226,7 @@ def test_photo_only_library_moves_with_images_and_app_choice(app, services, phot
     assert not (old / "photographs").exists()
 
 
-def test_preview_cache_clear_does_not_remove_photographs(app, services, photography_env):
+def test_preview_cache_clear_does_not_remove_thumbnails(app, services, photography_env):
     from types import SimpleNamespace
 
     saved = rpc(app, "thumbnails.save", alt="hoshino", png=photography_env["png"], mode="portrait")["result"]
@@ -321,7 +321,7 @@ def test_restore_reuses_or_creates_one_default_and_reports_the_deletion_identity
         assert entry["applied"] == info["used"] == (entry["id"] == key)
     assert services.thumbnail_store.image("hoshino", key) == (env["raw"] if existing else stream.getvalue())
     done(services, rpc(app, "thumbnails.restore", alt="hoshino", png=env["png"])["result"])
-    assert len(services.thumbnail_store.list("hoshino")["photos"]) == 2
+    assert len(services.thumbnail_store.list("hoshino")["thumbnails"]) == 2
     done(services, rpc(app, "thumbnails.delete", alt="hoshino", id=saved)["result"])
     failed = rpc(app, "thumbnails.delete", alt="hoshino", id=key)["result"]
     deadline = time.monotonic() + 3
@@ -358,19 +358,19 @@ def test_a_save_or_selection_arriving_while_the_manifest_is_parsed_does_not_dead
 ):
     """The reader holds the photograph lock and looks families up; the writer arrives meanwhile. The writer must not
     hold the services lock while it waits for the photograph lock: the reader would then wait for the services lock."""
-    from bmpt.library.photographs import Photographs
+    from bmpt.library.thumbnails import Thumbnails
 
     env = photography_env
     key = rpc(app, "thumbnails.save", alt="hoshino", png=env["png"], mode="portrait")["result"]["saved"]
     rpc(app, "thumbnails.select", alt="hoshino", id=key)
     reading, writing, release = threading.Event(), threading.Event(), threading.Event()
-    real_chosen, real_save, real_select = Photographs._chosen, Photographs.save, Photographs.select
+    real_chosen, real_save, real_select = Thumbnails._chosen, Thumbnails.save, Thumbnails.select
 
-    def chosen(self, data, variant):
+    def chosen(self, data, alt):
         if threading.current_thread().name == "reader" and not reading.is_set():
             reading.set()  # inside the photograph lock, before the family lookup
             assert writing.wait(10) and release.wait(10)
-        return real_chosen(self, data, variant)
+        return real_chosen(self, data, alt)
 
     def entering(real):
         def wrapper(self, *args, **kwargs):
@@ -380,9 +380,9 @@ def test_a_save_or_selection_arriving_while_the_manifest_is_parsed_does_not_dead
 
         return wrapper
 
-    monkeypatch.setattr(Photographs, "_chosen", chosen)
-    monkeypatch.setattr(Photographs, "save", entering(real_save))
-    monkeypatch.setattr(Photographs, "select", entering(real_select))
+    monkeypatch.setattr(Thumbnails, "_chosen", chosen)
+    monkeypatch.setattr(Thumbnails, "save", entering(real_save))
+    monkeypatch.setattr(Thumbnails, "select", entering(real_select))
     results = {}
     reader = _run(lambda: services.thumbnail_store.list("hoshino"), "reader", results)
     assert reading.wait(10)
@@ -437,17 +437,17 @@ def test_no_manifest_call_waits_for_the_services_lock(services, photography_env)
     assert stuck == [] and results["worker"] == "done", results
 
 
-def test_a_library_move_waits_for_a_photograph_save_and_the_photo_lands_in_the_new_folder(
+def test_a_library_move_waits_for_a_thumbnail_save_and_the_photo_lands_in_the_new_folder(
     app, services, photography_env, monkeypatch, tmp_path
 ):
     """The one thing the services lock around a save kept out: the move that leaves the folder the save writes to."""
-    from bmpt.library.photographs import Photographs
+    from bmpt.library.thumbnails import Thumbnails
 
     env = photography_env
     rpc(app, "thumbnails.save", alt="hoshino", png=env["png"], mode="portrait")  # a library worth moving
     old = services.library_dir()
     saving, release = threading.Event(), threading.Event()
-    real_save = Photographs.save
+    real_save = Thumbnails.save
 
     def save(self, *args, **kwargs):
         if threading.current_thread().name == "saver":
@@ -455,7 +455,7 @@ def test_a_library_move_waits_for_a_photograph_save_and_the_photo_lands_in_the_n
             assert release.wait(10)
         return real_save(self, *args, **kwargs)
 
-    monkeypatch.setattr(Photographs, "save", save)
+    monkeypatch.setattr(Thumbnails, "save", save)
     results = {}
     saver = _run(lambda: services.thumbnails.save("hoshino", env["png"], "portrait", "", "", ""), "saver", results)
     assert saving.wait(10)
@@ -469,4 +469,4 @@ def test_a_library_move_waits_for_a_photograph_save_and_the_photo_lands_in_the_n
     key = results["saver"]["saved"]
     assert (target / "photographs" / "images" / f"{key}.png").read_bytes() == env["raw"]
     assert not (old / "photographs").exists(), "the save landed in the folder the move left"
-    assert len(services.thumbnail_store.list("hoshino")["photos"]) == 2
+    assert len(services.thumbnail_store.list("hoshino")["thumbnails"]) == 2

@@ -165,8 +165,9 @@ export function restOnly(geometry) {
 }
 
 /**
- * The setup pose of a rig for the graft (spine/graft.py setup): per bone its world matrix [a, b, c, d, x, y], per
- * slot its bone, and per skin attachment that draws a region its page, world vertices, page UVs and triangles.
+ * The setup pose of a rig for adding animations (spine/add_animations.py setup): per bone its world matrix [a, b, c, d,
+ * x, y], per slot its bone, and per skin attachment that draws a region its page, world vertices, page UVs and
+ * triangles.
  */
 export function setupOf(S, atlasText, skeletonData) {
   const { data, missing } = load(S, atlasText, skeletonData);
@@ -217,9 +218,9 @@ export function setupOf(S, atlasText, skeletonData) {
 }
 
 /**
- * Poses for the graft's check (spine/graft.py choose), in rebake.rig's shape: the rest pose left empty and, per
- * animation of `check` (name -> slots) the skeleton has, what those slots draw with the idle on track 0 and the
- * animation on track 1.
+ * Poses for the check of added animations (spine/add_animations.py choose), in rebake.rig's shape: the rest pose left
+ * empty and, per animation of `check` (name -> slots) the skeleton has, what those slots draw with the idle on track 0
+ * and the animation on track 1.
  */
 export function partPoses(S, atlasText, skeletonData, check) {
   const { data, missing } = load(S, atlasText, skeletonData);
@@ -234,9 +235,9 @@ export function partPoses(S, atlasText, skeletonData, check) {
 }
 
 /**
- * The graft's check of a rig without a picture to compare (spine/graft.py plain): the animations of `names` the
- * runtime cannot pose (all of them when the rig does not read), each tried on track 0 from the setup pose at
- * `times` (shares of its duration). An animation fails when posing it throws or gives a bone or a drawn vertex
+ * The check of added animations on a rig without a picture to compare (spine/add_animations.py plain): the animations
+ * of `names` the runtime cannot pose (all of them when the rig does not read), each tried on track 0 from the setup
+ * pose at `times` (shares of its duration). An animation fails when posing it throws or gives a bone or a drawn vertex
  * that is not finite; one the skeleton lacks fails too.
  * @param {string[]} names The animations to try.
  * @param {number[]} [times] The shares of each animation's duration to pose at.

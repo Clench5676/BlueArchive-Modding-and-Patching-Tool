@@ -57,7 +57,7 @@ test("the hint takes the description tooltip's numbers", () => {
 });
 
 for (const locale of LOCALES)
-  for (const key of ["model.unfit", "model.crossCharacter", "model.beyondFit", "model.exParts", "model.carriedShader"])
+  for (const key of ["chibi.unfit", "chibi.crossCharacter", "chibi.beyondFit", "chibi.exParts", "chibi.carriedShader"])
     test(`${key} fits the tooltip above the control (${locale})`, () => {
       globalThis.document.documentElement.lang = locale;
       const style = hintStyle(PREFAB),
@@ -136,7 +136,7 @@ test("a card's hint is drawn around its scrolling list, not inside it, where the
   // a first-row card's hint above it then stays inside the popup, above the list's top edge
   const style = hintStyle(PREFAB),
     [l, t, w, h] = [20, 270, 200, 300];
-  const hint = hintLayout("Cross-character model, may break", [l + 300, t - 90, w, h], 1920, 1080, style);
+  const hint = hintLayout("Cross-character chibi, may break", [l + 300, t - 90, w, h], 1920, 1080, style);
   assert.equal(hint.side, "top");
   assert.ok(hint.origin[1] - (hint.h / 2 - BOX_INSET.top) * S >= 0);
   // any other control keeps its own layer

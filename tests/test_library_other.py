@@ -8,7 +8,7 @@ import pytest
 
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.core.errors import ServiceError
-from bmpt.library import ModLibrary, supports_kind
+from bmpt.library import ModLibrary, supports_resource_type
 from bmpt.library.identity import identify
 from bmpt.library.integrity import Contents, inspect as inspect_bundle
 from bmpt.library.judge import core_of, other_target
@@ -37,7 +37,7 @@ def other_env(setup_library):
 
 def test_generic_identity_is_the_official_file_slot_not_a_student_or_bare_core(other_env):
     env = other_env
-    assert supports_kind("other")
+    assert supports_resource_type("other")
     assert len({core_of(path.name) for path in env.parts}) == 3
     newer = game_bundle(env.tmp / "newer", "common", category="ui", part="textures", date="2026-10-01")
     assert core_of(newer.name) == core_of(env.parts[0].name)
@@ -45,7 +45,7 @@ def test_generic_identity_is_the_official_file_slot_not_a_student_or_bare_core(o
     assert core_of(another_part.name) != core_of(env.parts[0].name)
     name, target, kind = identify(env.parts[0], env.parts[0].name, env.catalog)
     assert (name, target, kind) == (env.parts[0].name, other_target([name]), "other")
-    assert env.catalog.variant_for_core(core_of(name)) is None
+    assert env.catalog.alt_for_core(core_of(name)) is None
 
 
 def test_generic_multi_file_add_apply_restore_reload_and_remove(other_env):
@@ -53,15 +53,15 @@ def test_generic_multi_file_add_apply_restore_reload_and_remove(other_env):
     uploads = [make_mod(p, env.tmp / "upload", payload=f"mod {i}".encode()) for i, p in enumerate(env.parts)]
     added = env.library.add_files("other", uploads, apply=True)
     (mod,) = added
-    assert mod.kind == "other" and added.applied == [mod]
+    assert mod.resource_type == "other" and added.applied == [mod]
     assert [p.read_bytes() for p in env.parts] == [p.read_bytes() for p in uploads]
     assert len(env.library.state(mod.target).files) == 3
     assert all(p.restorable for p in env.library.state(mod.target).files)
     assert all((env.root / "originals" / p.name).read_bytes() == env.official[p] for p in env.parts)
     assert env.library.add_files("other", uploads).duplicates == [mod]
     library = ModLibrary(env.root, env.catalog, object(), env.settings)
-    assert library.apply(mod.target, f"mod:{mod.id}", kind="other").unchanged
-    library.restore(mod.target, kind="other")
+    assert library.apply(mod.target, f"mod:{mod.id}", resource_type="other").unchanged
+    library.restore(mod.target, resource_type="other")
     assert all(p.read_bytes() == data for p, data in env.official.items())
     assert not library.remove(mod.id, confirm=True).failed
     assert not library.mods()
@@ -83,7 +83,7 @@ def test_generic_overlapping_mods_are_independent_alternatives_and_official_rest
     assert not env.library.remove(first.id, confirm=True).failed
     assert env.parts[0].read_bytes() == second.file.read_bytes()
     assert env.parts[1].read_bytes() == env.official[env.parts[1]]
-    env.library.restore(second.target, kind="other")
+    env.library.restore(second.target, resource_type="other")
     assert env.parts[0].read_bytes() == env.official[env.parts[0]]
 
 
@@ -93,7 +93,7 @@ def test_generic_master_switch_defers_and_reapplies_multiple_slots(other_env):
     added = env.library.add_files("other", [make_mod(p, env.tmp / "upload") for p in env.parts], apply=True)
     (mod,) = added
     assert added.configured == [mod] and not added.applied
-    assert env.library.variant_cores(mod.target) == {core_of(path.name) for path in env.parts}
+    assert env.library.alt_cores(mod.target) == {core_of(path.name) for path in env.parts}
     assert env.library.other_mods()[0]["state"] == "set"
     assert all(p.read_bytes() == data for p, data in env.official.items())
     for on in [True, False, True]:
@@ -110,16 +110,16 @@ def test_generic_drift_untracked_adoption_and_relocation(other_env):
     (mod,) = env.library.add_files("other", [make_mod(target, env.tmp / "upload")], apply=True)
     target.write_bytes(env.official[target])
     state = next(e for e in env.library.scan().entries if e.core == core_of(target.name))
-    assert state.kind == "other" and state.state == "reset"
+    assert state.resource_type == "other" and state.state == "reset"
     assert not env.library.restore_drift([{"install": state.install, "core": state.core}]).failed
     assert target.read_bytes() == mod.file.read_bytes()
-    env.library.restore(mod.target, kind="other")
+    env.library.restore(mod.target, resource_type="other")
     Path(str(target) + ".backup").write_bytes(env.official[target])
     target.write_bytes(header_bundle(b"outside"))
     state = next(e for e in env.library.scan().entries if e.core == core_of(target.name))
     assert state.state == "untracked"
     adopted = env.library.adopt([{"install": state.install, "core": state.core}])
-    assert adopted.added and not adopted.failed and adopted.added[0].kind == "other"
+    assert adopted.added and not adopted.failed and adopted.added[0].resource_type == "other"
     relocated = env.tmp / "relocated"
     shutil.move(env.root, relocated)
     library = ModLibrary(relocated, env.catalog, object(), env.settings)
@@ -203,12 +203,12 @@ def test_generic_older_name_update_creates_output_before_core_save(other_env, mo
     monkeypatch.setattr(Bundle, "load", lambda *args: FakeBundle())
     monkeypatch.setattr(env.settings, "crc_needed", lambda path: crc_needed)
     (mod,) = env.library.add_files("other", [upload])
-    result = env.library.apply(mod.target, f"mod:{mod.id}", kind="other")
+    result = env.library.apply(mod.target, f"mod:{mod.id}", resource_type="other")
     assert result.files == [target]
     assert saves == [target.name]
     expected = CRCUtils.apply_crc_fix(updated, int(parse_filename(target.name).crc)) if crc_needed else updated
     assert target.read_bytes() == expected
-    env.library.restore(mod.target, kind="other")
+    env.library.restore(mod.target, resource_type="other")
     assert target.read_bytes() == env.official[target]
 
 
@@ -239,13 +239,13 @@ def test_generic_exact_name_crc_save_preserves_whole_bundle_outside_update_types
     monkeypatch.setattr(env.settings, "crc_needed", lambda path: True)
     monkeypatch.setattr(env.settings, "asset_types", lambda: {"Texture2D"})
     (mod,) = env.library.add_files("other", [upload])
-    result = env.library.apply(mod.target, f"mod:{mod.id}", kind="other")
+    result = env.library.apply(mod.target, f"mod:{mod.id}", resource_type="other")
     assert result.files == [target]
     assert saves == [mod.file]
     assert target.read_bytes() == CRCUtils.apply_crc_fix(upload.read_bytes(), int(parse_filename(target.name).crc))
     assert payload in target.read_bytes()
     assert Bundle.check_crc_match(target)
-    env.library.restore(mod.target, kind="other")
+    env.library.restore(mod.target, resource_type="other")
     assert target.read_bytes() == env.official[target]
 
 
@@ -300,7 +300,7 @@ def test_generic_current_alternative_does_not_resolve_through_an_older_mods_asse
     rows = {row["id"]: row for row in env.library.other_mods()}
     assert rows[old.id]["state"] == "inactive"
     assert rows[current.id]["selected"]
-    env.library.restore(current.target, kind="other")
+    env.library.restore(current.target, resource_type="other")
     assert newer.read_bytes() == header_bundle(b"new official")
 
 
@@ -310,12 +310,12 @@ def test_generic_missing_official_import_and_apply_keep_the_outside_slot(other_e
     target.write_bytes(header_bundle(b"outside generic mod"))
     before = target.read_bytes()
     (mod,) = env.library.add_files("other", [make_mod(target, env.tmp / "incoming")])
-    result = env.library.apply(mod.target, f"mod:{mod.id}", kind="other")
+    result = env.library.apply(mod.target, f"mod:{mod.id}", resource_type="other")
     assert result.kept_current and not result.incomplete
     (kept,) = [entry for entry in env.library.mods() if entry.id != mod.id]
-    assert kept.kind == "other" and kept.file.read_bytes() == before
+    assert kept.resource_type == "other" and kept.file.read_bytes() == before
     assert target.read_bytes() == mod.file.read_bytes()
     assert next(row for row in env.library.other_mods() if row["id"] == mod.id)["overwritten"]
     assert not (env.root / "originals" / target.name).exists()
     with pytest.raises(ServiceError, match="official_unavailable"):
-        env.library.restore(mod.target, kind="other")
+        env.library.restore(mod.target, resource_type="other")

@@ -1,5 +1,5 @@
-// Tests for web/js/core/linear.js (the lobby's linear-light drawing) against a recording stand-in for WebGL2: what a
-// player gets on attach is freed again on detach. Run by tests/test_lobby_linear.py with Node's test runner.
+// Tests for web/js/core/linear.js (the memorial lobby's linear-light drawing) against a recording stand-in for WebGL2:
+// what a player gets on attach is freed again on detach. Run by tests/test_lobby_linear.py with Node's test runner.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -122,7 +122,7 @@ test("a lost context is not asked to delete anything", () => {
   assert.equal(p.restorables.length, 0);
 });
 
-// --- the game camera's post-processing (lobby.json "post") ---
+// --- the game camera's post-processing (memorial-lobby.json "post") ---
 const close = (a, b, eps = 1e-5) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 const closeAll = (a, b, eps) => {
   assert.equal(a.length, b.length);
@@ -150,7 +150,7 @@ test("Toki: chromatic aberration and a brighter gain, the gain's offset taken as
   assert.equal(p.grade, true);
 });
 
-test("Miku: a coloured gain is decoded, scaled by 0.8 and kept at its luminance; Panini on the lobby camera's 10 degrees", () => {
+test("Miku: a coloured gain is decoded, scaled by 0.8 and kept at its luminance; Panini on the memorial lobby camera's 10 degrees", () => {
   const gain = [0.98568, 1, 0.94948];
   const p = Linear.postParams({
     chromaticAberration: 0.075,
@@ -209,7 +209,7 @@ function frameUniforms(gl, p) {
   );
 }
 
-test("the pass hands the shader the lobby's parameters, and none while switched off for a check", () => {
+test("the pass hands the shader the memorial lobby's parameters, and none while switched off for a check", () => {
   const gl = fakeGL(),
     p = player(gl);
   Linear.attach(p);
@@ -242,7 +242,7 @@ test("the pass hands the shader the lobby's parameters, and none while switched 
 
 // --- the game's screen on the canvas ---
 const G = { x: -1480, y: -832.5, w: 2960, h: 1665 };
-// a layer placed by the prefab, and a view in NGUI units in its skeleton's units (lobby.js layerViewport)
+// a layer placed by the prefab, and a view in NGUI units in its skeleton's units (memorial-lobby.js layerViewport)
 const LAYER = { x: 12, y: -962, scale: 0.8 };
 const inLayer = (v) => ({
   x: (v.x - LAYER.x) / LAYER.scale,

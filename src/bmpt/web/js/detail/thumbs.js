@@ -1,15 +1,15 @@
 // Thumbnails rendered in the page from the portrait skeletons: faces for the expression cards, busts for the switch
-// card and the roster, cards for the popups. One hidden Spine player at a time (one WebGL context); results are
+// card and the student list, cards for the popups. One hidden Spine player at a time (one WebGL context); results are
 // in-memory blob URLs, with validated lossless PNGs retained by the backend preview cache when enabled.
-import { artBounds, settle } from "../lobby/lobby-health.js";
+import { artBounds, settle } from "../memorial-lobby/memorial-lobby-health.js";
 import { specialFramingOf, specialView } from "./special-view.js";
 import { withTimeout } from "../core/async.js";
 import { loadPlayer as spinePlayer } from "../spine/spine-load.js";
 import { ensureSpine, spineAllowed } from "../spine/spine-runtime.js";
 
 import { spineAssetBase, forgetSpineAssets } from "../core/api.js";
-import { lobbyIdle } from "../spine/rest-pose.js";
-import { lobbyStillViewport } from "../lobby/lobby-still.js";
+import { memorialLobbyIdle } from "../spine/rest-pose.js";
+import { memorialLobbyStillViewport } from "../memorial-lobby/memorial-lobby-still.js";
 import { previewError } from "./preview-error.js";
 import { captureRetries } from "../core/capture-retries.js";
 import { previewCache } from "./preview-cache.js";
@@ -30,7 +30,7 @@ const FRAMES = {
   face: [320, 277],
   bust: [480, 480],
   card: [384, 352],
-  roster: [404, 456],
+  studentList: [404, 456],
   portrait: [480, 880],
   landscape: [640, 360],
 };
@@ -154,11 +154,11 @@ export const NOT_FACE = 600;
 /**
  * The skeleton rect a thumbnail shows. Every frame is sized on the face, never on the bounds, so a weapon,
  * wings or a prop beside the character never shrink her; the bounds only stand in without a face. The "face"
- * frame is the whole head (face and hair), the face a little below the centre; "bust" and "roster" are head
+ * frame is the whole head (face and hair), the face a little below the centre; "bust" and "studentList" are head
  * down to the waist; "card" is the head.
  * @param {{x0: number, y0: number, x1: number, y1: number}|null} found The face box.
  * @param {{x: number, y: number, w: number, h: number}} bounds The skeleton's bounds.
- * @param {"face"|"bust"|"roster"|"card"} frame Which frame.
+ * @param {"face"|"bust"|"studentList"|"card"} frame Which frame.
  * @param {number} aspect The thumbnail's width over its height.
  * @returns {{x: number, y: number, width: number, height: number}} The rect in skeleton units.
  */
@@ -167,15 +167,15 @@ export function thumbFrame(found, bounds, frame, aspect) {
   const faceW = face ? Math.min(Math.max(face.x1 - face.x0, FACE_W[0]), FACE_W[1]) : bounds.w * 0.17;
   const cx = face ? (face.x0 + face.x1) / 2 : bounds.x + bounds.w / 2;
   const cyFace = face ? (face.y0 + face.y1) / 2 : bounds.y + bounds.h * 0.8;
-  const bust = frame === "bust" || frame === "roster" || frame === "portrait";
+  const bust = frame === "bust" || frame === "studentList" || frame === "portrait";
   const w = bust ? faceW * 3.8 : frame === "card" ? faceW * 3.4 : faceW * 3.3;
   const h = w / aspect;
   const cy = bust ? cyFace - h * 0.2 : frame === "card" ? cyFace - h * 0.06 : cyFace + h * 0.07;
   return { x: cx - w / 2, y: cy - h / 2, width: w, height: h };
 }
 
-function viewFor(p, frame, aspect, framing, lobby = false) {
-  if (lobby && !framing) return lobbyStillViewport(p.bamtLobbyFrame, aspect);
+function viewFor(p, frame, aspect, framing, memorialLobby = false) {
+  if (memorialLobby && !framing) return memorialLobbyStillViewport(p.bamtMemorialLobbyFrame, aspect);
   if (framing || frame === "landscape") {
     const bounds = artBounds(p.skeleton),
       r = specialView(bounds, framing ? specialFramingOf(framing, bounds) : "scene", aspect);
@@ -230,7 +230,7 @@ function loadPlayer(base, el, signal, onError) {
   );
 }
 
-async function capture(player, el, frame, expr, lobby, framing, background, signal, partial = () => {}) {
+async function capture(player, el, frame, expr, memorialLobby, framing, background, signal, partial = () => {}) {
   const [w, h] = FRAMES[frame];
   el.style.width = `${w}px`;
   el.style.height = `${h}px`;
@@ -239,10 +239,11 @@ async function capture(player, el, frame, expr, lobby, framing, background, sign
   // Stills own their frame clock, including in an unfocused window or an off-screen host.
   player.stopRendering();
   player.paused = true;
-  // the pose a still shows is the one the skeleton settles into: a lobby's idle as the lobby player chooses it, a
-  // portrait's idle. The player starts the skeleton's first animation (a lobby's is its intro, Start_Idle_*), and an
-  // animation set on top of it would mix in from it: the first frames would show the intro's first frame, mostly.
-  const idle = lobby ? lobbyIdle(data) : idleAnimation(data);
+  // the pose a still shows is the one the skeleton settles into: a memorial lobby's idle as the memorial lobby player
+  // chooses it, a portrait's idle. The player starts the skeleton's first animation (a memorial lobby's is its intro,
+  // Start_Idle_*), and an animation set on top of it would mix in from it: the first frames would show the intro's
+  // first frame, mostly.
+  const idle = memorialLobby ? memorialLobbyIdle(data) : idleAnimation(data);
   state.clearTracks();
   player.skeleton.setToSetupPose();
   let entry = idle ? state.setAnimation(0, idle, true) : state.setEmptyAnimation(0, 0);
@@ -252,11 +253,11 @@ async function capture(player, el, frame, expr, lobby, framing, background, sign
   }
   // The main portrait also applies 00. Some story portraits attach their entire body on that track;
   // an empty setup pose cannot produce a still, however often the same frame is drawn.
-  const expression = expr || (!lobby && !framing ? "00" : null);
+  const expression = expr || (!memorialLobby && !framing ? "00" : null);
   if (expression && data.findAnimation(expression)) state.setAnimation(1, expression, true);
   state.apply(player.skeleton);
   player.skeleton.updateWorldTransform(spine.Physics.update);
-  player.config.viewport = viewFor(player, frame, w / h, framing, lobby);
+  player.config.viewport = viewFor(player, frame, w / h, framing, memorialLobby);
   player.setViewport(entry.animation);
   let valid = false;
   // drawFrame(false) resizes and renders synchronously without scheduling a visibility-dependent RAF.
@@ -328,9 +329,9 @@ export async function collectionStill(
   return canvas;
 }
 
-const keyOf = (base, frame, expr, lobby = false, framing = null, background = null) =>
-  `${base}|${frame}|${expr || ""}|${lobby}|${framing || ""}|${background || ""}`;
-const persistentKey = (base, frame, expr, lobby, framing, background) =>
+const keyOf = (base, frame, expr, memorialLobby = false, framing = null, background = null) =>
+  `${base}|${frame}|${expr || ""}|${memorialLobby}|${framing || ""}|${background || ""}`;
+const persistentKey = (base, frame, expr, memorialLobby, framing, background) =>
   JSON.stringify([
     "spine-4.2.120-still-v1",
     base.match(/\/([a-f0-9]{64})\//)?.[1] || base,
@@ -338,14 +339,14 @@ const persistentKey = (base, frame, expr, lobby, framing, background) =>
     frame,
     FRAMES[frame],
     expr,
-    lobby,
+    memorialLobby,
     framing,
     background,
     globalThis.devicePixelRatio || 1,
   ]);
-const persistentDependencies = (base, lobby, framing, background) => [
+const persistentDependencies = (base, memorialLobby, framing, background) => [
   ...(background ? [background.endsWith(".png") ? background : `${background}.png`] : []),
-  ...(lobby && !framing ? [`${base.slice(0, base.lastIndexOf("/"))}/framing.json`] : []),
+  ...(memorialLobby && !framing ? [`${base.slice(0, base.lastIndexOf("/"))}/framing.json`] : []),
 ];
 
 /**
@@ -478,19 +479,19 @@ async function pump() {
               complete(q, null, signal.reason?.name === "AbortError" ? null : signal.reason);
           continue;
         }
-        if (first.lobby && !first.framing) {
+        if (first.memorialLobby && !first.framing) {
           const url = `${base.slice(0, base.lastIndexOf("/"))}/framing.json`;
-          player.bamtLobbyFrame = await withTimeout(
+          player.bamtMemorialLobbyFrame = await withTimeout(
             fetch(url, { signal }).then((r) => {
               if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
               return r.json();
             }),
             15000,
-            "Lobby still camera",
+            "MemorialLobby still camera",
             { signal },
           ).catch((err) => {
             if (signal.aborted) throw err;
-            console.warn("Lobby still camera unavailable; using standard game placement", err);
+            console.warn("MemorialLobby still camera unavailable; using standard game placement", err);
             return null;
           });
         }
@@ -498,9 +499,9 @@ async function pump() {
         const batch = [];
         let q = first.settled ? queue.find((q) => q.base === base) : first;
         while (!signal.aborted && q && !q.settled && captureEligible(q)) {
-          if (q.lobby && !q.framing && !player.bamtLobbyFrame) q.persistent = null;
+          if (q.memorialLobby && !q.framing && !player.bamtMemorialLobbyFrame) q.persistent = null;
           const url = await withTimeout(
-            capture(player, el, q.frame, q.expr, q.lobby, q.framing, q.background, signal, () => {
+            capture(player, el, q.frame, q.expr, q.memorialLobby, q.framing, q.background, signal, () => {
               q.persistent = null;
             }),
             THUMB_CAPTURE_TIMEOUT,
@@ -541,17 +542,17 @@ async function companions(player, el, base, batch, signal) {
   for (const q of batch) {
     const frame = COMPANION[q.frame];
     if (!frame || queue.length || popupCapturesOpen()) continue;
-    const key = keyOf(base, frame, null, q.lobby, q.framing, q.background);
+    const key = keyOf(base, frame, null, q.memorialLobby, q.framing, q.background);
     if (cache.has(key)) continue;
     let persistent = await previewCache.assetTicket(
-      previewCache.ticket(persistentKey(base, frame, null, q.lobby, q.framing, q.background), "spine"),
-      persistentDependencies(base, q.lobby, q.framing, q.background),
+      previewCache.ticket(persistentKey(base, frame, null, q.memorialLobby, q.framing, q.background), "spine"),
+      persistentDependencies(base, q.memorialLobby, q.framing, q.background),
     );
-    if (q.lobby && !q.framing && !player.bamtLobbyFrame) persistent = null;
+    if (q.memorialLobby && !q.framing && !player.bamtMemorialLobbyFrame) persistent = null;
     let url;
     try {
       url = await withTimeout(
-        capture(player, el, frame, null, q.lobby, q.framing, q.background, signal, () => {
+        capture(player, el, frame, null, q.memorialLobby, q.framing, q.background, signal, () => {
           persistent = null;
         }),
         THUMB_CAPTURE_TIMEOUT,
@@ -573,7 +574,7 @@ async function companions(player, el, base, batch, signal) {
         key,
         base,
         frame,
-        lobby: q.lobby,
+        memorialLobby: q.memorialLobby,
         framing: q.framing,
         background: q.background,
         url,
@@ -599,8 +600,8 @@ export function thumbnailScope({ priority = "background" } = {}) {
   if (priority === "popup") holdPopupCaptures(controller.signal);
   return {
     signal: controller.signal,
-    thumb: (base, frame = "bust", expr = null, lobby = false, framing = null, background = null) =>
-      request(base, frame, expr, lobby, framing, background, { signal: controller.signal, manifests }),
+    thumb: (base, frame = "bust", expr = null, memorialLobby = false, framing = null, background = null) =>
+      request(base, frame, expr, memorialLobby, framing, background, { signal: controller.signal, manifests }),
     cancel: () => {
       controller.abort();
       manifests.clear();
@@ -613,23 +614,23 @@ export function thumbnailScope({ priority = "background" } = {}) {
 /**
  * Render a thumbnail of a skeleton.
  * @param {string} base The skeleton's base path.
- * @param {"face"|"bust"|"roster"|"card"} [frame] Which frame.
+ * @param {"face"|"bust"|"studentList"|"card"} [frame] Which frame.
  * @param {string|null} [expr] A face to show.
- * @param {boolean} [lobby] Show the lobby's idle.
+ * @param {boolean} [memorial lobby] Show the memorial lobby's idle.
  * @param {string|null} [framing] A special slot's framing.
  * @param {object|null} [background] The collection background to fill under it.
  * @returns {Promise<string|null>} A blob URL, or null. The promise carries bump(), which puts a visible card
  *     before queued work; scopes add cancellation and share the source's manifest.
  */
-export function thumb(base, frame = "bust", expr = null, lobby = false, framing = null, background = null) {
-  return request(base, frame, expr, lobby, framing, background);
+export function thumb(base, frame = "bust", expr = null, memorialLobby = false, framing = null, background = null) {
+  return request(base, frame, expr, memorialLobby, framing, background);
 }
 
 function request(
   base,
   frame = "bust",
   expr = null,
-  lobby = false,
+  memorialLobby = false,
   framing = null,
   background = null,
   { signal, manifests } = {},
@@ -661,7 +662,7 @@ function request(
     const outer = resolveBase()
       .then(async (resolved) => {
         for (let attempt = 0; resolved && !signal?.aborted && attempt < 2; attempt++) {
-          inner = request(resolved, frame, expr, lobby, framing, background, { signal });
+          inner = request(resolved, frame, expr, memorialLobby, framing, background, { signal });
           if (first) inner.bump?.();
           const url = await inner;
           if (signal?.aborted || url || attempt) return url;
@@ -685,19 +686,19 @@ function request(
     outer.failure = () => inner?.failure?.();
     return outer;
   }
-  const key = keyOf(base, frame, expr, lobby, framing, background);
+  const key = keyOf(base, frame, expr, memorialLobby, framing, background);
   if (!cache.has(key)) {
     const item = {
       key,
       base,
       frame,
       expr,
-      lobby,
+      memorialLobby,
       framing,
       background,
       clients: new Set(),
       settled: false,
-      persistent: previewCache.ticket(persistentKey(base, frame, expr, lobby, framing, background), "spine"),
+      persistent: previewCache.ticket(persistentKey(base, frame, expr, memorialLobby, framing, background), "spine"),
     };
     cache.set(key, item);
     const enqueue = () => {
@@ -712,7 +713,7 @@ function request(
     };
     if (item.persistent)
       void previewCache
-        .assetTicket(item.persistent, persistentDependencies(base, lobby, framing, background))
+        .assetTicket(item.persistent, persistentDependencies(base, memorialLobby, framing, background))
         .then(async (ticket) => {
           item.persistent = ticket;
           return previewCache.get(ticket);
@@ -736,8 +737,8 @@ function request(
   // Reuse only a still of these exact source bytes. Never borrow the other similarly named alt's art,
   // a face-only crop, or a thumbnail from before an install/update changed the revision.
   return withThumbnailFallback(picture, () => {
-    for (const otherFrame of ["roster", "bust", "card"]) {
-      const still = cache.get(keyOf(base, otherFrame, expr, lobby, framing, background));
+    for (const otherFrame of ["studentList", "bust", "card"]) {
+      const still = cache.get(keyOf(base, otherFrame, expr, memorialLobby, framing, background));
       if (still?.url) return still.url;
     }
     return null;
