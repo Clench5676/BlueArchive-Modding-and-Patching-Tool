@@ -92,9 +92,9 @@ export function jobProgress({ action, name, current = 1, total = 1, step = "", f
 }
 
 // --- a job over mods: one line per item at hand (library/mod_progress.py) ---
-// "Processing Mods (3/13): Hoshino (Swimsuit) - Chibi - My Swim Edit - 42% - Saving Bundle": the job's verb and the
+// "Processing Mods (3/13): Hoshino (Swimsuit) - Chibi - My Swim Edit - Saving Bundle - 42%": the job's verb and the
 // item at hand of all, who it is, its kind, the mod's own name (or the alt whose costume it takes), how far it is
-// and its step. A one-item job leaves the count out.
+// and its step (0% before it reports one). A one-item job leaves the count out.
 const KIND_KEYS = {
   portrait: "tab.portrait",
   memorialLobby: "tab.lobby",
@@ -146,10 +146,10 @@ export function modLine(p = {}, { nameOf = plainName, action = "" } = {}) {
         ? T("progress.from", { name: nameOf({ alt: p.source }) || p.source })
         : "";
   if (own) parts.push([sep, 0], [own, SHRINK_NAME]);
-  const percent = percentText(p.fraction);
-  if (percent) parts.push([sep + percent, 0]);
   const step = p.step ? T(p.step) : "";
   if (step && step !== p.step) parts.push([sep + step, 0]);
+  // the item's share after its step, 0% until the item reports one
+  parts.push([sep + (percentText(p.fraction) || T("progress.percent", { percent: 0 })), 0]);
   return { text: parts.map(([text]) => text).join(""), parts };
 }
 

@@ -142,15 +142,14 @@ for (const locale of locales)
     assert.equal(
       line.text,
       `${T("progress.modCount", { action: T("progress.modsProcess"), current: 3, total: 13 })}Hoshino (Swimsuit)` +
-        `${sep}${T("tab.model")}${sep}My Swim Edit${sep}${T("progress.percent", { percent: 42 })}${sep}${T("import.step.save")}`,
+        `${sep}${T("tab.model")}${sep}My Swim Edit${sep}${T("import.step.save")}${sep}${T("progress.percent", { percent: 42 })}`,
     );
     assert.equal(line.parts.map(([text]) => text).join(""), line.text);
     // the count is of the item at hand: the first of 13 reads 1/13, never 0/13
     assert.ok(
       modLine({ current: 1, total: 13, alt: "ch0063", resourceType: "portrait" }, { nameOf }).text.includes("1"),
     );
-    // a costume swap names the alt whose costume it takes; one item leaves the count out; no fraction, no
-    // percentage
+    // a costume swap names the alt whose costume it takes; one item leaves the count out; no fraction yet, 0%
     const swap = modLine(
       {
         action: "apply",
@@ -166,17 +165,17 @@ for (const locale of locales)
     assert.equal(
       swap.text,
       `${T("progress.modHead", { action: T("progress.modsApply") })}Hoshino (Swimsuit)${sep}${T("tab.model")}` +
-        `${sep}${T("progress.from", { name: "Hina" })}${sep}${T("import.step.write")}`,
+        `${sep}${T("progress.from", { name: "Hina" })}${sep}${T("import.step.write")}${sep}${T("progress.percent", { percent: 0 })}`,
     );
     // a name that only repeats who it is is left out
     assert.equal(
       modLine({ alt: "ch0063", resourceType: "memorialLobby", name: "Hoshino (Swimsuit)" }, { nameOf }).parts.length,
-      3,
+      4,
     );
     for (const kind of ["portrait", "memorialLobby", "chibi"])
       assert.ok(
         modLine({ alt: "ch0063", resourceType: kind }, { nameOf }).text.endsWith(
-          T(`tab.${{ portrait: "portrait", memorialLobby: "lobby", chibi: "model" }[kind]}`),
+          `${T(`tab.${{ portrait: "portrait", memorialLobby: "lobby", chibi: "model" }[kind]}`)}${sep}${T("progress.percent", { percent: 0 })}`,
         ),
       );
     for (const key of ["readModel", "fitCostume", "buildModel", "write", "restore", "save", "check"]) {
@@ -209,15 +208,15 @@ test("a long line shortens the mod's own name first, then who it is, and keeps t
   assert.equal(fitLine(line.parts, width, full), line.text);
   const fitted = fitLine(line.parts, width, full - 10);
   assert.equal(width(fitted), full - 10);
-  assert.ok(fitted.includes("Hoshino (Swimsuit)") && fitted.includes("…") && fitted.endsWith("42% - 保存文件"), fitted);
+  assert.ok(fitted.includes("Hoshino (Swimsuit)") && fitted.includes("…") && fitted.endsWith("保存文件 - 42%"), fitted);
   assert.ok(fitted.startsWith("处理 Mod（3/13）："), fitted);
   // the own name down to the ellipsis alone, then who it is shortened
   const tight = fitLine(line.parts, width, full - 30);
   assert.ok(tight.includes(" - …") && tight.includes("Hoshino") && !tight.includes("Hoshino (Swimsuit)"), tight);
-  assert.ok(width(tight) <= full - 30 && tight.endsWith("42% - 保存文件"), tight);
+  assert.ok(width(tight) <= full - 30 && tight.endsWith("保存文件 - 42%"), tight);
   // nothing left to shorten: both at the ellipsis, the label's own ellipsis clips the rest
   const none = fitLine(line.parts, width, 5);
-  assert.ok(none.includes("：…") && none.endsWith("42% - 保存文件"), none);
+  assert.ok(none.includes("：…") && none.endsWith("保存文件 - 42%"), none);
 });
 
 // A one-mod job (a student page's, Settings' or a repair's action): who it is stays, the step and share follow the job.
@@ -231,19 +230,19 @@ test("a one-mod job keeps who it is, shows no count and keeps its step through a
     { nameOf, action: "progress.actionRepair" },
   );
   const head = `${T("progress.modHead", { action: T("progress.actionRepair") })}Hoshino (Swimsuit)${sep}${T("tab.portrait")}`;
-  assert.equal(line().text, head); // a name that only repeats the file is left out
+  assert.equal(line().text, `${head}${sep}0%`); // a name that only repeats the file is left out
   assert.equal(
     line({ step: "import.step.replace", fraction: 0.3 }).text,
-    `${head}${sep}30%${sep}${T("import.step.replace")}`,
+    `${head}${sep}${T("import.step.replace")}${sep}30%`,
   );
   assert.equal(
     line({ current: 2, total: 3, label: "file.bundle" }).text,
-    `${head}${sep}30%${sep}${T("import.step.replace")}`,
+    `${head}${sep}${T("import.step.replace")}${sep}30%`,
   );
   // a student thumbnail is its own kind
   assert.ok(
     modJob({ alt: "ch0063", resourceType: "thumbnail" }, { nameOf, action: "progress.actionApply" })().text.endsWith(
-      `${sep}${T("photo.modName")}`,
+      `${sep}${T("photo.modName")}${sep}0%`,
     ),
   );
 });

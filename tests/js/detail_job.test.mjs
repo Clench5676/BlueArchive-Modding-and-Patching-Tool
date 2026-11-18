@@ -207,11 +207,13 @@ test("detail actions keep the verb, target, kind and step from progress in all l
       });
       assert.equal(await h.job(method, params, { name: "Example" }), true);
       const actionKey = `progress.action${action[0].toUpperCase()}${action.slice(1)}`;
-      // one item: the verb, who and the kind, then the step; the files' own count is not the line's
+      // one item: the verb, who and the kind, then the step and 0% (no share reported); the files' own count is
+      // not the line's
       const head = `${T("progress.modHead", { action: T(actionKey) })}Example${T("progress.sep")}${T("tab.portrait")}`;
+      const zero = `${T("progress.sep")}${T("progress.percent", { percent: 0 })}`;
       assert.deepEqual(
         progress.map((line) => line.text),
-        [head, `${head}${T("progress.sep")}${T("import.step.crc")}`],
+        [`${head}${zero}`, `${head}${T("progress.sep")}${T("import.step.crc")}${zero}`],
         `${locale} ${method}`,
       );
       assert.deepEqual(h.messages, []);
@@ -258,13 +260,13 @@ test("a 3D model's costume build shows its percentage and step, only growing whi
     assert.deepEqual(
       progress.map((line) => line.text),
       [
-        head,
-        head,
-        `${head}${percent(42)}${fit}`,
-        `${head}${percent(42)}${fit}`,
-        `${head}${percent(99)}${write}`,
-        `${head}${percent(99)}${write}`,
-        `${head}${percent(99)}${write}`,
+        `${head}${percent(0)}`,
+        `${head}${percent(0)}`,
+        `${head}${fit}${percent(42)}`,
+        `${head}${fit}${percent(42)}`,
+        `${head}${write}${percent(99)}`,
+        `${head}${write}${percent(99)}`,
+        `${head}${write}${percent(99)}`,
       ],
       locale,
     );
@@ -311,7 +313,7 @@ test("detail progress identifies the target Mod's student alt and kind instead o
     },
   });
   await h.job("actions.update", { mod: "m1" });
-  assert.equal(h.progress.at(-1).text, "Repairing: Yoshimi (Band) - Memorial Lobby");
+  assert.equal(h.progress.at(-1).text, "Repairing: Yoshimi (Band) - Memorial Lobby - 0%");
 });
 
 test("an apply adds no notice, while mods are off (only saved) or on", async () => {
