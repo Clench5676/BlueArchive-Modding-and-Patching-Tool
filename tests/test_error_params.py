@@ -253,7 +253,7 @@ def test_export_names_the_colliding_member(setup_library, monkeypatch):
 
     names = ["Part-1.bundle", "part-1.bundle", "other.bundle"]
     paths = [env.tmp / name for name in names]
-    monkeypatch.setattr(export_service, "_prepare", lambda *args, **kwargs: (paths, {}))
+    monkeypatch.setattr(export_service, "_prepare", lambda *args, **kwargs: paths)
     monkeypatch.setattr(export_service, "_member_name", lambda path: path.name)
     error = raised(
         lambda: export_service.export_zip(

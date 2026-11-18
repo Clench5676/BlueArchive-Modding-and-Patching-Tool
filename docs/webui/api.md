@@ -87,10 +87,11 @@ with `value: {path, adopt: true}`. The backend requests a fresh choice when the 
 ### ZIP export
 
 `mod-export.js` provides one flow for the student-detail Export action and Settings' Export Mod Library / Export
-Applied. The exporter prepares selected sources against verified official files for the configured install. The ZIP
-has a portable directory per source with its `ba-mod.json` and bundle files. A root `manifest.json` lists the target,
-source identities, filenames, sizes, and SHA-256 digests. The archive is verified for ZIP integrity and member
-hashes before atomic publication. The package's `kind` field and its enum values belong to the package format.
+Applied. The exporter prepares selected sources against verified official files for the configured install. Each
+source's `ba-mod.json` is its only metadata file. Single exports place it and the bundle files at the ZIP root.
+Library and applied exports give each source a portable directory. The importer ignores the root `manifest.json`
+of older exports. The archive is verified for ZIP integrity and member hashes before atomic publication. The
+package's `kind` field and its enum values belong to the package format.
 
 ### Import grouping
 
