@@ -45,6 +45,7 @@ from ..host.store_formats import FutureFormat, managed_bytes, read_runtime, runt
 from ..core.errors import ServiceError
 from ..core.filelock import file_lock, replace
 from ..core.logging_utils import log_failure
+from . import toggle_timing
 
 logger = logging.getLogger(__name__)
 
@@ -195,14 +196,14 @@ class Profiles:
             ServiceError: Neither profiles.json nor its recovery copy is readable
                 (mod_configuration_unreadable).
         """
-        with self._lock:
+        with toggle_timing.enter("profiles_wait", self._lock):
             signatures = self._signatures()
             if signatures == self._seen:
                 return self._data
             if signatures == (None, None):  # no configuration yet: nothing to lock (the folder stays untouched)
                 self._data, self._seen = None, signatures
                 return None
-            with file_lock(self.lock_path):
+            with toggle_timing.enter("profiles_file_wait", file_lock(self.lock_path)):
                 signatures = self._signatures()
                 data, _bad = self._load()
             self._data = normalized(data) if data is not None else None
@@ -235,7 +236,10 @@ class Profiles:
         """
         if self.gate is not None:
             self.gate()
-        with self._lock, file_lock(self.lock_path):
+        with (
+            toggle_timing.enter("profiles_wait", self._lock),
+            toggle_timing.enter("profiles_file_wait", file_lock(self.lock_path)),
+        ):
             current, bad = self._load()
             data = normalized(current)
             if change(data) is False:

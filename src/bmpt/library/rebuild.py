@@ -34,6 +34,7 @@ from bmpt.engine import (
 )
 from ..core.errors import ServiceError
 from . import pointers
+from . import toggle_timing
 
 
 class UpdateScope:
@@ -177,6 +178,7 @@ def _failed(message: str, log: LogFunc, **fields) -> RebuildResult:
     return RebuildResult(False, message, **fields)
 
 
+@toggle_timing.stage("asset_rebuild")
 def rebuild(
     source_paths: list[Path],
     target_paths: list[Path],

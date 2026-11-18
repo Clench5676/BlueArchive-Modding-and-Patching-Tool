@@ -20,7 +20,7 @@ from bmpt.engine import parse_filename
 from ...core.errors import ServiceError
 from ...core.logging_utils import log_failure
 from ...core.openfiles import remove_tree
-from .. import fingerprint, integrity, rig_archive
+from .. import fingerprint, integrity, rig_archive, toggle_timing
 from ..original_checks import Verdict
 from ..judge import (
     core_of,
@@ -251,6 +251,7 @@ class OriginalsMixin:
                 out.append(path)
         return out
 
+    @toggle_timing.stage("official_lookup")
     def _official_for(self, game_file: Path, pin: Pin, full: bool = True, *, game_first: bool = False) -> Path:
         """Find an official copy of a game file.
 
@@ -314,6 +315,7 @@ class OriginalsMixin:
                 raise ServiceError("official_invalid", file=game_file)
         return official
 
+    @toggle_timing.stage("official_stage")
     def _copy_verified_official(self, source: Path, output: Path) -> None:
         """Detach a kept official input and verify the staged bytes before they can be used."""
         if not self._original_checks.matches_digest(source):

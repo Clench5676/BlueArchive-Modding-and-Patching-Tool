@@ -20,7 +20,7 @@ ACTIVE_LIMIT = 32
 class Sink(Protocol):
     """Receives finished spans: the web UI's session timings."""
 
-    def record(self, phase: str, seconds: float) -> None:
+    def record(self, phase: str, seconds: float, *, quiet: bool = False) -> None:
         """Record that ``phase`` took ``seconds``."""
         ...
 
@@ -39,11 +39,11 @@ def install(sink: Sink | None) -> None:
     _sink = sink
 
 
-def record(name: str, seconds: float) -> None:
-    """Hand a finished span of ``seconds`` to the installed sink, if there is one."""
+def record(name: str, seconds: float, *, quiet: bool = False) -> None:
+    """Hand a finished span to the sink; quiet spans update counters without a log line."""
     sink = _sink
     if sink is not None:
-        sink.record(name, seconds)
+        sink.record(name, seconds, quiet=quiet)
 
 
 @contextmanager

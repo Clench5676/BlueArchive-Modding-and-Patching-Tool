@@ -34,12 +34,13 @@ class Timings:
             finally:
                 self.record(phase, time.perf_counter() - started)
 
-    def record(self, phase: str, seconds: float) -> None:
+    def record(self, phase: str, seconds: float, *, quiet: bool = False) -> None:
         """Add one run of a phase to its totals and log it.
 
         Args:
             phase: The phase's name.
             seconds: How long this run took.
+            quiet: Update the counters without logging the sample.
         """
         with self._lock:
             value = self._values.setdefault(phase, {"count": 0, "seconds": 0.0, "max": 0.0})
@@ -47,7 +48,8 @@ class Timings:
             value["seconds"] += seconds
             # The longest single value: one long wait reads differently from many short ones.
             value["max"] = max(value["max"], seconds)
-        logger.info("Timing %s: %.3f s", phase, seconds)
+        if not quiet:
+            logger.info("Timing %s: %.3f s", phase, seconds)
 
     def snapshot(self) -> dict:
         """Copy the totals: per phase ``count``, ``seconds`` (sum) and ``max`` (longest single run)."""

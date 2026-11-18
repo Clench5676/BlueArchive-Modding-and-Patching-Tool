@@ -20,6 +20,7 @@ from ba_modding_toolkit.core import mod_install
 from ba_modding_toolkit.bundle import Bundle
 from bmpt.host.config import Settings
 from bmpt.core.errors import ServiceError
+from bmpt.core import spans
 from ba_modding_toolkit.i18n import I18n
 from bmpt.library import ModLibrary, safety, service, storage
 from bmpt.library import profiles as profiles_module
@@ -27,6 +28,7 @@ from bmpt.library.judge import carried_of, classify, install_key, install_root, 
 from bmpt.library.profiles import Profiles
 from ba_modding_toolkit.models import FilePair
 from bmpt.library.rebuild import RebuildResult
+from bmpt.webui.timing import Timings
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.utils import CRCUtils
 
@@ -755,13 +757,16 @@ def rebuilding_installer(monkeypatch, payload=b"rebuilt!", only=None):
     monkeypatch.setattr(service.ModLibrary, "_needs_crc_fix", rebuilding)
 
 
-def test_an_off_keeps_built_copies_and_on_writes_them_back_without_the_installer(world, monkeypatch):
+def test_an_off_keeps_built_copies_and_on_writes_them_back_without_the_installer(world, monkeypatch, caplog):
     atlas = game_bundle(world.game, part="002", payload=b"skeleton")
     mod = world.add(world.spr, fixed=True)
     rebuilding_installer(monkeypatch)
     world.library.apply("test", f"mod:{mod.id}")
     rebuilt = world.spr.read_bytes()
-    world.toggle(False)
+    timings = Timings()
+    monkeypatch.setattr(spans, "_sink", timings)
+    with caplog.at_level("INFO"):
+        world.toggle(False)
     built = world.folder()["built"]["test_spr"]
     sha1 = built["parts"][world.spr.name]["sha1"]
     assert built["source"] == f"mod:{mod.id}" and list(built["parts"]) == [world.spr.name]  # the modded part only
@@ -769,8 +774,17 @@ def test_an_off_keeps_built_copies_and_on_writes_them_back_without_the_installer
     assert (world.root / "built" / f"{sha1}.bundle").read_bytes() == rebuilt
     assert world.library.sizes("built")["builtSize"] == len(rebuilt)
     no_installer(monkeypatch)
-    world.toggle(True)
+    with caplog.at_level("INFO"):
+        world.toggle(True)
     assert world.spr.read_bytes() == rebuilt and atlas.read_bytes() == header_bundle(b"skeleton")
+    phases = timings.snapshot()
+    for direction, operation in (("off", "restore"), ("on", "write")):
+        for stage in ("total", "entry", operation):
+            assert phases[f"mods.toggle.{direction}.{stage}"]["count"] == 1
+    assert "mods.toggle.on.build_prepare" not in phases
+    assert "Mods on timing: 1/1 entries attempted" in caplog.text
+    assert "rebuilt=0 reused=1 direct=0" in caplog.text
+    assert "Timing mods.toggle." not in caplog.text
 
 
 def test_a_direct_mod_is_kept_as_its_own_file(world, monkeypatch):
@@ -795,7 +809,7 @@ def test_an_adopted_crc_fixed_mod_comes_back_byte_identical(world, monkeypatch):
     assert not (world.root / "built").exists()
 
 
-def test_a_built_copy_whose_bytes_changed_is_dropped_and_rebuilt(world, monkeypatch):
+def test_a_built_copy_whose_bytes_changed_is_dropped_and_rebuilt(world, monkeypatch, caplog):
     mod = world.add(world.spr, fixed=True)
     rebuilding_installer(monkeypatch)
     world.library.apply("test", f"mod:{mod.id}")
@@ -803,9 +817,11 @@ def test_a_built_copy_whose_bytes_changed_is_dropped_and_rebuilt(world, monkeypa
     world.toggle(False)
     (copy,) = (world.root / "built").iterdir()
     copy.write_bytes(b"damaged copy")
-    world.toggle(True)
+    with caplog.at_level("INFO", logger="bmpt.library"):
+        world.toggle(True)
     assert world.spr.read_bytes() == rebuilt
     assert "test_spr" not in world.folder()["built"] and not copy.exists()
+    assert "rebuilt=1 reused=0 direct=0" in caplog.text
 
 
 def test_clear_built_mods_keeps_keys_of_mod_files(world, monkeypatch):

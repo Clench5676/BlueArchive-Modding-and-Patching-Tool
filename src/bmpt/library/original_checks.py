@@ -23,6 +23,7 @@ from typing import Literal
 
 from ..host.store_formats import read_runtime, runtime_store
 from ..host.upgrade_files import digest
+from . import toggle_timing
 from .storage import Fingerprint, atomic_json
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,7 @@ class OriginalChecks:
         with self._lock:
             return self._read().get(name)
 
+    @toggle_timing.stage("original_digest")
     def matches_digest(self, original: Path, *, name: str | None = None) -> bool:
         """Check a kept file against its recorded baseline with a fresh full-file read."""
         if not self.managed:
@@ -102,6 +104,7 @@ class OriginalChecks:
         except (OSError, ValueError):
             return False
 
+    @toggle_timing.stage("original_digest")
     def remember_digest(self, original: Path, verified_sha1: str) -> None:
         """Record the SHA-256 of bytes that match an independently verified SHA-1."""
         if not self.managed:
@@ -153,6 +156,7 @@ class OriginalChecks:
             return None
         return record["by"]
 
+    @toggle_timing.stage("original_verdict_save")
     def save(self, original: Path, by: Verdict, fingerprint: Fingerprint, keep: set[str] | None = None) -> None:
         """Record a kept original's verdict, tolerating filesystem failures for later rechecking.
 

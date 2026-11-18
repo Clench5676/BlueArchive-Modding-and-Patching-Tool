@@ -21,7 +21,7 @@ from bmpt.engine import (
 from ...core.errors import ServiceError
 from ...core.openfiles import remove_tree
 from .. import profiles as profiles_mod
-from .. import mod_progress, safety
+from .. import mod_progress, safety, toggle_timing
 from ..judge import (
     LIBRARY_SOURCES,
     core_of,
@@ -59,6 +59,7 @@ logger = logging.getLogger(__package__)
 class CopiesMixin:
     """Built copies, the configuration, entries and the scan, and adopting mods already in use."""
 
+    @toggle_timing.stage("build_signature")
     def _build_signature(self, sources: list[Path], targets: list[Path], pin: Pin, version: str | None = None) -> str:
         """Give what a build is made from.
 
@@ -87,14 +88,20 @@ class CopiesMixin:
 
         Prepared files otherwise live solely in the caller's temporary staging directory.
         """
+
+        def prepare() -> dict[Path, Path]:
+            toggle_timing.prepared("rebuilt")
+            with toggle_timing.stage("build_prepare"):
+                return build()
+
         if len({path.name for path in targets}) != len(targets):
-            return build()  # built keys identify parts by file name
+            return prepare()  # built keys identify parts by file name
         try:
             signature = self._build_signature(sources, targets, pin)
         except ServiceError as error:
             if error.code != "official_unavailable":
                 raise
-            return build()  # No official baseline to sign; never cache a live fallback as official.
+            return prepare()  # No official baseline to sign; never cache a live fallback as official.
         build_keys.update((target, signature) for target in targets)
         for folder in ((self.profiles.read() or {}).get("folders") or {}).values():
             for core_name, key in (folder.get("built") or {}).items():
@@ -122,14 +129,16 @@ class CopiesMixin:
                     if self._stale_build(replacements, pin):
                         continue
                     logger.debug("Reused configured build %s", signature)
+                    toggle_timing.prepared("reused")
                     return replacements
                 except (OSError, ValueError, KeyError, TypeError):
                     continue
         start = time.perf_counter()
-        replacements = build()
+        replacements = prepare()
         logger.debug("Built %s in %.3f s", signature, time.perf_counter() - start)
         return replacements
 
+    @toggle_timing.stage("built_lookup")
     def _built_replacements(
         self, pin: Pin, core: str, source: str, targets: list[Path], build_keys: dict[Path, str] | None = None
     ) -> dict[Path, Path] | None:
@@ -176,6 +185,7 @@ class CopiesMixin:
         if fits:
             if build_keys is not None and key.get("build"):
                 build_keys.update((target, key["build"]) for target in targets)
+            toggle_timing.prepared("reused")
             return replacements
         self._drop_built(pin, [core])
         return None
@@ -238,6 +248,7 @@ class CopiesMixin:
         signatures.discard(None)
         return signatures
 
+    @toggle_timing.stage("keep_built")
     def _make_built(self, pin: Pin, entry: _Entry) -> None:
         """Keep the exact bytes of an entry's modded parts before an Off replaces them, whole.
 

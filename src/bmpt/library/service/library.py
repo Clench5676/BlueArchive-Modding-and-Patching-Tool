@@ -17,7 +17,7 @@ from ...core.errors import ServiceError
 from ...core.filelock import file_lock
 from ...gameassets.cabs import CabIndex
 from ...core.logging_utils import log_failure
-from .. import pointers, rig_archive, staging
+from .. import pointers, rig_archive, staging, toggle_timing
 from ..original_checks import OriginalChecks
 from ..judge import supports_kind
 from ..migrations import LEGACY_REMAP, legacy_remapped
@@ -442,6 +442,7 @@ class ModLibrary(
         except (OSError, ServiceError) as error:
             log_failure(logger, logging.DEBUG, "Library state migration skipped", error)
 
+    @toggle_timing.stage("state_save")
     def _save(self) -> None:
         """Write state.json, merged with what another instance sharing the library wrote since this one last read it.
 
@@ -457,7 +458,7 @@ class ModLibrary(
         self._check_recovery()
         path = self._state_path
         mine = (self._records, self._favorites, self._applied, self._migrations)
-        with file_lock(self.root / "state.json.lock"):
+        with toggle_timing.enter("state_file_wait", file_lock(self.root / "state.json.lock")):
             reading = self._read_state()
             if reading.error is not None and (reading.kind != "corrupt" or not self._state_good):
                 raise reading.error

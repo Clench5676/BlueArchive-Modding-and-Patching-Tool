@@ -16,7 +16,7 @@ from bmpt.engine import (
 from ...core.errors import ServiceError
 from ...core.logging_utils import log_failure
 from .. import profiles as profiles_mod
-from .. import mod_progress, safety
+from .. import mod_progress, safety, toggle_timing
 from ..judge import (
     core_of,
     distinguishing_folders,
@@ -199,7 +199,8 @@ class EnableMixin:
             ServiceError: Intent or installs changed, required consent or confirmation is absent,
                 or a stopping write refusal prevents the job.
         """
-        return self._run(enabled, expect, pins, log, progress, cancel, drift=None)
+        with toggle_timing.toggle(enabled):
+            return self._run(enabled, expect, pins, log, progress, cancel, drift=None)
 
     def restore_drift(
         self,
@@ -244,7 +245,7 @@ class EnableMixin:
         alone, the intent unchanged).
         """
         found: list[_Entry] = []
-        with self._lock, _errors("toggle"):
+        with toggle_timing.enter("library_wait", self._lock), _errors("toggle"), toggle_timing.stage("prepare"):
             pins = list(pins) if pins is not None else self.installs()
             self._check_start(pins, drift is None, expect)
             config = self.profiles.read()
@@ -263,9 +264,9 @@ class EnableMixin:
             )
         if view is not None:
             # previews go first: one loads while the pass runs (which pauses itself while a model preview is exported)
-            with _errors("toggle"):
+            with _errors("toggle"), toggle_timing.stage("off_scan"):
                 found = view.entries(pins, background=True)
-        with self._lock, _errors("toggle"):
+        with toggle_timing.enter("library_wait", self._lock), _errors("toggle"), toggle_timing.stage("plan"):
             if view is not None:  # what the start checked may have changed during the pass
                 self._check_start(pins, True, expect)
                 config = self.profiles.read()
@@ -294,6 +295,7 @@ class EnableMixin:
                 if not enabled:
                     self._check_space(self._off_space(plan, found, config))
             hidden = self._hidden_items(config) if drift is None and retry is None else []
+            toggle_timing.planned(len(plan))
             if enabled:  # an On, its Retry or Apply Mod Configuration: confirmed before the intent changes
                 self._untested_plan(plan, config, drift is not None)
         stamp = now()
@@ -311,7 +313,7 @@ class EnableMixin:
                         data["unfinished"].append(item)
                         listed_keys.add((item["install"], item["core"]))
 
-            with _errors("toggle"):
+            with _errors("toggle"), toggle_timing.stage("outcomes"):
                 self.profiles.update(intent)
             logger.info("Mods %s: %d entries to reach", "on" if enabled else "off", len(plan))
         result = {
@@ -335,13 +337,16 @@ class EnableMixin:
             for i, (pin, core) in enumerate(plan, 1):
                 if cancel and cancel():
                     break
-                self._let_others_in()
-                with self._lock:
+                with toggle_timing.stage("preview_yield"):
+                    self._let_others_in()
+                with toggle_timing.enter("library_wait", self._lock), toggle_timing.entry():
                     try:
                         with _errors("toggle"):
                             self._check_pins(pins)
                             if progress:
-                                line.item(i, **self._entry_identity(pin, core, config), step=mod_progress.STEP_CHECK)
+                                with toggle_timing.stage("progress_identity"):
+                                    identity = self._entry_identity(pin, core, config)
+                                line.item(i, **identity, step=mod_progress.STEP_CHECK)
                             outcome, why, entry = self._reach(
                                 pin,
                                 core,
@@ -385,7 +390,7 @@ class EnableMixin:
                 line.done()
         finally:
             _background.paced = False
-        with self._lock:
+        with toggle_timing.enter("library_wait", self._lock), toggle_timing.stage("prune"):
             self._prune_quietly()
         with _errors("toggle"):
             self._save_outcomes(outcomes)
@@ -449,6 +454,7 @@ class EnableMixin:
                 )
         self._check_untested(writes)
 
+    @toggle_timing.stage("outcomes")
     def _save_outcomes(self, outcomes: dict[tuple[str, str], str | None]) -> None:
         """Save the unfinished list after the reached entries.
 
@@ -522,10 +528,11 @@ class EnableMixin:
         entry's why in the unfinished list, None when it leaves; the entry). ``fraction``: its progress line's share
         (``mod_progress.Part``), told the build and the write.
         """
-        pins = self._view_pins(pin)
-        view = self._view(pins, "full")
-        entry = view.entry(pin, core)
-        self._note_judged(view, entry)
+        with toggle_timing.stage("judge"):
+            pins = self._view_pins(pin)
+            view = self._view(pins, "full")
+            entry = view.entry(pin, core)
+            self._note_judged(view, entry)
         item = entry.item()
         outcome: dict[str, Any] = {}
         if entry.state == "source_missing":

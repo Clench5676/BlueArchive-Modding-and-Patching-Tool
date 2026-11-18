@@ -29,6 +29,7 @@ from bmpt.engine import (
 from ..core import devmode
 from ..core.openfiles import temporary_directory
 from .pointers import Pointer
+from . import toggle_timing
 from .rebuild import rebuild
 
 
@@ -171,6 +172,7 @@ def _build_group(
     return failures
 
 
+@toggle_timing.stage("build_crc")
 def install_staged(
     groups: list[PlannedGroup],
     output_dir: Path,

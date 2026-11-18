@@ -19,7 +19,7 @@ from bmpt.engine import (
 from ...core.errors import ServiceError
 from ...core.openfiles import temporary_directory
 from .. import profiles as profiles_mod
-from .. import mod_progress
+from .. import mod_progress, toggle_timing
 from ..install import Action, PlannedFile, PlannedGroup, install_staged
 from ..rebuild import rebuild
 from .. import targets as resolver
@@ -67,6 +67,7 @@ class SwitchingMixin:
                 # official copy and replacing it with the same Mod adds no protection.
                 if progress:
                     progress(0, 1, t("webui.progress.process", name=core_of(record["files"][0])))
+                toggle_timing.prepared("direct")
                 return {
                     target: sources[target.name] if target.name in sources else self._official_or_current(target, pin)
                     for target in targets
