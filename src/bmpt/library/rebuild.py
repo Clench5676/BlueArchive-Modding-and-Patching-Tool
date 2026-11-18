@@ -11,7 +11,7 @@ from __future__ import annotations
 import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Mapping
 
 from bmpt.engine import (
     REPLACEABLE_ASSET_TYPES,
@@ -33,6 +33,7 @@ from bmpt.engine import (
     t,
 )
 from ..core.errors import ServiceError
+from . import pointers
 
 
 class UpdateScope:
@@ -46,26 +47,39 @@ class UpdateScope:
             strategy: Engine key strategy used for both source and target assets.
             asset_types: Eligible Unity class names, or ALL for every replaceable class.
         """
-        key_of = Bundle._get_key_func(strategy)
+        self._key_of = Bundle._get_key_func(strategy)
         self.counterparts: dict[AssetKey, list[tuple[Bundle, object]]] = {}
+        self._excluded_clips: set[AssetKey] = set()
         self.not_transferred: set[AssetKey] = set()
         self.unchanged: set[AssetKey] = set()
         self.seen: set[AssetKey] = set()  # every source key asked about, transferred or not
         for target in targets:
             for obj in target.env.objects:
                 if obj.type in REPLACEABLE_ASSET_TYPES and ("ALL" in asset_types or obj.type.name in asset_types):
-                    key = key_of(obj)
+                    key = self._key_of(obj)
                     if key is not None:
                         self.counterparts.setdefault(key, []).append((target, obj))
 
     def includes(self, key: AssetKey) -> bool:
-        """Record a source key as seen and report whether a target counterpart exists."""
+        """Record a source key as seen and report whether it can transfer to a target counterpart."""
         if key is not None:
             self.seen.add(key)
-        if key in self.counterparts:
+        if key in self.counterparts and key not in self._excluded_clips:
             return True
         self.not_transferred.add(key)
         return False
+
+    def _keep_official_clips(self, source: Bundle, stale: set[pointers.Pointer]) -> None:
+        """Keep official counterparts for clips that would transfer a known stale PPtr as raw bytes."""
+        self._excluded_clips = (
+            {
+                self._key_of(obj)
+                for obj in source.env.objects
+                if obj.type.name == "AnimationClip" and not stale.isdisjoint(pointers.object_pointers(obj))
+            }
+            if stale
+            else set()
+        )
 
     @staticmethod
     def serialized(bundle: Bundle, obj) -> tuple[bytes, dict[str, bytes]]:
@@ -177,6 +191,7 @@ def rebuild(
     log: LogFunc = no_log,
     prepared_patch: Patch | None = None,
     on_step: Callable[[str], None] | None = None,
+    stale_pointers: Mapping[Path, set[pointers.Pointer]] | None = None,
 ) -> RebuildResult:
     """Transfer source assets into current target parts and save changed parts under their names.
 
@@ -197,6 +212,7 @@ def rebuild(
             to bypass extraction. None builds a scoped patch from sources. With a supplied
             patch, each target must accept every resulting entry.
         on_step: Receives extract, replace, save, and crc phase names; None disables reporting.
+        stale_pointers: Known dangling references by source file. Clips carrying them keep their official counterparts.
 
     Returns:
         Output pairs and transfer details, or success=False with a message and any named ServiceError.
@@ -214,11 +230,14 @@ def rebuild(
                 return _failed(t("message.load_failed"), log)
             targets.append(target)
         scope = UpdateScope(targets, match_strategy, asset_types_to_replace) if prepared_patch is None else None
+        transfer_clips = bool({"ALL", "AnimationClip"} & asset_types_to_replace)
 
         for src in source_paths:
             src_bundle = Bundle.load(src, log)
             if not src_bundle:
                 return _failed(t("message.load_failed"), log)
+            if scope is not None and stale_pointers and transfer_clips:
+                scope._keep_official_clips(src_bundle, stale_pointers.get(src, set()))
             patch, conflicts = src_bundle.extract_patch(
                 asset_types_to_replace, match_strategy, spine_options, **({"scope": scope} if scope is not None else {})
             )
