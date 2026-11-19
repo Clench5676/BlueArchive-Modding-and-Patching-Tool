@@ -446,6 +446,8 @@ class JobsMixin:
             if pin is not None:
                 self._check_pin(library, pin)
                 result = library.refresh_costumes(pin, log=log, progress=progress, write_game=not self.classic_open())
+                if not self.classic_open():
+                    library.refresh_builds(pin, log=log, progress=progress)
             for known in library.installs():
                 self.submit_catalog_reapply(library, known, library.resource_version(known))
             return {**result, "notices": notices}

@@ -831,14 +831,14 @@ def test_a_built_copy_whose_bytes_changed_is_dropped_and_rebuilt(world, monkeypa
 
 
 def test_a_rebuilt_mod_installed_by_another_program_build_needs_a_new_build(world, monkeypatch, caplog):
-    from bmpt.library.service import copies
+    from bmpt.library import builders
 
     mod = world.add(world.portrait, fixed=True)
     rebuilding_installer(monkeypatch)
-    monkeypatch.setattr(copies, "_build_version", lambda: "previous")
+    monkeypatch.setattr(builders, "fingerprint", lambda kind="build": "build-previous")
     world.library.apply("test", f"mod:{mod.id}")
     assert world.portrait.read_bytes() != mod.file.read_bytes()
-    monkeypatch.setattr(copies, "_build_version", lambda: "current")
+    monkeypatch.setattr(builders, "fingerprint", lambda kind="build": "build-current")
     with caplog.at_level("INFO", logger="bmpt.library"):
         world.toggle(False)
     assert "Not keeping the built copy of test_spr" in caplog.text

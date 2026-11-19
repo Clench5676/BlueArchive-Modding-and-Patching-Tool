@@ -5,6 +5,7 @@ import hashlib
 import pytest
 
 from bmpt.core.errors import ServiceError
+from bmpt.library import builders
 from bmpt.library.storage import Fingerprints
 from ba_modding_toolkit.utils import CRCUtils
 
@@ -116,7 +117,7 @@ def test_changed_inputs_options_program_targets_and_corrupt_copy_force_rebuild(s
         (cached,) = (env.root / "built").glob("*.bundle")
         cached.write_bytes(header_bundle(b"changed copy"))
     elif change == "version":
-        patch_everywhere(monkeypatch, ["bmpt.library.service"], "_build_version", lambda: "another version")
+        monkeypatch.setattr(builders, "fingerprint", lambda kind="build": "build-another")
     elif change == "animation_check":
         env.settings.set("check_animations", True)
     elif change == "viewer_path":

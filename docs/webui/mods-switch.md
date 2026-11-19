@@ -82,6 +82,12 @@ setting.
   placed file, an official-named file) go through the per-entry steps. An Off makes no pass over the game files
   first: files that are neither official nor a library source are found by the scan that follows the toggle and
   offered by "Mods Not in the Library"; until then such a file stays as it is.
+  A rebuilt output (a mod adapted to another character, a costume build) records a build key of two parts: a
+  digest of what it was made from (the bytes of its inputs, the official bytes of its targets, the options) and
+  what built it (a fingerprint of the builder code and of the packages that shape the bytes,
+  `catalog/data/builder_fingerprints.json`, written by `scripts/build_builder_fingerprints.py`; the costume rule
+  for a costume). A toggle reuses an output while the first part holds. An output of another builder stays in use
+  and is built again by the start job behind the start cover (`refresh_builds`), never inside a toggle.
   Apply and restore of one entry place (or reuse) its file, generate a catalog and swap. Official files are never
   overwritten. A core whose files the catalog does not name, or that lie outside `GameData/Windows`, is switched by
   file replacement in the same folder.

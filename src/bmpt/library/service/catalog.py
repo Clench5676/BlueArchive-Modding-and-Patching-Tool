@@ -800,7 +800,7 @@ class CatalogMixin:
             if not (own is not None and self._placed_as_is(pin, target, redirect, own)):
                 if builds is None:
                     builds = self._redirect_builds(pin, core, targets, source, resource_type)
-                if redirect["build"] not in builds:
+                if not any(self._build_fits(redirect["build"], build) for build in builds):
                     return None
             try:
                 stamp, match = stamp_of(redirect, True)
@@ -817,7 +817,8 @@ class CatalogMixin:
             return self._current_builds(pin, core, self._record(source[4:]), targets)
         try:
             inputs = self._switch_alt_sources(pin, source[4:], resource_type)
-            return {self._build_signature(inputs, targets, pin)}
+            builder = self._costume_builder() if resource_type == "chibi" else None
+            return {self._build_signature(inputs, targets, pin, builder=builder)}
         except (OSError, ServiceError):
             return set()
 

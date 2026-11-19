@@ -185,6 +185,8 @@ class ModLibrary(
         self._migration_outcomes: dict[tuple[str, str], str | None] | None = None
         # a start job left kept originals to release: the maintenance prune takes them (take_prune_due)
         self._prune_due = False
+        # the start's refresh of built outputs runs: only an output of the current builder is reused (_build_fits)
+        self._fresh_builds_only = False
         # the official rigs of portraits kept per game release, and what was matched against them (_archived_rigs)
         self.rigs = rig_archive.RigArchive(self.root / "rigs")
         self._rig_matches: dict[tuple, dict] = {}

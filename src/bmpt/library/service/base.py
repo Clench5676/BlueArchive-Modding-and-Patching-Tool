@@ -1154,14 +1154,6 @@ class _ChoiceChange:
             log_failure(logger, logging.WARNING, "Could not delete replaced built copies", error)
 
 
-def _build_version() -> str:
-    """The program build: a cached build is never reused across versions."""
-    from bmpt.engine import get_version_info
-
-    info = get_version_info()
-    return f"{info.get('version')}:{info.get('commit_hash')}"
-
-
 def _folder_size(directory: Path) -> int:
     total = 0
     if directory.is_dir():

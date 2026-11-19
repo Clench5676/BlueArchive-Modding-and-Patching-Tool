@@ -22,7 +22,7 @@ from bmpt.host.config import Settings
 from bmpt.host.data_upgrade import DataUpgrade
 from bmpt.host.steam_records import OfficialFile
 from bmpt.host.store_formats import CATALOG_JOURNALS, parse_json, read_runtime
-from bmpt.library import ModLibrary, fingerprint, safety, tested_build
+from bmpt.library import ModLibrary, builders, fingerprint, safety, tested_build
 from bmpt.library.catalog_switch import MODS_DIR, catalog_paths
 from bmpt.library.service import catalog as catalog_service, updating
 from bmpt.library.service.base import _View
@@ -1863,3 +1863,36 @@ def test_start_retry_leaves_the_prune_to_maintenance(catalog_install, monkeypatc
     monkeypatch.setattr(lib, "_prune_quietly", lambda: pytest.fail("the start's retry pruned"))
     lib._run(True, True, [env.pin], lambda *args: None, None, None, drift=None, retry=["test_spr"])
     assert lib.take_prune_due() and not lib.take_prune_due()
+
+
+def test_output_of_another_builder_stands_in_a_toggle_and_is_built_again_at_start(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, _ = env.add("test")
+    lib.apply("test", source)
+    record = lib._catalog_record(pin)
+    current = builders.fingerprint()
+    assert all(item["build"].endswith(f".{current}") for item in record["redirects"].values())
+    older = {
+        name: {**item, "build": item["build"].split(".")[0] + ".build-older"}
+        for name, item in record["redirects"].items()
+    }
+    lib._save_catalog_record(pin, {**record, "redirects": older})
+    as_is = lib._placed_as_is
+    monkeypatch.setattr(lib, "_placed_as_is", lambda *args: False)  # as a rebuilt output would be
+    with monkeypatch.context() as patch:
+        patch.setattr(lib, "_reach", lambda *args, **kwargs: pytest.fail("a toggle built an output again"))
+        lib.toggle(False, True)
+        assert [item["core"] for item in lib.toggle(True, False).done] == ["test_spr"]
+    assert lib._stale_builds(pin, lib.profiles.read()) == ["test_spr"]
+    assert lib.update_due()["outdated"]
+    assert lib.refresh_builds() == ["test_spr"]
+    rebuilt = lib._catalog_record(pin)
+    assert all(item["build"].endswith(f".{current}") for item in rebuilt["redirects"].values())
+    assert rebuilt["live"] == "mods" and env.live.read_bytes() != env.official
+    assert lib._stale_builds(pin, lib.profiles.read()) == []
+    assert not lib._fresh_builds_only
+    # a placed file that is the mod's own file is never stale, whatever its key says
+    monkeypatch.setattr(lib, "_placed_as_is", as_is)
+    lib._save_catalog_record(pin, {**rebuilt, "redirects": older})
+    assert lib._stale_builds(pin, lib.profiles.read()) == []

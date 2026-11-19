@@ -9,7 +9,7 @@ import pytest
 
 from bmpt.catalog import Catalog
 from bmpt.core.errors import ServiceError
-from bmpt.library import ModLibrary, supports_resource_type
+from bmpt.library import ModLibrary, builders, supports_resource_type
 from bmpt.library.identity import content_cores, identify
 from bmpt.library.integrity import Contents
 from bmpt.library.judge import resource_type_of_file
@@ -1598,7 +1598,7 @@ def test_costume_verdicts_are_kept_per_build_signature(model_env, monkeypatch):
         )["ok"]
         is False
     )
-    patch_everywhere(monkeypatch, [service], "_build_version", lambda: "next:build")
+    monkeypatch.setattr(builders, "fingerprint", lambda kind="build": "build-next")
     assert library.costume_verdict("hoshino", "hoshino_swimsuit")["ok"] is False
     from bmpt.gameassets import costume_rule
 
