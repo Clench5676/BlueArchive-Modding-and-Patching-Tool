@@ -1838,3 +1838,28 @@ def test_off_of_a_catalog_install_makes_no_pass_over_the_game_files(catalog_inst
     result = lib.toggle(False, True)
     assert [item["core"] for item in result.done] == ["test_spr"]
     assert stray.read_bytes() == b"put there by another tool"
+
+
+def test_a_prune_pass_asks_each_mod_for_its_fingerprint_once(catalog_install, monkeypatch):
+    env = catalog_install
+    lib = env.library
+    env.add("test")
+    asked = []
+    monkeypatch.setattr(lib, "_read_built_against", lambda record: None)
+    monkeypatch.setattr(lib, "_backfill_built_against", lambda record, pin: asked.append(record["id"]))
+    tried: set[str] = set()
+    for path in env.files["test"]:
+        lib._backfill_before_release(path.name, tried)
+    assert len(asked) == 1
+    lib._backfill_before_release(env.files["test"][0].name)
+    assert len(asked) == 2  # a later pass asks again
+
+
+def test_start_retry_leaves_the_prune_to_maintenance(catalog_install, monkeypatch):
+    env = catalog_install
+    lib = env.library
+    source, _ = env.add("test")
+    lib.apply("test", source)
+    monkeypatch.setattr(lib, "_prune_quietly", lambda: pytest.fail("the start's retry pruned"))
+    lib._run(True, True, [env.pin], lambda *args: None, None, None, drift=None, retry=["test_spr"])
+    assert lib.take_prune_due() and not lib.take_prune_due()

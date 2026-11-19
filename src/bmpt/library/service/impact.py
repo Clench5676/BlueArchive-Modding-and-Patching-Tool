@@ -1136,21 +1136,27 @@ class ImpactMixin:
             log_failure(logger, logging.DEBUG, "No fingerprint made for the mod", error)
             return None
 
-    def _backfill_before_release(self, name: str) -> None:
+    def _backfill_before_release(self, name: str, tried: set[str] | None = None) -> None:
         """Backfill fingerprints before a kept original goes.
 
         The mods of its core stored without a fingerprint get theirs while the file that shows it is still here
-        (``_backfill_built_against``, kept originals only). Never raises.
+        (``_backfill_built_against``, kept originals only). ``tried`` holds the mods one prune pass asked already:
+        each is asked once per pass, since every release changes the set of kept originals and with it the key of
+        the misses kept across passes, while a pass only ever takes evidence away. Never raises.
         """
         try:
             key, core = integrity.replacement_key(name), core_of(name)
             for record in list(self._records.values()):
+                if tried is not None and record["id"] in tried:
+                    continue
                 names = record.get("files") or []
                 if record["resource_type"] == "other":
                     if key not in {integrity.replacement_key(file) for file in names}:
                         continue
                 elif core not in {core_of(file) for file in names}:
                     continue
+                if tried is not None:
+                    tried.add(record["id"])
                 if self._read_built_against(record) is None:
                     self._backfill_built_against(record, None)
         except Exception as error:  # noqa: BLE001 - releasing the original does not wait for it

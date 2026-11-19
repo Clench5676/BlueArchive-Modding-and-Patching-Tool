@@ -96,7 +96,9 @@ lock, which is taken only to save the store.
   the official catalog is kept, the bytes of every switched entry are placed, the generated catalog is swapped in,
   then the official files are put back entry by entry. An entry without an official copy keeps its bytes under the
   official name. An interruption repeats from the store: placing is idempotent and the swap is journaled. With mods
-  off only the method is recorded.
+  off only the method is recorded. The bytes placed are the ones the game already loads, so their contents are not
+  read again (hash and copy only). The kept official copies this makes unnecessary are released afterwards by the
+  maintenance prune, never by a start job: a prune pass asks each mod for a missing fingerprint once.
 - **Game updates.** Steam replaces the live catalog, so mods are off in game until the App acts. The new catalog is
   accepted as official (checked against Steam's file list with the scan consent, else it must be none of the App's
   generated catalogs and pass the format checks) and kept under the new resource version. A redirect whose official

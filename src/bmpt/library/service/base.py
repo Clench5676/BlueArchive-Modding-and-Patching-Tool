@@ -559,6 +559,8 @@ class _View:
             self.applied = library._applied
             self.by_name, self.by_folder = library._record_maps()
         self._sizes: dict[str, int | None] = {}
+        # the records of each install by core, listed at the first question (records_of)
+        self._records_by_core: dict[str, dict[str, list[tuple[Path, dict]]]] = {}
 
     def folder(self, key: str) -> dict:
         return ((self.config or {}).get("folders") or {}).get(key) or {}
@@ -613,12 +615,14 @@ class _View:
 
     def records_of(self, pin: Pin, core: str) -> list[tuple[Path, dict]]:
         """The library's records of a core's files in an install, gone files included."""
-        out = []
-        for folder in pin.dirs:
-            for path, record in self.by_folder.get(folder, []):
-                if self.maps[pin.key].slot(core_of(path.name)) == core:
-                    out.append((path, record))
-        return out
+        by_core = self._records_by_core.get(pin.key)
+        if by_core is None:
+            by_core = self._records_by_core[pin.key] = {}
+            slot = self.maps[pin.key].slot
+            for folder in pin.dirs:
+                for path, record in self.by_folder.get(folder, []):
+                    by_core.setdefault(slot(core_of(path.name)), []).append((path, record))
+        return list(by_core.get(core, ()))
 
     def _header(self, path: Path, recorded: bool) -> int | None:
         if self.allow == "recorded" and not recorded:

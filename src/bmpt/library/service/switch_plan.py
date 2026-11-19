@@ -203,8 +203,12 @@ class SwitchPlanMixin:
         kept_current: list[str] | None = None,
         untested: bool = True,
         before_write: Callable[[], None] | None = None,
+        replaced_kept: bool = False,
     ) -> list[Path]:
         """Write prepared files over game files as one unit, keeping what they replace.
+
+        ``replaced_kept``: the caller verified that every replaced file's bytes are kept elsewhere (a placed copy),
+        so none is looked for again.
 
         That is the official file in originals/ (once) and a file kept nowhere else as a library mod (_keep_replaced).
         Every written part is rolled back on failure. With ``prune``, unneeded kept originals are deleted afterwards,
@@ -230,6 +234,7 @@ class SwitchPlanMixin:
                     **({"before_write": before_write} if before_write else {}),
                     **({"expected": expected} if expected else {}),
                     **({"kept_current": kept_current} if kept_current is not None else {}),
+                    **({"replaced_kept": True} if replaced_kept else {}),
                 )
         finally:
             if prune:
@@ -863,9 +868,12 @@ class SwitchPlanMixin:
         kept_current: list[str] | None = None,
         untested: bool = True,
         before_write: Callable[[], None] | None = None,
+        replaced_kept: bool = False,
     ) -> list[Path]:
         kept = {target: path for target, path in replacements.items() if self._managed and self._is_kept(path)}
         options = dict(create_backup=create_backup, expected=expected, kept_current=kept_current, untested=untested)
+        if replaced_kept:
+            options["replaced_kept"] = True
         if before_write is not None:
             options["before_write"] = before_write
         with contextlib.ExitStack() as resources:
@@ -894,6 +902,7 @@ class SwitchPlanMixin:
         kept_current: list[str] | None = None,
         untested: bool = True,
         before_write: Callable[[], None] | None = None,
+        replaced_kept: bool = False,
     ) -> list[Path]:
         from ...gameassets.costume_rule import COSTUME_RULE
 
@@ -983,7 +992,7 @@ class SwitchPlanMixin:
                         if error.code != "official_unavailable":
                             raise
                 # Include omitted parts of the core: the outside mod must survive as a whole.
-                kept = self._keep_replaced(list(replacements), pin)
+                kept = [] if replaced_kept else self._keep_replaced(list(replacements), pin)
                 directory = self.root / "transactions" / uuid.uuid4().hex
                 directory.mkdir(parents=True)
                 sync_directory(self.root)

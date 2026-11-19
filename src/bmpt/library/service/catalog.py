@@ -32,7 +32,7 @@ from ..judge import LIBRARY_SOURCES, core_of, crc_state, now
 from ..records import Pin
 from ..safety import check_resource_path
 from ..storage import atomic_bytes, atomic_clone, atomic_copy, atomic_json, file_revision, sync_directory, verify_file
-from .base import STOPPING, _Entry, _background, _errors
+from .base import SAVE_EVERY, STOPPING, _Entry, _background, _errors
 
 logger = logging.getLogger(__name__)
 _SWAP_ID = re.compile(r"[0-9a-f]{32}")
@@ -257,12 +257,16 @@ class CatalogMixin:
                 cores.update((view.folder(pin.key).get("built") or {}).keys())
         view.allow = "full"
         planned = sorted(cores)
+        started = placed_at = time.perf_counter()
+        if planned:
+            logger.info("Moving %d entries of %s to the catalog switch", len(planned), pin.key)
         line = mod_progress.ItemProgress(progress, len(planned) * (2 if enabled else 1), "process")
         groups = {}
+        identities: dict[str, dict[str, str]] = {}
         for i, core in enumerate(planned, 1):
             self._let_others_in()
             with self._lock:
-                identity = self._entry_identity(pin, core, config)
+                identity = identities[core] = self._entry_identity(pin, core, config)
                 targets = self._spine_parts(core, pin)
             line.item(i, **identity, step=mod_progress.STEP_WRITE)
             try:
@@ -282,25 +286,44 @@ class CatalogMixin:
                 logger.info("Catalog migration deferred for %s: %s", core, error)
             line.done()
         redirects = {name: item for group in groups.values() for name, item in group.items()}
+        placed_at = time.perf_counter()
         if redirects != record["redirects"] or (redirects and not self._migration_catalog_available(pin, record)):
             self._publish_migration_catalog(pin, record, redirects)
         if enabled and redirects:
             if self._catalog_check_pending(pin, record["rv"]):
                 return
             self._swap_migration_catalog(pin, groups, redirects)
-            for i, core in enumerate(planned, len(planned) + 1):
-                self._let_others_in()
-                with self._lock:
-                    identity = self._entry_identity(pin, core, config)
-                line.item(i, **identity, step=mod_progress.STEP_RESTORE)
-                if core in groups and not self._restore_migrated_entry(pin, core, groups[core]):
-                    for name in groups[core]:
-                        del redirects[name]
-                    self._publish_migration_catalog(pin, self._catalog_record_for(pin), redirects)
-                    if redirects:
-                        self._timed_swap(pin, "mods")
-                line.done()
+            outcomes = self._migration_outcomes = {}
+            saved_at = time.monotonic()
+            try:
+                for i, core in enumerate(planned, len(planned) + 1):
+                    self._let_others_in()
+                    line.item(i, **identities[core], step=mod_progress.STEP_RESTORE)
+                    if core in groups and not self._restore_migrated_entry(pin, core, groups[core]):
+                        for name in groups[core]:
+                            del redirects[name]
+                        self._publish_migration_catalog(pin, self._catalog_record_for(pin), redirects)
+                        if redirects:
+                            self._timed_swap(pin, "mods")
+                    if len(outcomes) >= SAVE_EVERY[0] or time.monotonic() - saved_at >= SAVE_EVERY[1]:
+                        self._save_outcomes(outcomes)
+                        outcomes.clear()
+                        saved_at = time.monotonic()
+                    line.done()
+            finally:
+                # an interrupted pass keeps what it reached; the next start skips entries that are official again
+                self._migration_outcomes = None
+                self._save_outcomes(outcomes)
         self._save_catalog_record(pin, {**self._catalog_record_for(pin), "migrated": now()})
+        if planned:
+            logger.info(
+                "Moved %d entries to the catalog switch: %d redirects, placed in %.1f s, restored in %.1f s",
+                len(groups),
+                len(redirects),
+                placed_at - started,
+                time.perf_counter() - placed_at,
+            )
+        self._prune_due = True  # the kept originals of the entries moved are no longer needed
 
     def _swap_migration_catalog(
         self, pin: Pin, groups: dict[str, dict[str, Document]], redirects: dict[str, Document]
@@ -388,8 +411,10 @@ class CatalogMixin:
         source = entry.carried
         build_keys: dict[Path, str] = {}
         expected: dict[Path, str] = {}
+        applied = False
         with self._lock.unlocked():
             if source.startswith(LIBRARY_SOURCES):
+                applied = True  # every part below is what the game loads now: the record's bytes or the official part
                 paths = {part.path: part for part in entry.parts}
                 replacements = {}
                 for target in targets:
@@ -416,7 +441,9 @@ class CatalogMixin:
                     }
             else:
                 return {}
-            return self._place_entry(pin, replacements, source, build_keys, expected=expected) if replacements else {}
+            if not replacements:
+                return {}
+            return self._place_entry(pin, replacements, source, build_keys, expected=expected, applied=applied)
 
     def _view_built_parts(self, pin: Pin, core: str) -> Document:
         folder = ((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {}
@@ -477,16 +504,25 @@ class CatalogMixin:
                 prune=False,
                 expected=expected,
                 before_write=check_placements,
+                # every replaced file is a recorded one whose bytes are its verified placed copy, or official
+                replaced_kept=True,
             )
         except ServiceError as error:
             if error.code == "entry_changed":
                 return False
             if error.code != "official_unavailable":
                 raise
-            self._save_outcomes({(pin.key, core): "stuck"})
+            self._migration_outcome(pin, core, "stuck")
         else:
-            self._save_outcomes({(pin.key, core): None})
+            self._migration_outcome(pin, core, None)
         return True
+
+    def _migration_outcome(self, pin: Pin, core: str, why: str | None) -> None:
+        """Note an entry the move to the catalog finished: in the pass's batch, else saved at once."""
+        if self._migration_outcomes is None:
+            self._save_outcomes({(pin.key, core): why})
+        else:
+            self._migration_outcomes[(pin.key, core)] = why
 
     def _catalog_start_due(self) -> bool:
         """Check the known installs' versions and live catalog stats before scheduling class 3 work."""
@@ -811,12 +847,18 @@ class CatalogMixin:
         build_keys: Mapping[Path, str],
         *,
         expected: Mapping[Path, str] | None = None,
+        applied: bool = False,
     ) -> dict[str, Document]:
-        """Place one class 2 entry under the library lock, yielding at the caller's next entry boundary."""
+        """Place one class 2 entry under the library lock, yielding at the caller's next entry boundary.
+
+        ``applied``: the bytes are the ones the game already loads under the official names (a move to the catalog),
+        so their references are not read again; the placement changes nothing of what the game sees.
+        """
         self._check_stopping(pin)
         for target in replacements:
             check_resource_path(target, list(pin.dirs))
-        self._check_references(replacements, pin)
+        if not applied:
+            self._check_references(replacements, pin)
         return {
             target.name: {
                 **self._place(pin, target.name, prepared, **({"expected": expected[target]} if expected else {})),

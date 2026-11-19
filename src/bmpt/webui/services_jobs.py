@@ -283,6 +283,10 @@ class JobsMixin:
                 cores = None  # a preceding scan may become stale while this job writes
             # Without a complete snapshot a full scan still establishes the initial state.
             self.request_scan(cores=cores if cores and self.snapshot.scanned() else None)
+        take = getattr(library, "take_prune_due", None)
+        if kind != "library.prune" and take is not None and take():
+            # kept originals a start job no longer needs: released by maintenance, never under that job's line
+            self._start_prune(library)
         elapsed = time.perf_counter() - started
         if kind == "mods.toggle":
             self.timings.record("mods.toggle.follow_up", elapsed, quiet=True)

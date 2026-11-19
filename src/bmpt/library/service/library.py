@@ -181,6 +181,10 @@ class ModLibrary(
         self._backfill_misses: set[tuple] = set()
         # an install's checked catalog paths, reused for a moment (_catalog_paths)
         self._catalog_paths_kept: dict[str, tuple] = {}
+        # entries a running move to the catalog finished and has not saved yet (_migration_outcome)
+        self._migration_outcomes: dict[tuple[str, str], str | None] | None = None
+        # a start job left kept originals to release: the maintenance prune takes them (take_prune_due)
+        self._prune_due = False
         # the official rigs of portraits kept per game release, and what was matched against them (_archived_rigs)
         self.rigs = rig_archive.RigArchive(self.root / "rigs")
         self._rig_matches: dict[tuple, dict] = {}

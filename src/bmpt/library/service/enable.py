@@ -701,7 +701,10 @@ class EnableMixin:
                 self._clear_done(by_key[key], done_cores)
         # An interrupted run leaves its last saved checkpoint for Retry. A run that walked no entry wrote no game file
         # and kept no original: it leaves the prune to maintenance.
-        if not catalog_reconcile and (walked or not standing):
+        # The start's retry runs behind the start cover under its entries' line: it leaves the prune to maintenance too.
+        if retry is not None:
+            self._prune_due = True
+        elif not catalog_reconcile and (walked or not standing):
             with toggle_timing.enter("library_wait", self._lock), toggle_timing.stage("prune"):
                 self._prune_quietly()
         with _errors("toggle"):
