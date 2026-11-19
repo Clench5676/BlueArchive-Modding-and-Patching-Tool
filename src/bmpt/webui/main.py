@@ -20,7 +20,7 @@ from ..core import devmode
 from ..host.data_upgrade import DataUpgrade
 from ..host.format_manifest import DATA_MANIFEST
 from ..host.store_formats import NAMESPACE
-from bmpt.engine import EXE_DIR, i18n_manager, t
+from bmpt.engine import EXE_DIR, i18n_manager
 from .api import build_api
 from .instance import InstanceLock, raise_running, read_info
 from .server import Server, WebApp
@@ -349,7 +349,7 @@ def _run_window(s: Services, server: Server, debug: bool) -> None:
     webview.settings["DRAG_REGION_DIRECT_TARGET_ONLY"] = True
     with s.timings.measure("native.create-window"):
         window = webview.create_window(
-            t("ui.app_title"),
+            native.window_title(),
             server.url,
             width=1600,
             height=900,
@@ -377,6 +377,7 @@ def _run_window(s: Services, server: Server, debug: bool) -> None:
         if sys.platform == "darwin":
             native.keep_web_view_black(window)
             commands = native.install_window_commands(s, s.chrome)
+            native.mark_dev_dock()
         logger.info("Native lifecycle: before-show complete")
 
     window.events.before_show += before_show
@@ -632,8 +633,10 @@ def _serve_bootstrap(
         else:
             import webview
 
+            from .native import window_title
+
             window = webview.create_window(
-                t("ui.app_title"), server.url, width=1200, height=760, background_color="#000000"
+                window_title(), server.url, width=1200, height=760, background_color="#000000"
             )
             app.raise_window = lambda: (window.show(), window.restore())
             instance.publish(server.port, app.raise_token)
