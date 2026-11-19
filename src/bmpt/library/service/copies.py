@@ -23,7 +23,7 @@ from bmpt.engine import (
 from ...core.errors import ServiceError
 from ...core.openfiles import remove_tree
 from .. import profiles as profiles_mod
-from .. import mod_progress, safety, toggle_timing
+from .. import builders, mod_progress, safety, toggle_timing
 from ..judge import (
     sorted_resource_types,
     LIBRARY_SOURCES,
@@ -49,7 +49,6 @@ from .base import (
     _Entry,
     _Unread,
     _View,
-    _build_version,
     _errors,
     _folder_size,
     _mod_writer,
@@ -60,15 +59,38 @@ from .base import (
 logger = logging.getLogger(__package__)
 
 
+def _same_inputs(recorded: str | None, current: str | None) -> bool:
+    """Tell whether two build keys name outputs of the same inputs, whatever built them (``_build_signature``)."""
+    if not recorded or not current or "." not in recorded or "." not in current:
+        return False
+    return recorded.split(".", 1)[0] == current.split(".", 1)[0]
+
+
+def _builder_of(key: str | None) -> str | None:
+    """Give the builder part of a build key, None for a key from before the two parts."""
+    return key.split(".", 1)[1] if key and "." in key else None
+
+
 class CopiesMixin:
     """Built copies, the configuration, entries and the scan, and adopting mods already in use."""
 
     @toggle_timing.stage("build_signature")
-    def _build_signature(self, sources: list[Path], targets: list[Path], pin: Pin, version: str | None = None) -> str:
-        """Give what a build is made from.
+    def _build_signature(
+        self,
+        sources: list[Path],
+        targets: list[Path],
+        pin: Pin,
+        version: str | None = None,
+        *,
+        builder: str | None = None,
+    ) -> str:
+        """Give what a build is made from, as the ``build`` a game file written from it records.
 
-        That is the program (or ``version``, a rule's own), the bytes of its inputs, the official bytes of its targets
-        and the options. A game file written from it records this as its ``build``.
+        The key has two parts, ``<made from>.<builder>``: a digest of the bytes of its inputs, the official bytes of
+        its targets and the options, then what built it: the fingerprint of the builder code
+        (``builders.fingerprint``), or ``builder``, a rule's own mark (the costume rule). Two keys with the same
+        first part are outputs of the same inputs (``_same_inputs``). With ``version``, a rule's own, the key is one
+        digest over that version and the rest: the key of costume verdicts and previews, kept as it was.
         """
         inputs = [(path.name, self._hashes.get(path).sha1) for path in sources]
         originals = [(path.name, self._hashes.get(self._official_for(path, pin)).sha1) for path in targets]
@@ -78,7 +100,19 @@ class CopiesMixin:
             self.settings.spine_options(),
             self.settings.anim_check_key(),
         )
-        return hashlib.sha1(repr((1, version or _build_version(), inputs, originals, options)).encode()).hexdigest()
+        if version is not None:
+            return hashlib.sha1(repr((1, version, inputs, originals, options)).encode()).hexdigest()
+        made_from = hashlib.sha1(repr((2, inputs, originals, options)).encode()).hexdigest()
+        return f"{made_from}.{builder or builders.fingerprint()}"
+
+    def _build_fits(self, recorded: str | None, current: str) -> bool:
+        """Tell whether a placed output recorded under one build key serves where ``current`` is asked.
+
+        It does when the keys are equal, and also when only the builder differs: such an output is still made from
+        the same inputs, and the start's refresh builds it again (``refresh_builds``), never a toggle. While that
+        refresh runs, only an equal key fits.
+        """
+        return recorded == current or (not self._fresh_builds_only and _same_inputs(recorded, current))
 
     def _cached_build(
         self,
@@ -89,6 +123,7 @@ class CopiesMixin:
         build_keys: dict[Path, str],
         *,
         placed: bool = False,
+        builder: str | None = None,
     ) -> dict[Path, Path]:
         """Reuse only a referenced instant-On copy with the same program, inputs, official targets and options.
 
@@ -105,7 +140,7 @@ class CopiesMixin:
         if len(target_names) != len(targets):
             return prepare()  # built keys identify parts by file name
         try:
-            signature = self._build_signature(sources, targets, pin)
+            signature = self._build_signature(sources, targets, pin, builder=builder)
         except ServiceError as error:
             if error.code != "official_unavailable":
                 raise
@@ -146,6 +181,13 @@ class CopiesMixin:
         replacements = prepare()
         logger.debug("Built %s in %.3f s", signature, time.perf_counter() - start)
         return replacements
+
+    @staticmethod
+    def _costume_builder() -> str:
+        """Give the builder part of a costume build's key: its rule, not the program."""
+        from ...gameassets.costume_rule import COSTUME_RULE
+
+        return f"costume-rule:{COSTUME_RULE}"
 
     @toggle_timing.stage("built_lookup")
     def _built_replacements(
@@ -425,6 +467,7 @@ class CopiesMixin:
         Returns:
             Byte count of the built files selected for cleanup.
         """
+        self.checks.clear()
         directory = self.root / "built"
         freed = _folder_size(directory)
 

@@ -55,6 +55,7 @@ logger = logging.getLogger(__package__)
 
 SPACE_MARGIN = 512 * 1024 * 1024  # left free on the library's volume by an Off and an adoption
 SAVE_EVERY = (10, 2.0)  # a toggle saves its unfinished list every 10 entries or 2 s
+STANDING_STEP = 50  # entries a toggle checks by stat in one step under the library lock
 BUILT_TEMP_MAX_AGE = 60 * 60  # seconds before an abandoned built copy can be cleared
 COSTUME_PREVIEWS = 4  # costume previews kept in built/previews (one folder per build signature)
 # times a costume preview is built again when its build signature changed while it was built (costume_preview)
@@ -558,6 +559,8 @@ class _View:
             self.applied = library._applied
             self.by_name, self.by_folder = library._record_maps()
         self._sizes: dict[str, int | None] = {}
+        # the records of each install by core, listed at the first question (records_of)
+        self._records_by_core: dict[str, dict[str, list[tuple[Path, dict]]]] = {}
 
     def folder(self, key: str) -> dict:
         return ((self.config or {}).get("folders") or {}).get(key) or {}
@@ -612,12 +615,14 @@ class _View:
 
     def records_of(self, pin: Pin, core: str) -> list[tuple[Path, dict]]:
         """The library's records of a core's files in an install, gone files included."""
-        out = []
-        for folder in pin.dirs:
-            for path, record in self.by_folder.get(folder, []):
-                if self.maps[pin.key].slot(core_of(path.name)) == core:
-                    out.append((path, record))
-        return out
+        by_core = self._records_by_core.get(pin.key)
+        if by_core is None:
+            by_core = self._records_by_core[pin.key] = {}
+            slot = self.maps[pin.key].slot
+            for folder in pin.dirs:
+                for path, record in self.by_folder.get(folder, []):
+                    by_core.setdefault(slot(core_of(path.name)), []).append((path, record))
+        return list(by_core.get(core, ()))
 
     def _header(self, path: Path, recorded: bool) -> int | None:
         if self.allow == "recorded" and not recorded:
@@ -1147,14 +1152,6 @@ class _ChoiceChange:
             )
         except Exception as error:  # the next prune deletes what is left
             log_failure(logger, logging.WARNING, "Could not delete replaced built copies", error)
-
-
-def _build_version() -> str:
-    """The program build: a cached build is never reused across versions."""
-    from bmpt.engine import get_version_info
-
-    info = get_version_info()
-    return f"{info.get('version')}:{info.get('commit_hash')}"
 
 
 def _folder_size(directory: Path) -> int:

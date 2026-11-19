@@ -20,6 +20,7 @@ from ...core.filelock import file_lock
 from ...gameassets.cabs import CabIndex
 from ...core.logging_utils import log_failure
 from .. import pointers, rig_archive, staging, toggle_timing
+from ..check_cache import CheckCache
 from ..original_checks import OriginalChecks
 from ..judge import supports_resource_type
 from ..migrations import LEGACY_REMAP, legacy_remapped
@@ -133,6 +134,8 @@ class ModLibrary(
         self._hashes = Fingerprints()
         # cross-bundle pointers of a file by its SHA-1, and the objects of a game file's CABs by its revision
         self._pointer_cache: OrderedDict[str, frozenset[pointers.Pointer]] = OrderedDict()
+        # answers of content checks kept across runs by the bytes they were read from (check_cache)
+        self.checks = CheckCache(self.cache_root / "checks.json")
         self._layout_cache: OrderedDict[tuple, dict[str, dict[int, int]]] = OrderedDict()
         self._steam_files = steam_files if steam_files is not None else steam_records.OfficialFiles()
         self._steam_roots_cache: tuple[float, list[Path]] | None = None
@@ -179,6 +182,14 @@ class ModLibrary(
         # how each kept original was verified: Steam's list or the CRC rule alone
         self._original_checks = OriginalChecks(self.root, self._hashes)
         self._backfill_misses: set[tuple] = set()
+        # an install's checked catalog paths, reused for a moment (_catalog_paths)
+        self._catalog_paths_kept: dict[str, tuple] = {}
+        # entries a running move to the catalog finished and has not saved yet (_migration_outcome)
+        self._migration_outcomes: dict[tuple[str, str], str | None] | None = None
+        # a start job left kept originals to release: the maintenance prune takes them (take_prune_due)
+        self._prune_due = False
+        # the start's refresh of built outputs runs: only an output of the current builder is reused (_build_fits)
+        self._fresh_builds_only = False
         # the official rigs of portraits kept per game release, and what was matched against them (_archived_rigs)
         self.rigs = rig_archive.RigArchive(self.root / "rigs")
         self._rig_matches: dict[tuple, dict] = {}

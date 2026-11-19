@@ -566,7 +566,11 @@ class OriginalsMixin:
         known_dirs = {folder: pin for pin in guarded for folder in pin.dirs}
         released: list[Path] = []
         waited = 0.0
+        backfilled: set[str] = set()  # mods asked for a fingerprint in this pass (_backfill_before_release)
+        started = time.perf_counter()
+        slowest = ("", 0.0)
         for name in sorted(listed):
+            began = time.perf_counter()
             # a preview or a page read waiting for the library goes first; nothing is decided between two originals
             waited += self._lock.step_aside() if hasattr(self._lock, "step_aside") else 0.0
             original = directory / name
@@ -599,16 +603,29 @@ class OriginalsMixin:
                     continue
                 if self._needed_elsewhere(name, {str(path) for path in gone}, guarded):
                     continue
-            self._backfill_before_release(name)
+            self._backfill_before_release(name, backfilled)
             try:
                 original.unlink()
             except OSError as error:
                 log_failure(logger, logging.WARNING, "Could not delete the kept original", error)
                 continue
-            logger.info("Released the kept original %s", name)
+            logger.debug("Released the kept original %s", name)
             released.append(original)
+            took = time.perf_counter() - began
+            if took > slowest[1]:
+                slowest = (name, took)
         if waited:
             spans.record("library.prune.yield", waited)
+        if released:
+            logger.info(
+                "Released %d of %d kept originals in %.1f s (%d mods asked for a fingerprint; slowest %s, %.1f s)",
+                len(released),
+                len(listed),
+                time.perf_counter() - started - waited,
+                len(backfilled),
+                slowest[0],
+                slowest[1],
+            )
         # superseded gone records: kept while an original of their name is, else dropped (with the marker)
         kept = {name for name in listed if (directory / name).exists()}
         stale: list[str] = []
@@ -667,6 +684,11 @@ class OriginalsMixin:
         self._pruned_cores.update(core_of(Path(name).name) for name in stale)
         self._pruned_cores.update(core for cores in built_drops.values() for core in cores)
         return released
+
+    def take_prune_due(self) -> bool:
+        """Consume the note that a start job left kept originals for the maintenance prune to release."""
+        due, self._prune_due = self._prune_due, False
+        return due
 
     @_serialized
     def take_pruned_cores(self) -> set[str]:

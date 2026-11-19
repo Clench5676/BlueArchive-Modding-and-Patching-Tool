@@ -20,7 +20,7 @@ from ...core.errors import ServiceError
 from ...core.logging_utils import log_failure
 from ...host.upgrade_files import digest
 from .. import profiles as profiles_mod
-from .. import fingerprint, integrity, mod_progress, tested_build
+from .. import builders, fingerprint, integrity, mod_progress, tested_build
 from ..catalog_switch import MODE_CATALOG
 from ..judge import core_of, now
 from ..records import (
@@ -199,6 +199,15 @@ class ImpactMixin:
             known = self._impacts.get(key)
             if known is not None:
                 return known
+            # kept across runs by the mod's files, its stored baseline and the game's resource version
+            kept_key = hashlib.sha1(
+                repr((key, self._impact_mark(record), self.resource_version(pin))).encode()
+            ).hexdigest()
+            kept = self.checks.get("impacts", kept_key)
+            if kept is not None:
+                found = (kept[0], kept[1])
+                self._impacts[key] = found
+                return found
             if not targets:
                 # an alt whose core moved since (the catalog maps it elsewhere) is no target gone
                 mapped = (
@@ -220,6 +229,8 @@ class ImpactMixin:
             if len(self._impacts) >= 4096:
                 self._impacts.clear()
             self._impacts[key] = found
+            if found[0] != fingerprint.UNKNOWN:  # an unknown may become known once a fingerprint is stored
+                self.checks.put("impacts", kept_key, [found[0], found[1]])
             return found
         except Exception as error:  # noqa: BLE001 - a judgement that cannot be made tells nothing
             log_failure(logger, logging.DEBUG, "No impact judged for the mod", error)
@@ -741,6 +752,95 @@ class ImpactMixin:
             )
         return result
 
+    def _stale_builds(self, pin: Pin, config: dict[str, Any]) -> list[str]:
+        """List the entries whose placed outputs another builder made.
+
+        Those are the configured entries of an install switched by its catalog, with mods on, that hold a redirect
+        whose build key names another builder than the current one (``builders.fingerprint``, the costume rule for a
+        costume) and whose bytes are neither the mod's own file nor the official part. They stay in use as they are;
+        ``refresh_builds`` builds them again. Records, stats and the hash cache only: no bundle is opened.
+        """
+        from .copies import _builder_of
+
+        record = self._catalog_records_for_read().get(pin.key)
+        if (
+            not record
+            or record["mode"] != MODE_CATALOG
+            or not record["redirects"]
+            or record["rv"] != self.resource_version(pin)
+            or not profiles_mod.enabled(config)
+        ):
+            return []
+        configured = ((config.get("folders") or {}).get(pin.key) or {}).get("configured") or {}
+        mapped = self._core_map(pin)
+        groups: dict[str, dict[str, dict]] = {}
+        for name, item in record["redirects"].items():
+            groups.setdefault(mapped.slot(core_of(name)), {})[name] = item
+        stale = []
+        for core, group in sorted(groups.items()):
+            source = (configured.get(core) or {}).get("source")
+            if not isinstance(source, str) or any(item["source"] != source for item in group.values()):
+                continue
+            resource_type = self._resource_type(core, pin) or "portrait"
+            current = (
+                self._costume_builder()
+                if source.startswith("alt:") and resource_type == "chibi"
+                else builders.fingerprint()
+            )
+            if all(_builder_of(item["build"]) == current for item in group.values()):
+                continue
+            own: dict[str, Path] = {}
+            mod = self._records.get(source[4:]) if source.startswith("mod:") else None
+            if mod is not None and (mod["resource_type"] in ("other", "chibi") or core_of(mod["files"][0]) == core):
+                own = {path.name: path for path in self._paths(mod)}
+            targets = {path.name: path for path in self._spine_parts(core, pin)}
+            if any(
+                _builder_of(item["build"]) != current
+                and not (name in targets and self._placed_as_is(pin, targets[name], item, own))
+                for name, item in group.items()
+            ):
+                stale.append(core)
+        return stale
+
+    def refresh_builds(
+        self, pin: Pin | None = None, log: LogFunc = no_log, progress: ProgressCallback | None = None
+    ) -> list[str]:
+        """Build again, at start, the placed outputs another builder made.
+
+        A toggle keeps using an output whose inputs are unchanged (``_build_fits``); a new builder fingerprint asks
+        for it to be built again, here: class 3 behind the start cover, one entry per step with a yield between
+        entries and its own progress, then one catalog publication. What cannot be written now (the game runs,
+        the classic window, mods off) or fails keeps its output and waits for the next start.
+
+        Args:
+            pin: Game install and server the operation is fixed to; None uses the current install.
+            log: Receives user-facing operation messages.
+            progress: Receives per-entry build and write dictionaries; None disables reporting.
+
+        Returns:
+            The cores built again.
+        """
+        pin = self._current(pin)
+        try:
+            with self._lock:
+                stale = self._stale_builds(pin, self.profiles.read() or {})
+            if not stale or self._writes_refused():
+                return []
+            entries = [{"install": pin.key, "core": core, "state": "updated"} for core in stale]
+            self._fresh_builds_only = True
+            try:
+                self._run(None, None, [pin], log, progress, None, entries, catalog_reconcile=True)
+            finally:
+                self._fresh_builds_only = False
+            with self._lock:
+                left = set(self._stale_builds(pin, self.profiles.read() or {}))
+        except (OSError, ServiceError) as error:
+            log_failure(logger, logging.INFO, "Left outputs of another builder for the next start", error)
+            return []
+        done = [core for core in stale if core not in left]
+        logger.info("Outputs of another builder: %d of %d built again", len(done), len(stale))
+        return done
+
     def _entry_identity(self, pin: Pin, core: str, config: dict[str, Any] | None) -> dict[str, str]:
         """Who a toggle's entry is (``_progress_identity``): its core's alt and kind, and its configured source."""
         try:
@@ -905,6 +1005,10 @@ class ImpactMixin:
             out["outdated"] |= bool(self._outdated_costumes(pin, config))
         except (OSError, ServiceError) as error:
             log_failure(logger, logging.DEBUG, "Could not look for costume builds of an older rule", error)
+        try:
+            out["outdated"] |= bool(self._stale_builds(pin, config))
+        except (OSError, ServiceError) as error:
+            log_failure(logger, logging.DEBUG, "Could not look for outputs of another builder", error)
         if version is None or version == previous:
             return out
         with self._lock:
@@ -1136,21 +1240,27 @@ class ImpactMixin:
             log_failure(logger, logging.DEBUG, "No fingerprint made for the mod", error)
             return None
 
-    def _backfill_before_release(self, name: str) -> None:
+    def _backfill_before_release(self, name: str, tried: set[str] | None = None) -> None:
         """Backfill fingerprints before a kept original goes.
 
         The mods of its core stored without a fingerprint get theirs while the file that shows it is still here
-        (``_backfill_built_against``, kept originals only). Never raises.
+        (``_backfill_built_against``, kept originals only). ``tried`` holds the mods one prune pass asked already:
+        each is asked once per pass, since every release changes the set of kept originals and with it the key of
+        the misses kept across passes, while a pass only ever takes evidence away. Never raises.
         """
         try:
             key, core = integrity.replacement_key(name), core_of(name)
             for record in list(self._records.values()):
+                if tried is not None and record["id"] in tried:
+                    continue
                 names = record.get("files") or []
                 if record["resource_type"] == "other":
                     if key not in {integrity.replacement_key(file) for file in names}:
                         continue
                 elif core not in {core_of(file) for file in names}:
                     continue
+                if tried is not None:
+                    tried.add(record["id"])
                 if self._read_built_against(record) is None:
                     self._backfill_built_against(record, None)
         except Exception as error:  # noqa: BLE001 - releasing the original does not wait for it

@@ -76,6 +76,18 @@ setting.
   the official ones in a `ModBundles` subfolder, each named after the SHA-1 of its bytes, and the App generates a
   catalog that points the modded parts at them. A switch is one swap of the live catalog: a verified copy beside it,
   then a rename. Off swaps the official catalog back and leaves the placed files, so the next On is one swap again.
+  An entry whose placed files are there as recorded for its configured source, and whose official-named files are
+  official, is switched by the swap alone: nothing of it is read again, and a placed file that is the mod's own file
+  stays valid across program versions. Only entries that changed since (the mod's files, the configured source, a
+  placed file, an official-named file) go through the per-entry steps. An Off makes no pass over the game files
+  first: files that are neither official nor a library source are found by the scan that follows the toggle and
+  offered by "Mods Not in the Library"; until then such a file stays as it is.
+  A rebuilt output (a mod adapted to another character, a costume build) records a build key of two parts: a
+  digest of what it was made from (the bytes of its inputs, the official bytes of its targets, the options) and
+  what built it (a fingerprint of the builder code and of the packages that shape the bytes,
+  `catalog/data/builder_fingerprints.json`, written by `scripts/build_builder_fingerprints.py`; the costume rule
+  for a costume). A toggle reuses an output while the first part holds. An output of another builder stays in use
+  and is built again by the start job behind the start cover (`refresh_builds`), never inside a toggle.
   Apply and restore of one entry place (or reuse) its file, generate a catalog and swap. Official files are never
   overwritten. A core whose files the catalog does not name, or that lie outside `GameData/Windows`, is switched by
   file replacement in the same folder.
@@ -90,7 +102,9 @@ lock, which is taken only to save the store.
   the official catalog is kept, the bytes of every switched entry are placed, the generated catalog is swapped in,
   then the official files are put back entry by entry. An entry without an official copy keeps its bytes under the
   official name. An interruption repeats from the store: placing is idempotent and the swap is journaled. With mods
-  off only the method is recorded.
+  off only the method is recorded. The bytes placed are the ones the game already loads, so their contents are not
+  read again (hash and copy only). The kept official copies this makes unnecessary are released afterwards by the
+  maintenance prune, never by a start job: a prune pass asks each mod for a missing fingerprint once.
 - **Game updates.** Steam replaces the live catalog, so mods are off in game until the App acts. The new catalog is
   accepted as official (checked against Steam's file list with the scan consent, else it must be none of the App's
   generated catalogs and pass the format checks) and kept under the new resource version. A redirect whose official

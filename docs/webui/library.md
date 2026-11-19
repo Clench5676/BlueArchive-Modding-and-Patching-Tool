@@ -84,7 +84,7 @@ manifest to the committed membership. Settings relocation switches the data mani
 | `D/.bmpt-upgrade/data/g2/<epoch>/` | `config.toml`, `webui.json`, applicable previous copies, recovery material, and a seal |
 | `L/.bmpt-upgrade/library/g2/<epoch>/` | `state.json`, `profiles.json`, `originals.json`, `thumbnails/index.json`, `thumbnails/images/`, `mods/`, `originals/`, `built/`, `rigs/`, `catalogs.json`, `catalogs/`, and the transaction directories |
 | `D/.bmpt-upgrade/runtime/` | upgrade and session logs, runtime handshakes, and other process metadata |
-| `L/.bmpt-upgrade/cache/g2/` | derived costume and build-preview caches |
+| `L/.bmpt-upgrade/cache/g2/` | derived costume and build-preview caches, and `checks.json`: answers of content checks (a bundle's cross-bundle pointers and object layout, a write's reference verdict, a game update's impact on a mod) kept by the SHA-1 of the files read and the resource version, bounded, cleared with the built copies |
 
 The manifests carry `format` (`app_data` or `mod_library`), `format_version`, `min_reader_version`, informational
 `written_by`, `library_id`, and `stores` entries with `path` and `version`. The reader's supported major must be at

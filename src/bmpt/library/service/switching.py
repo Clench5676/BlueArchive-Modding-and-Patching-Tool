@@ -402,6 +402,7 @@ class SwitchingMixin:
                             **placed,
                         ),
                         build_keys,
+                        builder=self._costume_builder(),
                         **placed,
                     )
                 elif source.startswith("alt:"):
@@ -901,6 +902,7 @@ class SwitchingMixin:
                             **options,
                         ),
                         build_keys,
+                        builder=self._costume_builder(),
                         **options,
                     )
                 elif source.startswith("alt:"):

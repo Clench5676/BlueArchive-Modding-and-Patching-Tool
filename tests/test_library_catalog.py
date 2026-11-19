@@ -22,9 +22,10 @@ from bmpt.host.config import Settings
 from bmpt.host.data_upgrade import DataUpgrade
 from bmpt.host.steam_records import OfficialFile
 from bmpt.host.store_formats import CATALOG_JOURNALS, parse_json, read_runtime
-from bmpt.library import ModLibrary, fingerprint, safety, tested_build
+from bmpt.library import ModLibrary, builders, fingerprint, safety, tested_build
 from bmpt.library.catalog_switch import MODS_DIR, catalog_paths
 from bmpt.library.service import catalog as catalog_service, updating
+from bmpt.library.service.base import _View
 from bmpt.unity import ccdb
 from bmpt.webui.api import build_api
 from bmpt.webui.jobs import START
@@ -1687,3 +1688,245 @@ def test_impact_rows_carry_a_retired_target_in_the_wire_spelling():
     assert wire_value({"mods": [row]}) == {
         "mods": [{"id": "1", "resourceType": "portrait", "impact": "rebuilt", "targetRetired": True}]
     }
+
+
+def _switch_state(env):
+    lib = env.library
+    config = lib.profiles.read()
+    return {
+        "live": env.live.read_bytes() == env.official,
+        "redirects": lib._catalog_record(env.pin)["redirects"],
+        "applied": lib._applied,
+        "unfinished": config["unfinished"],
+        "enabled": config["enabled"],
+        "game": {path.name: path.read_bytes() for paths in env.files.values() for path in paths},
+    }
+
+
+def _outcome(result):
+    return {
+        name: sorted(item["core"] for item in getattr(result, name))
+        for name in ("done", "adopted", "stuck", "left", "skipped", "dropped", "held")
+    } | {"failed": sorted(item["entry"]["core"] for item in result.failed), "cores": result.cores}
+
+
+@pytest.mark.parametrize("standing", [True, False])
+def test_unchanged_entries_switch_by_the_swap_alone(catalog_install, monkeypatch, standing):
+    env = catalog_install
+    lib = env.library
+    for key in ("test", "second"):
+        source, _ = env.add(key, fixed=key == "test")
+        lib.apply(key, source)
+    if not standing:
+        monkeypatch.setattr(lib, "_standing_on", lambda *args: {})
+        monkeypatch.setattr(lib, "_standing_off", lambda *args: [])
+    walked, saves = [], []
+    reach, update = lib._reach, lib.profiles.update
+    monkeypatch.setattr(
+        lib, "_reach", lambda pin, core, *args, **kwargs: walked.append(core) or reach(pin, core, *args, **kwargs)
+    )
+    monkeypatch.setattr(lib.profiles, "update", lambda *args, **kwargs: saves.append(1) or update(*args, **kwargs))
+    states = []
+    for enabled in (False, True, False, True):
+        result = lib.toggle(enabled, not enabled)
+        states.append((_outcome(result), _switch_state(env)))
+    assert all(outcome["done"] == ["second_spr", "test_spr"] and not outcome["failed"] for outcome, _ in states)
+    assert [state["live"] for _, state in states] == [True, False, True, False]
+    assert all(state["unfinished"] == [] and state["applied"] == {} for _, state in states)
+    assert states[1][1]["redirects"] == states[3][1]["redirects"]
+    if standing:
+        assert walked == []
+        assert len(saves) <= 4 * 3  # the intent and the finished list of each toggle, never one per entry
+    else:
+        assert len(walked) == 8
+
+
+def test_standing_and_walked_toggles_agree(catalog_install, monkeypatch, tmp_path_factory):
+    env = catalog_install
+    lib = env.library
+    for key in ("test", "second"):
+        source, _ = env.add(key)
+        lib.apply(key, source)
+    lib.toggle(False, True)
+    fast = (_outcome(lib.toggle(True, False)), _switch_state(env))
+    lib.toggle(False, True)
+    monkeypatch.setattr(lib, "_standing_on", lambda *args: {})
+    slow = (_outcome(lib.toggle(True, False)), _switch_state(env))
+    assert fast == slow
+
+
+def test_placed_mod_file_stands_under_another_build_key(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, upload = env.add("test")
+    lib.apply("test", source)
+    lib.toggle(False, True)
+    record = lib._catalog_record(pin)
+    redirects = {
+        name: {**item, "build": "written by another program build"} for name, item in record["redirects"].items()
+    }
+    lib._save_catalog_record(pin, {**record, "redirects": redirects})
+    monkeypatch.setattr(lib, "_reach", lambda *args, **kwargs: pytest.fail("a placed mod file was walked again"))
+    assert [item["core"] for item in lib.toggle(True, False).done] == ["test_spr"]
+    assert env.live.read_bytes() != env.official
+    # bytes that are not the mod's own file need a current build key
+    lib.toggle(False, True)
+    monkeypatch.setattr(lib, "_placed_as_is", lambda *args: False)
+    walked = []
+    monkeypatch.setattr(lib, "_reach", lambda pin, core, *args, **kwargs: walked.append(core) or ({}, None, None))
+    lib.toggle(True, False)
+    assert walked == ["test_spr"]
+
+
+@pytest.mark.parametrize("change", ["placed_gone", "placed_resized", "mod_replaced", "source_changed", "part_changed"])
+def test_changed_entry_is_walked_as_before(catalog_install, monkeypatch, change):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, upload = env.add("test")
+    other, _ = env.add("second")
+    lib.apply("test", source)
+    lib.apply("second", other)
+    lib.toggle(False, True)
+    placed = lib._placed_path(pin, lib._catalog_record(pin)["redirects"][upload.name])
+    if change == "placed_gone":
+        placed.unlink()
+    elif change == "placed_resized":
+        placed.write_bytes(placed.read_bytes() + b"more")
+    elif change == "mod_replaced":
+        path = lib._paths(lib._record(source[4:]))[0]
+        make_mod(path, path.parent, payload=b"other bytes of the same mod")
+    elif change == "source_changed":
+        second_upload = make_mod(env.files["test"][0], upload.parent.parent / "again", payload=b"another mod")
+        lib.apply("test", f"mod:{lib.add([second_upload])[0].id}")
+    else:
+        env.files["test"][0].write_bytes(b"written by another tool")
+    walked = []
+    reach = lib._reach
+    monkeypatch.setattr(
+        lib, "_reach", lambda pin, core, *args, **kwargs: walked.append(core) or reach(pin, core, *args, **kwargs)
+    )
+    result = lib.toggle(True, False)
+    assert walked == ["test_spr"]
+    assert "second_spr" in [item["core"] for item in result.done]
+
+
+def test_interrupted_publication_leaves_standing_entries_pending(catalog_install, monkeypatch):
+    env = catalog_install
+    lib = env.library
+    source, _ = env.add("test")
+    lib.apply("test", source)
+    lib.toggle(False, True)
+
+    def stopped(*args, **kwargs):
+        raise _Interrupted
+
+    monkeypatch.setattr(lib, "_regenerate", stopped)
+    with pytest.raises(_Interrupted):
+        lib.toggle(True, False)
+    assert lib.profiles.read()["unfinished"] == [{"install": env.pin.key, "core": "test_spr", "why": "pending"}]
+    assert env.live.read_bytes() == env.official
+
+
+def test_off_of_a_catalog_install_makes_no_pass_over_the_game_files(catalog_install, monkeypatch):
+    env = catalog_install
+    lib = env.library
+    source, _ = env.add("test")
+    lib.apply("test", source)
+    stray = env.files["second"][0]
+    stray.write_bytes(b"put there by another tool")
+    monkeypatch.setattr(_View, "entries", lambda *args, **kwargs: pytest.fail("the Off scanned the game files"))
+    result = lib.toggle(False, True)
+    assert [item["core"] for item in result.done] == ["test_spr"]
+    assert stray.read_bytes() == b"put there by another tool"
+
+
+def test_a_prune_pass_asks_each_mod_for_its_fingerprint_once(catalog_install, monkeypatch):
+    env = catalog_install
+    lib = env.library
+    env.add("test")
+    asked = []
+    monkeypatch.setattr(lib, "_read_built_against", lambda record: None)
+    monkeypatch.setattr(lib, "_backfill_built_against", lambda record, pin: asked.append(record["id"]))
+    tried: set[str] = set()
+    for path in env.files["test"]:
+        lib._backfill_before_release(path.name, tried)
+    assert len(asked) == 1
+    lib._backfill_before_release(env.files["test"][0].name)
+    assert len(asked) == 2  # a later pass asks again
+
+
+def test_start_retry_leaves_the_prune_to_maintenance(catalog_install, monkeypatch):
+    env = catalog_install
+    lib = env.library
+    source, _ = env.add("test")
+    lib.apply("test", source)
+    monkeypatch.setattr(lib, "_prune_quietly", lambda: pytest.fail("the start's retry pruned"))
+    lib._run(True, True, [env.pin], lambda *args: None, None, None, drift=None, retry=["test_spr"])
+    assert lib.take_prune_due() and not lib.take_prune_due()
+
+
+def test_output_of_another_builder_stands_in_a_toggle_and_is_built_again_at_start(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, _ = env.add("test")
+    lib.apply("test", source)
+    record = lib._catalog_record(pin)
+    current = builders.fingerprint()
+    assert all(item["build"].endswith(f".{current}") for item in record["redirects"].values())
+    older = {
+        name: {**item, "build": item["build"].split(".")[0] + ".build-older"}
+        for name, item in record["redirects"].items()
+    }
+    lib._save_catalog_record(pin, {**record, "redirects": older})
+    as_is = lib._placed_as_is
+    monkeypatch.setattr(lib, "_placed_as_is", lambda *args: False)  # as a rebuilt output would be
+    with monkeypatch.context() as patch:
+        patch.setattr(lib, "_reach", lambda *args, **kwargs: pytest.fail("a toggle built an output again"))
+        lib.toggle(False, True)
+        assert [item["core"] for item in lib.toggle(True, False).done] == ["test_spr"]
+    assert lib._stale_builds(pin, lib.profiles.read()) == ["test_spr"]
+    assert lib.update_due()["outdated"]
+    assert lib.refresh_builds() == ["test_spr"]
+    rebuilt = lib._catalog_record(pin)
+    assert all(item["build"].endswith(f".{current}") for item in rebuilt["redirects"].values())
+    assert rebuilt["live"] == "mods" and env.live.read_bytes() != env.official
+    assert lib._stale_builds(pin, lib.profiles.read()) == []
+    assert not lib._fresh_builds_only
+    # a placed file that is the mod's own file is never stale, whatever its key says
+    monkeypatch.setattr(lib, "_placed_as_is", as_is)
+    lib._save_catalog_record(pin, {**rebuilt, "redirects": older})
+    assert lib._stale_builds(pin, lib.profiles.read()) == []
+
+
+def test_check_answers_are_kept_across_runs(tmp_path):
+    from bmpt.library.check_cache import SCHEMA, CheckCache
+
+    path = tmp_path / "cache" / "checks.json"
+    cache = CheckCache(path)
+    assert cache.get("pointers", "a" * 40) is None
+    cache.put("pointers", "a" * 40, [["cab-1", 7, "Material"]])
+    cache.flush()
+    again = CheckCache(path)
+    assert again.get("pointers", "a" * 40) == [["cab-1", 7, "Material"]]
+    assert (again.hits, again.misses) == (1, 0)
+    # another schema number, or a file that does not read, starts empty and is written again
+    path.write_text(path.read_text().replace(f'"schema":{SCHEMA}', '"schema":0'))
+    assert CheckCache(path).get("pointers", "a" * 40) is None
+    path.write_text("not json")
+    broken = CheckCache(path)
+    assert broken.get("layouts", "b" * 40) is None
+    broken.put("layouts", "b" * 40, {"cab": {"1": 2}})
+    broken.flush()
+    assert CheckCache(path).get("layouts", "b" * 40) == {"cab": {"1": 2}}
+    broken.clear()
+    assert not path.exists() and broken.get("layouts", "b" * 40) is None
+
+
+def test_kept_answers_are_bounded(tmp_path, monkeypatch):
+    from bmpt.library import check_cache
+
+    monkeypatch.setattr(check_cache, "LIMIT", 3)
+    cache = check_cache.CheckCache(tmp_path / "checks.json")
+    for number in range(5):
+        cache.put("references", str(number), {})
+    assert [cache.get("references", str(number)) is not None for number in range(5)] == [False, False, True, True, True]
