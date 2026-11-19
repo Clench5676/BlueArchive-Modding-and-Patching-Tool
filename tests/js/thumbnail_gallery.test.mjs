@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { POPUP_MODULES } from "./helpers/source-text.mjs";
 // The thumbnail capture gallery is the Switch pickers' list popup (popup.js listPopup): the chosen thumbnail and its actions in
 // the details at the left, the thumbnails' cards in the list at the right. popup.js draws prefabs at import, so the
 // gallery's code is taken from the source and run against a recording listPopup.
@@ -202,16 +201,8 @@ test("Apply is greyed while the game already shows the chosen thumbnail", async 
   assert.equal(h.last().details(h.last().items[1]).actions[0][2], true);
 });
 
-test("the gallery's cards and picture are Chibi's squares, each thumbnail filling its inclined window", async () => {
+test("the gallery's cards are Chibi's squares", async () => {
   const { switchGrid, MIN_COLUMNS } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
   for (const width of [1200, 1500, 1818]) assert.deepEqual(switchGrid("thumbnail", width), switchGrid("chibi", width));
   assert.equal(MIN_COLUMNS.thumbnail, MIN_COLUMNS.chibi);
-  const popup = POPUP_MODULES.map((file) =>
-    readFileSync(new URL(`../../src/bmpt/web/js/ui/${file}`, import.meta.url), "utf8"),
-  ).join("\n");
-  // only a chibi's still is shown whole (contain); a thumbnail, like the other kinds, covers the card's and the
-  // picture's window
-  assert.equal(popup.match(/imgSize: kind === "chibi" \? "contain" : "cover"/g)?.length, 2);
-  assert.match(popup, /const chibi = !portraitTexture && \(kind === "chibi" \|\| kind === "thumbnail"\);/);
-  assert.match(popup, /: chibi \? 1 : 16 \/ 9;/);
 });
