@@ -350,6 +350,99 @@ def install_edit_menu() -> None:
     AppHelper.callAfter(install)
 
 
+DEV_SUFFIX = " (DEV)"
+
+
+def window_title() -> str:
+    """Return the native window's title: the App's name, marked ``(DEV)`` in dev mode.
+
+    The mark is fixed and untranslated, so a dev run is told apart from the user's own App in every language.
+    """
+    from bmpt.engine import t
+
+    from ..core import devmode
+
+    title = t("ui.app_title")
+    return title + DEV_SUFFIX if devmode.active() else title
+
+
+def _set_launch_services_name(name: str) -> bool:
+    """Set the display name LaunchServices keeps for this process, which the Dock and the app switcher show.
+
+    Uses LaunchServices' private ``_LSSetApplicationInformationItem`` with ``_kLSDisplayNameKey``; there is no
+    public call for it.
+
+    Args:
+        name: The new display name.
+
+    Returns:
+        True when LaunchServices accepted it.
+    """
+    import ctypes
+
+    services = ctypes.CDLL(
+        "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/LaunchServices"
+    )
+    foundation = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+    current_asn = services["_LSGetCurrentApplicationASN"]
+    current_asn.restype = ctypes.c_void_p
+    current_asn.argtypes = []
+    set_item = services["_LSSetApplicationInformationItem"]
+    set_item.restype = ctypes.c_int32
+    set_item.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+    create_string = foundation.CFStringCreateWithCString
+    create_string.restype = ctypes.c_void_p
+    create_string.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
+    release = foundation.CFRelease
+    release.argtypes = [ctypes.c_void_p]
+
+    asn = current_asn()
+    key = ctypes.c_void_p.in_dll(services, "_kLSDisplayNameKey").value
+    if not asn or not key:
+        return False
+    value = create_string(None, name.encode("utf-8"), 0x08000100)  # kCFStringEncodingUTF8
+    if not value:
+        return False
+    try:
+        # -2 is kLSDefaultSessionID, the session of the current user
+        return set_item(-2, asn, key, value, None) == 0
+    finally:
+        release(value)
+
+
+def mark_dev_dock() -> None:
+    """Mark the App's Dock icon in dev mode: a ``DEV`` badge, and ``(DEV)`` after the name the Dock shows.
+
+    Does nothing outside dev mode and on other systems than macOS. A failure is logged and never stops the App.
+    """
+    import sys
+
+    from ..core import devmode
+
+    if sys.platform != "darwin" or not devmode.active():
+        return
+    try:
+        import AppKit
+        from PyObjCTools import AppHelper
+    except Exception:
+        logger.debug("dev mode Dock mark unavailable", exc_info=True)
+        return
+
+    def mark():
+        try:
+            AppKit.NSApplication.sharedApplication().dockTile().setBadgeLabel_("DEV")
+        except Exception:
+            logger.debug("dev mode Dock badge not set", exc_info=True)
+        try:
+            name = str(AppKit.NSRunningApplication.currentApplication().localizedName() or "")
+            if name and not name.endswith(DEV_SUFFIX) and not _set_launch_services_name(name + DEV_SUFFIX):
+                logger.debug("LaunchServices refused the dev mode display name")
+        except Exception:
+            logger.debug("dev mode display name not set", exc_info=True)
+
+    AppHelper.callAfter(mark)
+
+
 def keep_web_view_black(window) -> None:
     """Stop the macOS web view from painting a background of its own.
 
