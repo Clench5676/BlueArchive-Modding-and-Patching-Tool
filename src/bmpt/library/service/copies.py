@@ -245,6 +245,14 @@ class CopiesMixin:
                 replacements[target] = kept
         if fits and self._stale_build(replacements, pin):
             fits = False
+        if fits and self._fresh_builds_only:
+            # the start's refresh asks for the current builder's output: a copy another builder made is built again
+            current = (
+                self._costume_builder()
+                if source.startswith("alt:") and self._resource_type(core, pin) == "chibi"
+                else builders.fingerprint()
+            )
+            fits = _builder_of(key.get("build")) == current
         if fits:
             if build_keys is not None and key.get("build"):
                 build_keys.update((target, key["build"]) for target in targets)

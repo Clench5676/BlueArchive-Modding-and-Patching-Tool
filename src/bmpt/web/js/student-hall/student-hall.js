@@ -31,6 +31,8 @@ import { row } from "../ui/ui-grid.js";
 import { toolbarBox, renderPortraitActions, createHoverOwner } from "./student-hall-portrait-toolbar.js";
 
 let ctx, store, options, root, art, chrome, hits, subtitle, layouts, dialogue, fullscreen, sceneCamera;
+let optionsRead = null,
+  optionsAgain = false;
 let page = 0,
   scene = 0,
   toolbar = 0,
@@ -1255,6 +1257,34 @@ export async function show(context, data = null) {
   });
   document.addEventListener("keydown", onKey);
   await renderScene();
+}
+/**
+ * Read the list of choices again, the shown scene left as it is: the mod list may have changed while it stayed
+ * up.
+ */
+export function refreshOptions() {
+  const gen = page;
+  if (!root || !options) return Promise.resolve();
+  // one read at a time: a change that comes while it runs is read once more after it
+  if (optionsRead) {
+    optionsAgain = true;
+    return optionsRead;
+  }
+  optionsRead = (async () => {
+    try {
+      const available = await rpc("studentHall.options");
+      if (gen === page && root) options = available;
+    } catch (error) {
+      console.error("Student Hall choices", error);
+    } finally {
+      optionsRead = null;
+      if (optionsAgain) {
+        optionsAgain = false;
+        refreshOptions();
+      }
+    }
+  })();
+  return optionsRead;
 }
 function onKey(event) {
   if (

@@ -11,7 +11,8 @@ function harness({ shown = "screen-detail", writing = () => false } = {}) {
   const refreshed = [],
     forgotten = [],
     timers = [],
-    routes = [];
+    routes = [],
+    options = [];
   let invalidated = 0;
   const env = {
     ctx: { invalidateStudentList: () => invalidated++ },
@@ -26,6 +27,7 @@ function harness({ shown = "screen-detail", writing = () => false } = {}) {
         }),
     },
     Loading: { writing },
+    StudentHall: { refreshOptions: () => options.push(env.routeToken) },
     route: async () => {
       routes.push(env.routeToken);
     },
@@ -44,7 +46,7 @@ function harness({ shown = "screen-detail", writing = () => false } = {}) {
     ${code}
     return { libraryChanged, applyChange };`,
   )(env);
-  return { ...api, refreshed, forgotten, routes, invalidated: () => invalidated };
+  return { ...api, refreshed, forgotten, routes, options, invalidated: () => invalidated };
 }
 
 test("a library-only add refreshes the open detail page with no game thumbnail eviction", async () => {
@@ -121,5 +123,44 @@ test("the Student Hall and the list wait for a watched write to end before they 
     h.libraryChanged(null);
     await h.applyChange({ now: true });
     assert.equal(h.routes.length, 2, shown);
+  }
+});
+
+test("a write of game files or the switch leaves the Student Hall standing and draws the list again", async () => {
+  const files = [
+    (h) => h.libraryChanged(null, { files: true }),
+    (h) => h.libraryChanged({ cores: ["dress_spr"], resourceTypes: ["portrait"] }),
+    (h) => {
+      h.libraryChanged(null, { files: true });
+      h.libraryChanged({ cores: ["dress_spr"], resourceTypes: ["portrait"] });
+    },
+  ];
+  for (const change of files) {
+    const hall = harness({ shown: "screen-student-hall", writing: () => true });
+    change(hall);
+    await hall.applyChange();
+    assert.deepEqual(hall.routes, []);
+    assert.equal(hall.options.length, 1);
+    assert.equal(hall.invalidated() > 0, true);
+    const list = harness({ shown: "screen-student-list" });
+    change(list);
+    await list.applyChange();
+    assert.equal(list.routes.length, 1);
+  }
+});
+
+test("a mod-list change among file changes still draws the Student Hall again", async () => {
+  for (const order of [0, 1]) {
+    const h = harness({ shown: "screen-student-hall" });
+    const changes = [() => h.libraryChanged(null, { files: true }), () => h.libraryChanged(null)];
+    if (order) changes.reverse();
+    for (const change of changes) change();
+    await h.applyChange();
+    assert.equal(h.routes.length, 1);
+    assert.deepEqual(h.options, []);
+    // the next change starts clean
+    h.libraryChanged(null, { files: true });
+    await h.applyChange();
+    assert.equal(h.routes.length, 1);
   }
 });

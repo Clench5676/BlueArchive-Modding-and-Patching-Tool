@@ -241,11 +241,13 @@ async function openMod({ id, alt, resourceType }) {
 // --- library.changed: a writer job switched game files ({cores, resourceTypes}), or anything may have changed (no data: the
 // classic UI closed, a job stopped midway, the mod list changed). The student list is read again, the thumbnails of
 // those cores are forgotten (both live and official sources, including other installs' bases) and the detail screen
-// reloads what it shows of them ---
+// reloads what it shows of them. files: only game files or the Enable Mods switch changed, the mod list is as it
+// was (a change that names its cores is one too) ---
 let heldChange,
+  heldFiles = true,
   changeTimer = null,
   changeRoute = 0;
-function libraryChanged(data) {
+function libraryChanged(data, { files = false } = {}) {
   // An import changes the mod list without changing game files.
   const change = data && !data.mods && Array.isArray(data.cores) ? { cores: data.cores } : null;
   if (change && !change.cores.length) return;
@@ -260,6 +262,7 @@ function libraryChanged(data) {
     }
   }
   ctx.invalidateStudentList();
+  heldFiles = (heldChange === undefined || heldFiles) && (files || change !== null);
   heldChange =
     heldChange === undefined
       ? change
@@ -272,11 +275,19 @@ function libraryChanged(data) {
 }
 // now: the end of the write itself (refreshAfterToggle), drawn at once
 async function applyChange({ now = false } = {}) {
-  const change = heldChange;
+  const change = heldChange,
+    files = heldFiles;
   heldChange = undefined;
+  heldFiles = true;
   if (change === undefined) return;
   const my = changeRoute;
   if (!$("screen-detail").hidden) return Detail.filesChanged(change);
+  // The Student Hall shows library mods and official copies, never the game files as they are: a write of game
+  // files or the switch leaves it standing, and only its list of choices is read again.
+  if (files && !$("screen-student-hall").hidden) {
+    StudentHall.refreshOptions?.();
+    return;
+  }
   // The Student Hall and the list are drawn again once no popup is open and no write the user watches is under way: a
   // switch that flips midway (Enable Mods turned on or off) keeps the shown screen under Now Loading, and the
   // write's own end draws it, unless a route came meanwhile (it reads the list itself).
@@ -291,9 +302,10 @@ async function applyChange({ now = false } = {}) {
   if (my === routeToken && !$("screen-student-list").hidden) await route();
 }
 
-// A completed toggle refreshes directly, even if its event has not arrived or is still being coalesced.
-async function refreshAfterToggle() {
-  libraryChanged(null);
+// A completed toggle refreshes directly, even if its event has not arrived or is still being coalesced. A toggle
+// that added mods to the library (an Off keeping the mods it found) changed the mod list too.
+async function refreshAfterToggle(result = null) {
+  libraryChanged(null, { files: !!result && !result.adopted?.length && !result.dropped?.length });
   clearTimeout(changeTimer);
   await applyChange({ now: true });
 }
@@ -868,7 +880,7 @@ async function start() {
     const next = state.enabled !== false;
     if (next === enabled) return;
     enabled = next;
-    libraryChanged(null);
+    libraryChanged(null, { files: true });
   });
   Prompts.init({ names: altNames });
   Impact.init({ names: altNames, go: openMod });
