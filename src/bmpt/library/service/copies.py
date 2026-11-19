@@ -467,6 +467,7 @@ class CopiesMixin:
         Returns:
             Byte count of the built files selected for cleanup.
         """
+        self.checks.clear()
         directory = self.root / "built"
         freed = _folder_size(directory)
 

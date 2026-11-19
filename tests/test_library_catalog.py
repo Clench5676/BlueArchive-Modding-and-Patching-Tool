@@ -1896,3 +1896,37 @@ def test_output_of_another_builder_stands_in_a_toggle_and_is_built_again_at_star
     monkeypatch.setattr(lib, "_placed_as_is", as_is)
     lib._save_catalog_record(pin, {**rebuilt, "redirects": older})
     assert lib._stale_builds(pin, lib.profiles.read()) == []
+
+
+def test_check_answers_are_kept_across_runs(tmp_path):
+    from bmpt.library.check_cache import SCHEMA, CheckCache
+
+    path = tmp_path / "cache" / "checks.json"
+    cache = CheckCache(path)
+    assert cache.get("pointers", "a" * 40) is None
+    cache.put("pointers", "a" * 40, [["cab-1", 7, "Material"]])
+    cache.flush()
+    again = CheckCache(path)
+    assert again.get("pointers", "a" * 40) == [["cab-1", 7, "Material"]]
+    assert (again.hits, again.misses) == (1, 0)
+    # another schema number, or a file that does not read, starts empty and is written again
+    path.write_text(path.read_text().replace(f'"schema":{SCHEMA}', '"schema":0'))
+    assert CheckCache(path).get("pointers", "a" * 40) is None
+    path.write_text("not json")
+    broken = CheckCache(path)
+    assert broken.get("layouts", "b" * 40) is None
+    broken.put("layouts", "b" * 40, {"cab": {"1": 2}})
+    broken.flush()
+    assert CheckCache(path).get("layouts", "b" * 40) == {"cab": {"1": 2}}
+    broken.clear()
+    assert not path.exists() and broken.get("layouts", "b" * 40) is None
+
+
+def test_kept_answers_are_bounded(tmp_path, monkeypatch):
+    from bmpt.library import check_cache
+
+    monkeypatch.setattr(check_cache, "LIMIT", 3)
+    cache = check_cache.CheckCache(tmp_path / "checks.json")
+    for number in range(5):
+        cache.put("references", str(number), {})
+    assert [cache.get("references", str(number)) is not None for number in range(5)] == [False, False, True, True, True]

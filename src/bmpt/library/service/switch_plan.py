@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..records import stored_target
 
 import contextlib
+import hashlib
 import errno
 import tempfile
 import logging
@@ -605,6 +606,10 @@ class SwitchPlanMixin:
         sha1 = self._hashes.get(path).sha1
         found = self._pointer_cache.get(sha1)
         if found is None:
+            kept = self.checks.get("pointers", sha1)
+            if kept is not None:
+                found = frozenset(pointers.Pointer(cab, path_id, declared) for cab, path_id, declared in kept)
+        if found is None:
             devmode.check_read(path)
             try:
                 bundle = Bundle.load(path)
@@ -614,6 +619,8 @@ class SwitchPlanMixin:
             except Exception as error:  # noqa: BLE001 - an unreadable file gives no evidence
                 log_failure(logger, log_level, f"Could not read the pointers of {path.name}", error)
                 return frozenset()  # not kept: the read may succeed later
+            self.checks.put("pointers", sha1, sorted([item.cab, item.path_id, item.declared] for item in found))
+        if sha1 not in self._pointer_cache:
             self._pointer_cache[sha1] = found
             while len(self._pointer_cache) > POINTER_CACHE:
                 self._pointer_cache.popitem(last=False)
@@ -630,8 +637,18 @@ class SwitchPlanMixin:
         key = (str(path), stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
         layouts = self._layout_cache.get(key)
         if layouts is None:
-            contents = integrity.metadata(path, inspection=integrity.Inspection())
-            layouts = {cab: dict(objects) for cab, objects in contents.layout.items()}
+            sha1 = self._hashes.get(path).sha1
+            kept = self.checks.get("layouts", sha1)
+            if kept is not None:
+                layouts = {
+                    cab: {int(path_id): kind for path_id, kind in objects.items()} for cab, objects in kept.items()
+                }
+            else:
+                contents = integrity.metadata(path, inspection=integrity.Inspection())
+                layouts = {cab: dict(objects) for cab, objects in contents.layout.items()}
+                self.checks.put(
+                    "layouts", sha1, {cab: {str(k): v for k, v in objects.items()} for cab, objects in layouts.items()}
+                )
             self._layout_cache[key] = layouts
             while len(self._layout_cache) > POINTER_CACHE:
                 self._layout_cache.popitem(last=False)
@@ -715,15 +732,50 @@ class SwitchPlanMixin:
         ]
         if not written:
             return {}
+        # The answer is a matter of the bytes involved and of the game files of one resource version: kept by them.
+        version = self.resource_version(pin)
+        key = None
+        if version is not None:
+            involved = sorted(
+                (
+                    target.name,
+                    self._hashes.get(replacements[target]).sha1 if target in replacements else None,
+                    self._hashes.get(official[target]).sha1 if official[target] is not None else None,
+                    None if target in replacements or official[target] is not None else self._hashes.get(target).sha1,
+                )
+                for target in official
+            )
+            key = hashlib.sha1(repr((pin.key, version, involved)).encode()).hexdigest()
+            kept = self.checks.get("references", key)
+            if kept is not None:
+                by_name = {target.name: target for target in written}
+                return {
+                    by_name[name]: {pointers.Pointer(cab, path_id, declared) for cab, path_id, declared in found}
+                    for name, found in kept.items()
+                    if name in by_name
+                }
         log_level = logging.INFO if targets else logging.DEBUG
         current, baseline = self._reference_worlds(official, replacements, pin, log_level=log_level)
         broken: dict[Path, set[pointers.Pointer]] = {}
+        complete = True
         for target in written:
-            found = pointers.dangling(self._pointers_of(replacements[target], log_level=log_level), current(target))
+            mine = self._pointers_of(replacements[target], log_level=log_level)
+            # an unreadable file gives no pointers and is not kept: its entry's answer is not kept either
+            complete = complete and self._hashes.get(replacements[target]).sha1 in self._pointer_cache
+            found = pointers.dangling(mine, current(target))
             if found and official[target] is not None:
                 found -= pointers.dangling(self._pointers_of(official[target], log_level=log_level), baseline(target))
             if found:
                 broken[target] = found
+        if key is not None and complete:  # a file that could not be read gives no answer to keep
+            self.checks.put(
+                "references",
+                key,
+                {
+                    target.name: sorted([item.cab, item.path_id, item.declared] for item in found)
+                    for target, found in broken.items()
+                },
+            )
         return broken
 
     def _stale_build(self, replacements: Mapping[Path, Path], pin: Pin) -> bool:

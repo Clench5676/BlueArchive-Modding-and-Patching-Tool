@@ -199,6 +199,15 @@ class ImpactMixin:
             known = self._impacts.get(key)
             if known is not None:
                 return known
+            # kept across runs by the mod's files, its stored baseline and the game's resource version
+            kept_key = hashlib.sha1(
+                repr((key, self._impact_mark(record), self.resource_version(pin))).encode()
+            ).hexdigest()
+            kept = self.checks.get("impacts", kept_key)
+            if kept is not None:
+                found = (kept[0], kept[1])
+                self._impacts[key] = found
+                return found
             if not targets:
                 # an alt whose core moved since (the catalog maps it elsewhere) is no target gone
                 mapped = (
@@ -220,6 +229,8 @@ class ImpactMixin:
             if len(self._impacts) >= 4096:
                 self._impacts.clear()
             self._impacts[key] = found
+            if found[0] != fingerprint.UNKNOWN:  # an unknown may become known once a fingerprint is stored
+                self.checks.put("impacts", kept_key, [found[0], found[1]])
             return found
         except Exception as error:  # noqa: BLE001 - a judgement that cannot be made tells nothing
             log_failure(logger, logging.DEBUG, "No impact judged for the mod", error)

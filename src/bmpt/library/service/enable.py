@@ -695,6 +695,7 @@ class EnableMixin:
                             resource_types.add(item["resource_type"])
         finally:
             _background.paced = was_paced
+            self.checks.flush()
         by_key = {pin.key: pin for pin in pins}
         for key, done_cores in settled.items():
             with _errors("toggle"):
