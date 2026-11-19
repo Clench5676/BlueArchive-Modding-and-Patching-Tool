@@ -504,7 +504,7 @@ test("startup scan prompts follow current consent without a separate startup mod
     .replace("export async function", "async function");
   const calls = [];
   const deps = {
-    ModSwitch: { refresh: async () => ({ scan: false }), startDue: () => false },
+    ModSwitch: { refresh: async () => ({ scan: false }), startDue: () => false, tellCatalog: async () => {} },
     rpc: () => assert.fail("Off must not fetch entries"),
     show: () => assert.fail("Off has no prompt"),
     later: async () => calls.push("later"),
@@ -562,6 +562,7 @@ function bootHarness({ compiled = true, startupUpdate = true } = {}) {
     },
     ModSwitch: {
       current: () => modState,
+      tellCatalog: async () => {},
       startDue: (name, { info }) =>
         name === "update" ? info.compiled && info.startupUpdate !== false : ["consent", "scan"].includes(name),
     },

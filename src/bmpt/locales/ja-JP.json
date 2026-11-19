@@ -295,7 +295,11 @@
 			"onState": "MOD ON",
 			"helpOn": "ONにすると、すべての立ち絵とメモリアルロビーに設定済みのMODが適用されます。",
 			"helpOff": "OFFにすると、すべての立ち絵とメモリアルロビーがオリジナルに戻ります（オリジナルが上書きされている場合は無効）。MODはMODライブラリに保管されます。このスイッチを切り替える前にゲームを終了してください。",
-			"helpFolders": "ゲームフォルダー：{folders}",
+			"method": {
+				"catalog": "切り替え方式：カタログ",
+				"files": "切り替え方式：ファイル置換"
+			},
+			"catalogFallback": "このゲームバージョンではカタログで切り替えられません。ファイル置換を使用中",
 			"installNamed": "{server}（{folder}）",
 			"explainOnce": "この説明は次回から非表示",
 			"scan": {
@@ -383,7 +387,8 @@
 					"rig": ".skelファイルの構成変更",
 					"textures": "テクスチャサイズ変更",
 					"removed": "パーツ削除",
-					"added": "パーツ追加"
+					"added": "パーツ追加",
+					"retired": "ゲームファイルの名前変更または削除"
 				}
 			},
 			"untested": {
@@ -533,7 +538,7 @@
 			"catalog_alt_not_found": "バリエーションが見つかりません",
 			"catalog_changed": "ゲームカタログが外部で変更されました",
 			"catalog_invalid": "生成したカタログの検証に失敗しました",
-			"catalog_restored": "公式ゲームカタログを復元しました",
+			"catalog_restored": "ゲームカタログを公式に戻しました",
 			"catalog_unsupported": "未対応のカタログ形式",
 			"game_file_conflict": "ゲームファイルが競合しています：{file}",
 			"game_file_not_found": "対応するゲームファイルが見つかりません",

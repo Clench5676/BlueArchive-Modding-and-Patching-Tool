@@ -75,7 +75,7 @@ function bootHarness(info, upgradedNotice = null) {
       },
       whenIdle: async () => {},
     },
-    ModSwitch: { current: () => ({}), startDue: () => false },
+    ModSwitch: { current: () => ({}), startDue: () => false, tellCatalog: async () => {} },
     Tours: { start: async () => {} },
     document: { getElementById: () => null },
     Consent: { init() {}, show: async () => true, spine: async () => true, scan: async () => {} },
@@ -102,7 +102,7 @@ test("the start shows the notice once, ahead of the other start popups", async (
   });
   await h.boot();
   assert.equal(h.sequences.length, 1);
-  assert.deepEqual(h.sequences[0], ["data-dir", "consent", "spine", "scan", "impact", "drift", "untracked"]);
+  assert.deepEqual(h.sequences[0], ["data-dir", "consent", "spine", "scan", "impact", "catalog", "drift", "untracked"]);
   assert.equal(h.messages.length, 1);
   assert.equal(h.messages[0].title, "quit.title");
 });
@@ -111,7 +111,7 @@ test("a writable data folder leaves the start popups as they were", async () => 
   for (const dataDirWritable of [true, undefined]) {
     const h = bootHarness({ gameFound: true, dataDirWritable, dataDir: "/app/data" });
     await h.boot();
-    assert.deepEqual(h.sequences, [["consent", "spine", "scan", "impact", "drift", "untracked"]]);
+    assert.deepEqual(h.sequences, [["consent", "spine", "scan", "impact", "catalog", "drift", "untracked"]]);
     assert.deepEqual(h.messages, []);
   }
 });
@@ -147,7 +147,7 @@ test("an upgrade notice runs first in the start sequence, and once per session a
   const withGame = bootHarness({ gameFound: true, dataDirWritable: false, dataDir: "/app/data" }, notice);
   await withGame.boot();
   assert.deepEqual(withGame.sequences, [
-    ["upgraded", "data-dir", "consent", "spine", "scan", "impact", "drift", "untracked"],
+    ["upgraded", "data-dir", "consent", "spine", "scan", "impact", "catalog", "drift", "untracked"],
   ]);
   assert.equal(calls, 1);
 
@@ -166,5 +166,5 @@ test("a failing upgrade notice never stops the data folder notice or the start p
   assert.equal(noGame.messages.length, 1, "the data folder notice still shows");
   const noNotice = bootHarness({ gameFound: true, dataDirWritable: true }, null);
   await noNotice.boot();
-  assert.deepEqual(noNotice.sequences, [["consent", "spine", "scan", "impact", "drift", "untracked"]]);
+  assert.deepEqual(noNotice.sequences, [["consent", "spine", "scan", "impact", "catalog", "drift", "untracked"]]);
 });

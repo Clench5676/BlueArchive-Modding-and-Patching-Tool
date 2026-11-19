@@ -193,8 +193,9 @@ test("every refusal code is a code the page can say: a string in all six languag
       "native_only",
       "native_unavailable",
       "untested_build",
+      "catalog_restored",
     ].sort(),
-    "the registry preserves all 27 original notices and untested_build after them",
+    "the registry preserves all 27 original notices, then untested_build and catalog_restored",
   );
 });
 

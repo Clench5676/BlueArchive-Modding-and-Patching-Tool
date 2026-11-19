@@ -132,17 +132,29 @@ export function confirmation(state) {
   };
 }
 
+/** A line about one game folder: the folder's label first when the switch covers several. */
+const ofFolder = (install, text, several) => (several ? `${install.label} - ${text}` : text);
+
 /**
- * The "?" help's lines, [{text, button: {id, label}}]. Buttons: retry (pending and left entries), details
- * (stuck entries: the Overwritten message, never a Retry), held (entries a game update's rig change holds:
- * their names).
+ * How each game folder switches mods (mods.state installs[].method): one line per folder, its label first when
+ * there are several. The catalog swaps the game's catalog file; files replace the game's resource files.
  */
-export function helpLines(state, { sep = listSep() } = {}) {
+export function methodLines(state) {
+  const installs = state?.installs || [];
+  return installs.map((i) =>
+    ofFolder(i, T(i.method === "catalog" ? "mods.method.catalog" : "mods.method.files"), installs.length > 1),
+  );
+}
+
+/**
+ * The "?" help's lines, [{text, button: {id, label}}]: the basics, each game folder's switch method (it names
+ * every folder), then the buttons. Buttons: retry (pending and left entries), details (stuck entries: the
+ * Overwritten message, never a Retry), held (entries a game update's rig change holds: their names).
+ */
+export function helpLines(state) {
   const s = state || {};
   const lines = basics().map((text) => ({ text }));
-  const installs = s.installs || [];
-  if (installs.length > 1)
-    lines.push({ text: T("mods.helpFolders", { folders: installs.map((i) => i.label).join(sep) }) });
+  for (const text of methodLines(s)) lines.push({ text });
   const notSwitched = (s.pending || 0) + (s.left || 0);
   if (notSwitched > 0)
     lines.push({ text: T("mods.notSwitched", { n: notSwitched }), button: { id: "retry", label: T("mods.retry") } });
@@ -151,6 +163,29 @@ export function helpLines(state, { sep = listSep() } = {}) {
   if (s.held > 0) lines.push({ text: T("mods.held", { n: s.held }), button: { id: "held", label: T("mods.details") } });
   if (s.sourceMissing > 0) lines.push({ text: T("mods.sourceMissing", { n: s.sourceMissing }) });
   return lines;
+}
+
+/**
+ * The catalog notices: the official catalog put back at the start (the start job's notices, catalog_restored, by
+ * install) and a fallback to file replacement for the game version (installs[].methodNotice). Each folder once,
+ * its label first when the switch covers several.
+ * @param {object} state mods.state.
+ * @param {object[]} [restored] The start job's notices, {code, install}.
+ * @param {Set<string>} [told] Installs whose fallback this page told already.
+ * @returns {{lines: string[], seen: string[]}} The lines, and the installs whose fallback they tell.
+ */
+export function catalogNotices(state, restored = [], told = new Set()) {
+  const installs = state?.installs || [];
+  const several = installs.length > 1;
+  const byKey = new Map(installs.map((i) => [i.key, i]));
+  const lines = [];
+  for (const key of new Set((restored || []).filter((n) => n?.code === "catalog_restored").map((n) => n.install))) {
+    const install = byKey.get(key) || { label: "" };
+    lines.push(ofFolder(install, errorText("catalog_restored"), several && !!install.label));
+  }
+  const fallback = installs.filter((i) => i.methodNotice && !told.has(i.key));
+  for (const i of fallback) lines.push(ofFolder(i, T("mods.catalogFallback"), several));
+  return { lines, seen: fallback.map((i) => i.key) };
 }
 
 /**
@@ -289,6 +324,10 @@ let host = null,
   els = null;
 const listeners = new Set();
 let lastSignature = "";
+let restored = []; // the start job's catalog notices, told once the start popups reach them
+let telling = null; // the catalog notices on screen or waiting for the screen to be free
+let toldAtStart = false; // the start sequence reached the catalog notices: later changes are told as they come
+const toldHere = new Set(); // installs whose fallback this page told (if recording it fails, not told again)
 
 /** The state of mods.state as last read. */
 export const current = () => state;
@@ -346,6 +385,7 @@ function update(next) {
   if (!next) return;
   state = next;
   render();
+  if (toldAtStart && (next.installs || []).some((i) => i.methodNotice && !toldHere.has(i.key))) void tellCatalog();
   const sig = signature(next);
   if (sig === lastSignature) return;
   lastSignature = sig;
@@ -810,6 +850,36 @@ async function queueDone({ submitted = [], dropped = [] } = {}) {
     lines: dropped.map((d) => `${what(d)} - ${errorText(d.error?.code, d.error?.params)}`),
     ok: T("picker.ok"),
   });
+}
+
+// --- the catalog notices ---
+
+/** Keep the start job's catalog notices (mods.refreshCostumes' notices) for the start popups. */
+export function noteRestored(notices) {
+  if (Array.isArray(notices)) restored.push(...notices);
+}
+
+/**
+ * Tell the catalog notices on the game's notice popup once nothing else is on screen, then record the told
+ * fallbacks (mods.methodNoticeSeen). The start sequence calls it; after that, a new fallback in mods.state does.
+ */
+export function tellCatalog() {
+  toldAtStart = true;
+  telling ||= (async () => {
+    try {
+      await Popup.whenIdle(200, () => Loading.busy());
+      const s = state || (await refresh());
+      const { lines, seen } = catalogNotices(s, restored, toldHere);
+      restored = [];
+      if (!lines.length) return;
+      for (const install of seen) toldHere.add(install);
+      await Popup.message({ title: T("quit.title"), lines, ok: T("picker.ok") });
+      for (const install of seen) await rpc("mods.methodNoticeSeen", { install }).catch(() => {});
+    } finally {
+      telling = null;
+    }
+  })();
+  return telling;
 }
 
 // --- the help ---

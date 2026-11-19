@@ -295,7 +295,11 @@
 			"onState": "Mod 已开启",
 			"helpOn": "开启时，所有立绘和记忆大厅应用已配置的 Mod；",
 			"helpOff": "关闭时，所有立绘和记忆大厅恢复原版（如原版已被覆盖，则无效），Mod 将保留在 Mod 仓库中。切换该开关前必须关闭游戏。",
-			"helpFolders": "游戏目录：{folders}",
+			"method": {
+				"catalog": "切换方式：替换目录文件",
+				"files": "切换方式：替换资源文件"
+			},
+			"catalogFallback": "当前游戏版本无法用目录文件切换，已改用替换资源文件",
 			"installNamed": "{server}（{folder}）",
 			"explainOnce": "此说明不再显示",
 			"scan": {
@@ -383,7 +387,8 @@
 					"rig": ".skel 文件结构改变",
 					"textures": "贴图尺寸改变",
 					"removed": "部件已移除",
-					"added": "新增部件"
+					"added": "新增部件",
+					"retired": "游戏文件已改名或移除"
 				}
 			},
 			"untested": {
@@ -531,9 +536,9 @@
 			"catalog_data_invalid": "角色数据已损坏",
 			"catalog_student_not_found": "找不到这名学生",
 			"catalog_alt_not_found": "找不到这个换皮",
-			"catalog_changed": "游戏目录文件被外部修改",
+			"catalog_changed": "目录文件已被外部修改",
 			"catalog_invalid": "生成的目录文件未通过校验",
-			"catalog_restored": "已恢复官方游戏目录文件",
+			"catalog_restored": "已恢复官方目录文件",
 			"catalog_unsupported": "不支持此目录文件格式",
 			"game_file_conflict": "游戏文件冲突：{file}",
 			"game_file_not_found": "找不到对应的游戏文件",

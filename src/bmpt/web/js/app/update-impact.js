@@ -34,7 +34,8 @@ const kindKey = (kind) =>
 
 /**
  * What the update changed in a mod's official parts ("Official Portrait: atlas repacked, 1 new animation", from
- * mods.impact's changes), "" when nothing is known. A repack carries its texture sizes.
+ * mods.impact's changes), "" when nothing is known. A repack carries its texture sizes; a game file the update
+ * renamed or removed (targetRetired) is said last.
  */
 export function changeText(mod, sep = T("mods.impact.sep")) {
   const c = mod?.changes || {};
@@ -48,6 +49,7 @@ export function changeText(mod, sep = T("mods.impact.sep")) {
   if (c.textures && !c.repacked) parts.push(T("mods.impact.change.textures"));
   if (c.removed) parts.push(T("mods.impact.change.removed"));
   if (c.added) parts.push(T("mods.impact.change.added"));
+  if (mod?.targetRetired) parts.push(T("mods.impact.change.retired"));
   if (!parts.length) return "";
   const changes = parts.join(sep);
   return mod.resourceType === "other"
@@ -112,9 +114,12 @@ export const configuredMods = (entries) => [
   ...new Set((entries || []).map((e) => /^mod:(.+)$/.exec(e?.configured || "")?.[1]).filter(Boolean)),
 ];
 
-/** The keys of the entries whose configured mod's rig an update changed (from mods.impact {ids}). */
+/** Whether an update holds a mod until it is updated: its rig changed, or the game file it replaces was renamed or removed. */
+export const needsUpdate = (mod) => mod?.impact === "rig_changed" || !!mod?.targetRetired;
+
+/** The keys of the entries whose configured mod an update holds (from mods.impact {ids}). */
 export function heldKeys(entries, impacts) {
-  const changed = new Set((impacts || []).filter((m) => m.impact === "rig_changed").map((m) => m.id));
+  const changed = new Set((impacts || []).filter(needsUpdate).map((m) => m.id));
   return new Set(
     (entries || [])
       .filter((e) => changed.has(/^mod:(.+)$/.exec(e?.configured || "")?.[1]))
@@ -209,13 +214,15 @@ async function run({ force = false, scan = true } = {}) {
   );
 }
 
-// refresh(): the costume builds of an older costume rule built again under the loading screen, with the plain progress
-// of a writer task and nothing to answer: what cannot be built again is kept or left for the next start, never told
+// refresh(): the game catalogs prepared and the costume builds of an older costume rule built again under the loading
+// screen, with the plain progress of a writer task and nothing to answer: what cannot be built again is kept or left
+// for the next start, never told; an official catalog put back is told with the start popups (mod-switch.js)
 async function refresh() {
   await names().catch(() => undefined); // the student list in, for the names on the progress line
-  await Loading.task(async (update) => waitJob(await rpc("mods.refreshCostumes"), update), {
+  const result = await Loading.task(async (update) => waitJob(await rpc("mods.refreshCostumes"), update), {
     label: T("progress.modsProcess"),
   });
+  ModSwitch.noteRestored(result?.notices);
 }
 
 // retry(): the entries whose last write failed written again under the loading screen, nothing to answer: one that
@@ -279,11 +286,11 @@ export async function gate() {
 // --- the list (the drift prompt's popup) ---
 
 /**
- * The mods the list shows, those to update: a mod whose rig changed, unless a repaired copy took its place (it
- * has one and its student is not configured with it).
+ * The mods the list shows, those to update: a mod whose rig changed or whose game file the update renamed or
+ * removed, unless a repaired copy took its place (it has one and its student is not configured with it).
  */
 export const heldOf = (result) =>
-  (result?.mods || []).filter((m) => m.impact === "rig_changed" && !(m.repairedCopyId && !m.configured));
+  (result?.mods || []).filter((m) => needsUpdate(m) && !(m.repairedCopyId && !m.configured));
 
 /** A card's key: its mod, else its core. */
 export const modKey = (mod) => mod?.id || `${mod?.core || ""}`;
