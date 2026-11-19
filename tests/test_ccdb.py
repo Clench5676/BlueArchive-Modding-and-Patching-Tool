@@ -9,45 +9,19 @@ from random import Random
 from time import perf_counter
 
 import pytest
+from catalog_fixture import LOAD, PRELOAD, bundle_id, synthetic_catalog
 
 from bmpt.library.catalog_switch import MODS_DIR
 from bmpt.unity import ccdb
-from bmpt.unity.ccdb import Catalog, CatalogFormatError, bundle_ids, crc_suffix, parse, redirect, write
+from bmpt.unity.ccdb import CatalogFormatError, bundle_ids, crc_suffix, parse, redirect, write
 
-LOAD = "{PlatformUtils.AddressableLoadPath}"
-PRELOAD = "{PlatformUtils.AddressablePreLoadPath}"
 PLACED_A = "a" * 40 + ".bundle"
 PLACED_B = "b" * 40 + ".bundle"
 
 
-def _id(prefix, name):
-    return f"{prefix}\\{name}".encode()
-
-
 @pytest.fixture
 def catalog():
-    return Catalog(
-        version=1,
-        locator=b"locator",
-        instance=b"instance",
-        scene=b"scene",
-        providers=[b"provider" * 30],
-        provider_ids=[b"provider-id", b"other-provider"],
-        ids=[
-            _id(LOAD, "a.bundle"),
-            b"ui/asset",
-            _id(PRELOAD, "preload.bundle"),
-            _id(LOAD, "b.bundle"),
-            _id(LOAD, "folder\\nested.bundle"),
-            b"https://example.invalid/remote.bundle",
-        ],
-        keys=b"keys\0",
-        buckets=b"\xffbuckets",
-        entries=b"entries",
-        extra=b"extra",
-        types=[b"type", b""],
-        tail=[b"tail"],
-    )
+    return synthetic_catalog()
 
 
 def test_roundtrip(catalog):
@@ -74,7 +48,7 @@ def test_redirect_changes_only_requested_ids_and_keeps_crc(catalog, redirects):
     changed = redirect(official, redirects, MODS_DIR)
     expected_ids = catalog.ids.copy()
     for name, placed in redirects.items():
-        expected_ids[catalog.ids.index(_id(LOAD, name))] = _id(LOAD, f"{MODS_DIR}\\{placed}")
+        expected_ids[catalog.ids.index(bundle_id(LOAD, name))] = bundle_id(LOAD, f"{MODS_DIR}\\{placed}")
     assert parse(changed[:-4]) == replace(catalog, ids=expected_ids)
     assert zlib.crc32(changed) == zlib.crc32(official)
 
@@ -137,7 +111,7 @@ def test_redirect_refuses_trailing_bytes(catalog):
 
 @pytest.mark.parametrize("prefix", [LOAD, PRELOAD])
 def test_redirect_refuses_duplicate_official_bundle_name(catalog, prefix):
-    catalog.ids.append(_id(prefix, "a.bundle"))
+    catalog.ids.append(bundle_id(prefix, "a.bundle"))
     with pytest.raises(CatalogFormatError) as refused:
         redirect(write(catalog), {"a.bundle": PLACED_A}, MODS_DIR)
     assert refused.value.reason == "ambiguous"

@@ -32,6 +32,7 @@ from ..storage import (
     atomic_json,
 )
 from .base import _UNREADABLE, _LibraryLock, _NewerState, _Reading, _combine, _held_after, _held_id, _valid_id
+from .catalog import CatalogMixin
 from .copies import CopiesMixin
 from .costumes import CostumesMixin
 from .editing import EditingMixin
@@ -66,6 +67,7 @@ class ModLibrary(
     ImpactMixin,
     ViewsMixin,
     SwitchPlanMixin,
+    CatalogMixin,
     CostumesMixin,
     SwitchingMixin,
     CopiesMixin,
@@ -133,7 +135,7 @@ class ModLibrary(
         self._steam_roots_cache: tuple[float, list[Path]] | None = None
         self._legacy_import_matches: dict[str, str | None] = {}
         self._writing_mods = False
-        self._transacting = False
+        self._transaction_owner: int | None = None
         self._deferred_prunes = 0
         self._prune_pending = False
         self._recovery_error: ServiceError | None = None  # why the last recovery attempt failed: writes refuse with it
@@ -188,19 +190,19 @@ class ModLibrary(
         self.profiles.gate = self._check_writes  # no change of the configuration while writes are refused
         staging.cleanup(self.root)
         self._load()
-        with self._lock:
-            try:
-                self._recover_pending()
+        try:
+            self._recover_pending()
+            with self._lock:
                 self._lookup_records()
                 self._migrate_collection_slots()
                 self._migrate_packed_slots()
                 self._known()
-            except ServiceError as error:
-                if self._managed and self._recovery_error is not None:
-                    raise
-                log_failure(logger, logging.WARNING, "Mod configuration not looked up", error)
-            except Exception as error:  # the library still works without it; the next build tries again
-                log_failure(logger, logging.ERROR, "Mod configuration lookup failed", error)
+        except ServiceError as error:
+            if self._managed and self._recovery_error is not None:
+                raise
+            log_failure(logger, logging.WARNING, "Mod configuration not looked up", error)
+        except Exception as error:  # the library still works without it; the next build tries again
+            log_failure(logger, logging.ERROR, "Mod configuration lookup failed", error)
 
     def _parse_state(self, data: Any) -> tuple[dict, set, dict, set, list]:
         """Parse the JSON of a state.json.

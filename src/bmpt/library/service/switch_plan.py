@@ -9,6 +9,7 @@ import errno
 import tempfile
 import logging
 import shutil
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -22,7 +23,7 @@ from bmpt.engine import (
     parse_filename,
     t,
 )
-from ...host.store_formats import read_runtime
+from ...host.store_formats import CATALOG_JOURNALS, read_runtime
 from ...core.errors import ServiceError
 from ...core.filelock import file_lock
 from ...core.logging_utils import log_failure
@@ -221,7 +222,9 @@ class SwitchPlanMixin:
                 self._prune_quietly()
 
     @contextlib.contextmanager
-    def _writable(self, paths: list[Path], pin: Pin, *, recovering: bool = False) -> Iterator[None]:
+    def _writable(
+        self, paths: list[Path], pin: Pin, *, recovering: bool = False, resource_dirs: list[Path] | None = None
+    ) -> Iterator[None]:
         """Run the checks right before game files are written.
 
         They are: the game not running, Steam not updating or verifying the install, the files inside its resource
@@ -237,7 +240,10 @@ class SwitchPlanMixin:
         )
         with (
             toggle_timing.enter(
-                "game_file_preflight", safety.writable_game_files(paths, list(pin.dirs), allow_missing=recovering)
+                "game_file_preflight",
+                safety.writable_game_files(
+                    paths, list(pin.dirs) if resource_dirs is None else resource_dirs, allow_missing=recovering
+                ),
             ),
             toggle_timing.enter("legacy_write_gate", legacy_gate),
         ):
@@ -252,11 +258,12 @@ class SwitchPlanMixin:
         settle); the failure is remembered for the reads and for the writes that do not take this lock
         (``_check_recovery``).
         """
-        if self._transacting:
+        owner = threading.get_ident()
+        if self._transaction_owner == owner:
             yield
             return
         with toggle_timing.enter("transaction_wait", file_lock(self.root / "transactions.lock", timeout=10)):
-            self._transacting = True
+            self._transaction_owner = owner
             try:
                 self._refresh_state(migrate=False)  # nothing is saved before the journals are settled
                 try:
@@ -268,14 +275,14 @@ class SwitchPlanMixin:
                 self._check_writable()
                 yield
             finally:
-                self._transacting = False
+                self._transaction_owner = None
 
     def _journals(self) -> tuple[str, ...]:
-        """The pending journals: write, import and deletion journals under the library, as sorted paths."""
+        """The pending game, import, catalog and deletion journals under the library, as sorted paths."""
         return tuple(
             sorted(
                 str(path)
-                for folder in ("transactions", "import-transactions", "asset-deletions")
+                for folder in ("transactions", "import-transactions", CATALOG_JOURNALS, "asset-deletions")
                 for path in (self.root / folder).glob("*/journal.json")
             )
         )
@@ -285,7 +292,7 @@ class SwitchPlanMixin:
 
         Raises the failure of a journal that cannot be settled (it stays pending); nothing happens without a journal.
         """
-        if self._transacting:
+        if self._transaction_owner:
             return
         if self._journals():
             with self._transaction_lock():
@@ -301,12 +308,14 @@ class SwitchPlanMixin:
         journals still pending but raises nothing follows the same limit. Writes recover on their own
         (``_transaction_lock``).
         """
-        if self._transacting:
+        if self._transaction_owner:
             return
         journals = self._journals()
         if not journals:
             self._recovery_error = self._recovery_seen = self._recovery_logged = None
             return
+        if any(Path(path).parent.parent.name == CATALOG_JOURNALS for path in journals):
+            return  # Catalog recovery belongs to startup and writers, where it can run outside the library lock.
         seen = self._recovery_seen
         if seen is not None and seen[0] == journals and time.monotonic() - seen[1] < RECOVERY_RETRY:
             return
@@ -346,7 +355,7 @@ class SwitchPlanMixin:
         Recovery is attempted again first (a closed game, a repaired file), so the refusal is the real, current one. Not
         during a recovery itself or the writes under the transaction lock, which recovered before they started.
         """
-        if self._recovery_error is not None and not self._transacting:
+        if self._recovery_error is not None and not self._transaction_owner:
             self._recover_pending()
 
     def _check_writes(self) -> None:
@@ -365,7 +374,7 @@ class SwitchPlanMixin:
         That is when a recovery has failed or the state cannot be written. It is for the reads that settle something on
         the side and skip it instead.
         """
-        return self._state_error is not None or (self._recovery_error is not None and not self._transacting)
+        return self._state_error is not None or (self._recovery_error is not None and not self._transaction_owner)
 
     def state_unreadable(self) -> bool:
         """Check whether the library lacks state from a good read, retrying an unreadable state first.
@@ -380,7 +389,7 @@ class SwitchPlanMixin:
 
     @toggle_timing.stage("journal_recovery")
     def _recover_transactions(self) -> None:
-        """Settle every pending journal under the transaction lock: imports, then write journals, then asset deletions.
+        """Settle imports, write journals, catalog swaps, then asset deletions under the transaction lock.
 
         A failure (ServiceError) leaves the journal and stops here; a write journal whose install is not known now waits
         (skipped, logged once). A game file changed outside the library is left as it is (``_rollback_write``).
@@ -454,6 +463,7 @@ class SwitchPlanMixin:
                 logger.info("Recovered interrupted library write %s", path.parent.name)
             except (ValueError, TypeError, KeyError) as error:
                 raise ServiceError("library_io_error", file=path) from error
+        self._recover_catalog()
         from ..asset_delete import recover
 
         recover(self)

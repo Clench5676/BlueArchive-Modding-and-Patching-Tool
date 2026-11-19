@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+import re
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from decimal import Decimal
@@ -26,6 +27,8 @@ IMPORT_OPTIONS = {
 }
 NAMESPACE = ".bmpt-upgrade"
 GENERATION = 2
+CATALOG_JOURNALS = "catalog-transactions"
+_SHA1 = re.compile(r"[0-9a-f]{40}")
 
 
 class InvalidStore(ValueError):
@@ -362,6 +365,8 @@ STORES: dict[str, Store] = {
     "R": Store("library", "rigs", "rigs", version=1, tree=True, policy="preserve"),
     "A": Store("library", "mods/**/built-against.json", "mods/**/built-against.json", version=1, policy="preserve"),
     "O": Store("library", "originals.json", "originals.json", _official_checks, 2),
+    "CS": Store("library", "catalogs.json", "catalogs.json", version=1),
+    "BC": Store("library", "catalogs", "catalogs", version=1, tree=True, policy="preserve"),
     "T": Store("library", "transactions", "transactions", _write, 2, tree=True),
     "I": Store("library", "import-transactions", "import-transactions", _import, 2, tree=True),
     "D": Store("library", "asset-deletions", "asset-deletions", _deletion, 2, tree=True),
@@ -380,6 +385,57 @@ def _require(document: Document, key: str, expected: type, *, optional: bool = F
         return
     if type(document.get(key)) is not expected:
         raise InvalidStore(f"Invalid {key!r} field")
+
+
+def _check_catalog_stamp(record: object, *digests: str) -> None:
+    if not isinstance(record, dict):
+        raise InvalidStore("Invalid catalog fingerprint")
+    for field in digests:
+        _require(record, field, str)
+        if not _SHA1.fullmatch(record[field]):
+            raise InvalidStore(f"Invalid {field!r} digest")
+    for field in ("size", "mtime"):
+        _require(record, field, int)
+    if record["size"] < 0:
+        raise InvalidStore("Invalid catalog file size")
+
+
+def _check_catalogs(data: Document) -> None:
+    _require(data, "installs", dict)
+    for record in data["installs"].values():
+        if not isinstance(record, dict) or record.get("mode") not in ("catalog", "files"):
+            raise InvalidStore("Invalid catalog install mode")
+        if record.get("live") not in ("official", "mods", "unknown"):
+            raise InvalidStore("Invalid live catalog state")
+        for field in ("reason", "migrated"):
+            if field not in record or (record[field] is not None and not isinstance(record[field], str)):
+                raise InvalidStore(f"Invalid {field!r} field")
+        _require(record, "rv", str)
+        if not _SHA1.fullmatch(record["rv"]):
+            raise InvalidStore("Invalid catalog resource version")
+        _check_catalog_stamp(record.get("official"), "sha1")
+        _require(record["official"], "crc32", int)
+        if not 0 <= record["official"]["crc32"] <= 0xFFFFFFFF:
+            raise InvalidStore("Invalid official catalog CRC32")
+        if "mods" not in record:
+            raise InvalidStore("Missing generated catalog fingerprint")
+        if record["mods"] is not None:
+            _check_catalog_stamp(record["mods"], "sha1", "redirects_sha1")
+        _require(record, "redirects", dict)
+        for redirect in record["redirects"].values():
+            if not isinstance(redirect, dict):
+                raise InvalidStore("Invalid catalog redirect")
+            for field in ("placed", "dir", "source", "build"):
+                _require(redirect, field, str)
+            for field in ("size", "mtime"):
+                _require(redirect, field, int)
+            if (
+                not redirect["placed"].endswith(".bundle")
+                or not _SHA1.fullmatch(redirect["placed"].removesuffix(".bundle"))
+                or redirect["dir"] not in ("GameData/Windows", "Preload/Windows")
+                or redirect["size"] < 0
+            ):
+                raise InvalidStore("Invalid placed catalog bundle")
 
 
 def _check(store_id: str, data: Document, generation: int) -> None:
@@ -442,6 +498,8 @@ def _check(store_id: str, data: Document, generation: int) -> None:
                 for digest in data["digests"].values()
             ):
                 raise InvalidStore("Invalid kept official digest")
+    elif store_id == "CS":
+        _check_catalogs(data)
     elif store_id == "T":
         if data.get("phase") not in ("preparing", "writing", "committed"):
             raise InvalidStore("Invalid game-write phase")
@@ -692,6 +750,8 @@ def count_records(store_id: str, document: Document, *, generation: int = GENERA
             "configured": sum(len(folder.get("configured", {})) for folder in folders.values()),
             "unfinished": len(document.get("unfinished", [])),
         }
+    if store_id == "CS":
+        return {"installs": len(document["installs"])}
     if store_id == "F":
         items = "photos" if generation == 1 else "thumbnails"
         counters = "next_by_variant" if generation == 1 else "next_by_alt"
@@ -741,6 +801,7 @@ def runtime_store(path: Path) -> str | None:
             "profiles.json": "P",
             "profiles.json.prev": "P",
             "originals.json": "O",
+            "catalogs.json": "CS",
         }.get(path.name)
     if relative.as_posix() == "thumbnails/index.json":
         return "F"
@@ -752,8 +813,10 @@ def read_runtime(path: Path) -> Document:
     store = runtime_store(path)
     if store:
         return managed_document(store, path)
-    document = json.loads(path.read_text(encoding="utf-8"))
     legacy = _legacy_store(path)
+    if legacy == "CS":
+        return managed_document(legacy, path)
+    document = json.loads(path.read_text(encoding="utf-8"))
     if legacy and legacy != "U" and isinstance(document, dict):
         version = document.get("version")
         if isinstance(version, (int, float)) and version > 1:
@@ -777,12 +840,16 @@ def _legacy_store(path: Path) -> str | None:
         "profiles.json": "P",
         "profiles.json.prev": "P",
         "originals.json": "O",
+        "catalogs.json": "CS",
     }.get(path.name)
 
 
 def legacy_document(path: Path, document: Document) -> Document:
     """Preserve the format used by an explicitly opened standalone legacy store."""
     store = _legacy_store(path)
+    if store == "CS":
+        _check(store, document, GENERATION)
+        return document
     if not store or (store != "U" and document.get("version") != GENERATION):
         return document
     stored = copy.deepcopy(document)

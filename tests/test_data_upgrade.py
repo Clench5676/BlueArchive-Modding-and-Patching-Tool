@@ -7,11 +7,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from catalog_fixture import synthetic_catalog
 
 from bmpt.core.errors import ServiceError
-from bmpt.host import upgrade_files
-from bmpt.host import store_formats
+from bmpt.host import format_manifest, store_formats, upgrade_files
 from bmpt.host.data_upgrade import DataUpgrade
+from bmpt.library.storage import atomic_json
+from bmpt.unity import ccdb
 from bmpt.host.store_formats import (
     FutureFormat,
     InvalidStore,
@@ -735,7 +737,7 @@ def test_relocation_adoption_pins_verified_payloads_without_a_prompt(tmp_path, m
     [
         ("data", "3.0", "2.0"),
         ("library", "3.0", "2.0"),
-        ("library", "2.1", "2.1"),
+        ("library", "2.2", "2.2"),
     ],
 )
 def test_newer_manifest_refuses_before_creating_any_files(tmp_path, owner, format_version, minimum):
@@ -791,6 +793,88 @@ def _matches_schema(value, schema):
     return True
 
 
+def _catalog_document(payload):
+    sha1 = hashlib.sha1(payload).hexdigest()
+    return {
+        "version": 1,
+        "installs": {
+            "game": {
+                "mode": "catalog",
+                "reason": None,
+                "migrated": None,
+                "rv": "a" * 40,
+                "official": {"sha1": sha1, "size": len(payload), "crc32": 0, "mtime": 1},
+                "mods": None,
+                "live": "official",
+                "redirects": {},
+            }
+        },
+    }
+
+
+def test_catalog_stores_are_preserved_and_fenced(tmp_path, monkeypatch):
+    data = _data(tmp_path / "data")
+    library = data / "library"
+    payload = ccdb.write(synthetic_catalog())
+    document = _catalog_document(payload)
+    tree = Path("catalogs") / ("b" * 12) / ("a" * 40 + ".bytes")
+    official = library / tree
+    official.parent.mkdir(parents=True)
+    official.write_bytes(payload)
+    path = library / "catalogs.json"
+    atomic_json(path, document)
+    assert store_formats.read_runtime(path) == document
+    upgrade = _open(data)
+    try:
+        assert upgrade.run()["status"] == "ready"
+        epoch = upgrade.paths.library_epoch
+        assert (epoch / tree).read_bytes() == payload
+        assert store_formats.runtime_store(epoch / "catalogs.json") == "CS"
+        assert store_formats.read_runtime(epoch / "catalogs.json") == document
+        manifest = parse_json((library / "library.json").read_bytes())
+        assert manifest["format_version"] == manifest["min_reader_version"] == "2.1"
+        for name, relative in (("catalog_state", "catalogs.json"), ("catalogs", "catalogs")):
+            assert manifest["stores"][name] == {
+                "path": (epoch / relative).relative_to(library).as_posix(),
+                "version": "1.0",
+            }
+        assert parse_json((data / "data.json").read_bytes())["min_reader_version"] == "2.0"
+    finally:
+        upgrade.close()
+    monkeypatch.setattr(format_manifest, "FORMAT_VERSION", "2.0")
+    assert _open(data).run()["reason"] == "newerFormat"
+
+
+def test_old_library_manifest_stays_readable_until_catalog_stores_are_fenced(tmp_path):
+    data = _data(tmp_path / "data")
+    root = data / "library"
+    upgrade = _open(data)
+    try:
+        assert upgrade.run()["status"] == "ready"
+        epoch = upgrade.paths.library_epoch
+    finally:
+        upgrade.close()
+    path = root / "library.json"
+    manifest = parse_json(path.read_bytes())
+    manifest["format_version"] = manifest["min_reader_version"] = "2.0"
+    del manifest["stores"]["catalogs"], manifest["stores"]["catalog_state"]
+    _write(path, manifest)
+    old_head = path.read_bytes()
+    assert not (epoch / "catalogs.json").exists()
+    try:
+        assert upgrade.run()["status"] == "ready"
+        assert path.read_bytes() == old_head
+        format_manifest.fence_catalog_stores(epoch)
+        fenced = parse_json(path.read_bytes())
+        assert fenced["format_version"] == fenced["min_reader_version"] == "2.1"
+        assert fenced["active_epoch"] == manifest["active_epoch"]
+        assert fenced["sequence"] == manifest["sequence"] + 1
+        assert fenced["predecessor"] == hashlib.sha256(old_head).hexdigest()
+        assert not (epoch / "catalogs.json").exists()
+    finally:
+        upgrade.close()
+
+
 def test_store_schemas_validate_upgrade_fixtures(tmp_path):
     schemas = Path(__file__).parents[1] / "docs" / "webui" / "schemas"
     data = _data(tmp_path / "data")
@@ -808,6 +892,7 @@ def test_store_schemas_validate_upgrade_fixtures(tmp_path):
         "profiles-v2": {"version": 2, "folders": {"game": {"configured": {"core": {"source": "alt:fixture"}}}}},
         "thumbnails-v2": {"version": 2, "thumbnails": {}, "selected": {}, "next": 1},
         "original_checks-v2": {"version": 2, "officials": {}, "digests": {"kept.bundle": "b" * 64}},
+        "catalogs-v1": _catalog_document(ccdb.write(synthetic_catalog())),
         "rigs-v1": {"version": 1, "rigs": {}, "stamps": {}},
         "build_fingerprints-v1": {"version": 1, "parts": [], "files": {"kept.bundle": sha}},
         "transactions-v2": {"version": 2, "phase": "writing", "pin": {}, "files": [], "kept": [], "old_applied": {}},
@@ -844,7 +929,7 @@ def test_compatible_minor_manifest_extensions_survive_commit(tmp_path):
     upgrade.close()
     for path in (data / "data.json", library / "library.json"):
         manifest = parse_json(path.read_bytes())
-        manifest["format_version"] = "2.1"
+        manifest["format_version"] = "2.2"
         manifest["extension"] = {"data": [1, None]}
         next(iter(manifest["stores"].values()))["extension"] = {"flag": True}
         _write(path, manifest)
@@ -854,7 +939,7 @@ def test_compatible_minor_manifest_extensions_survive_commit(tmp_path):
         assert upgrade.run("import")["status"] == "ready"
         for path in (data / "data.json", library / "library.json"):
             manifest = parse_json(path.read_bytes())
-            assert manifest["format_version"] == "2.1"
+            assert manifest["format_version"] == "2.2"
             assert manifest["extension"] == {"data": [1, None]}
             assert next(iter(manifest["stores"].values()))["extension"] == {"flag": True}
     finally:

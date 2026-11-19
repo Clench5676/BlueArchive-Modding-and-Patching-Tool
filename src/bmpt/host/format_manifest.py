@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import re
+from collections.abc import Callable
 from pathlib import Path
 from uuid import UUID
 
 from . import upgrade_files as files
 from .store_formats import GENERATION, NAMESPACE, STORES, Document, FutureFormat, InvalidStore, parse_json
+from .upgrade_journals import RecoveryPending
 
 DATA_MANIFEST = "data.json"
 LIBRARY_MANIFEST = "library.json"
 FORMAT_NAMES = {"data": "app_data", "library": "mod_library"}
-FORMAT_VERSION = f"{GENERATION}.0"
+DATA_FORMAT_VERSION = f"{GENERATION}.0"
+FORMAT_VERSION = f"{GENERATION}.1"
 _VERSION = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
 _NAMES = {
     "C": "config",
@@ -28,10 +32,13 @@ _NAMES = {
     "R": "rigs",
     "A": "build_fingerprints",
     "O": "official_checks",
+    "CS": "catalog_state",
+    "BC": "catalogs",
     "T": "transactions",
     "I": "import_transactions",
     "D": "asset_deletions",
 }
+_CATALOG_STORES = frozenset((_NAMES["CS"], _NAMES["BC"]))
 _COMMON = {"libraryId": "library_id", "epoch": "active_epoch"}
 _DATA = {**_COMMON, "dataId": "data_id", "token": "route_token"}
 _LIBRARY = {**_COMMON, "members": "memberships"}
@@ -136,7 +143,8 @@ def read_manifest(root: Path, owner: str) -> Document | None:
         raise InvalidStore(f"Unexpected format name in {path}")
     version = _version(raw.get("format_version"))
     required = _version(raw.get("min_reader_version"))
-    if version[0] > GENERATION or required > _version(FORMAT_VERSION):
+    supported = FORMAT_VERSION if owner == "library" else DATA_FORMAT_VERSION
+    if version[0] > GENERATION or required > _version(supported):
         raise NewerManifest(path, owner)
     if version[0] != GENERATION or required > version:
         raise InvalidStore(f"Invalid format version in {path}")
@@ -149,6 +157,8 @@ def read_manifest(root: Path, owner: str) -> Document | None:
     expected = store_descriptors(owner, raw.get("active_epoch"))
     for name, fields in expected.items():
         entry = declared.get(name)
+        if name in _CATALOG_STORES and name not in declared and required < (GENERATION, 1):
+            continue
         if not isinstance(entry, dict) or entry.get("path") != fields["path"]:
             raise InvalidStore(f"Invalid {name} store location in {path}")
         found, supported = _version(entry.get("version")), _version(fields["version"])
@@ -172,8 +182,10 @@ def encode_manifest(owner: str, record: Document) -> Document:
 
     result = _map(copy.deepcopy(record), _DATA if owner == "data" else _LIBRARY, encode=True)
     result["format"] = FORMAT_NAMES[owner]
-    result.setdefault("format_version", FORMAT_VERSION)
-    result.setdefault("min_reader_version", FORMAT_VERSION)
+    version = FORMAT_VERSION if owner == "library" else DATA_FORMAT_VERSION
+    for field in ("format_version", "min_reader_version"):
+        if field not in result or _version(result[field]) < _version(version):
+            result[field] = version
     result["written_by"] = {**result.get("written_by", {}), "name": "BMPT", "version": current_version()}
     result["library_id"] = _uuid(result.get("library_id"), encode=True)
     stores = result.setdefault("stores", {})
@@ -184,3 +196,46 @@ def encode_manifest(owner: str, record: Document) -> Document:
     else:
         _library_detail(result, encode=True)
     return result
+
+
+def publish_library_head(
+    root: Path, previous: Document | None, proposed: Document, *, fault: Callable[[str], None] = lambda _: None
+) -> None:
+    """Publish a library head and retain the exact predecessor under the caller's write lease."""
+    path = root / LIBRARY_MANIFEST
+    raw = path.read_bytes() if previous is not None else None
+    sequence = previous["sequence"] if previous else 0
+    proposed["sequence"] = sequence + 1
+    proposed["predecessor"] = hashlib.sha256(raw).hexdigest() if raw is not None else None
+    if raw is not None:
+        receipt = root / NAMESPACE / "heads" / f"{sequence}.json"
+        if files.present(receipt) and receipt.read_bytes() != raw:
+            raise RecoveryPending("The previous head receipt differs")
+        files.write_bytes(receipt, raw)
+        fault("head:previous")
+    fault("head:beforeReplace")
+    encoded = encode_manifest("library", proposed)
+    try:
+        files.write_document(path, encoded)
+    except OSError as error:
+        try:
+            if files.present(path) and parse_json(path.read_bytes()) == encoded:
+                if raw is None:
+                    path.unlink()
+                    files.sync_directory(path.parent)
+                else:
+                    files.write_bytes(path, raw)
+        except (OSError, ValueError) as rollback:
+            raise RecoveryPending("Could not determine the durable head after a failed publication") from rollback
+        raise error
+    fault("head:durable")
+
+
+def fence_catalog_stores(epoch: Path) -> None:
+    """Require the catalog-capable reader before the first catalog write in an active epoch."""
+    root = epoch.parents[3]
+    head = read_manifest(root, "library")
+    if head is None or head["epoch"] != epoch.name:
+        raise RecoveryPending("The catalog store is outside the active library epoch")
+    if _version(head["min_reader_version"]) < _version(FORMAT_VERSION):
+        publish_library_head(root, head, dict(head))

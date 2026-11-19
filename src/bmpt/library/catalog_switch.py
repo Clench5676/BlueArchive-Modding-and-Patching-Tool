@@ -25,7 +25,7 @@ class CatalogPaths:
     mods_dir: Path
 
 
-def _layout(pin: Pin) -> tuple[CatalogPaths | None, str | None]:
+def _layout(pin: Pin, *, allow_missing: bool = False) -> tuple[CatalogPaths | None, str | None]:
     if pin.server != "global":
         return None, "unsupported_server"
 
@@ -37,7 +37,7 @@ def _layout(pin: Pin) -> tuple[CatalogPaths | None, str | None]:
         root = pin.root.resolve()
         if any(root not in path.resolve().parents for path in (paths.live, paths.hash, bundles, paths.mods_dir)):
             return None, "outside_root"
-        if not live.is_file():
+        if (not allow_missing or live.exists()) and not live.is_file():
             return None, "missing_catalog"
         if bundles.resolve() not in pin.dirs or not bundles.is_dir():
             return None, "missing_bundle_folder"
@@ -46,16 +46,17 @@ def _layout(pin: Pin) -> tuple[CatalogPaths | None, str | None]:
     return paths, None
 
 
-def catalog_paths(pin: Pin) -> CatalogPaths | None:
+def catalog_paths(pin: Pin, *, allow_missing: bool = False) -> CatalogPaths | None:
     """Get the fixed catalog and placed-bundle paths for an eligible install.
 
     Args:
         pin: The install root, search directories, and server.
+        allow_missing: Locate a missing live file when recovering an interrupted swap.
 
     Returns:
         Paths under the pinned root, or None when the layout is ineligible.
     """
-    paths, _ = _layout(pin)
+    paths, _ = _layout(pin, allow_missing=allow_missing)
     return paths
 
 
