@@ -88,7 +88,7 @@ export function moreButton(fs = DETAILS.box.value.fs) {
   return { h, fs: cap, w: Math.ceil(glyphsOf(MORE, cap)) + LINE_BUTTON.pad, gap: SPACE.s };
 }
 const MORE = "…";
-// A student thumbnail's proportions: the roster's collection portrait, 404 x 456.
+// A student thumbnail's proportions: the student list's collection portrait, 404 x 456.
 const THUMBNAIL_ASPECT = 404 / 456;
 /**
  * Build the details panel of a list popup: title bar, the picture, name and chips, fields, actions (exported
