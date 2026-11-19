@@ -1930,3 +1930,28 @@ def test_kept_answers_are_bounded(tmp_path, monkeypatch):
     for number in range(5):
         cache.put("references", str(number), {})
     assert [cache.get("references", str(number)) is not None for number in range(5)] == [False, False, True, True, True]
+
+
+def test_redirected_parts_name_the_official_copy_behind_them(catalog_install):
+    env = catalog_install
+    lib = env.library
+    target = env.files["test"][0]
+    source, _ = env.add("test")
+    lib.apply("test", source)
+    files = lib.state("test").files
+    assert files and all(not item.official and item.restorable for item in files)
+    assert {item.copy for item in files} == {"game"}
+    (entry,) = lib.scan(cores={"test_spr"}).entries
+    assert entry.state == "ok" and not entry.overwritten
+    # the game's own file no longer holds official bytes and nothing else does: that part has no copy
+    target.write_bytes(b"not official" + b"\0" * 8)
+    lost = [item for item in lib.state("test").files if not item.restorable]
+    assert [item.copy for item in lost] == [None] and len(lost) < len(files) or len(files) == 1
+    # a kept original stands in for it
+    kept = lib.root / "originals" / target.name
+    kept.parent.mkdir(exist_ok=True)
+    kept.write_bytes(env.originals[target])
+    reopened = ModLibrary(lib.root, lib.catalog, object(), lib.settings, scan_allowed=lambda: True)
+    files = reopened.state("test").files
+    assert all(item.restorable for item in files) and "kept" in {item.copy for item in files}
+    assert any(item.has_kept_official for item in files)

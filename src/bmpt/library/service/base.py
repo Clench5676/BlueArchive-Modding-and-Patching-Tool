@@ -923,6 +923,8 @@ class _View:
         source = next(iter(sources)) if len(sources) == 1 else "unknown"
         parts = []
         missing = False
+        named = {path.name: path for path in files}
+        copies: dict[str, str | None] = {}
         for name, item in redirects.items():
             try:
                 path, stamp, match = self.library._placed_stamp(pin, item, full=self.allow == "full")
@@ -930,6 +932,7 @@ class _View:
                 missing = True
                 continue
             missing |= not match
+            copies[str(path)] = self._copy_behind(name, named.get(name))
             parts.append(
                 _Part(
                     path,
@@ -962,9 +965,38 @@ class _View:
         alt = self.maps[pin.key].key(core) or (config or {}).get("alt") or core
         if resource_type == "other" and files:
             alt = parse_filename(files[0].name).core
-        entry = _Entry(pin, core, resource_type, alt, parts, carried, configured, state, drifted=state == "updated")
+        entry = _Entry(
+            pin, core, resource_type, alt, parts, carried, configured, state, drifted=state == "updated", copies=copies
+        )
         entry.dismissed = self.dismissed(entry)
         return entry
+
+    def _copy_behind(self, name: str, path: Path | None) -> str | None:
+        """Find the official copy behind a redirected part, by stat and header alone.
+
+        A redirect leaves the game's own file of that name in place, so the official copy is that file while it holds
+        official bytes ("game"), else a kept original ("kept"); None when neither does. The placed file is never the
+        copy, and the answer changes no switch: it only tells the pages whether the official choice can be shown.
+        """
+        if (
+            name in self.originals
+            and self.library._original_checks.of_file(self.library.root / "originals" / name) != "failed"
+        ):
+            return "kept"
+        if path is None:
+            return None
+        try:
+            stat = path.stat()
+            record = self.applied.get(str(path.resolve()))
+            if record and record.get("size") == stat.st_size and record.get("mtime") == stat.st_mtime_ns:
+                return "game" if says_official(record) else None
+            if self.allow == "recorded":
+                return None
+            expected = self.official_size(name)
+            official = trailing_bytes(path) == 0 and (expected is None or stat.st_size == expected)
+        except OSError:
+            return None
+        return "game" if official else None
 
     def dismissed(self, entry: _Entry) -> bool:
         resource_type = "drift" if entry.state in ("reset", "updated") else "untracked"
