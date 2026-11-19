@@ -81,7 +81,7 @@ def _redirects_sha1(redirects: Mapping[str, Document]) -> str:
 def _load_names(path: Path, sha1: str, size: int, mtime: int) -> frozenset[str]:
     raw = path.read_bytes()
     if hashlib.sha1(raw).hexdigest() != sha1:
-        raise ServiceError("official_invalid")
+        raise ServiceError("official_invalid", file=path)
     return frozenset(name for name, (_, prefix) in ccdb.bundle_ids(ccdb.parse(raw)).items() if prefix == _LOAD_PREFIX)
 
 
@@ -1101,7 +1101,7 @@ class CatalogMixin:
                 except FileNotFoundError as error:
                     raise ServiceError("catalog_changed") from error
                 if hashlib.sha1(official).hexdigest() != record["official"]["sha1"]:
-                    raise ServiceError("official_invalid")
+                    raise ServiceError("official_invalid", file=self._catalog_library_copy(pin, record["rv"]))
                 try:
                     raw = ccdb.redirect(official, placed, MODS_DIR)
                 except ccdb.CatalogFormatError as error:
