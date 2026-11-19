@@ -89,6 +89,13 @@ class SwitchingMixin:
                 stale.update(more_stale)
                 resolution = self._resolve(sources, targets, pin, older=stale)
             current = resolution.current
+            updates: dict[Path, list[Path]] = {}
+            for target in targets:
+                if target not in current:
+                    for path in resolver.same_prefix(sources.values(), target):
+                        if path not in current.values() and path not in stale:
+                            updates.setdefault(path, []).append(target)
+            stale.update(self._stale_updates(updates, current, pin, targets=targets))
             staged = self._stage_direct(targets, sources, work / "targets", pin, set(targets) - current.keys())
             output = work / "output"
             output.mkdir(parents=True, exist_ok=True)
