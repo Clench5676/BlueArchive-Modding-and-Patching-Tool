@@ -1955,3 +1955,44 @@ def test_redirected_parts_name_the_official_copy_behind_them(catalog_install):
     files = reopened.state("test").files
     assert all(item.restorable for item in files) and "kept" in {item.copy for item in files}
     assert any(item.has_kept_official for item in files)
+
+
+def test_output_under_a_key_of_an_older_program_is_built_again_once(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, _ = env.add("test")
+    lib.apply("test", source)
+    record = lib._catalog_record(pin)
+    current = builders.fingerprint()
+    # what an older program left: one-part build keys, and a kept built copy under such a key
+    older = {name: {**item, "build": item["build"].split(".")[0]} for name, item in record["redirects"].items()}
+    lib._save_catalog_record(pin, {**record, "redirects": older})
+    parts = {}
+    for name, item in older.items():
+        sha1 = item["placed"].removesuffix(".bundle")
+        kept = lib.root / "built" / f"{sha1}.bundle"
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        kept.write_bytes(lib._placed_path(pin, item).read_bytes())
+        parts[name] = {"sha1": sha1, "mod_file": None}
+    key = {"source": source, "inputs": [], "parts": parts, "build": next(iter(older.values()))["build"]}
+
+    def keep(data):
+        data["folders"][pin.key]["built"]["test_spr"] = key
+        return True
+
+    lib._update_profiles(keep)
+    monkeypatch.setattr(lib, "_placed_as_is", lambda *args: False)  # as a rebuilt output would be
+    # a toggle walks the entry and places the kept copy again, under the key it was kept with
+    lib.toggle(False, True)
+    assert [item["core"] for item in lib.toggle(True, False).done] == ["test_spr"]
+    assert lib._stale_builds(pin, lib.profiles.read()) == ["test_spr"]
+    assert lib.refresh_builds() == ["test_spr"]
+    rebuilt = lib._catalog_record(pin)
+    assert all(item["build"].endswith(f".{current}") for item in rebuilt["redirects"].values())
+    assert "test_spr" not in lib.profiles.read()["folders"][pin.key]["built"]
+    assert lib._stale_builds(pin, lib.profiles.read()) == []
+    assert lib.refresh_builds() == []
+    with monkeypatch.context() as patch:
+        patch.setattr(lib, "_reach", lambda *args, **kwargs: pytest.fail("a toggle built an output again"))
+        lib.toggle(False, True)
+        assert [item["core"] for item in lib.toggle(True, False).done] == ["test_spr"]
