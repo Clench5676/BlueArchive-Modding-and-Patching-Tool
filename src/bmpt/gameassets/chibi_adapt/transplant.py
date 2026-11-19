@@ -29,10 +29,10 @@ from ..chibi import (
     _prefabs,
     chibi_root,
 )
-from .costume import Costume, Plan, plan
+from .costume import Costume, Plan, flatten, plan
 from .face import clip_edit_error, clip_snapshot, face_retarget, saved_tree
 from .halo import _IN, _MATERIAL, _MESH, _ROOT, DRAWN, HaloChange, _halo_change, _mesh_tree, _pointers
-from .parts import Part, Skin, deform, pick, prefab_clips, probe_poses, roles, skin_of
+from .parts import Part, Skin, bindposes, deform, pick, prefab_clips, probe_poses, roles, skin_of
 from .skeleton import FIELD_KINDS, IDLE_CLIPS, Node, Skeleton, _inverse, _shader_name, loaded_with, refuse
 from .skirts import Hems, Skirt, curve_frames, hems, rigidify, skirt_bones, skirt_curves, springs
 from .writing import (
@@ -70,6 +70,8 @@ class Result:
     dropped: list[str] = field(default_factory=list)  # slot renderers whose worn items are hidden
     carried: list[str] = field(default_factory=list)  # source renderers whose worn items are transferred
     arms: int = 0  # Optimize Physics: the slot's clips copied with the arms pushed out of the costume
+    left: list[str] = field(default_factory=list)  # source set pieces that draw nothing (their top bones)
+    kept: list[str] = field(default_factory=list)  # slot set pieces drawn again (their top bones)
 
 
 def _chibi_prefabs(graph: BundleGraph, files: list[Path]) -> dict[str, Any]:
@@ -172,6 +174,8 @@ def adapt(
     A costume past the stretch limit is built and applied all the same (``plan.unfit``).
     The slot's worn items (``chibi_props``: hats, glasses, bags) draw nothing and the source's are carried;
     packed items remain with the costume that encloses them (chibi_props).
+    Set pieces in the costume meshes (``chibi_setpieces``: a wheelchair, a prop the clips bring out) stay with the
+    slot they were made for: the source's draw nothing, the slot's are drawn again.
     The graph reads every bundle from memory (``unity.load_bundle``: a path lock for each load alone), so a build
     needs no chibi lock and exports run beside it. ``step`` is called between the build's steps (most under 0.5 s;
     the plan, the hems and a cold first read of the idle poses up to a few seconds, measured on Hina wearing Aoba):
@@ -229,6 +233,7 @@ def _adapt(
     poses: PoseStore | None = None,
 ) -> Result:
     from .. import chibi_props as mp
+    from .. import chibi_setpieces as sp
 
     phase = meter.phase
     phase("read")
@@ -285,14 +290,22 @@ def _adapt(
     layouts = [mg.geometry_of(tree) for tree in mesh_trees]
     step()
     phase("plan")
+    own_probes = probe_poses(s_skeleton, s_clips)
     result = plan(
         target,
         source,
         probes,
         fit=all(layout is not None for layout in layouts),
-        own_probes=probe_poses(s_skeleton, s_clips),
+        own_probes=own_probes,
         clips=t_clips,
     )
+    # set pieces (a wheelchair, a prop the clips bring out): the source's stay behind, the slot's stay
+    s_flat, t_flat = flatten(source, s_skeleton.world()), flatten(target, t_skeleton.world())
+    s_pieces = sp.set_pieces(source, s_flat, s_idle, own_probes)
+    t_pieces = sp.set_pieces(target, t_flat, t_idle, probes)
+    s_left = sp.part_triangles(source, s_flat, s_pieces)
+    t_kept = sp.part_triangles(target, t_flat, t_pieces)
+    step()
     from .. import chibi_arm_clips, chibi_arm_frames, chibi_arm_solve
 
     # Optimize Physics only: the arms pushed out of a bulkier costume cost seconds on an affected pair
@@ -571,6 +584,14 @@ def _adapt(
                 mg.write_geometry(tree, layouts[k], points, linear)
             except OverflowError:  # a position past what half-precision or packed floats hold
                 raise refuse("vertices out of range", part=part.mesh.peek_name()) from None
+        if k in s_left and not mp.drop_triangles(tree, s_left[k]):
+            logger.info(
+                "Costume of %s on %s: set pieces of part %s kept: its triangles cannot be edited",
+                s_name,
+                t_name,
+                part.mesh.peek_name(),
+            )
+            s_left.pop(k)
         skin = Skin(points, skin.joints, skin.weights, skin.edges, skin.triangles)
         joints, weights = skin.joints, skin.weights
         aabbs = len(tree["m_BonesAABB"]) == len(nodes)
@@ -663,6 +684,42 @@ def _adapt(
             )
         )
         new_meshes.append((writer.add(mesh_sf, "Mesh", tree), c.nodes))
+    # the slot's set pieces: each costume mesh holding one is drawn again, on its own bones, without the costume
+    kept_parts: list[Part] = []
+    for k, triangles in sorted(t_kept.items()):
+        part, skin = t_costume[k], target.skins[k]
+        tree = _mesh_tree(part.mesh)
+        poses = bindposes(graph, part.mesh)
+        rest_of = np.setdiff1d(np.arange(len(skin.triangles)), triangles)
+        if len(poses) != len(part.bones) or (len(rest_of) and not mp.drop_triangles(tree, rest_of)):
+            logger.info(
+                "Costume of %s on %s: set pieces of the slot's part %s not kept: its mesh cannot be edited",
+                s_name,
+                t_name,
+                part.mesh.peek_name(),
+            )
+            continue
+        for material in part.materials:
+            if material is not None:
+                carry_material(material)
+        nodes = [b if b is not None else 0 for b in part.bones]
+        written.append(
+            Written(
+                part.mesh.peek_name(),
+                skin.vertices,
+                None,
+                skin.joints,
+                skin.weights,
+                poses,
+                [t_skeleton.nodes[n].name for n in nodes],
+                len(tree["m_SubMeshes"]),
+                skin.weights.sum(axis=1),
+                [0 if m is None else 1 for m in part.materials],
+                bool((tree.get("m_StreamData") or {}).get("size")),
+            )
+        )
+        new_meshes.append((writer.add(mesh_sf, "Mesh", tree), nodes))
+        kept_parts.append(part)
     # the slot's worn items: a renderer drawing nothing else the clips show draws nothing, another a copy of its mesh
     # without them
     worn_meshes = mp.host_meshes(t_worn, lambda tree: writer.add(mesh_sf, "Mesh", tree), _mesh_tree)
@@ -709,7 +766,8 @@ def _adapt(
         bundle = opened[prefab_path]
         for name, sf in bundle.env.file.files.items():
             if hasattr(sf, "objects") and name.lower() in files:
-                drawn_parts = [*s_costume, *(c.part for c in carried_parts)]
+                from_source = [*s_costume, *(c.part for c in carried_parts)]
+                drawn_parts = [*from_source, *kept_parts]
                 _edit_prefabs(
                     writer,
                     sf,
@@ -720,7 +778,8 @@ def _adapt(
                     material_cab,
                     new_meshes,
                     [[materials[_key(m)] if m is not None else 0 for m in p.materials] for p in drawn_parts],
-                    [s_skeleton.nodes[p.node].name for p in drawn_parts],
+                    [s_skeleton.nodes[p.node].name for p in from_source]
+                    + [t_skeleton.nodes[p.node].name for p in kept_parts],
                     root_node,
                     t_skeleton,
                     bounds,
@@ -799,7 +858,17 @@ def _adapt(
             ", ".join(dropped) or "none",
             ", ".join(carried_names) or "none",
         )
-    return Result(opened, result, len(s_costume), hem, cautions, dropped, carried_names, len(arm_clips))
+    left = sorted({s_skeleton.nodes[p.top].name for p in s_pieces}) if s_left else []
+    kept = sorted({t_skeleton.nodes[p.top].name for p in t_pieces}) if kept_parts else []
+    if left or kept:
+        logger.info(
+            "Costume of %s on %s: set pieces of the costume draw nothing (%s), the slot's stay (%s)",
+            s_name,
+            t_name,
+            ", ".join(left) or "none",
+            ", ".join(kept) or "none",
+        )
+    return Result(opened, result, len(s_costume), hem, cautions, dropped, carried_names, len(arm_clips), left, kept)
 
 
 def _edit_prefabs(
