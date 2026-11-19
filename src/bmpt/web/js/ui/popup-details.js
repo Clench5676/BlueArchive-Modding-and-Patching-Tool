@@ -88,6 +88,8 @@ export function moreButton(fs = DETAILS.box.value.fs) {
   return { h, fs: cap, w: Math.ceil(glyphsOf(MORE, cap)) + LINE_BUTTON.pad, gap: SPACE.s };
 }
 const MORE = "…";
+// A student thumbnail's proportions: the roster's collection portrait, 404 x 456.
+const THUMBNAIL_ASPECT = 404 / 456;
 /**
  * Build the details panel of a list popup: title bar, the picture, name and chips, fields, actions (exported
  * for the tests, like chipPlaces).
@@ -151,9 +153,10 @@ export function detailsTree(
   kids.push(titleNode);
   bands.push({ name: "Title_Bg", w, h: titleH });
   // A chibi's picture spans the panel, its name, chips and fields under it, one size for every candidate
-  // (chibi); a thumbnail's square the same (thumbnail), its picture filling the window (cover) where a chibi's still
-  // is shown whole (contain).
+  // (chibi), its still shown whole (contain) in the inclined square. A thumbnail's picture takes the same square's
+  // height (thumbnail) in an upright window of the thumbnail's own proportions, so nothing of it is cut.
   const chibi = !portraitTexture && (kind === "chibi" || kind === "thumbnail");
+  const upright = !portraitTexture && kind === "thumbnail";
   const columns = grid(content),
     pictureColumn = portraitTexture ? columns.span(5) : content;
   const infoColumn = portraitTexture ? columns.span(7, 5) : content;
@@ -417,6 +420,9 @@ export function detailsTree(
     );
   else pictureW = Math.max(0, Math.min(w - 2 * SPACE.m, roomFor(infoStack.h, 1) * aspect));
   const pictureH = pictureW / aspect;
+  // the upright window as high as the square, as wide as the thumbnail's proportions make it
+  if (upright) pictureW = pictureH * THUMBNAIL_ASPECT;
+  const pictureIncline = upright ? 0 : 10;
   const source = typeof it.big === "function" ? it.big() : it.big;
   const picture = node("Picture", [0, 0], [], []);
   if (texture) {
@@ -441,7 +447,9 @@ export function detailsTree(
     });
     picture.children = [texture];
   } else {
-    picture.widgets = [sprite("Common_Btn_BG", pictureW, pictureH, { incline: 10, depth: 6, color: "#ffffff/1.00" })];
+    picture.widgets = [
+      sprite("Common_Btn_BG", pictureW, pictureH, { incline: pictureIncline, depth: 6, color: "#ffffff/1.00" }),
+    ];
     picture.children = [
       node(
         "Thumb",
@@ -454,10 +462,10 @@ export function detailsTree(
             h_: pictureH - SPACE.m,
             pivot: 4,
             depth: 7,
-            incline: 10,
+            incline: pictureIncline,
             radius: 22,
             color: "#ffffff/1.00",
-            imgSize: kind === "chibi" ? "contain" : "cover",
+            imgSize: kind === "chibi" || upright ? "contain" : "cover",
             imgPosition: "center 18%",
           },
         ],
@@ -467,7 +475,7 @@ export function detailsTree(
         [0, 0],
         [
           sprite("Common_Line_Raius20px", pictureW - SPACE.s, pictureH - SPACE.s, {
-            incline: 10,
+            incline: pictureIncline,
             depth: 8,
             color: "#ffffff/1.00",
           }),

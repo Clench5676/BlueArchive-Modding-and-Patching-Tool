@@ -3564,6 +3564,30 @@ test("a loading action in the details panel shows the ring in its caption's plac
   assert.ok(!NGUI.find(busy, "Act_2/Label").widgets[0].loadingRing, "an action not loading keeps its caption");
 });
 
+// The thumbnail gallery's picture: an upright window of the thumbnail's own proportions (404 x 456) at the height of
+// Chibi's square, the thumbnail shown whole; Chibi's picture keeps its inclined square
+test("a thumbnail's picture in the details panel is upright and shows the whole thumbnail", async () => {
+  const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
+  await Popup.ready();
+  const actions = [
+    ["Apply", () => {}],
+    ["Export", () => {}],
+    ["Delete", () => {}],
+  ];
+  const pictureOf = (kind) => {
+    const tree = Popup.detailsTree(items[0], "Thumbnail", [], actions, null, kind);
+    return ["Picture", "Picture/Thumb", "Picture/Line"].map((path) => NGUI.find(tree, path).widgets[0]);
+  };
+  const thumbnail = pictureOf("thumbnail"),
+    chibi = pictureOf("chibi");
+  assert.equal(thumbnail[0].h_, chibi[0].h_, "as high as Chibi's square");
+  assert.ok(Math.abs(thumbnail[0].w_ / thumbnail[0].h_ - 404 / 456) < 1e-9);
+  for (const widget of thumbnail) assert.equal(widget.incline, 0);
+  assert.equal(thumbnail[1].imgSize, "contain");
+  for (const widget of chibi) assert.equal(widget.incline, 10);
+  assert.equal(chibi[1].imgSize, "contain");
+});
+
 // A still being made holds its place with the game's loading ring (UIRatioNoticePopup's LoadingIcon, turned by
 // its TweenRotation); the placeholder text shows only once it fails, and both go when it decodes
 test("a still being made shows the game's loading ring, the placeholder text only when it fails", async (t) => {
