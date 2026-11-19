@@ -37,7 +37,7 @@ class ViewsMixin:
     """What the game shows: the state, the student list, the selection, the bundles and the previews' reads."""
 
     def _file_state(self, view: _View, entry: _Entry, part: _Part) -> GameFileState:
-        parsed = parse_filename(part.path.name)
+        parsed = parse_filename(part.official_name or part.path.name)
         copy_ = entry.copies.get(str(part.path))
         applied = "unknown" if part.carried == "damaged" else part.carried
         checked = (

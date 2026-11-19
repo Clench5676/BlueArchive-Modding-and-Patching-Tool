@@ -32,7 +32,7 @@ from ..storage import (
     atomic_json,
 )
 from .base import _UNREADABLE, _LibraryLock, _NewerState, _Reading, _combine, _held_after, _held_id, _valid_id
-from .catalog import CatalogMixin
+from .catalog import CatalogKind, CatalogMixin
 from .copies import CopiesMixin
 from .costumes import CostumesMixin
 from .editing import EditingMixin
@@ -187,6 +187,9 @@ class ModLibrary(
         ] = {}  # confirmed cores of an untested build (confirm_untested)
         self._maps_cache: tuple[tuple, Any] | None = None
         self.profiles = Profiles(self.root)
+        self._catalog_idle = threading.Event()
+        self._catalog_idle.set()
+        self._catalog_identifications: dict[Path, tuple[tuple[int, int, str, str | None], CatalogKind | None]] = {}
         self.profiles.gate = self._check_writes  # no change of the configuration while writes are refused
         staging.cleanup(self.root)
         self._load()

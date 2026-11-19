@@ -257,11 +257,24 @@ class SwitchPlanMixin:
         and raises the real failure when one cannot be rolled back (a write never goes on over a journal it could not
         settle); the failure is remembered for the reads and for the writes that do not take this lock
         (``_check_recovery``).
+
+        A writer waiting for a catalog transaction in this process gives up the library lock for foreground
+        reads and for the catalog's store save. That wait does not count against the interprocess lock timeout.
+        A writer whose locked preparation may have changed must start over.
         """
         owner = threading.get_ident()
         if self._transaction_owner == owner:
             yield
             return
+        prepared_version = None
+        while not self._catalog_idle.is_set():
+            version = self._version
+            with self._lock.unlocked() as released:
+                self._catalog_idle.wait()
+            if released:
+                if self._version != version:
+                    raise ServiceError("state_changed")
+                prepared_version = version
         with toggle_timing.enter("transaction_wait", file_lock(self.root / "transactions.lock", timeout=10)):
             self._transaction_owner = owner
             try:
@@ -273,6 +286,8 @@ class SwitchPlanMixin:
                     raise
                 self._remember_recovery(None)
                 self._check_writable()
+                if prepared_version is not None and self._version != prepared_version:
+                    raise ServiceError("state_changed")
                 yield
             finally:
                 self._transaction_owner = None
@@ -731,10 +746,11 @@ class SwitchPlanMixin:
 
     @toggle_timing.stage("crc_check")
     def _check_target_crc(self, changed: dict[Path, Path]) -> None:
-        """Make the last CRC check of a write.
+        """Check official-named replacements in the writer's class, under the library lock for one entry.
 
         Bytes whose CRC is not the one in the target's name never reach an install that needs the CRC fix, whatever step
-        before missed it (crc_fix_failed, naming the file).
+        before missed it (crc_fix_failed, naming the file). Catalog placements bypass this check. The caller yields
+        at the next entry boundary.
         """
         for target, prepared in changed.items():
             fingerprint = self._hashes.get(prepared)

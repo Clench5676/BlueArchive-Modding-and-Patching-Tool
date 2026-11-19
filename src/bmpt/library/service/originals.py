@@ -11,7 +11,7 @@ import os
 import shutil
 import time
 from pathlib import Path
-from typing import Any, Callable, Iterator, Mapping, Sequence
+from typing import AbstractSet, Any, Callable, Iterator, Mapping, Sequence
 
 from bmpt.spine import atlas_remap
 from bmpt.host import game_paths, steam_records
@@ -21,6 +21,7 @@ from ...core.errors import ServiceError
 from ...core.logging_utils import log_failure
 from ...core.openfiles import remove_tree
 from .. import fingerprint, integrity, rig_archive, toggle_timing
+from ..catalog_switch import MODE_CATALOG
 from ..original_checks import Verdict
 from ..judge import (
     core_of,
@@ -450,7 +451,14 @@ class OriginalsMixin:
                     return True
         return False
 
-    def _kept_for_configuration(self, name: str, config: dict | None, pins: list[Pin]) -> bool:
+    def _kept_for_configuration(
+        self,
+        name: str,
+        config: dict | None,
+        pins: list[Pin],
+        *,
+        catalog_official: AbstractSet[Path] = frozenset(),
+    ) -> bool:
         """Tell whether a configured entry keeps the original of a name.
 
         It does when its game file of that name exists in that install, and the configured source may write non-official
@@ -471,7 +479,7 @@ class OriginalsMixin:
             if not isinstance(entry, dict) or not isinstance(entry.get("source"), str):
                 continue
             path = next((path for path in self._index(pin).get(core, []) if path.name == name), None)
-            if path is None:
+            if path is None or path in catalog_official:
                 continue
             record = self._applied.get(str(path.resolve()))
             if not (record and record.get("source") == entry["source"] and record.get("official") is True):
@@ -504,21 +512,27 @@ class OriginalsMixin:
                 logger.info("Released the original of %s kept by a failed write", target.name)
 
     def _prune(self) -> list[Path]:
-        """Serialize deletion with writes that may still need an original for rollback.
+        """Serialize class 4 deletion with writes that may still need files for rollback.
 
-        Nothing is deleted while a journal is pending or the state cannot be written (the start job calls this).
+        The library lock is held per original or catalog side file, yielding between items.
+        A pending file journal or unreadable state prevents deletion.
         """
         if self._state_error is not None or any((self.root / "transactions").glob("*/journal.json")):
             return []
         with self._transaction_lock():
-            return self._prune_originals()
+            records = self._catalog_document()["installs"]
+            released = self._prune_originals(records)
+            if records:
+                self._prune_catalogs(self._all_pins(), records)
+            return released
 
-    def _prune_originals(self) -> list[Path]:
-        """Delete unneeded kept originals, over every known install, from names, stats and records only.
+    def _prune_originals(self, catalogs: Mapping[str, dict] | None = None) -> list[Path]:
+        """Delete unneeded kept originals in class 4, yielding the library lock between originals.
 
-        No game file's contents are read; an original about to go is read once for the mods of its core that have no
-        fingerprint of their official parts yet (``_backfill_before_release``). An original whose name is present is
-        released once every file of that name is unchanged since the library wrote official bytes there; an original
+        An original about to go is read once for the mods of its core that have no fingerprint of their official
+        parts yet (``_backfill_before_release``). A catalog core can release an original if the official-named file
+        verifies and every other install still has what it needs. A files-mode original whose name is present is
+        released once every file of that name is unchanged since the library wrote official bytes there. An original
         whose name is gone from every known install is deleted when a game update superseded it (a later-dated file of
         the same part in the folder of each of its gone records). Then the records of superseded gone files are dropped
         (with the entry's ``updated`` marker when the library wrote non-official bytes there), and the built copies
@@ -528,6 +542,8 @@ class OriginalsMixin:
         library shared with a data directory that names such an install keeps the same originals here as there, so
         removing an install from the list never changes what the prune keeps.
         """
+        if catalogs is None:
+            catalogs = self._catalog_document()["installs"]
         directory = self.root / "originals"
         if not directory.resolve().is_relative_to(self.root):
             return []
@@ -538,7 +554,7 @@ class OriginalsMixin:
         pins = self.installs()
         guarded = self._all_pins()
         listed = {path.name for path in directory.glob("*.bundle")} if directory.is_dir() else set()
-        view = _View(self, guarded, config, "recorded")
+        view = _View(self, guarded, config, "recorded", official_only=True)
         view.originals = {name: size for name, size in view.originals.items()}  # as listed at the start
         present: dict[str, list[Path]] = {}
         for names in view.names.values():
@@ -553,9 +569,20 @@ class OriginalsMixin:
             original = directory / name
             files = present.get(name, [])
             if files:
-                if self._kept_for_configuration(name, config, guarded):
+                catalog_official = set()
+                for path in files:
+                    pin = known_dirs.get(path.parent)
+                    record = catalogs.get(pin.key) if pin else None
+                    if record and record["mode"] == MODE_CATALOG:
+                        core = view.maps[pin.key].slot(core_of(name))
+                        with contextlib.suppress(OSError, ServiceError):
+                            if self._catalog_targets(pin, self._spine_parts(core, pin), record) and self._is_official(
+                                path
+                            ):
+                                catalog_official.add(path)
+                if self._kept_for_configuration(name, config, guarded, catalog_official=catalog_official):
                     continue
-                if not all(self._unchanged_official(path) for path in files):
+                if not all(path in catalog_official or self._unchanged_official(path) for path in files):
                     continue
                 if self._needed_elsewhere(name, {str(path.resolve()) for path in files}, guarded):
                     continue
@@ -665,7 +692,7 @@ class OriginalsMixin:
         try:
             self._prune()
         except Exception as error:  # never in the way of the switch itself; the next prune tries again
-            log_failure(logger, logging.WARNING, "Could not prune the kept originals", error)
+            log_failure(logger, logging.WARNING, "Could not prune the library files", error)
 
     @contextlib.contextmanager
     def import_batch(self) -> Iterator[None]:

@@ -627,9 +627,15 @@ class FoldersMixin:
         )
 
     def _view(
-        self, pins: list[Pin], allow: str, config: dict | None | type(...) = ..., snapshot: bool = False
+        self,
+        pins: list[Pin],
+        allow: str,
+        config: dict | None | type(...) = ...,
+        snapshot: bool = False,
+        *,
+        official_only: bool = False,
     ) -> _View:
         self._refresh_state()
         if config is ...:
             config = self.profiles.read()
-        return _View(self, pins, config, allow, snapshot)
+        return _View(self, pins, config, allow, snapshot, official_only=official_only)
