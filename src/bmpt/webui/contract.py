@@ -18,6 +18,7 @@ _JSON_FIELDS = {
     "group_alts": "groupAlts",
     "has_kept_official": "hasKeptOfficial",
     "released_on_server": "releasedOnServer",
+    "target_retired": "targetRetired",
 }
 _OPAQUE = {
     "aliases",

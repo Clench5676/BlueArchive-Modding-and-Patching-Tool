@@ -295,7 +295,11 @@
 			"onState": "Mod 已開啟",
 			"helpOn": "開啟時，所有立繪和紀念大廳套用已設定的 Mod；",
 			"helpOff": "關閉時，所有立繪和紀念大廳還原為原版（如原版已被覆蓋，則無效），Mod 將保留在 Mod 倉庫中。切換此開關前必須關閉遊戲。",
-			"helpFolders": "遊戲資料夾：{folders}",
+			"method": {
+				"catalog": "切換方式：替換目錄檔案",
+				"files": "切換方式：替換資源檔案"
+			},
+			"catalogFallback": "目前遊戲版本無法以目錄檔案切換，已改用替換資源檔案",
 			"installNamed": "{server}（{folder}）",
 			"explainOnce": "此說明不再顯示",
 			"scan": {
@@ -383,7 +387,8 @@
 					"rig": ".skel 檔案結構變更",
 					"textures": "貼圖尺寸變更",
 					"removed": "部件已移除",
-					"added": "新增部件"
+					"added": "新增部件",
+					"retired": "遊戲檔案已改名或移除"
 				}
 			},
 			"untested": {
@@ -531,6 +536,10 @@
 			"catalog_data_invalid": "角色資料已損毀",
 			"catalog_student_not_found": "找不到這名學生",
 			"catalog_alt_not_found": "找不到這個換皮",
+			"catalog_changed": "目錄檔案已遭外部修改",
+			"catalog_invalid": "產生的目錄檔案未通過驗證",
+			"catalog_restored": "已還原官方目錄檔案",
+			"catalog_unsupported": "不支援此目錄檔案格式",
 			"game_file_conflict": "遊戲檔案衝突：{file}",
 			"game_file_not_found": "找不到對應的遊戲檔案",
 			"game_file_outside_resources": "目標不在遊戲資料夾中：{file}",

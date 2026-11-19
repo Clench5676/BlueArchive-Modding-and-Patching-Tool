@@ -59,8 +59,9 @@ class CostumesMixin:
     """Costume switches of 3D chibis: staging, verdicts, Optimize Physics and costume previews."""
 
     def _stage_adapted(
-        self, sources: list[Path], targets: list[Path], directory: Path, log: LogFunc, pin: Pin
+        self, sources: list[Path], targets: list[Path], directory: Path, log: LogFunc, pin: Pin, *, placed: bool = False
     ) -> dict[Path, Path]:
+        """Stage one adaptation in class 2, holding the library lock until the caller's next entry."""
         staged = self._stage_official(targets, directory / "targets", pin, current_fallback=True)
         output = directory / "output"
         output.mkdir(parents=True)
@@ -73,7 +74,7 @@ class CostumesMixin:
             list(staged.values()),
             output,
             self.settings.asset_types(),
-            self.settings.save_options(self.settings.crc_needed(targets[0])),
+            self.settings.save_options(not placed and self.settings.crc_needed(targets[0])),
             self.settings.spine_options(),
             skip_unchanged=True,
             match_strategy="name_type",
@@ -183,6 +184,7 @@ class CostumesMixin:
         inputs: _CostumeInputs | None = None,
         step: Callable[[], None] | None = None,
         fraction: Callable[[float], None] | None = None,
+        placed: bool = False,
     ) -> dict[Path, Path]:
         """Build the chibi slot ``targets`` (official copies) carrying the costume of ``other``'s chibi.
 
@@ -191,6 +193,7 @@ class CostumesMixin:
         same student's too, carries its halo or hides the slot's. The build takes no chibi lock (``chibi_adapt.adapt``
         reads its bundles from memory), so exports run beside it. The changed parts are saved in threads
         (``bundle_saves.save_bundles``), at most half the cores; the same bytes as one after another.
+        A class 2 switch holding the library lock yields at its next entry boundary. Placed bundles skip the CRC fix.
 
         - ``physics``: Optimize Physics; the build may also choose Rule B, or a rule built with the followed leg
           groups made rigid; ``report["physics"]`` says whether it chose one of them.
@@ -272,7 +275,7 @@ class CostumesMixin:
                 output / path.name,
                 SaveOptions(perform_crc=False, compression="none")
                 if preview
-                else self.settings.save_options(self.settings.crc_needed(reverse[path])),
+                else self.settings.save_options(not placed and self.settings.crc_needed(reverse[path])),
             )
             for path, bundle in result.changed.items()
         ]

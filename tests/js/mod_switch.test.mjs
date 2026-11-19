@@ -692,28 +692,34 @@ test("every locale gives the help and first toggle two separate opening lines", 
   }
 });
 
-test("the help's lines: game folders, Retry and Details, independent of scan consent", () => {
+test("the help's lines: each game folder's switch method, Retry and Details, independent of scan consent", () => {
   const texts = (s, sizes) => MS.helpLines(s, sizes).map((l) => l.text);
   const buttons = (s) =>
     MS.helpLines(s)
       .filter((l) => l.button)
       .map((l) => [l.button.id, l.button.label]);
-  assert.deepEqual(texts(base()), [S("mods.helpOn"), S("mods.helpOff")]);
-  assert.ok(!texts(base()).some((t) => t.startsWith("Game folders")));
+  // one game folder: its method alone, after the opening text; an install without a method replaces files
+  assert.deepEqual(texts(base()), [S("mods.helpOn"), S("mods.helpOff"), "Switch method: File Replacement"]);
+  const catalog = base({ installs: [install("/games/BlueArchive", "Global", { method: "catalog" })] });
+  assert.deepEqual(texts(catalog), [S("mods.helpOn"), S("mods.helpOff"), "Switch method: Catalog"]);
   assert.ok(!texts(base()).some((t) => t.startsWith("Disk use:")));
   assert.ok(!texts(base(), { originalsSize: 3 * 1048576 }).some((t) => t.includes("Official copies for Off")));
   assert.deepEqual(buttons(base()), []);
   assert.deepEqual(buttons(base({ builtSize: 5 * 1073741824 })), []);
-  // two game folders: their install labels, with the language's separator
+  // several game folders: one line each, its install label first, whatever the reason for file replacement
   const two = base({
-    installs: [install("/a/BlueArchive", "Global (BlueArchive)"), install("/b/Steam", "Global (Steam)")],
+    installs: [
+      install("/a/BlueArchive", "Global (BlueArchive)", { method: "catalog", methodReason: null }),
+      install("/b/Steam", "Global (Steam)", { method: "files", methodReason: "catalog_invalid" }),
+      install("/c/JP", "Japan", { server: "japan", method: "files", methodReason: "unsupported_server" }),
+    ],
   });
-  assert.ok(texts(two).includes("Game folders: Global (BlueArchive), Global (Steam)"));
-  assert.equal(texts(two)[2], "Game folders: Global (BlueArchive), Global (Steam)", "after the opening text");
-  assert.equal(
-    MS.helpLines(two, { sep: "、" }).find((l) => l.text.startsWith("Game folders")).text,
-    "Game folders: Global (BlueArchive)、Global (Steam)",
-  );
+  assert.deepEqual(texts(two).slice(2, 5), [
+    "Global (BlueArchive) - Switch method: Catalog",
+    "Global (Steam) - Switch method: File Replacement",
+    "Japan - Switch method: File Replacement",
+  ]);
+  assert.deepEqual(MS.methodLines(two), texts(two).slice(2, 5));
   // Retry for the entries not switched (pending and left), Details for those left as is (stuck), never a Retry for them
   const counts = base({ pending: 2, left: 1, stuck: 3, sourceMissing: 1 });
   assert.ok(texts(counts).includes("Not switched: 3"));
@@ -755,6 +761,47 @@ test("entries a game update's rig change holds: their own help line and Details,
   // a toggle that held entries says so
   const r = MS.resultSummary({ enabled: true, done: [{}], held: [{ core: "a_spr" }] });
   assert.ok(r.lines.includes("Official .skel or .atlas file changed, not applied: 1"));
+});
+
+test("the catalog notices: the official catalog put back at the start, a fallback to file replacement", () => {
+  // one game folder: the notice alone; a restore told once whatever the number of notices for it
+  const one = base({ installs: [install("/a", "Global", { method: "catalog" })] });
+  assert.deepEqual(MS.catalogNotices(one), { lines: [], seen: [] });
+  assert.deepEqual(
+    MS.catalogNotices(one, [
+      { code: "catalog_restored", install: "/a" },
+      { code: "catalog_restored", install: "/a" },
+    ]),
+    { lines: ["Game catalog restored to official"], seen: [] },
+  );
+  const fallback = base({
+    installs: [install("/a", "Global", { method: "files", methodReason: "catalog_invalid", methodNotice: true })],
+  });
+  assert.deepEqual(MS.catalogNotices(fallback), {
+    lines: ["Catalog switching unavailable for this game version. File replacement in use."],
+    seen: ["/a"],
+  });
+  assert.deepEqual(MS.catalogNotices(fallback, [], new Set(["/a"])), { lines: [], seen: [] }, "told on this page");
+  // several game folders: each line names its folder; other notices are not catalog notices
+  const two = base({
+    installs: [
+      install("/a", "Global (BlueArchive)", { method: "catalog" }),
+      install("/b", "Global (Steam)", { method: "files", methodReason: "catalog_unsupported", methodNotice: true }),
+    ],
+  });
+  assert.deepEqual(
+    MS.catalogNotices(two, [
+      { code: "catalog_restored", install: "/a" },
+      { code: "other", install: "/b" },
+    ]),
+    {
+      lines: [
+        "Global (BlueArchive) - Game catalog restored to official",
+        "Global (Steam) - Catalog switching unavailable for this game version. File replacement in use.",
+      ],
+      seen: ["/b"],
+    },
+  );
 });
 
 test("a toggle's end: silence, or the result popup naming each failed entry with its error string", () => {
@@ -989,6 +1036,31 @@ test("the top bar's switch follows mods.state, and the first toggle explains onc
   assert.ok(walk(switchHost).every((e) => !e.title && !e.getAttribute("title")));
 });
 
+test("the catalog notices are told once on the notice popup and the fallback is recorded as told", async () => {
+  const fallback = install("/a", "Global", { method: "files", methodReason: "catalog_invalid", methodNotice: true });
+  answers["mods.state"] = base({ installs: [fallback] });
+  await MS.refresh();
+  MS.noteRestored([{ code: "catalog_restored", install: "/a" }]);
+  const told = MS.tellCatalog();
+  await expectNotice("Game catalog restored to official");
+  await told;
+  assert.deepEqual(called("mods.methodNoticeSeen").at(-1), { install: "/a" });
+  // the same state again (recording failed or not published yet): not told twice on this page
+  const before = called("mods.methodNoticeSeen").length;
+  emit("mods.state", base({ installs: [fallback] }));
+  await tick();
+  await MS.tellCatalog();
+  assert.equal(called("mods.methodNoticeSeen").length, before);
+  // after the start, a new fallback in mods.state is told as it comes
+  const other = install("/b", "Global", { method: "files", methodReason: "catalog_invalid", methodNotice: true });
+  answers["mods.state"] = base({ installs: [other] });
+  emit("mods.state", base({ installs: [other] }));
+  await expectNotice("Catalog switching unavailable for this game version. File replacement in use.");
+  await until(() => called("mods.methodNoticeSeen").at(-1)?.install === "/b", "the fallback recorded");
+  answers["mods.state"] = base();
+  await MS.refresh();
+});
+
 test("state refresh, the first explanation and help never measure logical originals as extra space", async () => {
   assert.deepEqual(called("mods.sizes"), []);
   answers["mods.state"] = base();
@@ -1187,10 +1259,16 @@ test("the help fits its opening lines together in every locale, with and without
             assert.equal(lines[i].style.fontSize, `${(NGUI.fontSizeFor(texts[i], fs) * scale).toFixed(2)}px`);
             assert.equal(lines[i].textContent.replaceAll("\n", " ").replaceAll(" ", ""), texts[i].replaceAll(" ", ""));
           }
+          // the game folder's switch method after the opening lines, in one line
+          const method = walk(dialog).find((e) => e.dataset.path === "Center/Popup/Lines/Line_2");
+          assert.equal(
+            method.textContent.replaceAll("\n", " ").replaceAll(" ", ""),
+            ui.mods.method.files.replaceAll(" ", ""),
+          );
           if (counts.pending)
             for (const [i, caption] of [
-              [2, ui.mods.retry],
-              [3, ui.mods.details],
+              [3, ui.mods.retry],
+              [4, ui.mods.details],
             ]) {
               const row = walk(dialog).find((e) => e.dataset.path === `Center/Popup/Lines/Line_${i}`);
               const button = walk(dialog).find((e) => e.dataset.path === `Center/Popup/Lines/Btn_${i}`);
@@ -2583,7 +2661,7 @@ test("an update's impact as a list: only the mods to update, each a card with it
         ["chibi", { textures: true }],
         ["other", { removed: true }],
       ]) {
-        const text = Impact.changeText({ resourceType: kind, changes });
+        const text = Impact.changeText({ resourceType: kind, changes, targetRetired: true });
         assert.ok(text && !/[{}]|mods\./.test(text), `${lang} ${kind} ${text}`);
       }
       for (const k of ["impact", "view", "viewUpdates"])
@@ -2621,6 +2699,15 @@ test("what an update changed in a mod's official parts: each change once, a repa
   assert.equal(
     Impact.changeText({ resourceType: "other", changes: { removed: true } }),
     "Official files: part removed",
+  );
+  // the game file the mod replaces renamed or removed by the update: said last, also with no other change
+  assert.equal(
+    Impact.changeText({ resourceType: "portrait", targetRetired: true, changes: {} }),
+    "Official Portrait changes: game file renamed or removed",
+  );
+  assert.equal(
+    Impact.changeText({ resourceType: "chibi", targetRetired: true, changes: { textures: true } }),
+    "Official Chibi changes: texture size changed, game file renamed or removed",
   );
   // a generic mod: its own name and the kind, no Go To (no student page); a held one keeps Fix
   const other = Impact.modLines({
@@ -2690,6 +2777,25 @@ test("the entries a game update overwrote that need no repair are applied again;
   assert.deepEqual(
     Impact.heldOf(fixed).map((m) => m.id),
     ["z", "v"],
+  );
+  // a mod whose game file the update renamed or removed waits for its update like a changed rig, whatever its impact
+  const retired = {
+    mods: [
+      { id: "r", impact: "rebuilt", targetRetired: true },
+      { id: "u", impact: "unchanged", targetRetired: true, repairedCopyId: "u2", configured: false },
+      { id: "a", impact: "rebuilt" },
+    ],
+  };
+  assert.deepEqual(
+    Impact.heldOf(retired).map((m) => m.id),
+    ["r"],
+  );
+  assert.deepEqual(
+    Impact.reappliable(
+      [entry("airi_spr", "updated", { configured: "mod:a" }), entry("hina_home", "updated", { configured: "mod:r" })],
+      retired,
+    ).map((e) => e.core),
+    ["airi_spr"],
   );
   // with mods on, the scan's overwritten entries that need no repair are applied again by themselves, no prompt
   const saved = { ...answers };

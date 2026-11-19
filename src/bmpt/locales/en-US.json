@@ -295,7 +295,11 @@
 			"onState": "Mods on",
 			"helpOn": "When on, the configured mods are applied to all portraits and memorial lobbies;",
 			"helpOff": "When off, all portraits and memorial lobbies return to official (no effect where the official files were overwritten), and mods stay in the mod library. Close the game before toggling this switch.",
-			"helpFolders": "Game folders: {folders}",
+			"method": {
+				"catalog": "Switch method: Catalog",
+				"files": "Switch method: File Replacement"
+			},
+			"catalogFallback": "Catalog switching unavailable for this game version. File replacement in use.",
 			"installNamed": "{server} ({folder})",
 			"explainOnce": "Not shown again",
 			"scan": {
@@ -383,7 +387,8 @@
 					"rig": ".skel file structure changed",
 					"textures": "texture size changed",
 					"removed": "part removed",
-					"added": "new parts"
+					"added": "new parts",
+					"retired": "game file renamed or removed"
 				}
 			},
 			"untested": {
@@ -531,6 +536,10 @@
 			"catalog_data_invalid": "The character data is damaged",
 			"catalog_student_not_found": "Student not found",
 			"catalog_alt_not_found": "Alt not found",
+			"catalog_changed": "Game catalog changed outside the App",
+			"catalog_invalid": "Generated catalog failed its check",
+			"catalog_restored": "Game catalog restored to official",
+			"catalog_unsupported": "Catalog format not supported",
 			"game_file_conflict": "Conflicting game files: {file}",
 			"game_file_not_found": "The matching game file was not found",
 			"game_file_outside_resources": "The target is outside the game folder: {file}",

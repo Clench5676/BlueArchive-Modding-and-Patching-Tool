@@ -26,6 +26,7 @@ from ..core.errors import ServiceError
 from ..core.logging_utils import log_failure
 from . import safety
 from .judge import LIBRARY_SOURCES, core_of, crc_state, now, says_official, sorted_resource_types
+from .catalog_switch import MODE_CATALOG, MODS_DIR
 from .records import JsonResult
 
 if TYPE_CHECKING:
@@ -100,10 +101,18 @@ def _item(library: ModLibrary, pin: Pin | None, install: str, core: str) -> dict
 
 
 def _built(library: ModLibrary, config: dict | None) -> list[tuple[str, str]]:
-    """(install key, core) of each built key with a part whose kept bytes lack the part's CRC."""
+    """List built copies that need a target CRC in a class 4 step under the library lock.
+
+    Catalog placements can reuse these bytes. The caller yields between repair entries.
+    """
     out = []
+    catalogs = library._catalog_document()["installs"]
     for install, folder in ((config or {}).get("folders") or {}).items():
+        catalog = catalogs.get(install)
+        pin = library._recorded_pin(install, folder) if catalog and catalog["mode"] == MODE_CATALOG else None
         for core, key in (folder.get("built") or {}).items():
+            if pin is not None and library._catalog_targets(pin, library._spine_parts(core, pin), catalog):
+                continue
             source = key.get("source") if isinstance(key, dict) else None
             if not isinstance(source, str):
                 continue
@@ -121,6 +130,7 @@ def _game(library: ModLibrary, pins: list[Pin]) -> list[tuple[Pin, str, str]]:
         One ``(install, core, the source it carries)`` tuple per such file.
     """
     out: dict[tuple[str, str], tuple[Pin, str, str]] = {}
+    catalogs = library._catalog_document()["installs"]
     for target, record in list(library._applied.items()):
         source = record.get("source")
         if (
@@ -134,6 +144,8 @@ def _game(library: ModLibrary, pins: list[Pin]) -> list[tuple[Pin, str, str]]:
         path = Path(target)
         pin = next((pin for pin in pins if any(path.is_relative_to(folder) for folder in pin.dirs)), None)
         if pin is None:
+            continue
+        if catalogs.get(pin.key, {}).get("mode") == MODE_CATALOG and path.parent.name == MODS_DIR:
             continue
         try:
             stat = path.stat()
@@ -188,6 +200,7 @@ def repair(library: ModLibrary, log: LogFunc = no_log, progress: ProgressCallbac
 
     Dropped copies are rebuilt on the next On. Entry refusals are reported in failed
     and retried at startup; the check is marked complete once none remain.
+    Class 4 holds the library lock for one repair entry and yields between entries.
 
     Args:
         library: Library supplying source records, build storage, and the protected game writer.
@@ -225,7 +238,8 @@ def repair(library: ModLibrary, log: LogFunc = no_log, progress: ProgressCallbac
         with library._lock:
             try:
                 library._drop_built(pin, [core])
-                library._switch(pin, core, source, log, use_built=False)
+                options = {"files_only": True} if library._catalog_record(pin)["mode"] == MODE_CATALOG else {}
+                library._switch(pin, core, source, log, use_built=False, **options)
             except ServiceError as error:
                 log_failure(logger, logging.WARNING, f"Could not write {core} again", error)
                 result.failed.append({"entry": item, "code": error.code, "params": error.to_json()["params"]})

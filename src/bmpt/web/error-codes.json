@@ -123,12 +123,28 @@
     "code": "E2003",
     "level": "failed"
   },
+  "catalog_changed": {
+    "code": "E2021",
+    "level": "failed"
+  },
   "catalog_data_invalid": {
     "code": "E2001",
     "level": "failed"
   },
+  "catalog_invalid": {
+    "code": "E2022",
+    "level": "failed"
+  },
+  "catalog_restored": {
+    "code": "E2023",
+    "level": "notice"
+  },
   "catalog_student_not_found": {
     "code": "E2002",
+    "level": "failed"
+  },
+  "catalog_unsupported": {
+    "code": "E2024",
     "level": "failed"
   },
   "classic_failed": {

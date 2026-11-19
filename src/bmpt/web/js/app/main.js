@@ -792,6 +792,7 @@ function dataDirNotice() {
 //   - the Spine licence notice, until it is acknowledged (a stored No shows it again);
 //   - the scan consent, while it is unanswered and a game folder is known;
 //   - the impact of a game update on the library's mods, once per resource version (update-impact.js);
+//   - the catalog notices: the official catalog put back at the start, a fallback to file replacement (mod-switch.js);
 //   - the prompts of mods back to official and of mods outside the library, if the start scan is already in;
 //     a later scan shows them once no other popup is open, only with the scan consent
 function startPopups() {
@@ -815,6 +816,7 @@ function startPopups() {
     ],
     ["scan", () => due("scan") && Consent.scan($("consent"))],
     ["impact", () => info.gameFound && Impact.check()],
+    ["catalog", () => ModSwitch.tellCatalog()],
     ["drift", () => Prompts.start("drift", info)],
     ["untracked", () => Prompts.start("untracked", info)],
   ];

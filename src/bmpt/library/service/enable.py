@@ -17,6 +17,7 @@ from ...core.errors import ServiceError
 from ...core.logging_utils import log_failure
 from .. import profiles as profiles_mod
 from .. import mod_progress, safety, toggle_timing
+from ..catalog_switch import MODE_CATALOG, MODE_FILES, mode_of
 from ..judge import (
     sorted_resource_types,
     core_of,
@@ -35,6 +36,17 @@ from .base import SAVE_EVERY, STOPPING, _Entry, _Unread, _View, _background, _er
 logger = logging.getLogger(__package__)
 
 
+def _method(pin: Pin, record: dict[str, Any] | None) -> dict[str, Any]:
+    """How an install switches mods, as its catalog record says; an install without one replaces files."""
+    if isinstance(record, dict) and record.get("mode") in (MODE_CATALOG, MODE_FILES):
+        return {"method": record["mode"], "methodReason": record.get("reason"), "methodVersion": record.get("rv")}
+    try:
+        reason = mode_of(pin)[1]
+    except OSError:
+        reason = None
+    return {"method": MODE_FILES, "methodReason": reason, "methodVersion": None}
+
+
 class EnableMixin:
     """The Enable Mods switch: its status, the toggle run, unfinished entries and their prompts."""
 
@@ -44,7 +56,10 @@ class EnableMixin:
         Include known installs, the current install, intent, configured count, and
         reason (mod_configuration_unreadable or None). Each install's
         ``distinct`` is the shortest trailing part of its path that tells it from the other installs of its server
-        (for the install label, "Global (BlueArchive)"), None when it is the only one of its server.
+        (for the install label, "Global (BlueArchive)"), None when it is the only one of its server. ``method`` is
+        how mods are switched there (``catalog`` or ``files``), ``methodReason`` why an install uses files (a
+        refusal code of the catalog checks, or a layout reason), and ``methodVersion`` the resource version that
+        answer was recorded for; they come from the catalog store, read without the library lock.
         """
         pins = self.installs()
         named = {pin.key for pin in self._named_pins()}
@@ -56,6 +71,7 @@ class EnableMixin:
         for roots in servers.values():
             if len(roots) > 1:
                 distinct.update(distinguishing_folders(roots))
+        catalogs = self._catalog_records_for_read()
         out: dict[str, Any] = {
             "installs": [
                 {
@@ -65,6 +81,7 @@ class EnableMixin:
                     "folder": str(pin.root),
                     "named": pin.key in named,
                     "distinct": distinct.get(pin.key),
+                    **_method(pin, catalogs.get(pin.key)),
                 }
                 for pin in pins
             ],
@@ -202,7 +219,38 @@ class EnableMixin:
                 or a stopping write refusal prevents the job.
         """
         with toggle_timing.toggle(enabled):
-            return self._run(enabled, expect, pins, log, progress, cancel, drift=None)
+            with self._lock:
+                pins = list(pins) if pins is not None else self.installs()
+                self._check_pins(pins)
+                if profiles_mod.enabled(self.profiles.read()) != expect:
+                    raise ServiceError("state_changed")
+            files_only = set()
+            if enabled:
+                for pin in pins:
+                    try:
+                        with _errors("prepare catalog toggle"):
+                            self._refresh_catalog_version(pin)
+                            self._migrate_catalog(pin, progress)
+                    except ServiceError as error:
+                        if error.code in STOPPING:
+                            raise
+                        files_only.add(pin.key)
+                        log_failure(logger, logging.INFO, "Catalog switch deferred", error)
+            result = self._run(
+                enabled, expect, pins, log, progress, cancel, drift=None, files_only=files_only, fallback=True
+            )
+            for pin in pins:
+                if pin.key in files_only:
+                    self._defer_catalog_migration(pin)
+            if not enabled and not (cancel and cancel()):
+                for pin in pins:
+                    if pin.key in files_only:
+                        continue
+                    try:
+                        self._migrate_catalog(pin, progress)
+                    except ServiceError as error:
+                        log_failure(logger, logging.INFO, "Catalog switch deferred", error)
+            return result
 
     def restore_drift(
         self,
@@ -239,17 +287,34 @@ class EnableMixin:
         cancel: Callable[[], bool] | None,
         drift: list[dict] | None,
         retry: Sequence[str] | None = None,
+        *,
+        catalog_reconcile: bool = False,
+        files_only: set[str] | None = None,
+        fallback: bool = False,
     ) -> ToggleResult:
         """Run a toggle, Retry, Apply Mod Configuration or the start's retry of failed writes.
 
         The kinds are a toggle, Retry (``drift`` None), Apply Mod Configuration (``drift``, the listed entries) and the
         start's retry of failed writes (``retry``, cores of the one install ``pins``: an On's Retry of those entries
         alone, the intent unchanged).
+
+        Class 2 and the class 3 catalog reconcile take the library lock for planning and for one entry at a time,
+        yielding between entries. Catalog preparation and publication share a transaction. Generation and swaps
+        release the lock. Class 3 leaves pruning to maintenance.
         """
         found: list[_Entry] = []
+        files_only = set() if files_only is None else files_only
+
+        def check_pins() -> None:
+            if catalog_reconcile:
+                if pins[0] not in self.installs():
+                    raise ServiceError("folder_changed")
+            else:
+                self._check_pins(pins)
+
         with toggle_timing.enter("library_wait", self._lock), _errors("toggle"), toggle_timing.stage("prepare"):
             pins = list(pins) if pins is not None else self.installs()
-            self._check_start(pins, drift is None, expect)
+            self._check_start(pins, drift is None, expect, scoped=catalog_reconcile)
             config = self.profiles.read()
             current = profiles_mod.enabled(config)
             if drift is None and retry is None:
@@ -262,7 +327,9 @@ class EnableMixin:
             allowed = drift is None and self._scan_allowed()  # Keep consent fixed for planning and execution.
             # an Off with scan consent plans from the files as they are now: its own pass, read outside the lock
             view = (
-                self._view(pins, "scan", config, snapshot=True) if drift is None and not enabled and allowed else None
+                self._view(pins, "scan", config, snapshot=True, official_only=True)
+                if drift is None and not enabled and allowed
+                else None
             )
         if view is not None:
             # previews go first: one loads while the pass runs (which pauses itself while a chibi preview is exported)
@@ -297,6 +364,37 @@ class EnableMixin:
                 if not enabled:
                     self._check_space(self._off_space(plan, found, config))
             hidden = self._hidden_items(config) if drift is None and retry is None else []
+            installs = self._catalog_records_for_read() if pins else {}
+            if enabled and fallback:
+                for pin in pins:
+                    record = installs.get(pin.key)
+                    if not record or record["mode"] != MODE_CATALOG:
+                        continue
+                    try:
+                        if (
+                            record["rv"] != self.resource_version(pin)
+                            or self._catalog_live(pin, record) is None
+                            or not self._catalog_library_copy(pin, record["rv"]).is_file()
+                            or self._catalog_check_pending(pin, record["rv"])
+                        ):
+                            files_only.add(pin.key)
+                    except (OSError, ValueError, ServiceError):
+                        files_only.add(pin.key)
+            catalog_pins = {
+                pin.key: pin
+                for pin in pins
+                if pin.key not in files_only
+                and installs.get(pin.key, {}).get("mode") == MODE_CATALOG
+                and (drift is None and retry is None or any(current.key == pin.key for current, _ in plan))
+            }
+            if not enabled:
+                planned = {(pin.key, core) for pin, core in plan}
+                for key, pin in catalog_pins.items():
+                    record = installs[key]
+                    if record["live"] == "mods":
+                        mapped = self._core_map(pin)
+                        redirected = {mapped.slot(core_of(name)) for name in record["redirects"]}
+                        plan.extend((pin, core) for core in sorted(redirected) if (key, core) not in planned)
             toggle_timing.planned(len(plan))
             if enabled:  # an On, its Retry or Apply Mod Configuration: confirmed before the intent changes
                 self._untested_plan(plan, config, drift is not None)
@@ -337,65 +435,215 @@ class EnableMixin:
         resource_types: set[str] = set()
         saved_at, unsaved = time.monotonic(), 0
         stop: ServiceError | None = None
+        was_paced = getattr(_background, "paced", False)
         _background.paced = True  # other callers of the library go first between its entries (_let_others_in)
         line = mod_progress.ItemProgress(progress, len(plan), "apply" if enabled else "restore")
+        batches: dict[str, dict[str, dict]] = {key: {} for key in catalog_pins}
+        reached: dict[str, dict[str, dict]] = {key: {} for key in catalog_pins}
+        off_redirects: dict[str, set[str]] = {}
+        failed_off: set[tuple[str, str]] = set()
+        unavailable: set[str] = set()
+        catalog_done: dict[str, list[dict]] = {key: [] for key in catalog_pins}
+        full_toggle = drift is None and retry is None
         try:
-            for i, (pin, core) in enumerate(plan, 1):
-                if cancel and cancel():
-                    break
-                with toggle_timing.stage("preview_yield"):
-                    self._let_others_in()
-                with toggle_timing.enter("library_wait", self._lock), toggle_timing.entry():
-                    try:
-                        with _errors("toggle"):
-                            self._check_pins(pins)
-                            if progress:
-                                line.item(i, **identities[(pin.key, core)], step=mod_progress.STEP_CHECK)
-                            outcome, why, entry = self._reach(
-                                pin,
-                                core,
-                                enabled,
-                                allowed,
-                                listed.get((pin.key, core)),
-                                drift is not None,
-                                log,
-                                fraction=line.part(0.0, 1.0, build=0.9),
-                            )
-                    except ServiceError as error:
-                        item = {
-                            "install": pin.key,
-                            "core": core,
-                            "resource_type": self._resource_type(core, pin) or "portrait",
-                            "alt": self._core_map(pin).key(core) or core,
-                        }
-                        if error.code not in STOPPING:  # a refusal of the moment belongs to the switch, not the choice
-                            self._selection_error(pin, [core], error.to_json())
-                        result["failed"].append(
-                            {"entry": item, "code": error.code, "params": error.to_json()["params"]}
-                        )
-                        outcomes[(pin.key, core)] = "pending"
-                        if error.code in STOPPING:
-                            stop = error
+            with self._catalog_transaction() if catalog_pins else contextlib.nullcontext():
+                if not enabled:
+                    for key, pin in catalog_pins.items():
+                        if cancel and cancel():
                             break
-                        continue
-                outcomes[(pin.key, core)] = why
-                if "done" in outcome:
-                    self._selection_error(pin, [core], None)
-                for name, value in outcome.items():
-                    result[name].append(value)
-                if entry is not None and ("done" in outcome or "adopted" in outcome):
-                    cores.add(core)
-                    resource_types.add(entry["resource_type"])
-                unsaved += 1
-                if unsaved >= SAVE_EVERY[0] or time.monotonic() - saved_at >= SAVE_EVERY[1]:
-                    with _errors("toggle"):
-                        self._save_outcomes(outcomes)
-                    outcomes, unsaved, saved_at = {}, 0, time.monotonic()
-                line.done()
+                        self._let_others_in()
+                        with self._lock:
+                            check_pins()
+                            record = self._catalog_record(pin)
+                            mapped = self._core_map(pin)
+                            redirected = {mapped.slot(core_of(name)) for name in record["redirects"]}
+                        try:
+                            with _errors("toggle"):
+                                self._timed_swap(pin, "official")
+                        except ServiceError as error:
+                            with self._lock:
+                                for core in sorted(redirected):
+                                    item = self._toggle_entry(pin, core)
+                                    result["failed"].append(
+                                        {"entry": item, "code": error.code, "params": error.to_json()["params"]}
+                                    )
+                                    outcomes[(key, core)] = "pending"
+                                    failed_off.add((key, core))
+                                files_only.add(key)
+                        else:
+                            if record["live"] == "mods":
+                                off_redirects[key] = redirected
+                for i, (pin, core) in enumerate(plan, 1):
+                    if cancel and cancel():
+                        break
+                    with toggle_timing.stage("preview_yield"):
+                        self._let_others_in()
+                    with toggle_timing.enter("library_wait", self._lock), toggle_timing.entry():
+                        batch = None
+                        try:
+                            with _errors("toggle"):
+                                check_pins()
+                                if progress:
+                                    line.item(i, **identities[(pin.key, core)], step=mod_progress.STEP_CHECK)
+                                if enabled and pin.key in batches and pin.key not in files_only:
+                                    choice = ((config or {}).get("folders") or {}).get(pin.key) or {}
+                                    source = ((choice.get("configured") or {}).get(core) or {}).get("source")
+                                    if self._catalog_needs_mod_update(installs[pin.key], core, source):
+                                        result["skipped"].append(
+                                            {**self._toggle_entry(pin, core), "why": "entry_changed"}
+                                        )
+                                        outcomes[(pin.key, core)] = None
+                                        line.done()
+                                        continue
+                                eligible = False
+                                if enabled and pin.key in batches and pin.key not in files_only:
+                                    try:
+                                        eligible = self._catalog_targets(
+                                            pin, self._spine_parts(core, pin), installs[pin.key]
+                                        )
+                                    except ServiceError as error:
+                                        if fallback and error.code not in STOPPING:
+                                            files_only.add(pin.key)
+                                            unavailable.add(pin.key)
+                                        else:
+                                            if error.code == "catalog_changed":
+                                                unavailable.add(pin.key)
+                                            raise
+                                if eligible:
+                                    batch = batches[pin.key]
+                                    reached[pin.key][core] = {
+                                        "install": pin.key,
+                                        "core": core,
+                                        **identities.get((pin.key, core), {}),
+                                    }
+                                outcome, why, entry = self._reach(
+                                    pin,
+                                    core,
+                                    enabled,
+                                    allowed,
+                                    listed.get((pin.key, core)),
+                                    drift is not None,
+                                    log,
+                                    fraction=line.part(0.0, 1.0, build=0.9),
+                                    **({"redirect_batch": batch} if batch is not None else {}),
+                                    **(
+                                        {"official_only": True}
+                                        if pin.key in files_only or (not enabled and pin.key in catalog_pins)
+                                        else {}
+                                    ),
+                                )
+                        except ServiceError as error:
+                            item = self._toggle_entry(pin, core)
+                            if batch is not None:
+                                reached[pin.key][core] = item
+                            stops = error.code in STOPPING and not (
+                                batch is not None and error.code == "untested_build"
+                            )
+                            if not stops:  # a refusal of the moment belongs to the switch, not the choice
+                                self._selection_error(pin, [core], error.to_json())
+                            result["failed"].append(
+                                {"entry": item, "code": error.code, "params": error.to_json()["params"]}
+                            )
+                            outcomes[(pin.key, core)] = "pending"
+                            if stops:
+                                stop = error
+                                break
+                            continue
+                    if batch is not None:
+                        reached[pin.key][core] = entry
+                        if "done" in outcome:
+                            catalog_done[pin.key].append(outcome.pop("done"))
+                            why = "pending"
+                    if entry is not None and not outcome and core in off_redirects.get(pin.key, ()):
+                        outcome["done"] = entry
+                    outcomes[(pin.key, core)] = "pending" if (pin.key, core) in failed_off else why
+                    if "done" in outcome:
+                        self._selection_error(pin, [core], None)
+                    for name, value in outcome.items():
+                        result[name].append(value)
+                    if entry is not None and ("done" in outcome or "adopted" in outcome):
+                        cores.add(core)
+                        resource_types.add(entry["resource_type"])
+                    unsaved += 1
+                    if unsaved >= SAVE_EVERY[0] or time.monotonic() - saved_at >= SAVE_EVERY[1]:
+                        with _errors("toggle"):
+                            self._save_outcomes(outcomes)
+                        outcomes, unsaved, saved_at = {}, 0, time.monotonic()
+                    line.done()
+                if enabled and stop is None and not (cancel and cancel()):
+                    for key, pin in catalog_pins.items():
+                        if key in unavailable and not (fallback and reached[key]):
+                            continue
+                        self._let_others_in()
+                        try:
+                            with self._lock:
+                                check_pins()
+                            if key in unavailable:
+                                raise ServiceError("catalog_changed")
+                            self._regenerate(pin, batches[key], drop=set(reached[key]), replace_all=full_toggle)
+                        except ServiceError as error:
+                            if error.code in STOPPING:
+                                stop = error
+                                break
+                            if fallback:
+                                files_only.add(key)
+                                log_failure(logger, logging.INFO, "Catalog switch deferred", error)
+                                for core, item in reached[key].items():
+                                    self._let_others_in()
+                                    try:
+                                        with self._lock, _errors("toggle files"):
+                                            check_pins()
+                                            written, why, _ = self._reach(
+                                                pin, core, True, allowed, None, False, log, official_only=True
+                                            )
+                                    except ServiceError as file_error:
+                                        if file_error.code in STOPPING:
+                                            stop = file_error
+                                            break
+                                        result["failed"].append({"entry": item, **file_error.to_json()})
+                                        outcomes[(key, core)] = "pending"
+                                        continue
+                                    result["failed"] = [
+                                        failure
+                                        for failure in result["failed"]
+                                        if (failure["entry"]["install"], failure["entry"]["core"]) != (key, core)
+                                    ]
+                                    for name, value in written.items():
+                                        result[name].append(value)
+                                    if "done" in written:
+                                        self._selection_error(pin, [core], None)
+                                        cores.add(core)
+                                        resource_types.add(item["resource_type"])
+                                    outcomes[(key, core)] = why
+                                if stop is not None:
+                                    break
+                                continue
+                            if not reached[key]:
+                                raise
+                            for core, item in reached[key].items():
+                                if any(
+                                    failure["entry"]["install"] == key and failure["entry"]["core"] == core
+                                    for failure in result["failed"]
+                                ):
+                                    continue
+                                self._selection_error(pin, [core], error.to_json())
+                                result["failed"].append({"entry": item, **error.to_json()})
+                                outcomes[(key, core)] = "pending"
+                            continue
+                        for item in catalog_done[key]:
+                            core = item["core"]
+                            self._clear_marker(pin, core)
+                            self._selection_error(pin, [core], None)
+                            result["done"].append(item)
+                            outcomes[(key, core)] = None
+                            cores.add(core)
+                            resource_types.add(item["resource_type"])
         finally:
-            _background.paced = False
-        with toggle_timing.enter("library_wait", self._lock), toggle_timing.stage("prune"):
-            self._prune_quietly()
+            _background.paced = was_paced
+        # An interrupted run leaves its last saved checkpoint for Retry.
+        if not catalog_reconcile:
+            with toggle_timing.enter("library_wait", self._lock), toggle_timing.stage("prune"):
+                self._prune_quietly()
         with _errors("toggle"):
             self._save_outcomes(outcomes)
         if stop is not None:
@@ -414,12 +662,24 @@ class EnableMixin:
             result["held"],
         )
 
-    def _check_start(self, pins: list[Pin], intent: bool, expect: bool | None) -> None:
+    def _toggle_entry(self, pin: Pin, core: str) -> dict[str, str]:
+        return {
+            "install": pin.key,
+            "core": core,
+            "resource_type": self._resource_type(core, pin) or "portrait",
+            "alt": self._core_map(pin).key(core) or core,
+        }
+
+    def _check_start(self, pins: list[Pin], intent: bool, expect: bool | None, *, scoped: bool = False) -> None:
         """Check what a toggle, Retry or Apply Mod Configuration checks before it plans.
 
         With ``intent``, it also checks that the stored intent is still the one the caller saw.
         """
-        self._check_pins(pins)
+        if scoped:
+            if pins[0] not in self.installs():
+                raise ServiceError("folder_changed")
+        else:
+            self._check_pins(pins)
         if intent and profiles_mod.enabled(self.profiles.read()) != expect:
             raise ServiceError("state_changed")
         safety.check_game_not_running()
@@ -524,8 +784,11 @@ class EnableMixin:
         drift: bool,
         log: LogFunc,
         fraction: Callable[[float], None] | None = None,
+        *,
+        redirect_batch: dict[str, dict] | None = None,
+        official_only: bool = False,
     ) -> tuple[dict[str, Any], str | None, dict | None]:
-        """Reach one entry of a toggle, Retry or Apply Mod Configuration, under the library lock.
+        """Reach one class 2 entry under the library lock, yielding at the caller's next entry boundary.
 
         Its configuration is read again and its files judged at write strength (a part the library can show unchanged by
         stat carries its record's source; every other part is read in full). Returns (what happened, by result list; the
@@ -534,7 +797,7 @@ class EnableMixin:
         """
         with toggle_timing.stage("judge"):
             pins = self._view_pins(pin)
-            view = self._view(pins, "full")
+            view = self._view(pins, "full", official_only=official_only)
             entry = view.entry(pin, core)
             self._note_judged(view, entry)
         item = entry.item()
@@ -543,15 +806,15 @@ class EnableMixin:
             self._configure(pin, entry.alt, {entry.resource_type: core}, None)
             logger.info("Dropped the configuration of %s: %s is gone from the library", core, entry.configured)
             outcome["dropped"] = item
-            view = self._view(pins, "full")
+            view = self._view(pins, "full", official_only=official_only)
             entry = view.entry(pin, core)
         if entry.takeover:
             self._configure(pin, entry.alt, {entry.resource_type: core}, entry.takeover)
             logger.info("Configured %s in %s with %s (taken over)", core, pin.key, entry.takeover)
-            view = self._view(pins, "full")
+            view = self._view(pins, "full", official_only=official_only)
             entry = view.entry(pin, core)
         state = entry.state
-        if state in ("damaged", "missing"):
+        if state == "damaged" or (state == "missing" and redirect_batch is None):
             outcome["skipped"] = {**item, "why": state}
             return outcome, None, item
         if enabled is False:
@@ -567,7 +830,7 @@ class EnableMixin:
                     outcome["left"] = {**item, "code": error.code, "params": error.to_json()["params"]}
                     return outcome, "left", item
                 outcome["adopted"] = {**item, "mod": mod_id}
-                view = self._view(pins, "full")
+                view = self._view(pins, "full", official_only=official_only)
                 entry = view.entry(pin, core)
             if entry.carried == "official":
                 return outcome, None, item
@@ -577,7 +840,14 @@ class EnableMixin:
             if entry.configured and entry.carried == entry.configured and not entry.drifted:
                 self._make_built(pin, entry)
             try:
-                self._switch(pin, core, "official", log, fraction=fraction)
+                self._switch(
+                    pin,
+                    core,
+                    "official",
+                    log,
+                    fraction=fraction,
+                    **({"files_only": True} if official_only else {}),
+                )
             except ServiceError as error:
                 if error.code == "official_unavailable":
                     outcome["stuck"] = item
@@ -591,12 +861,12 @@ class EnableMixin:
         if state in ("untracked", "changed") and not (drift and state == "changed" and listed_state == "changed"):
             outcome["skipped"] = {**item, "why": state}
             return outcome, (None if leaves(state, True) else "pending"), item
-        if drift and state not in ("reset", "updated", "changed"):
+        if drift and state not in ("reset", "updated", "changed") and redirect_batch is None:
             if state != "ok":
                 outcome["skipped"] = {**item, "why": "entry_changed"}
             return outcome, (None if leaves(state, True) else "pending"), item
         target = entry.configured or "official"
-        if state == "ok":
+        if state == "ok" and (redirect_batch is None or target == "official"):
             self._selection_error(pin, [core], None)
             return outcome, None, item
         if entry.overwritten and not entry.configured:
@@ -609,12 +879,22 @@ class EnableMixin:
             return outcome, "held", item
         mod_count = len(self._records)
         try:
-            self._switch(pin, core, target, log, fraction=fraction)
+            self._switch(
+                pin,
+                core,
+                target,
+                log,
+                fraction=fraction,
+                **({"redirect_batch": redirect_batch} if redirect_batch is not None else {}),
+                **({"files_only": True} if official_only else {}),
+            )
         except ServiceError as error:
             if error.code == "official_unavailable":
                 outcome["stuck"] = item
                 return outcome, "stuck", item
             raise
+        if state == "ok" and entry.carried == target:
+            return outcome, None, item
         outcome["done"] = item
         if len(self._records) > mod_count:
             outcome["done"] = {**outcome["done"], "kept_current": True}
@@ -690,10 +970,24 @@ class EnableMixin:
                 if pin is None:
                     continue
                 files = view.indexes[pin.key].get(item["core"], [])
-                if not allowed and files and not any(str(path.resolve()) in view.applied for path in files):
+                if (
+                    not allowed
+                    and files
+                    and item["core"] not in view.redirects.get(pin.key, {})
+                    and not any(str(path.resolve()) in view.applied for path in files)
+                ):
                     continue  # judged only by the scan, or when a toggle reaches it
                 try:
                     entry = view.entry(pin, item["core"])
+                    if item["why"] == "stuck" and item["core"] in view.redirects.get(pin.key, {}):
+                        if any(
+                            path.is_file()
+                            and view.says_nonofficial(path, record, present=True)
+                            and (part := view.part(path, pin, entry.resource_type)).matched
+                            and not part.official
+                            for path, record in view.records_of(pin, item["core"])
+                        ):
+                            continue
                 except (OSError, _Unread):
                     continue
                 self._note_judged(view, entry)

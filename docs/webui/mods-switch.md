@@ -42,7 +42,8 @@ configuration: Off puts every entry of every known install back to official, On 
   the reason as a notice; the first toggle ever, the explanation (shown once, `mods.explained`); otherwise the
   confirmation, then `mods.toggle {enabled, expect}` with the corner indicator and "Working 12/40". The end is
   silent, or a result popup when entries were adopted first, failed or were left as is. `state_changed` is a notice.
-- **The "?" help**: what On and Off do; the install labels when more than one folder is known; "Not switched: n" with
+- **The "?" help**: what On and Off do; one line per game folder with its switch method ("Switch method: Catalog" or
+  "Switch method: File Replacement", the folder's label first when more than one is known); "Not switched: n" with
   Retry; "Left as is, no official copy: n" with Details (the Overwritten message and repair lines); held entries with
   Details and Go To; "Gone from the library: n".
 - **The scan consent popup** (`consent.js scan`, built like the asset consent): what the file check reads and will
@@ -59,6 +60,50 @@ configuration: Off puts every entry of every known install back to official, On 
   library lock); a read that finishes after the screen was read anew is dropped.
 - **While mods are off** an apply only saves the choice (the apply job's `deferred`); the switch popup reads Save.
 - **The tray's events** are followed like the page's own toggle (see [Tray](desktop.md#tray)).
+- **Catalog notices** (`ModSwitch.tellCatalog`, with the start popups and later whenever no popup is open): one
+  notice popup lists "Game catalog restored to official" for each folder the start put back (the start job's
+  `notices`), and "Catalog switching unavailable for this game version. File replacement in use." for each folder
+  whose `methodNotice` is set, then records it (`mods.methodNoticeSeen`). Moving a folder to the catalog is silent:
+  only the start cover's progress line shows it.
+
+## Switch methods
+
+Each game folder switches mods one of two ways (`mods.state.installs[].method`); the App picks it, there is no
+setting.
+
+- **Catalog** (`catalog`): a Global install with the PC layout (`PUB/Resource/Catalog/Windows/catalog_Windows.bytes`
+  below the game folder and `PUB/Resource/GameData/Windows` among its resource folders). Mod files are placed beside
+  the official ones in a `ModBundles` subfolder, each named after the SHA-1 of its bytes, and the App generates a
+  catalog that points the modded parts at them. A switch is one swap of the live catalog: a verified copy beside it,
+  then a rename. Off swaps the official catalog back and leaves the placed files, so the next On is one swap again.
+  Apply and restore of one entry place (or reuse) its file, generate a catalog and swap. Official files are never
+  overwritten. A core whose files the catalog does not name, or that lie outside `GameData/Windows`, is switched by
+  file replacement in the same folder.
+- **File replacement** (`files`): Japan installs, other layouts, and Global installs whose catalog the checks
+  refused. Mod bytes are written over the official files, which the library keeps as originals.
+
+The swap runs inside the writer jobs (toggle, apply, restore, Apply Mod Configuration, Retry) with the same checks
+as a file write (game closed, Steam idle, no classic window); the generation and the swap run outside the library
+lock, which is taken only to save the store.
+
+- **Moving to the catalog.** At the first start that finds a capable install with mods on, behind the start cover:
+  the official catalog is kept, the bytes of every switched entry are placed, the generated catalog is swapped in,
+  then the official files are put back entry by entry. An entry without an official copy keeps its bytes under the
+  official name. An interruption repeats from the store: placing is idempotent and the swap is journaled. With mods
+  off only the method is recorded.
+- **Game updates.** Steam replaces the live catalog, so mods are off in game until the App acts. The new catalog is
+  accepted as official (checked against Steam's file list with the scan consent, else it must be none of the App's
+  generated catalogs and pass the format checks) and kept under the new resource version. A redirect whose official
+  bundle is gone from the new catalog is dropped; its mod is listed in Mods to Update ("game file renamed or
+  removed", `targetRetired`) and updated with the usual update action. Once the update check is answered and mods
+  are on, a catalog for the new version is generated and swapped in. A Steam file check that restores the official
+  catalog makes the redirected entries `reset`; Apply Mod Configuration is one swap.
+- **Failures.** Nothing reaches the live path without passing the generator's checks and a SHA-1 check of the
+  temporary copy. A failed swap leaves the previous catalog live and reports the job's error (`catalog_changed`
+  when the live catalog is neither the recorded official nor the recorded generated one). If the generator's checks
+  refuse a version (`catalog_unsupported`, `catalog_invalid`), the folder uses file replacement for that resource
+  version and the user is told once. At start, a live catalog recorded as the App's that matches no recorded catalog
+  or does not parse is swapped back to the official copy and the user is told (`catalog_restored`).
 
 ## Troubleshoot Mods (pre-release builds)
 

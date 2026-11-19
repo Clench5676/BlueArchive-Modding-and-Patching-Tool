@@ -32,6 +32,7 @@ BLOCKS = (
         "game_file_not_found game_file_outside_resources game_not_found game_running game_status_unavailable "
         "official_invalid official_unavailable steam_busy alt_incompatible alt_not_found untested_build "
         "game_file_denied game_app_denied game_disk_full game_file_write_failed "
+        "catalog_changed catalog_invalid catalog_restored catalog_unsupported "
     ).split(),
     (
         "bundle_invalid conflict conversion_failed conversion_names game_file_conflict mod_parts_missing "

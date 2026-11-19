@@ -82,7 +82,7 @@ manifest to the committed membership. Settings relocation switches the data mani
 | Location | Contents |
 |---|---|
 | `D/.bmpt-upgrade/data/g2/<epoch>/` | `config.toml`, `webui.json`, applicable previous copies, recovery material, and a seal |
-| `L/.bmpt-upgrade/library/g2/<epoch>/` | `state.json`, `profiles.json`, `originals.json`, `thumbnails/index.json`, `thumbnails/images/`, `mods/`, `originals/`, `built/`, `rigs/`, and the transaction directories |
+| `L/.bmpt-upgrade/library/g2/<epoch>/` | `state.json`, `profiles.json`, `originals.json`, `thumbnails/index.json`, `thumbnails/images/`, `mods/`, `originals/`, `built/`, `rigs/`, `catalogs.json`, `catalogs/`, and the transaction directories |
 | `D/.bmpt-upgrade/runtime/` | upgrade and session logs, runtime handshakes, and other process metadata |
 | `L/.bmpt-upgrade/cache/g2/` | derived costume and build-preview caches |
 
@@ -114,6 +114,28 @@ any known install holds a file of its name that is not provably official since t
 there, or while a file of its name the library wrote to elsewhere may need it. Once its name is gone from every known
 install and each of its records' folders holds a later-dated file of the same part, a game update superseded it and
 it is deleted; when unsure, an original stays (the cost is disk space, counted in the switch's help).
+
+**Game catalogs (`catalogs.json`, `catalogs/`).** For installs switched through the catalog (see
+[Switch methods](mods-switch.md#switch-methods)), `catalogs.json` holds per install key the method and its reason,
+when the install was moved to the catalog, the resource version, the recorded official catalog and the last
+generated one (size, date, SHA-1), which of them is live, and the redirects: per official bundle name the placed
+file (`<SHA-1>.bundle` in `GameData/Windows/ModBundles`), its source, build, size and date. A missing file means
+every install still replaces files. The library keeps the official catalog of the current version in
+`catalogs/<install id>/<resource version>.bytes`; it is the authority. Beside the live catalog,
+`Catalog/Windows/ModBundles/` holds `official-<rv12>.bytes` and `mods-<rv12>.bytes`, the copies a swap renames into
+place. A swap is journaled in `catalog-transactions/<id>/journal.json` and settled with the other journals before
+any write. The store is additive (format 2.1): its first write raises the library's `min_reader_version`, so an
+older App does not write mods over official names while a generated catalog is live. Placed files keep the bytes of
+the built copy; the CRC repair skips them. Fields: [catalogs-v1](schemas/catalogs-v1.schema.json).
+
+**Placed files and the prune.** The prune (class 4, after the switch's swap) deletes, by name pattern and store only,
+placed files no redirect of the store or of the live catalog names, and the catalog copies of older resource versions,
+in the library and beside the live catalog. It reads no placed file's contents.
+
+**Originals for catalog installs.** A catalog install never overwrites official-named files, so a kept original is
+not held for its configuration while its file of that name is official; the usual prune then releases most of them.
+Originals a Japan install or a file replacement fallback still needs stay, and a later fallback keeps originals
+again on its first write.
 
 **Configuration (`profiles.json`).** This file holds the Enable Mods switch intent (`enabled`, one for every known
 install, with on as the default), its last

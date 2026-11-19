@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "catalogs-v1.schema.json",
+  "title": "Per-install game catalogs",
+  "type": "object",
+  "properties": {
+    "version": { "const": 1 },
+    "installs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "mode": { "enum": ["catalog", "files"] },
+          "reason": { "type": ["string", "null"] },
+          "migrated": { "type": ["string", "null"], "format": "date-time" },
+          "rv": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+          "official": {
+            "type": "object",
+            "properties": {
+              "sha1": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+              "size": { "type": "integer", "minimum": 0 },
+              "crc32": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+              "mtime": { "type": "integer" }
+            },
+            "required": ["sha1", "size", "crc32", "mtime"]
+          },
+          "mods": {
+            "type": ["object", "null"],
+            "properties": {
+              "sha1": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+              "size": { "type": "integer", "minimum": 0 },
+              "mtime": { "type": "integer" },
+              "redirects_sha1": { "type": "string", "pattern": "^[a-f0-9]{40}$" }
+            },
+            "required": ["sha1", "size", "mtime", "redirects_sha1"]
+          },
+          "live": { "enum": ["official", "mods", "unknown"] },
+          "redirects": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "placed": { "type": "string", "pattern": "^[a-f0-9]{40}\\.bundle$" },
+                "dir": { "enum": ["GameData/Windows", "Preload/Windows"] },
+                "source": { "type": "string" },
+                "build": { "type": "string" },
+                "size": { "type": "integer", "minimum": 0 },
+                "mtime": { "type": "integer" }
+              },
+              "required": ["placed", "dir", "source", "build", "size", "mtime"]
+            }
+          }
+        },
+        "required": ["mode", "reason", "migrated", "rv", "official", "mods", "live", "redirects"]
+      }
+    }
+  },
+  "required": ["version", "installs"]
+}

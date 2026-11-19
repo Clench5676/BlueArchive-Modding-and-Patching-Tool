@@ -39,6 +39,7 @@ from ..judge import (
     seconds,
 )
 from ..records import Pin
+from ..catalog_switch import MODE_CATALOG
 from ..storage import (
     atomic_json,
     read_tail,
@@ -176,6 +177,18 @@ class _LibraryLock:
     def release(self) -> None:
         self._lock.release()
         self._note()
+
+    @contextlib.contextmanager
+    def unlocked(self) -> Iterator[bool]:
+        """Release every lock level for a catalog step and yield whether the caller held it."""
+        if not self._lock._is_owned():
+            yield False
+            return
+        state = self._lock._release_save()
+        try:
+            yield True
+        finally:
+            self._lock._acquire_restore(state)
 
     def step_aside(self, longest: float = STEP_ASIDE) -> float:
         """Give up the lock between two steps of a job while another caller waits for it.
@@ -421,6 +434,7 @@ class _Part:
     crc: str
     record: dict | None
     restamp: int | None = None  # the record's new modification time: same bytes, new date
+    official_name: str | None = None  # the ID whose bytes come from a placed bundle
 
 
 @dataclass
@@ -495,12 +509,20 @@ class _View:
     """
 
     def __init__(
-        self, library: ModLibrary, pins: list[Pin], config: dict | None, allow: str, snapshot: bool = False
+        self,
+        library: ModLibrary,
+        pins: list[Pin],
+        config: dict | None,
+        allow: str,
+        snapshot: bool = False,
+        *,
+        official_only: bool = False,
     ) -> None:
         """Collect what the judgement reads besides the game files.
 
         ``snapshot``: copy the records, for a view read outside the library lock (the scan). A view used under the lock
-        shares the library's records and the maps built from them.
+        shares the library's records and the maps built from them. Class 4 scans hold the lock only for this
+        snapshot and yield before each entry. An Off's adoption pass uses official-named files.
         """
         self.library = library
         self.pins = {pin.key: pin for pin in pins}
@@ -512,6 +534,22 @@ class _View:
         self.indexes = {pin.key: library._index(pin) for pin in pins}
         self.maps = {pin.key: library._core_map(pin) for pin in pins}
         self.names = {pin.key: library._names(pin) for pin in pins}
+        self.catalogs: dict[str, dict] = {}
+        self.redirects: dict[str, dict[str, dict[str, dict]]] = {}
+        self._catalog_live: dict[str, str | None] = {}
+        self._catalog_updated: dict[str, bool] = {}
+        if pins and not official_only:
+            installs = library._catalog_records_for_read()
+            for pin in pins:
+                record = installs.get(pin.key)
+                if not record or record["mode"] != MODE_CATALOG or not record["redirects"]:
+                    continue
+                self.catalogs[pin.key] = record
+                by_core: dict[str, dict[str, dict]] = {}
+                for name, item in record["redirects"].items():
+                    core = self.maps[pin.key].slot(core_of(name))
+                    by_core.setdefault(core, {})[name] = item
+                self.redirects[pin.key] = by_core
         self.originals: dict[str, int] = dict(library._originals())
         if snapshot:
             self.applied = {path: dict(record) for path, record in library._applied.items()}
@@ -760,12 +798,16 @@ class _View:
         return out
 
     def entry(self, pin: Pin, core: str) -> _Entry:
+        """Judge one entry, yielding between cores in class 4 scans outside the library lock."""
         core = self.maps[pin.key].slot(core)
         resource_type = self.library._resource_type(core, pin) or "portrait"
         files = [path for value in self.maps[pin.key].slot_cores(core) for path in self.indexes[pin.key].get(value, [])]
-        parts = [self.part(path, pin, resource_type) for path in files]
         folder = self.folder(pin.key)
         config = self.configured(pin.key, core)
+        entry = self._redirected_entry(pin, core, resource_type, files, config)
+        if entry is not None:
+            return entry
+        parts = [self.part(path, pin, resource_type) for path in files]
         configured = config["source"] if config else None
         damaged = any(part.carried == "damaged" for part in parts)
         carried = "damaged" if damaged else carried_of((part.carried, part.official) for part in parts)
@@ -813,6 +855,10 @@ class _View:
             )
 
         state, takeover = judged(configured)
+        if configured and configured != "official" and self.enabled and self.redirects.get(pin.key, {}).get(core):
+            if state in ("ok", "pending", "reset", "updated") and carried == "official":
+                state = "updated" if marker or self._catalog_updated[pin.key] else "reset"
+                drifted_present = True
         if state == "takeover":
             configured = takeover
             state, _ = classify(
@@ -849,6 +895,72 @@ class _View:
         entry.dismissed = self.dismissed(entry)
         return entry
 
+    def _redirected_entry(
+        self,
+        pin: Pin,
+        core: str,
+        resource_type: str,
+        files: list[Path],
+        config: dict | None,
+    ) -> _Entry | None:
+        redirects = self.redirects.get(pin.key, {}).get(core)
+        if not redirects:
+            return None
+        if pin.key not in self._catalog_live:
+            record = self.catalogs[pin.key]
+            self._catalog_live[pin.key] = self.library._catalog_live(pin, record)
+            rv = self.library.resource_version(pin)
+            self._catalog_updated[pin.key] = rv is not None and rv != record["rv"]
+        if self._catalog_live[pin.key] != "mods":
+            return None
+        configured = (config or {}).get("source")
+        sources = {item["source"] for item in redirects.values()}
+        source = next(iter(sources)) if len(sources) == 1 else "unknown"
+        parts = []
+        missing = False
+        for name, item in redirects.items():
+            try:
+                path, stamp, match = self.library._placed_stamp(pin, item, full=self.allow == "full")
+            except (OSError, ServiceError):
+                missing = True
+                continue
+            missing |= not match
+            parts.append(
+                _Part(
+                    path,
+                    stamp["size"],
+                    stamp["mtime"],
+                    item["source"] if match else "unknown",
+                    False,
+                    match,
+                    not match,
+                    None,
+                    item.get("crc", "ok"),
+                    None,
+                    official_name=name,
+                )
+            )
+        carried = source if not missing and {path.name for path in files} <= redirects.keys() else "official"
+        marker = core in (self.folder(pin.key).get("updated") or {})
+        if self._catalog_updated[pin.key] or marker or (not missing and carried == "official"):
+            state = "updated"
+        elif not self.source_exists(configured or source, pin.key, resource_type) or not self.source_exists(
+            source, pin.key, resource_type
+        ):
+            state = "source_missing"
+        elif missing:
+            state = "missing"
+        elif self.enabled and source == configured:
+            state = "ok"
+        else:
+            state = "pending"
+        alt = self.maps[pin.key].key(core) or (config or {}).get("alt") or core
+        if resource_type == "other" and files:
+            alt = parse_filename(files[0].name).core
+        entry = _Entry(pin, core, resource_type, alt, parts, carried, configured, state, drifted=state == "updated")
+        entry.dismissed = self.dismissed(entry)
+        return entry
+
     def dismissed(self, entry: _Entry) -> bool:
         resource_type = "drift" if entry.state in ("reset", "updated") else "untracked"
         stored = ((self.folder(entry.pin.key).get("dismissed") or {}).get(resource_type) or {}).get(entry.core)
@@ -863,6 +975,7 @@ class _View:
         """
         cores = {core for core in self.indexes[pin.key] if self.library._resource_type(core, pin)}
         cores.update(self.folder(pin.key).get("configured") or {})
+        cores.update(self.redirects.get(pin.key, {}))
         for folder in pin.dirs:
             cores.update(
                 core_of(path.name)

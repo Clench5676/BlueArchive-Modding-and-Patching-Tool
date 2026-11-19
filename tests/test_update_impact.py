@@ -232,6 +232,7 @@ def test_the_start_asks_only_after_a_seen_version_changed_and_with_mods(spine):
     library = reload_library(env)
     due = library.update_due()
     assert due["due"] is True and due["previous"] == first["version"] != due["version"]
+    assert due["outdated"] is False
     assert library.update_due()["due"] is True  # asked until checked
     library.impact_seen(due["install"], due["version"])
     assert library.update_due()["due"] is False
@@ -286,7 +287,7 @@ def test_the_summary_answers_from_its_last_check_while_nothing_changed(spine, mo
     first = library.update_impact(force=True)
     assert first["mods"][0]["impact"] == "rig_changed"
     calls = []
-    monkeypatch.setattr(library, "_impact_of", lambda *args: calls.append(args) or ("unchanged", {}))
+    monkeypatch.setattr(library, "_impact_of", lambda *args, **kwargs: calls.append(args) or ("unchanged", {}))
     assert library.update_impact(force=True)["mods"] == first["mods"] and not calls, "the same answer, nothing judged"
     # a new baseline (an update, a repair) is a change: judged again
     import os

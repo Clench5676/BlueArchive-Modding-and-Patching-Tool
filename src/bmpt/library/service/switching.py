@@ -22,6 +22,7 @@ from ...core.errors import ServiceError
 from ...core.openfiles import temporary_directory
 from .. import profiles as profiles_mod
 from .. import mod_progress, toggle_timing
+from ..catalog_switch import MODE_CATALOG
 from ..install import Action, PlannedFile, PlannedGroup, install_staged
 from ..rebuild import rebuild
 from .. import targets as resolver
@@ -52,15 +53,22 @@ class SwitchingMixin:
         log: LogFunc,
         progress: ProgressCallback | None,
         pin: Pin,
+        *,
+        placed: bool = False,
     ) -> dict[Path, Path]:
+        """Build one class 2 entry under the library lock, yielding at the caller's entry boundary."""
         sources = {path.name: path for path in self._paths(record)}
         by_name = {path.name: path for path in targets}
         stale = {}
+
+        def needs_crc(source: Path, target: Path) -> bool:
+            return not placed and self._needs_crc_fix(source, target)
+
         if (
             len(sources) == len(record["files"])
             and len(by_name) == len(targets)
             and sources.keys() <= by_name.keys()
-            and all(not self._needs_crc_fix(path, by_name[name]) for name, path in sources.items())
+            and all(not needs_crc(path, by_name[name]) for name, path in sources.items())
         ):
             stale = self._stale_sources({by_name[name]: path for name, path in sources.items()}, pin, targets=targets)
             if not stale:
@@ -88,7 +96,7 @@ class SwitchingMixin:
             for target, original in staged.items():
                 exact = current.get(target)
                 if exact:
-                    if not self._needs_crc_fix(exact, target):
+                    if not needs_crc(exact, target):
                         atomic_copy(exact, original)
                         continue
                     # Same-name mods retain the whole uploaded bundle, including types outside the update filter.
@@ -118,7 +126,7 @@ class SwitchingMixin:
                     [original],
                     output,
                     self.settings.asset_types(),
-                    self.settings.save_options(self.settings.crc_needed(target)),
+                    self.settings.save_options(not placed and self.settings.crc_needed(target)),
                     self.settings.spine_options(),
                     match_strategy="cont_name_type",
                     skip_unchanged=True,
@@ -158,9 +166,7 @@ class SwitchingMixin:
                     replace(
                         file,
                         existing_path=staged.get(file.existing_path),
-                        need_crc_fix=self._needs_crc_fix(file.mod_path, file.existing_path)
-                        if file.existing_path
-                        else False,
+                        need_crc_fix=needs_crc(file.mod_path, file.existing_path) if file.existing_path else False,
                     )
                     for file in group.files
                 ],
@@ -172,7 +178,7 @@ class SwitchingMixin:
             staged_groups,
             work / "output",
             self.settings.asset_types(),
-            self.settings.save_options(self.settings.crc_needed(targets[0])),
+            self.settings.save_options(not placed and self.settings.crc_needed(targets[0])),
             self.settings.spine_options(),
             anim_check=self.settings.anim_check_options(),
             log=log,
@@ -266,6 +272,8 @@ class SwitchingMixin:
         A mod replaces all parts of its own kind as a unit. Another alt's mod must belong to the same student and
         is adapted to official targets. While mods are off nothing is written: the source is configured and applied
         when mods are on (``deferred``). Save the validated choice before attempting installation.
+
+        Class 2 holds the library lock for preparation and placement, releasing it for catalog generation and swaps.
         """
         if source == "official":
             pin = self._current(pin)
@@ -322,6 +330,7 @@ class SwitchingMixin:
                     resource_types = {record["resource_type"]: cores[0]}
                     incomplete = self._incomplete(record, pin)
                     change.configure(resource_types)
+                    placed = {"placed": True} if self._catalog_parts(pin, targets) == set(targets) else {}
                     if own_chibi or core_of(record["files"][0]) == cores[0]:
                         view = self._view([pin], "full")
                         entry = view.entry(pin, cores[0])
@@ -335,8 +344,9 @@ class SwitchingMixin:
                             self._paths(record),
                             targets,
                             pin,
-                            lambda: self._install_direct(record, targets, work, log, progress, pin),
+                            lambda: self._install_direct(record, targets, work, log, progress, pin, **placed),
                             build_keys,
+                            **placed,
                         )
                     elif target_alt != alt_id:
                         sources = self._preview(record, pin)
@@ -344,8 +354,11 @@ class SwitchingMixin:
                             sources,
                             targets,
                             pin,
-                            lambda: self._stage_adapted(sources, targets, work / record["resource_type"], log, pin),
+                            lambda: self._stage_adapted(
+                                sources, targets, work / record["resource_type"], log, pin, **placed
+                            ),
                             build_keys,
+                            **placed,
                         )
                     else:  # a memorial lobby mod of another core of this alt: not offered, never written there
                         raise ServiceError("game_file_outside_resources", file=targets[0])
@@ -366,15 +379,23 @@ class SwitchingMixin:
                     change.configure(resource_types)
                     if not on:
                         return self._defer(pin, alt_id, resource_types, source)
+                    placed = {"placed": True} if self._catalog_parts(pin, targets) == set(targets) else {}
                     _, inputs = self._costume_source(other, pin)
                     replacements = self._cached_build(
                         inputs,
                         targets,
                         pin,
                         lambda: self._stage_costume(
-                            other, targets, work / "chibi", log, pin, fraction=fraction or _item_fraction(progress)
+                            other,
+                            targets,
+                            work / "chibi",
+                            log,
+                            pin,
+                            fraction=fraction or _item_fraction(progress),
+                            **placed,
                         ),
                         build_keys,
+                        **placed,
                     )
                 elif source.startswith("alt:"):
                     other = source[4:]
@@ -397,13 +418,15 @@ class SwitchingMixin:
                             targets = self._game_files(alt_id, current, pin)
                             sources = self._game_files(other, current, pin)
                             official = [self._official_for(path, pin) for path in sources]
+                            placed = {"placed": True} if self._catalog_parts(pin, targets) == set(targets) else {}
                             replacements.update(
                                 self._cached_build(
                                     official,
                                     targets,
                                     pin,
-                                    lambda: self._stage_adapted(official, targets, work / current, log, pin),
+                                    lambda: self._stage_adapted(official, targets, work / current, log, pin, **placed),
                                     build_keys,
+                                    **placed,
                                 )
                             )
                     if not resource_types:
@@ -414,13 +437,12 @@ class SwitchingMixin:
                     raise ServiceError("source_unsupported", source=source)
                 prepared = time.perf_counter()
                 mod_progress.entered(fraction, "write")
-                files = self._commit(
+                files = self._apply_prepared(
                     replacements,
                     source,
                     log,
                     progress,
                     pin,
-                    prune=False,
                     build_keys=build_keys,
                     create_backup=create_backup,
                     kept_current=kept_current,
@@ -516,6 +538,7 @@ class SwitchingMixin:
         *,
         untested: bool = True,
     ) -> ApplyResult:
+        """Apply a generic choice in class 2, releasing the library lock for catalog generation and swaps."""
         if not source.startswith("mod:"):
             raise ServiceError("source_unsupported", source=source)
         record = self._record(source[4:])
@@ -532,20 +555,21 @@ class SwitchingMixin:
             change.configure(resource_types)
             with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
                 build_keys = {}
+                placed = {"placed": True} if targets and self._catalog_parts(pin, targets) == set(targets) else {}
                 replacements = self._cached_build(
                     self._paths(record),
                     targets,
                     pin,
-                    lambda: self._install_direct(record, targets, Path(temporary), log, progress, pin),
+                    lambda: self._install_direct(record, targets, Path(temporary), log, progress, pin, **placed),
                     build_keys,
+                    **placed,
                 )
-                files = self._commit(
+                files = self._apply_prepared(
                     replacements,
                     source,
                     log,
                     progress,
                     pin,
-                    prune=False,
                     build_keys=build_keys,
                     create_backup=create_backup,
                     kept_current=kept_current,
@@ -572,6 +596,63 @@ class SwitchingMixin:
         finally:
             change.close()
             self._prune_quietly()
+
+    def _catalog_parts(self, pin: Pin, targets: list[Path]) -> set[Path]:
+        record = self._catalog_record(pin)
+        if record["mode"] != MODE_CATALOG:
+            return set()
+        mapped = self._core_map(pin)
+        groups: dict[str, list[Path]] = {}
+        for path in targets:
+            groups.setdefault(mapped.slot(core_of(path.name)), []).append(path)
+        return {
+            path
+            for core, parts in groups.items()
+            if set(parts) == set(self._spine_parts(core, pin)) and self._catalog_targets(pin, parts, record)
+            for path in parts
+        }
+
+    def _apply_prepared(
+        self,
+        replacements: dict[Path, Path],
+        source: str,
+        log: LogFunc,
+        progress: ProgressCallback | None,
+        pin: Pin,
+        *,
+        build_keys: dict[Path, str],
+        create_backup: bool,
+        kept_current: list[str],
+        untested: bool = True,
+    ) -> list[Path]:
+        """Commit a class 2 apply, holding the library lock for file writes and placement.
+
+        Catalog generation and swaps release the library lock for foreground reads.
+        """
+        placed = self._catalog_parts(pin, list(replacements))
+        files = {path: value for path, value in replacements.items() if path not in placed}
+        written = []
+        if files or not placed:
+            written = self._commit(
+                files,
+                source,
+                log,
+                progress,
+                pin,
+                prune=False,
+                build_keys=build_keys,
+                create_backup=create_backup,
+                kept_current=kept_current,
+                untested=untested,
+            )
+        if placed:
+            with self._catalog_transaction():
+                redirects = self._place_entry(
+                    pin, {path: value for path, value in replacements.items() if path in placed}, source, build_keys
+                )
+                if self._regenerate(pin, redirects):
+                    written.extend(self._placed_path(pin, item) for item in redirects.values())
+        return written
 
     @_serialized
     def restore(
@@ -613,14 +694,28 @@ class SwitchingMixin:
         pin: Pin | None = None,
         progress: ProgressCallback | None = None,
     ) -> ApplyResult:
+        """Restore in class 2, holding the library lock for file writes and yielding during catalog publication."""
         pin = self._current(pin)
-        self.profiles.read()
+        config = self.profiles.read()
         targets = self._game_files(alt_id, resource_type, pin)
         if not targets:
             raise ServiceError("game_file_not_found", alt=alt_id)
         try:
-            replacements = {path: self._official_for(path, pin) for path in targets}
-            files = self._commit(replacements, "official", log, progress=progress, pin=pin, prune=False)
+            placed = self._catalog_parts(pin, targets)
+            replacements = {path: self._official_for(path, pin) for path in targets if path not in placed}
+            files = (
+                self._commit(replacements, "official", log, progress=progress, pin=pin, prune=False)
+                if replacements
+                else []
+            )
+            if placed and profiles_mod.enabled(config):
+                with self._catalog_transaction():
+                    record = self._catalog_record(pin)
+                    removed = [path for path in placed if path.name in record["redirects"]]
+                    if removed:
+                        mapped = self._core_map(pin)
+                        self._regenerate(pin, {}, drop={mapped.slot(core_of(path.name)) for path in removed})
+                        files.extend(removed)
             resource_types = {
                 (core_of(path.name) if resource_type == "other" else resource_type_of_file(path.name)): core_of(
                     path.name
@@ -661,7 +756,13 @@ class SwitchingMixin:
         if source != "official":
             return on
         view = self._view([pin], "student")
-        for path in self._game_files(alt_id, resource_type, pin):
+        targets = self._game_files(alt_id, resource_type, pin)
+        placed = self._catalog_parts(pin, targets)
+        if on and placed and any(path.name in self._catalog_record(pin)["redirects"] for path in placed):
+            return True
+        for path in targets:
+            if path in placed:
+                continue
             part = view.part(path, pin, resource_type_of_file(path.name) or "portrait")
             if not part.official:
                 return True
@@ -676,18 +777,73 @@ class SwitchingMixin:
         progress: ProgressCallback | None = None,
         use_built: bool = True,
         fraction: Callable[[float], None] | None = None,
+        *,
+        redirect_batch: dict[str, dict] | None = None,
+        files_only: bool = False,
     ) -> list[Path]:
         """Write an entry internally: its core's parts in its own install switched to a source, and nothing else.
 
         The configuration stays. The write is from a built copy when one still fits; a mod made for the core is
         installed directly, another alt's mod adapted, another alt's files (in that same install) adapted.
         ``fraction``: told how far a costume build is and when the write starts (``mod_progress.Part``).
+
+        A class 2 entry holds the library lock through its build and write or placement. Generation and swaps
+        release it. A toggle collects placements for publication and yields between entries.
         """
         core = self._core_map(pin).slot(core)
         targets = self._spine_parts(core, pin)
         if not targets:
             raise ServiceError("game_file_not_found", alt=core)
         resource_type = self._resource_type(core, pin) or "portrait"
+        redirect = not files_only and self._catalog_targets(pin, targets)
+        if redirect:
+            with self._catalog_transaction():
+                if source == "official":
+                    if redirect_batch is None:
+                        self._regenerate(pin, {}, drop={core})
+                        self._clear_marker(pin, core)
+                    return []
+                writes = [(pin, self._untested_entry(pin, core, targets), targets)]
+                self._check_untested(writes)
+                redirects = (
+                    self._reusable_redirects(pin, core, targets, source, resource_type)
+                    if use_built and redirect_batch is not None
+                    else None
+                )
+                if redirects is None:
+                    redirects = self._prepare_switch(
+                        pin, core, source, log, progress, use_built, fraction, targets, resource_type, placed=True
+                    )
+                if redirect_batch is not None:
+                    names = {item["placed"] for item in redirects.values()}
+                    prior = {item["placed"] for name, item in redirect_batch.items() if name not in redirects}
+                    if len(names) != len(redirects) or names & prior:
+                        raise ServiceError("catalog_invalid", guard="ambiguous")
+                    redirect_batch.update(redirects)
+                else:
+                    self._regenerate(pin, redirects)
+                    self._clear_marker(pin, core)
+                return [self._placed_path(pin, item) for item in redirects.values()]
+        files = self._prepare_switch(pin, core, source, log, progress, use_built, fraction, targets, resource_type)
+        self._clear_marker(pin, core)
+        return files
+
+    def _prepare_switch(
+        self,
+        pin: Pin,
+        core: str,
+        source: str,
+        log: LogFunc,
+        progress: ProgressCallback | None,
+        use_built: bool,
+        fraction: Callable[[float], None] | None,
+        targets: list[Path],
+        resource_type: str,
+        *,
+        placed: bool = False,
+    ) -> list[Path] | dict[str, dict]:
+        """Build and write or place one class 2 entry with the library lock held until the caller's next step."""
+        options = {"placed": True} if placed else {}
         with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
             work = Path(temporary)
             build_keys: dict[Path, str] = {}
@@ -695,7 +851,7 @@ class SwitchingMixin:
             if source == "official":
                 replacements = {path: self._official_for(path, pin) for path in targets}
             elif use_built:
-                replacements = self._built_replacements(pin, core, source, targets, build_keys)
+                replacements = self._built_replacements(pin, core, source, targets, build_keys, **options)
             if replacements is None:
                 if source.startswith("mod:"):
                     record = self._record(source[4:])
@@ -708,8 +864,9 @@ class SwitchingMixin:
                             self._paths(record),
                             targets,
                             pin,
-                            lambda: self._install_direct(record, targets, work, log, progress, pin),
+                            lambda: self._install_direct(record, targets, work, log, progress, pin, **options),
                             build_keys,
+                            **options,
                         )
                     else:
                         sources = self._preview(record, pin)
@@ -717,11 +874,12 @@ class SwitchingMixin:
                             sources,
                             targets,
                             pin,
-                            lambda: self._stage_adapted(sources, targets, work / resource_type, log, pin),
+                            lambda: self._stage_adapted(sources, targets, work / resource_type, log, pin, **options),
                             build_keys,
+                            **options,
                         )
                 elif source.startswith("alt:") and resource_type == "chibi":
-                    _, inputs = self._costume_source(source[4:], pin)
+                    inputs = self._switch_alt_sources(pin, source[4:], resource_type)
                     replacements = self._cached_build(
                         inputs,
                         targets,
@@ -733,25 +891,34 @@ class SwitchingMixin:
                             log,
                             pin,
                             fraction=fraction or _item_fraction(progress),
+                            **options,
                         ),
                         build_keys,
+                        **options,
                     )
                 elif source.startswith("alt:"):
-                    other = self._core_map(pin).core(source[4:], resource_type)
-                    sources = self._index(pin).get(other.lower(), []) if other else []
-                    if not sources:
-                        raise ServiceError("game_file_not_found", alt=source[4:])
-                    official = [self._official_for(path, pin) for path in sources]
+                    official = self._switch_alt_sources(pin, source[4:], resource_type)
                     replacements = self._cached_build(
                         official,
                         targets,
                         pin,
-                        lambda: self._stage_adapted(official, targets, work / resource_type, log, pin),
+                        lambda: self._stage_adapted(official, targets, work / resource_type, log, pin, **options),
                         build_keys,
+                        **options,
                     )
                 else:
                     raise ServiceError("source_unsupported", source=source)
             mod_progress.entered(fraction, "restore" if source == "official" else "write")
-            files = self._commit(replacements, source, log, progress, pin, prune=False, build_keys=build_keys)
-        self._clear_marker(pin, core)
-        return files
+            if placed:
+                return self._place_entry(pin, replacements, source, build_keys)
+            return self._commit(replacements, source, log, progress, pin, prune=False, build_keys=build_keys)
+
+    def _switch_alt_sources(self, pin: Pin, alt: str, resource_type: str) -> list[Path]:
+        """Resolve the input files shared by a switch's alt build and its reuse check."""
+        if resource_type == "chibi":
+            return self._costume_source(alt, pin)[1]
+        core = self._core_map(pin).core(alt, resource_type)
+        sources = self._index(pin).get(core.lower(), []) if core else []
+        if not sources:
+            raise ServiceError("game_file_not_found", alt=alt)
+        return [self._official_for(path, pin) for path in sources]

@@ -87,10 +87,13 @@ class CopiesMixin:
         pin: Pin,
         build: Callable[[], dict[Path, Path]],
         build_keys: dict[Path, str],
+        *,
+        placed: bool = False,
     ) -> dict[Path, Path]:
         """Reuse only a referenced instant-On copy with the same program, inputs, official targets and options.
 
-        Prepared files otherwise live solely in the caller's temporary staging directory.
+        Prepared files otherwise live solely in staging. This class 2 step holds the library lock for
+        one entry and yields at the caller's entry boundary.
         """
 
         def prepare() -> dict[Path, Path]:
@@ -129,7 +132,7 @@ class CopiesMixin:
                         fingerprint = self._hashes.get(kept)
                         if fingerprint.sha1 != part["sha1"]:
                             raise ValueError("Changed built copy")
-                        if not self._kept_crc_fits(fingerprint, target):
+                        if not placed and not self._kept_crc_fits(fingerprint, target):
                             raise ValueError("Built copy without the part's CRC")
                         replacements[target] = kept
                     if self._stale_build(replacements, pin):
@@ -146,13 +149,22 @@ class CopiesMixin:
 
     @toggle_timing.stage("built_lookup")
     def _built_replacements(
-        self, pin: Pin, core: str, source: str, targets: list[Path], build_keys: dict[Path, str] | None = None
+        self,
+        pin: Pin,
+        core: str,
+        source: str,
+        targets: list[Path],
+        build_keys: dict[Path, str] | None = None,
+        *,
+        placed: bool = False,
     ) -> dict[Path, Path] | None:
         """Give the entry's built copy written back, when it still fits.
 
         It fits when it was built for this very source, with every part's name and every input's name still in the
         install. The other parts take their official copies. A kept file whose bytes are not the recorded ones drops the
         key (the entry is rebuilt).
+
+        This class 2 lookup holds the library lock for one entry and yields at the caller's entry boundary.
         """
         folder = ((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {}
         key = (folder.get("built") or {}).get(core)
@@ -180,7 +192,9 @@ class CopiesMixin:
                 )
                 try:
                     fingerprint = self._hashes.get(kept)
-                    if fingerprint.sha1 != part.get("sha1") or not self._kept_crc_fits(fingerprint, target):
+                    if fingerprint.sha1 != part.get("sha1") or (
+                        not placed and not self._kept_crc_fits(fingerprint, target)
+                    ):
                         raise ValueError(kept)
                 except (OSError, ValueError):
                     logger.info("The built copy of %s no longer fits, rebuilding", target.name)

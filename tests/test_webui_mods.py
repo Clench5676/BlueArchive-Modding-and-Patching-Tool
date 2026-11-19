@@ -29,6 +29,7 @@ from bmpt.webui import main as webui_main
 from bmpt.webui.api import build_api
 from bmpt.webui.instance import InstanceLock, raise_running, read_info
 from bmpt.webui.server import WebApp
+from bmpt.webui import services as services_module
 from bmpt.webui.services import Services
 from bmpt.webui.state import UiState, data_path
 
@@ -248,6 +249,9 @@ def test_mods_state_has_its_shape_and_answers_while_the_library_lock_is_held(env
             "named": True,
             "label": "Global",
             "distinct": None,
+            "method": "files",
+            "methodReason": state["installs"][0]["methodReason"],
+            "methodNotice": False,
         }
     ]
     assert (state["current"], state["enabled"], state["available"], state["reason"]) == (env.key(), True, True, None)
@@ -271,6 +275,31 @@ def test_mods_state_has_its_shape_and_answers_while_the_library_lock_is_held(env
     release.set()
     holder.join(5)
     assert answer.get("result", {}).get("current") == env.key()
+
+
+def test_the_switch_method_and_a_fallback_told_once_per_resource_version(env):
+    library = env.s.library
+    pin = library.installs()[0]
+
+    def fall_back(rv):
+        record = {"rv": rv, "migrated": None, "official": None, "mods": None, "live": "unknown", "redirects": {}}
+        library._save_catalog_record(pin, {**record, "mode": "files", "reason": "catalog_invalid"})
+        env.s.refresh_status()
+        return rpc(env.app, "mods.state")["result"]["installs"][0]
+
+    item = fall_back("a" * 40)
+    assert (item["method"], item["methodReason"], item["methodNotice"]) == ("files", "catalog_invalid", True)
+    assert "methodVersion" not in item
+    assert rpc(env.app, "mods.methodNoticeSeen", install=env.key()) == {"result": {}}
+    assert rpc(env.app, "mods.state")["result"]["installs"][0]["methodNotice"] is False
+    assert fall_back("a" * 40)["methodNotice"] is False
+    # another game version falls back again: told again
+    assert fall_back("b" * 40)["methodNotice"] is True
+    assert rpc(env.app, "mods.methodNoticeSeen", install="elsewhere")["error"]["code"] == "bad_params"
+    # a catalog install, and a layout reason, are never a notice
+    for method, reason in (("catalog", None), ("files", "unsupported_server"), ("files", None)):
+        item = {"key": env.key(), "method": method, "methodReason": reason, "methodVersion": "c" * 40}
+        assert services_module._method_notice(item, {}) is False
 
 
 def test_mods_state_and_status_refresh_never_compute_sizes(env, monkeypatch):

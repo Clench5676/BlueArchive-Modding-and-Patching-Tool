@@ -28,11 +28,12 @@ one changes are in the other files ([`README.md`](README.md)).
 | `chibi.costumes {alt, others}` / `chibi.checkCostumes {...}` / `chibi.optimize {alt, source, name}` | costume verdicts / check pairs to their end (job) / Optimize Physics (writer job) |
 | `chibi.costumeCautions {alt, others}` | what offered pairs may draw differently in the game: `ex_parts`, `carried_shader` |
 | `mods.state` / `mods.sizes {kind}` | the switch snapshot / Mod Cache (`built`) or kept official files (`officials`) size on demand |
+| `mods.methodNoticeSeen {install}` | the install's fallback to file replacement told, for its current resource version (see Switch method) |
 | `mods.toggle {enabled, expect}` | the switch over every known install (writer job); also Retry |
 | `mods.consent {granted}` / `mods.explained` / `mods.scan {dismissed}` / `mods.entries` | scan consent / first-toggle explanation shown / request a scan / the last scan's entries |
 | `mods.adopt {entries}` / `mods.restoreDrift {entries}` / `mods.dismiss {kind, entries}` | Add to Library / Apply Mod Configuration / Keep as Is, Don't Ask Again |
-| `mods.impact {ids?, force?}` / `mods.impactLast` / `mods.impactSeen {install, version}` | game update impact (job) / the last check without checking / mark seen |
-| `mods.updateDue` / `mods.refreshCostumes` / `mods.retryFailed` / `mods.confirmUntested {confirm}` | whether the start asks to check mods / rebuild outdated costume builds (writer job) / write failed entries again once per App build (writer job) / confirm an `untested_build` refusal |
+| `mods.impact {ids?, force?}` / `mods.impactLast` / `mods.impactSeen {install, version}` | game update impact (job; a row whose target the update renamed or removed carries `targetRetired`) / the last check without checking / mark seen |
+| `mods.updateDue` / `mods.refreshCostumes` / `mods.retryFailed` / `mods.confirmUntested {confirm}` | whether the start asks to check mods / prepare the game catalogs and rebuild outdated costume builds (writer job; its result's `notices` list `catalog_restored` by `install`) / write failed entries again once per App build (writer job) / confirm an `untested_build` refusal |
 | `mods.clearBuilt` / `mods.forget {install}` | Clear Mod Cache / Remove from List (jobs) |
 | `mods.troubleshootState` / `mods.applyOfficial` / `mods.restoreConfig` | Troubleshoot Mods (pre-release builds only) |
 | `actions.apply {alt, source, resourceType}` / `actions.restore {alt, resourceType}` | switch what the current install shows (writer job, `deferred` while Mods are off) |
@@ -62,6 +63,20 @@ one changes are in the other files ([`README.md`](README.md)).
 
 `GET /api/classic/session`, `GET /api/classic/control` and `POST /api/classic/report` use the classic child's token.
 `POST /api/instance/raise` uses its own raise token. The bootstrap, RPC and asset requests use the page's session.
+
+### Switch method
+
+Each `mods.state.installs[]` item carries how mods are switched in that game folder, read from the catalog store
+in the snapshot, never through the library lock:
+
+- `method`: `catalog` (the App swaps the game's catalog file for one that points the modded parts at placed files)
+  or `files` (the App writes mod bytes over the official files);
+- `methodReason`: why a folder uses `files`, null for `catalog` and for a folder not moved to the catalog yet: a refusal of the catalog checks (`catalog_unsupported`,
+  `catalog_invalid`) or a layout reason (`unsupported_server`, `missing_catalog`, `missing_bundle_folder`,
+  `outside_root`, `invalid_layout`);
+- `methodNotice`: true while a fallback after a refusal of the catalog checks was not told for the folder's current
+  resource version. The page tells it once and calls `mods.methodNoticeSeen`; a later game version that falls back
+  again is told again.
 
 ### Resource fields
 

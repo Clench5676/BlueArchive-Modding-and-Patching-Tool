@@ -9,6 +9,7 @@ import errno
 import tempfile
 import logging
 import shutil
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -22,7 +23,7 @@ from bmpt.engine import (
     parse_filename,
     t,
 )
-from ...host.store_formats import read_runtime
+from ...host.store_formats import CATALOG_JOURNALS, read_runtime
 from ...core.errors import ServiceError
 from ...core.filelock import file_lock
 from ...core.logging_utils import log_failure
@@ -189,6 +190,7 @@ class SwitchPlanMixin:
         expected: dict[Path, str] | None = None,
         kept_current: list[str] | None = None,
         untested: bool = True,
+        before_write: Callable[[], None] | None = None,
     ) -> list[Path]:
         """Write prepared files over game files as one unit, keeping what they replace.
 
@@ -213,6 +215,7 @@ class SwitchPlanMixin:
                     build_keys,
                     create_backup=create_backup,
                     untested=untested,
+                    **({"before_write": before_write} if before_write else {}),
                     **({"expected": expected} if expected else {}),
                     **({"kept_current": kept_current} if kept_current is not None else {}),
                 )
@@ -221,7 +224,15 @@ class SwitchPlanMixin:
                 self._prune_quietly()
 
     @contextlib.contextmanager
-    def _writable(self, paths: list[Path], pin: Pin, *, recovering: bool = False) -> Iterator[None]:
+    def _writable(
+        self,
+        paths: list[Path],
+        pin: Pin,
+        *,
+        recovering: bool = False,
+        resource_dirs: list[Path] | None = None,
+        catalog: tuple[Path | None, str | None] | None = None,
+    ) -> Iterator[None]:
         """Run the checks right before game files are written.
 
         They are: the game not running, Steam not updating or verifying the install, the files inside its resource
@@ -230,14 +241,18 @@ class SwitchPlanMixin:
         if self._write_check is not None:
             self._write_check(pin)
         self._check_idle([pin])
-        legacy_gate = (
-            self._game_write_gate(paths, pin.root, self._is_official_as)
-            if self._game_write_gate
-            else contextlib.nullcontext()
-        )
+        legacy_gate = contextlib.nullcontext()
+        if catalog is not None:
+            if self._catalog_write_gate is not None:
+                legacy_gate = self._catalog_write_gate(*catalog)
+        elif self._game_write_gate is not None:
+            legacy_gate = self._game_write_gate(paths, pin.root, self._is_official_as)
         with (
             toggle_timing.enter(
-                "game_file_preflight", safety.writable_game_files(paths, list(pin.dirs), allow_missing=recovering)
+                "game_file_preflight",
+                safety.writable_game_files(
+                    paths, list(pin.dirs) if resource_dirs is None else resource_dirs, allow_missing=recovering
+                ),
             ),
             toggle_timing.enter("legacy_write_gate", legacy_gate),
         ):
@@ -251,12 +266,26 @@ class SwitchPlanMixin:
         and raises the real failure when one cannot be rolled back (a write never goes on over a journal it could not
         settle); the failure is remembered for the reads and for the writes that do not take this lock
         (``_check_recovery``).
+
+        A writer waiting for a catalog transaction in this process gives up the library lock for foreground
+        reads and for the catalog's store save. That wait does not count against the interprocess lock timeout.
+        A writer whose locked preparation may have changed must start over.
         """
-        if self._transacting:
+        owner = threading.get_ident()
+        if self._transaction_owner == owner:
             yield
             return
+        prepared_version = None
+        while not self._catalog_idle.is_set():
+            version = self._version
+            with self._lock.unlocked() as released:
+                self._catalog_idle.wait()
+            if released:
+                if self._version != version:
+                    raise ServiceError("state_changed")
+                prepared_version = version
         with toggle_timing.enter("transaction_wait", file_lock(self.root / "transactions.lock", timeout=10)):
-            self._transacting = True
+            self._transaction_owner = owner
             try:
                 self._refresh_state(migrate=False)  # nothing is saved before the journals are settled
                 try:
@@ -266,16 +295,18 @@ class SwitchPlanMixin:
                     raise
                 self._remember_recovery(None)
                 self._check_writable()
+                if prepared_version is not None and self._version != prepared_version:
+                    raise ServiceError("state_changed")
                 yield
             finally:
-                self._transacting = False
+                self._transaction_owner = None
 
     def _journals(self) -> tuple[str, ...]:
-        """The pending journals: write, import and deletion journals under the library, as sorted paths."""
+        """The pending game, import, catalog and deletion journals under the library, as sorted paths."""
         return tuple(
             sorted(
                 str(path)
-                for folder in ("transactions", "import-transactions", "asset-deletions")
+                for folder in ("transactions", "import-transactions", CATALOG_JOURNALS, "asset-deletions")
                 for path in (self.root / folder).glob("*/journal.json")
             )
         )
@@ -285,7 +316,7 @@ class SwitchPlanMixin:
 
         Raises the failure of a journal that cannot be settled (it stays pending); nothing happens without a journal.
         """
-        if self._transacting:
+        if self._transaction_owner:
             return
         if self._journals():
             with self._transaction_lock():
@@ -301,12 +332,14 @@ class SwitchPlanMixin:
         journals still pending but raises nothing follows the same limit. Writes recover on their own
         (``_transaction_lock``).
         """
-        if self._transacting:
+        if self._transaction_owner:
             return
         journals = self._journals()
         if not journals:
             self._recovery_error = self._recovery_seen = self._recovery_logged = None
             return
+        if any(Path(path).parent.parent.name == CATALOG_JOURNALS for path in journals):
+            return  # Catalog recovery belongs to startup and writers, where it can run outside the library lock.
         seen = self._recovery_seen
         if seen is not None and seen[0] == journals and time.monotonic() - seen[1] < RECOVERY_RETRY:
             return
@@ -346,7 +379,7 @@ class SwitchPlanMixin:
         Recovery is attempted again first (a closed game, a repaired file), so the refusal is the real, current one. Not
         during a recovery itself or the writes under the transaction lock, which recovered before they started.
         """
-        if self._recovery_error is not None and not self._transacting:
+        if self._recovery_error is not None and not self._transaction_owner:
             self._recover_pending()
 
     def _check_writes(self) -> None:
@@ -365,7 +398,7 @@ class SwitchPlanMixin:
         That is when a recovery has failed or the state cannot be written. It is for the reads that settle something on
         the side and skip it instead.
         """
-        return self._state_error is not None or (self._recovery_error is not None and not self._transacting)
+        return self._state_error is not None or (self._recovery_error is not None and not self._transaction_owner)
 
     def state_unreadable(self) -> bool:
         """Check whether the library lacks state from a good read, retrying an unreadable state first.
@@ -380,7 +413,7 @@ class SwitchPlanMixin:
 
     @toggle_timing.stage("journal_recovery")
     def _recover_transactions(self) -> None:
-        """Settle every pending journal under the transaction lock: imports, then write journals, then asset deletions.
+        """Settle imports, write journals, catalog swaps, then asset deletions under the transaction lock.
 
         A failure (ServiceError) leaves the journal and stops here; a write journal whose install is not known now waits
         (skipped, logged once). A game file changed outside the library is left as it is (``_rollback_write``).
@@ -454,6 +487,7 @@ class SwitchPlanMixin:
                 logger.info("Recovered interrupted library write %s", path.parent.name)
             except (ValueError, TypeError, KeyError) as error:
                 raise ServiceError("library_io_error", file=path) from error
+        self._recover_catalog()
         from ..asset_delete import recover
 
         recover(self)
@@ -721,10 +755,11 @@ class SwitchPlanMixin:
 
     @toggle_timing.stage("crc_check")
     def _check_target_crc(self, changed: dict[Path, Path]) -> None:
-        """Make the last CRC check of a write.
+        """Check official-named replacements in the writer's class, under the library lock for one entry.
 
         Bytes whose CRC is not the one in the target's name never reach an install that needs the CRC fix, whatever step
-        before missed it (crc_fix_failed, naming the file).
+        before missed it (crc_fix_failed, naming the file). Catalog placements bypass this check. The caller yields
+        at the next entry boundary.
         """
         for target, prepared in changed.items():
             fingerprint = self._hashes.get(prepared)
@@ -747,9 +782,12 @@ class SwitchPlanMixin:
         expected: dict[Path, str] | None = None,
         kept_current: list[str] | None = None,
         untested: bool = True,
+        before_write: Callable[[], None] | None = None,
     ) -> list[Path]:
         kept = {target: path for target, path in replacements.items() if self._managed and self._is_kept(path)}
         options = dict(create_backup=create_backup, expected=expected, kept_current=kept_current, untested=untested)
+        if before_write is not None:
+            options["before_write"] = before_write
         with contextlib.ExitStack() as resources:
             if kept:
                 work = Path(
@@ -775,6 +813,7 @@ class SwitchPlanMixin:
         expected: dict[Path, str] | None = None,
         kept_current: list[str] | None = None,
         untested: bool = True,
+        before_write: Callable[[], None] | None = None,
     ) -> list[Path]:
         from ...gameassets.costume_rule import COSTUME_RULE
 
@@ -802,6 +841,8 @@ class SwitchPlanMixin:
         }
         old_applied = dict(self._applied)
         stamp = now()
+        # Migration stages and verifies bundles outside the library lock. Ordinary writes already hold it.
+        state_lock = self._lock if before_write is not None else contextlib.nullcontext()
 
         def records() -> dict[str, dict[str, Any]]:
             out = {}
@@ -833,13 +874,14 @@ class SwitchPlanMixin:
 
         if not changed:
             new = records()
-            if any(self._applied.get(path) != record for path, record in new.items()):
-                self._applied.update(new)
-                try:
-                    self._save()
-                except (OSError, ServiceError):
-                    self._applied = old_applied
-                    raise
+            with state_lock:
+                if any(self._applied.get(path) != record for path, record in new.items()):
+                    self._applied.update(new)
+                    try:
+                        self._save()
+                    except (OSError, ServiceError):
+                        self._applied = old_applied
+                        raise
             return []
         written: list[Path] = []
         kept_now: list[Path] = []  # originals this call kept from the game file itself
@@ -927,6 +969,8 @@ class SwitchPlanMixin:
                     transaction["phase"] = "writing"
                     atomic_json(journal, transaction)
                     stage = "write"
+                    if before_write is not None:
+                        before_write()
                     for i, (target, prepared) in enumerate(changed.items(), 1):
                         check_resource_path(target, dirs)
                         if source == "official" and prepared == self._original_path(target):
@@ -951,8 +995,10 @@ class SwitchPlanMixin:
                             )
                     saving_state = True
                     stage = "state"
-                    self._applied.update(records())
-                    self._save()
+                    new = records()
+                    with state_lock:
+                        self._applied.update(new)
+                        self._save()
                 except Exception as error:
                     self._applied = old_applied
                     try:

@@ -27,8 +27,9 @@ from ..core.errors import ServiceError
 from ..core.filelock import file_lock
 from . import upgrade_files as files
 from .data_paths import APP_DIR_NAME, OLD_APP_DIR_NAME
-from .format_manifest import DATA_MANIFEST, LIBRARY_MANIFEST, NewerManifest, encode_manifest
+from .format_manifest import DATA_MANIFEST, NewerManifest, encode_manifest, publish_library_head
 from .store_formats import (
+    CATALOG_JOURNALS,
     GENERATION,
     NAMESPACE,
     STORES,
@@ -595,6 +596,8 @@ class DataUpgrade:
                 self._open(source_d.root, selected, source_l.root, route, head)
                 return
             current = epoch_path(selected, "library", head["epoch"])
+            if any((current / CATALOG_JOURNALS).glob("*/journal.json")):
+                raise RecoveryPending("The current generation has a pending catalog journal")
             if changed_l and expected_l != path_record(source_l.root, source_d.root):
                 missing = [
                     store
@@ -1010,34 +1013,7 @@ class DataUpgrade:
     def _publish_head(self, root: Path, previous: Document | None, proposed: Document) -> None:
         self._advance_step("verify")
         self._phase("publish")
-        private = namespace(root)
-        path = root / LIBRARY_MANIFEST
-        raw = path.read_bytes() if previous is not None else None
-        sequence = previous["sequence"] if previous else 0
-        proposed["sequence"] = sequence + 1
-        proposed["predecessor"] = hashlib.sha256(raw).hexdigest() if raw is not None else None
-        if raw is not None:
-            receipt = private / "heads" / f"{sequence}.json"
-            if files.present(receipt) and receipt.read_bytes() != raw:
-                raise RecoveryPending("The previous head receipt differs")
-            files.write_bytes(receipt, raw)
-            self._fault("head:previous")
-        self._fault("head:beforeReplace")
-        encoded = encode_manifest("library", proposed)
-        try:
-            files.write_document(path, encoded)
-        except OSError as error:
-            try:
-                if maybe_read_record(path) == encoded:
-                    if raw is None:
-                        path.unlink()
-                        files.sync_directory(path.parent)
-                    else:
-                        files.write_bytes(path, raw)
-            except (OSError, ValueError) as rollback:
-                raise RecoveryPending("Could not determine the durable head after a failed publication") from rollback
-            raise error
-        self._fault("head:durable")
+        publish_library_head(root, previous, proposed, fault=self._fault)
 
     def _open(self, data: Path, library: Path, source: Path, route: Document, head: Document) -> None:
         self._advance_step("verify")
@@ -1256,7 +1232,8 @@ class DataUpgrade:
             backup = head["backups"][index]
             if backup["dataId"] != paths.data_id:
                 raise InvalidStore("Backup belongs to another data directory")
-            if any(any((paths.library_epoch / STORES[key].current).glob("*/journal.json")) for key in _JOURNALS):
+            folders = [CATALOG_JOURNALS, *(STORES[key].current for key in _JOURNALS)]
+            if any(any((paths.library_epoch / folder).glob("*/journal.json")) for folder in folders):
                 raise RecoveryPending("The current generation has a pending journal")
             old_data = epoch_path(paths.data_root, "data", backup["dataEpoch"])
             old_library = epoch_path(paths.library_root, "library", backup["libraryEpoch"])
@@ -1355,6 +1332,24 @@ class DataUpgrade:
                         for path in options
                     ):
                         raise ServiceError("official_unavailable", file=target, folder=str(install))
+            yield
+
+    @contextmanager
+    def catalog_write(self, backup: Path | None, sha1: str | None) -> Iterator[None]:
+        """Exclude older game writers and verify the kept catalog before a live write."""
+        if self.paths is None:
+            raise ServiceError("library_recovery_pending")
+        legacy = self.paths.legacy_library
+        with ExitStack() as fences:
+            try:
+                if files.present(legacy):
+                    self._lock(fences, legacy / "transactions.lock", "olderVersion")
+                if backup is not None:
+                    devmode.check_read(backup)
+                    if backup.resolve() != backup or files.digest(backup, "sha1") != sha1:
+                        raise ServiceError("official_invalid", file=backup)
+            except (OSError, ValueError, UpgradeBlocked) as error:
+                raise ServiceError("library_recovery_pending", file=legacy) from error
             yield
 
     def classic_read_only(self) -> bool:
