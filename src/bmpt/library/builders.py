@@ -16,12 +16,14 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
+from bmpt.engine import ENGINE_PACKAGE
+
 #: the one kind of builder the library signs with a fingerprint (costume builds sign with their rule number)
 BUILD = "build"
 
 #: builder code, relative to ``src``: the engine and the App's own builders
 MODULES = (
-    "ba_modding_toolkit",
+    ENGINE_PACKAGE,
     "bmpt/library/alts.py",
     "bmpt/library/bundle_saves.py",
     "bmpt/library/install.py",
@@ -31,7 +33,7 @@ MODULES = (
     "bmpt/unity/texture_guard.py",
 )
 #: folders of the engine that build nothing: its windows, its device tools and its command line
-NOT_BUILDERS = ("ba_modding_toolkit/gui", "ba_modding_toolkit/adb", "ba_modding_toolkit/cli")
+NOT_BUILDERS = tuple(f"{ENGINE_PACKAGE}/{folder}" for folder in ("gui", "adb", "cli"))
 
 #: packages whose version changes the bytes a build writes
 PACKAGES = ("unitypy", "pillow", "texture2ddecoder", "etcpak", "astc-encoder-py", "lz4", "brotli")
