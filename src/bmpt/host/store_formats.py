@@ -413,15 +413,38 @@ def _check_catalogs(data: Document) -> None:
         _require(record, "rv", str)
         if not _SHA1.fullmatch(record["rv"]):
             raise InvalidStore("Invalid catalog resource version")
-        _check_catalog_stamp(record.get("official"), "sha1")
-        _require(record["official"], "crc32", int)
-        if not 0 <= record["official"]["crc32"] <= 0xFFFFFFFF:
-            raise InvalidStore("Invalid official catalog CRC32")
+        _require(record, "reapply", bool, optional=True)
+        _require(record, "refused_sha1", str, optional=True)
+        if "refused_sha1" in record and not _SHA1.fullmatch(record["refused_sha1"]):
+            raise InvalidStore("Invalid refused catalog fingerprint")
+        _require(record, "pending", dict, optional=True)
+        if not all(isinstance(source, str) for source in record.get("pending", {}).values()):
+            raise InvalidStore("Invalid pending catalog entry")
+        _require(record, "removed", dict, optional=True)
+        for item in record.get("removed", {}).values():
+            if not isinstance(item, dict):
+                raise InvalidStore("Invalid retired catalog target")
+            _require(item, "source", str)
+            if item.get("mark") is not None and not isinstance(item["mark"], str):
+                raise InvalidStore("Invalid retired catalog target build")
         if "mods" not in record:
             raise InvalidStore("Missing generated catalog fingerprint")
         if record["mods"] is not None:
             _check_catalog_stamp(record["mods"], "sha1", "redirects_sha1")
         _require(record, "redirects", dict)
+        if (
+            record.get("official") is None
+            and record["mode"] == "files"
+            and record["reason"] in ("catalog_invalid", "catalog_unsupported")
+            and record["live"] == "unknown"
+            and record["mods"] is None
+            and not record["redirects"]
+        ):
+            continue
+        _check_catalog_stamp(record.get("official"), "sha1")
+        _require(record["official"], "crc32", int)
+        if not 0 <= record["official"]["crc32"] <= 0xFFFFFFFF:
+            raise InvalidStore("Invalid official catalog CRC32")
         for redirect in record["redirects"].values():
             if not isinstance(redirect, dict):
                 raise InvalidStore("Invalid catalog redirect")

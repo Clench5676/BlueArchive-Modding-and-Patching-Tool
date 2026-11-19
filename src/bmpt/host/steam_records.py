@@ -30,6 +30,7 @@ BUNDLE_FOLDERS = (
     "BlueArchive_Data/StreamingAssets/PUB/Resource/GameData/Windows/",
     "BlueArchive_Data/StreamingAssets/PUB/Resource/Preload/Windows/",
 )
+_CATALOG_FILE = "BlueArchive_Data/StreamingAssets/PUB/Resource/Catalog/Windows/catalog_Windows.bytes"
 #: A depot manifest larger than this is not read (the Global build's is about 9 MB)
 MAX_MANIFEST = 256 * 1024 * 1024
 
@@ -299,7 +300,7 @@ class OfficialFiles:
     def __init__(self) -> None:
         """Start with nothing read."""
         self._lock = threading.Lock()
-        self._cache: dict[Path, tuple[tuple, dict[str, OfficialFile]]] = {}
+        self._cache: dict[Path, tuple[tuple, dict[str, OfficialFile], OfficialFile | None]] = {}
         self._apps: dict[Path, tuple[tuple, Path]] = {}  # app manifest -> (its stat, the depot manifest it named)
 
     def bundles(self, game_folder: Path) -> dict[str, OfficialFile]:
@@ -312,32 +313,39 @@ class OfficialFiles:
             ``{bundle file name: file}`` for the bundles of ``BUNDLE_FOLDERS``; empty when Steam keeps no readable
             file list of it.
         """
+        return self._files(game_folder)[0]
+
+    def catalog(self, game_folder: Path) -> OfficialFile | None:
+        """Return Steam's catalog fingerprint for the install when its manifest is available."""
+        return self._files(game_folder)[1]
+
+    def _files(self, game_folder: Path) -> tuple[dict[str, OfficialFile], OfficialFile | None]:
         app = game_paths.steam_app_manifest(Path(game_folder))
         if app is None or not devmode.allows_read(app):
-            return {}
+            return {}, None
         try:
             app_stat = app.stat()
         except OSError:
-            return {}
+            return {}, None
         app_signature = (app_stat.st_size, app_stat.st_mtime_ns)
         with self._lock:
             known = self._apps.get(app)
         manifest = known[1] if known and known[0] == app_signature else depot_manifest_path(Path(game_folder))
         if manifest is None:
-            return {}
+            return {}, None
         with self._lock:
             self._apps[app] = (app_signature, manifest)
         try:
             stat = manifest.stat()
         except OSError:
-            return {}
+            return {}, None
         signature = (stat.st_size, stat.st_mtime_ns)
         with self._lock:
             cached = self._cache.get(manifest)
             if cached and cached[0] == signature:
-                return cached[1]
+                return cached[1], cached[2]
         if stat.st_size > MAX_MANIFEST:
-            return {}
+            return {}, None
         try:
             _depot, _gid, files = parse_depot_manifest(manifest.read_bytes())
         except (OSError, ManifestError):
@@ -348,6 +356,7 @@ class OfficialFiles:
             for prefix in BUNDLE_FOLDERS:
                 if path.startswith(prefix) and "/" not in path[len(prefix) :]:
                     bundles[path[len(prefix) :]] = entry
+        catalog = files.get(_CATALOG_FILE)
         with self._lock:
-            self._cache[manifest] = (signature, bundles)
-        return bundles
+            self._cache[manifest] = (signature, bundles, catalog)
+        return bundles, catalog

@@ -296,9 +296,7 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         library = s.library
         pin = s._current_pin(library)
         if ids is None:
-            return s.submit(
-                "mods.impact", lambda log, progress: library.update_impact(pin, force=force, progress=progress)
-            )
+            return s.submit_update_impact(library, pin, force)
         return s.submit("mods.impact", lambda log, progress: {"mods": library.impacts(ids, pin)})
 
     @rpc.method("mods.impactLast")
@@ -314,10 +312,9 @@ def register(rpc: RpcRegistry, s: Services) -> None:
     def mods_update_due() -> dict[str, Any]:
         """Tell whether the start asks to check the mods against a game update (``update_due``).
 
-        The answer is ``{due, outdated, retry, install, version, previous}``. ``outdated`` lists costume builds of an
-        older costume rule to build again first (``mods.refreshCostumes``); ``retry`` lists entries whose last write
-        failed, to write again (``mods.retryFailed``). Reads the version file, the configuration and cached
-        fingerprints only.
+        The answer is ``{due, outdated, retry, install, version, previous}``. ``outdated`` schedules catalog and
+        costume maintenance first (``mods.refreshCostumes``). ``retry`` schedules entries whose last write failed
+        (``mods.retryFailed``).
         """
         library = s.library
         return library.update_due(library.current_pin())  # no game folder: nothing is asked
@@ -343,7 +340,7 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         """Record that the impact summary of a game update was shown, so its resource version is not told again."""
         if not isinstance(install, str) or not isinstance(version, str) or not version:
             raise ServiceError("bad_params", key="version")
-        s.library.impact_seen(install, version)
+        s.library.impact_seen(install, version, checked=True)
         return {}
 
     @rpc.method("mods.confirmUntested")

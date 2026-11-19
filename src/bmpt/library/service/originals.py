@@ -511,18 +511,21 @@ class OriginalsMixin:
                 original.unlink()
                 logger.info("Released the original of %s kept by a failed write", target.name)
 
-    def _prune(self) -> list[Path]:
+    def _prune(self, *, game_files: bool = True, catalog_only: bool = False) -> list[Path]:
         """Serialize class 4 deletion with writes that may still need files for rollback.
 
-        The library lock is held per original or catalog side file, yielding between items.
+        Original cleanup holds the library lock per item. Catalog cleanup releases it and yields between deletions.
         A pending file journal or unreadable state prevents deletion.
         """
         if self._state_error is not None or any((self.root / "transactions").glob("*/journal.json")):
             return []
         with self._transaction_lock():
-            records = self._catalog_document()["installs"]
-            released = self._prune_originals(records)
-            if records:
+            records = self._catalog_records_for_read()
+            released = []
+            if not catalog_only:
+                catalog_originals = any(record["mode"] == MODE_CATALOG for record in records.values())
+                released = self._prune_originals(records if catalog_originals and self._scan_allowed() else {})
+            if game_files and records:
                 self._prune_catalogs(self._all_pins(), records)
             return released
 
@@ -709,16 +712,20 @@ class OriginalsMixin:
                     self._prune_quietly()
 
     @_serialized
-    def prune(self) -> list[Path]:
+    def prune(self, *, game_files: bool = True, catalog_only: bool = False) -> list[Path]:
         """Delete unneeded originals after official restoration or replacement by a game update.
 
         Originals another install may need, including configured entries restored by the
         next Off, are retained.
 
+        Args:
+            game_files: Whether the job can delete catalog copies and placements on the game side.
+            catalog_only: Whether to skip original and built-copy maintenance.
+
         Returns:
             Paths of the deleted kept originals.
         """
-        return self._prune()
+        return self._prune(game_files=game_files, catalog_only=catalog_only)
 
     def archive_rigs(self, pin: Pin | None = None, cancel: Callable[[], bool] | None = None) -> int:
         """Archive each distinct official portrait rig and its page alpha masks for an install.

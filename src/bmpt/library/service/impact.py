@@ -18,17 +18,17 @@ from bmpt.engine import (
 )
 from ...core.errors import ServiceError
 from ...core.logging_utils import log_failure
+from ...host.upgrade_files import digest
 from .. import profiles as profiles_mod
 from .. import fingerprint, integrity, mod_progress, tested_build
-from ..judge import (
-    core_of,
-    now,
-)
+from ..catalog_switch import MODE_CATALOG
+from ..judge import core_of, now
 from ..records import (
     Pin,
     ToggleResult,
 )
 from .base import LATER, _app_version, _errors, _serialized
+from .catalog import _file_revision, _paced_catalog
 
 
 logger = logging.getLogger(__package__)
@@ -174,7 +174,9 @@ class ImpactMixin:
         """
         return self._impact_of(record, pin)[0]
 
-    def _impact_of(self, record: dict[str, Any], pin: Pin | None) -> tuple[str, dict[str, Any]]:
+    def _impact_of(
+        self, record: dict[str, Any], pin: Pin | None, *, version: str | None = None
+    ) -> tuple[str, dict[str, Any]]:
         """Give ``_impact`` with what changed in those parts (``fingerprint.changes``).
 
         It is kept per mod files and official part names (a rebuilt part has another CRC in its name), so a toggle
@@ -191,6 +193,7 @@ class ImpactMixin:
                 record["id"],
                 tuple(sorted(self._mod_hashes(record).items())),
                 pin.key,
+                version,
                 tuple(sorted(str(path) for path in targets)),
             )
             known = self._impacts.get(key)
@@ -251,8 +254,8 @@ class ImpactMixin:
         fingerprint.impact and fingerprint.changes. due is True for rebuilt parts,
         new parts, changed rigs, or vanished cores. An empty check acknowledges the
         version immediately; a nonempty result waits for impact_seen. Per-mod
-        failures provide no impact evidence and do not fail the pass. Apart from
-        caching outcomes and acknowledging empty checks, the operation only reads.
+        failures provide no impact evidence and do not fail the pass. Class 3 at startup, and class 2
+        when requested from Settings, it holds the library lock per mod and yields between mods.
 
         Args:
             pin: Game install and server the operation is fixed to; None uses the current install if available.
@@ -263,6 +266,7 @@ class ImpactMixin:
         if pin is None:
             return {"due": False, "install": None, "version": None, "previous": None, "mods": [], "counts": {}}
         version = self.resource_version(pin)
+        catalog = self._checked_catalog_snapshot(pin, version)
         config = self.profiles.read() or {}
         seen = ((config.get("folders") or {}).get(pin.key) or {}).get("resource") or {}
         previous = seen.get("version") if isinstance(seen, dict) else None
@@ -274,7 +278,7 @@ class ImpactMixin:
             "mods": [],
             "counts": {name: 0 for name in fingerprint.IMPACTS},
         }
-        if version is None or (version == previous and not force):
+        if version is None or (version == previous and not force and not self._catalog_check_pending(pin, version)):
             return out
         configured = {
             entry.get("source")
@@ -285,14 +289,17 @@ class ImpactMixin:
             records = [self._records[mod_id] for mod_id in entries if mod_id in self._records]
             # the same resource version, the same mods and baselines and configuration as the last check: its answer
             # (Settings' View shows the summary at once when nothing changed)
-            stamp = self._impact_stamp(pin, version, records, configured)
+            stamp = (self._impact_stamp(pin, version, records, configured), catalog)
         cached = self._impact_cache.get(pin.key)
         if cached and cached[0] == stamp:
             out.update(mods=[dict(mod) for mod in cached[1]["mods"]], counts=dict(cached[1]["counts"]))
             out["due"] = bool(out["mods"])
+            if catalog != self._checked_catalog_snapshot(pin, version):
+                raise ServiceError("catalog_changed")
             return out
         line = mod_progress.ItemProgress(progress, len(records), "check")
         for i, record in enumerate(records, 1):
+            self._let_others_in()
             if progress:
                 entry = entries[record["id"]]
                 line.item(
@@ -306,20 +313,168 @@ class ImpactMixin:
             with self._lock:
                 if record["id"] not in self._records:
                     continue
-                found, changes = self._impact_of(record, pin)
+                found, changes = self._impact_of(record, pin, version=version)
+            retired = self._retired_catalog_target(pin, record)
             out["counts"][found] += 1
-            if found in (fingerprint.UNCHANGED, fingerprint.UNKNOWN):
-                continue
-            out["mods"].append(self._impact_item(entries[record["id"]], found, changes, configured))
+            if retired or found not in (fingerprint.UNCHANGED, fingerprint.UNKNOWN):
+                row = self._impact_item(entries[record["id"]], found, changes, configured)
+                if retired:
+                    row["target_retired"] = True
+                out["mods"].append(row)
         out["due"] = bool(out["mods"])
-        self._impact_cache[pin.key] = (
-            stamp,
-            {"mods": [dict(mod) for mod in out["mods"]], "counts": dict(out["counts"])},
-        )
-        self._keep_impact(pin.key, version, out["mods"])
-        if not out["due"] and not force:
-            self.impact_seen(pin.key, version)
+        if catalog != self._checked_catalog_snapshot(pin, version):
+            raise ServiceError("catalog_changed")
+        if self._keep_impact(pin, version, out["mods"], catalog):
+            self._impact_cache[pin.key] = (
+                stamp,
+                {"mods": [dict(mod) for mod in out["mods"]], "counts": dict(out["counts"])},
+            )
+            if not out["due"] and not force:
+                self.impact_seen(pin.key, version, checked=True)
         return out
+
+    def _checked_catalog_snapshot(self, pin: Pin, version: str | None) -> tuple | None:
+        with _errors("check catalog version"):
+            if self.resource_version(pin) != version:
+                raise ServiceError("catalog_changed")
+            record = self._catalog_record(pin)
+            refused = record.get("refused_sha1")
+            if record["mode"] != MODE_CATALOG and not refused:
+                return None
+            if record["rv"] != version:
+                raise ServiceError("catalog_changed")
+            live = self._catalog_paths(pin, recovering=True).live
+            revision = _file_revision(live)
+            self._check_catalog_revision(pin, live, version, revision)
+            if refused:
+                if revision is None or digest(live, "sha1") != refused:
+                    raise ServiceError("catalog_changed")
+            elif not record.get("official") or self._catalog_live(pin, record) is None:
+                raise ServiceError("catalog_changed")
+            self._check_catalog_revision(pin, live, version, revision)
+            return refused or record["official"]["sha1"], revision
+
+    def refresh_catalogs(self, pins: Sequence[Pin]) -> None:
+        """Accept updated official catalogs in one class 3 transaction per install.
+
+        Each install releases the library lock for validation and copies. Saves take it briefly.
+        """
+        for pin in pins:
+            try:
+                with _errors("refresh catalog"):
+                    self._refresh_catalog_version(pin)
+            except ServiceError as error:
+                if error.code not in LATER:
+                    log_failure(logger, logging.INFO, "Could not accept the updated game catalog", error)
+
+    def prepare_catalogs(self, log: LogFunc = no_log, progress: ProgressCallback | None = None) -> list[dict]:
+        """Run class 3 maintenance under the start cover, yielding between installs and entries."""
+        pins = self.installs()
+        with _paced_catalog():
+            if self._journals():
+                try:
+                    with _errors("recover catalogs"), self._catalog_transaction():
+                        pass
+                except ServiceError as error:
+                    log_failure(logger, logging.WARNING, "Could not recover game catalogs", error)
+            self.refresh_catalogs(pins)
+            for pin in pins:
+                try:
+                    self._check_catalog_at_start(pin)
+                    self._migrate_catalog(pin, progress)
+                except ServiceError as error:
+                    if error.code not in LATER:
+                        log_failure(logger, logging.WARNING, "Could not prepare the game catalog", error)
+        notices = [
+            {**ServiceError("catalog_restored").to_json(), "install": install}
+            for install in sorted(self._catalog_restores)
+        ]
+        self._catalog_restores.clear()
+        return notices
+
+    def _catalog_check_pending(self, pin: Pin, version: str | None) -> bool:
+        folder = ((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {}
+        seen = (folder.get("resource") or {}).get("version")
+        checked = folder.get("impact") or {}
+        record = self._catalog_records_for_read().get(pin.key, {})
+        official = record.get("official") or {}
+        needs_check = seen not in (None, version) or record.get("reapply")
+        return bool(
+            needs_check
+            and (checked.get("version") != version or (official and checked.get("catalog_sha1") != official["sha1"]))
+        )
+
+    def _catalog_reapply_due(self, pin: Pin, version: str | None) -> bool:
+        record = self._catalog_records_for_read().get(pin.key)
+        return bool(
+            record
+            and record["mode"] == MODE_CATALOG
+            and record["rv"] == version
+            and record.get("reapply")
+            and profiles_mod.enabled(self.profiles.read())
+            and not self._catalog_check_pending(pin, version)
+        )
+
+    def _reapply_catalog_update(self, pin: Pin, version: str, progress: ProgressCallback | None = None) -> None:
+        """Reconcile a checked update as a class 2 or 3 writer, yielding between entry lock steps."""
+        try:
+            with (
+                _errors("reapply catalog update"),
+                _paced_catalog(),
+                self._catalog_transaction(),
+                self._lock.unlocked(),
+            ):
+                if not self._catalog_reapply_due(pin, version) or self.resource_version(pin) != version:
+                    return
+                record = self._catalog_record_for(pin)
+                self._check_stopping(pin)
+                with self._lock:
+                    groups = self._catalog_cores(pin, record)
+                    pending = dict(
+                        record.get(
+                            "pending", {core: next(iter(group.values()))["source"] for core, group in groups.items()}
+                        )
+                    )
+                    config = self.profiles.read() or {}
+                    choices = ((config.get("folders") or {}).get(pin.key) or {}).get("configured") or {}
+                entries = []
+                for core, source in list(pending.items()):
+                    self._let_others_in()
+                    with self._lock:
+                        current_source = (choices.get(core) or {}).get("source")
+                        if current_source != source:
+                            del pending[core]
+                        elif self._spine_parts(core, pin) and not (
+                            self._hold(pin, source) or self._catalog_needs_mod_update(record, core, source)
+                        ):
+                            entries.append({"install": pin.key, "core": core, "state": "updated"})
+                if entries:
+                    result = self._run(None, None, [pin], no_log, progress, None, entries, catalog_reconcile=True)
+                    current = self._catalog_record_for(pin)
+                    if self._catalog_live(pin, current) == "mods":
+                        published = self._catalog_cores(pin, current)
+                        for entry in entries:
+                            core = entry["core"]
+                            if (
+                                core in published
+                                and all(item["source"] == pending[core] for item in published[core].values())
+                                and not any(failure["entry"]["core"] == core for failure in result.failed)
+                            ):
+                                del pending[core]
+                current = self._catalog_record_for(pin)
+                self._save_catalog_record(pin, {**current, "pending": pending, "reapply": bool(pending)})
+        except ServiceError as error:
+            if error.code not in LATER:
+                log_failure(logger, logging.WARNING, "Could not reapply the updated game catalog", error)
+
+    def _retired_catalog_target(self, pin: Pin, mod: dict, catalog: dict | None = None) -> bool:
+        if catalog is None:
+            catalog = self._catalog_records_for_read().get(pin.key, {})
+        source = f"mod:{mod['id']}"
+        return any(
+            item["source"] == source and item["mark"] == self._impact_mark(mod)
+            for item in catalog.get("removed", {}).values()
+        )
 
     @staticmethod
     def _impact_item(entry: Any, found: str, changes: dict, configured: set) -> dict[str, Any]:
@@ -349,11 +504,10 @@ class ImpactMixin:
             mark = None
         return hashlib.sha1(json.dumps([sorted(record.get("files") or []), mark]).encode()).hexdigest()
 
-    def _keep_impact(self, install: str, version: str, mods: list[dict[str, Any]]) -> None:
+    def _keep_impact(self, pin: Pin, version: str, mods: list[dict[str, Any]], catalog: tuple | None) -> bool:
         """Keep the outcome of an impact check of an install (``last_impact``).
 
-        It holds the resource version and the mods whose rig changed, each with what changed and its mark
-        (``_impact_mark``). Never fails.
+        It holds the resource version, the accepted catalog digest, and the mods that need updating.
         """
         with self._lock:
             kept = [
@@ -361,26 +515,35 @@ class ImpactMixin:
                     "id": mod["id"],
                     "changes": mod.get("changes") or {},
                     "mark": self._impact_mark(self._records[mod["id"]]),
+                    **({"impact": mod["impact"], "target_retired": True} if mod.get("target_retired") else {}),
                 }
                 for mod in mods
-                if mod.get("impact") == fingerprint.RIG_CHANGED and mod["id"] in self._records
+                if (mod.get("impact") == fingerprint.RIG_CHANGED or mod.get("target_retired"))
+                and mod["id"] in self._records
             ]
         if self._writes_refused():
-            return
+            return False
 
         def change(data: dict) -> bool:
-            folder = data["folders"].setdefault(install, {})
+            if catalog != self._checked_catalog_snapshot(pin, version):
+                raise ServiceError("catalog_changed")
+            folder = data["folders"].setdefault(pin.key, {})
             before = folder.get("impact") or {}
-            if before.get("version") == version and before.get("mods") == kept:
+            result = {"version": version, "mods": kept}
+            if catalog:
+                result["catalog_sha1"] = catalog[0]
+            if all(before.get(key) == value for key, value in result.items()):
                 return False
-            folder["impact"] = {"version": version, "checked": now(), "mods": kept}
+            folder["impact"] = {**result, "checked": now()}
             return True
 
         try:
             with _errors("impact_kept"):
                 self.profiles.update(change)
+            return True
         except ServiceError as error:
             log_failure(logger, logging.WARNING, "Could not keep the outcome of the impact check", error)
+            return False
 
     def last_impact(self, pin: Pin | None = None) -> dict[str, Any]:
         """Read the last impact outcome using only the version file and configuration.
@@ -421,7 +584,12 @@ class ImpactMixin:
                 if record is None or item["id"] not in entries or item.get("mark") != self._impact_mark(record):
                     continue
                 changes = item.get("changes") if isinstance(item.get("changes"), dict) else {}
-                out["mods"].append(self._impact_item(entries[item["id"]], fingerprint.RIG_CHANGED, changes, configured))
+                row = self._impact_item(
+                    entries[item["id"]], item.get("impact", fingerprint.RIG_CHANGED), changes, configured
+                )
+                if item.get("target_retired"):
+                    row["target_retired"] = True
+                out["mods"].append(row)
         return out
 
     def _outdated_costumes(self, pin: Pin, config: dict) -> list[dict[str, Any]]:
@@ -700,12 +868,10 @@ class ImpactMixin:
         """Determine whether startup should offer an impact check or retry background maintenance.
 
         A check is due when the install's resource version
-        differs from the last one seen there and the library has mods. Reads only the version file and the
-        configuration. With no version seen yet (a first start, a newly chosen folder) or no mod, the version is
-        recorded as seen at once and nothing is asked. Never fails: a version that cannot be read asks nothing.
+        differs from the last one seen there and the library has mods. With no recorded version yet or no mod,
+        the version is recorded as seen at once. An unreadable version asks nothing.
 
-        ``outdated``: whatever the version, the App built something from a costume under an older costume rule
-        (``_outdated_costumes``): the start builds it again first (``refresh_costumes``), without asking.
+        ``outdated``: catalog maintenance or outdated costume builds need the startup job before the question.
         ``retry``: entries whose last write failed, not tried again under this build of the App (``_failed_writes``):
         the start writes them again (``retry_failed``), without asking; after the check while ``due``.
 
@@ -715,7 +881,7 @@ class ImpactMixin:
         pin = pin or self.current_pin()
         out: dict[str, Any] = {
             "due": False,
-            "outdated": False,
+            "outdated": self._catalog_start_due(),
             "retry": False,
             "install": None,
             "version": None,
@@ -731,9 +897,12 @@ class ImpactMixin:
             log_failure(logger, logging.DEBUG, "Could not look for entries whose last write failed", error)
         seen = ((config.get("folders") or {}).get(pin.key) or {}).get("resource") or {}
         previous = seen.get("version") if isinstance(seen, dict) else None
+        catalog = self._catalog_records_for_read().get(pin.key, {"mode": "files"})
+        if previous is None and self._catalog_version_changed(catalog, version) and catalog["redirects"]:
+            previous = catalog["rv"]
         out.update(install=pin.key, version=version, previous=previous)
         try:
-            out["outdated"] = bool(self._outdated_costumes(pin, config))
+            out["outdated"] |= bool(self._outdated_costumes(pin, config))
         except (OSError, ServiceError) as error:
             log_failure(logger, logging.DEBUG, "Could not look for costume builds of an older rule", error)
         if version is None or version == previous:
@@ -742,6 +911,7 @@ class ImpactMixin:
             has_mods = bool(self._records)
         if previous is None or not has_mods:
             try:
+                self._checked_catalog_snapshot(pin, version)
                 self.impact_seen(pin.key, version)
             except ServiceError as error:
                 log_failure(logger, logging.DEBUG, "Could not record the resource version as seen", error)
@@ -749,7 +919,7 @@ class ImpactMixin:
         out["due"] = True
         return out
 
-    def impacts(self, ids: Sequence[str], pin: Pin | None = None) -> list[dict[str, str]]:
+    def impacts(self, ids: Sequence[str], pin: Pin | None = None) -> list[dict[str, Any]]:
         """Classify update impacts for selected mods, omitting missing IDs.
 
         Args:
@@ -765,23 +935,40 @@ class ImpactMixin:
             with self._lock:
                 record = self._records.get(mod_id)
                 if record is not None:
-                    out.append({"id": mod_id, "impact": self._impact(record, pin)})
+                    item = {"id": mod_id, "impact": self._impact(record, pin)}
+                    if pin and self._retired_catalog_target(pin, record):
+                        item["target_retired"] = True
+                    out.append(item)
         return out
 
-    def impact_seen(self, install: str, version: str) -> None:
+    def impact_seen(self, install: str, version: str, *, checked: bool = False) -> None:
         """Record a resource version as seen because its impact summary was shown or unnecessary.
 
         Args:
             install: Install key whose resource notification is acknowledged.
             version: Nonempty resource version to record with the acknowledgement time.
+            checked: Require a saved impact check and the current accepted catalog for page acknowledgements.
         """
         if not isinstance(install, str) or not isinstance(version, str) or not version:
             raise ServiceError("bad_params", key="version")
+        catalog = None
+        if checked:
+            pin = next((pin for pin in self.installs() if pin.key == install), None)
+            if pin is None:
+                raise ServiceError("bad_params", key="install")
+            catalog = self._checked_catalog_snapshot(pin, version)
         if self._writes_refused():
             return
 
         def change(data: dict) -> bool:
             folder = data["folders"].setdefault(install, {})
+            impact = folder.get("impact") or {}
+            if checked and (
+                impact.get("version") != version
+                or (catalog and impact.get("catalog_sha1") != catalog[0])
+                or catalog != self._checked_catalog_snapshot(pin, version)
+            ):
+                raise ServiceError("catalog_changed")
             if (folder.get("resource") or {}).get("version") == version:
                 return False
             folder["resource"] = {"version": version, "seen": now()}

@@ -11,7 +11,7 @@ from typing import Any, Callable
 from ..core.errors import ServiceError
 from ..library import toggle_timing
 from bmpt.engine import parse_filename
-from .jobs import MAINTENANCE, USER
+from .jobs import MAINTENANCE, START, USER
 
 
 logger = logging.getLogger("bmpt.webui.services")  # the services log under one name
@@ -245,7 +245,8 @@ class JobsMixin:
     def _after_writer(self, library: Any, kind: str, result: Any, failed: bool) -> None:
         started = time.perf_counter()
         library = library if library is not None else self._library
-        if library is not None and kind != "library.judge":
+        startup = not self._startup_ready and kind in ("mods.refreshCostumes", "mods.catalogReapply")
+        if library is not None and kind != "library.judge" and not startup:
             try:
                 library.judge_unfinished()
             except ServiceError as error:
@@ -261,8 +262,10 @@ class JobsMixin:
         self.events.publish("library.changed", None if failed else _changed_of(result))
         replace_scan = self.scanner.running or self.scanner.invalidated
         pruned = library.take_pruned_cores() if library is not None else set()
-        if kind not in ("library.prune", "library.judge") and (
-            kind != "mods.add" or result or getattr(result, "installed", None) or replace_scan or pruned
+        if (
+            not startup
+            and kind not in ("library.prune", "library.judge")
+            and (kind != "mods.add" or result or getattr(result, "installed", None) or replace_scan or pruned)
         ):
             changed = _changed_of(result)
             cores = set(changed["cores"]) if not failed and kind in ("apply", "restore") else None
@@ -422,23 +425,55 @@ class JobsMixin:
             return self.submit("mods.restore", run, writes="game", library=library)
 
     def submit_refresh_costumes(self) -> str:
-        """Submit ``mods.refreshCostumes``: build again, at the start, the costume builds of an older costume rule.
+        """Submit the class 3 catalog and costume work behind the start cover.
 
-        See ``refresh_costumes``; it works on the current install. With a classic window open the game files are
-        left for the next start.
+        Catalog work covers every known install. Costume work covers the current one. Each library operation
+        yields between entries and releases the lock for catalog generation and swaps.
 
         Returns:
             The job's id.
         """
         library = self.library
-        pin = self._current_pin(library)
+        pin = library.current_pin()
 
         def run(log: Any, progress: Any) -> Any:
-            self._check_pin(library, pin)
-            return library.refresh_costumes(pin, log=log, progress=progress, write_game=not self.classic_open())
+            notices = library.prepare_catalogs(log=log, progress=progress)
+            result = {"done": [], "kept": [], "left": []}
+            if pin is not None:
+                self._check_pin(library, pin)
+                result = library.refresh_costumes(pin, log=log, progress=progress, write_game=not self.classic_open())
+            for known in library.installs():
+                self.submit_catalog_reapply(library, known, library.resource_version(known))
+            return {**result, "notices": notices}
 
         with self.classic.starting():
-            return self.submit("mods.refreshCostumes", run, writes="game", library=library)
+            return self.submit("mods.refreshCostumes", run, writes="game", library=library, rank=START)
+
+    def submit_update_impact(self, library: Any, pin: Any, force: bool) -> str:
+        """Submit the impact reader at its usual rank, yielding between per-mod lock steps."""
+
+        def run(log: Any, progress: Any) -> Any:
+            result = library.update_impact(pin, force=force, progress=progress)
+            self.submit_catalog_reapply(library, pin, result["version"])
+            return result
+
+        return self.submit("mods.impact", run)
+
+    def submit_catalog_reapply(self, library: Any, pin: Any, version: str | None) -> str | None:
+        """Submit one install's writer, yielding between entries and saving redirects in short lock steps."""
+        due = getattr(library, "_catalog_reapply_due", None)
+        if version is None or due is None or not due(pin, version):
+            return None
+
+        def run(log: Any, progress: Any) -> None:
+            library._reapply_catalog_update(pin, version, progress)
+            if self._startup_ready:
+                self._start_prune(library)
+
+        with self.classic.starting():
+            return self.submit(
+                "mods.catalogReapply", run, writes="game", library=library, rank=USER if self._startup_ready else START
+            )
 
     def submit_retry_failed(self) -> str:
         """Submit ``mods.retryFailed``: at the start, write again the entries whose last write failed.

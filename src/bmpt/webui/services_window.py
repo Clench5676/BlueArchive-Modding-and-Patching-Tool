@@ -13,7 +13,7 @@ from ..host import updater
 from ..catalog.records import alt_resource_core
 from ..core.errors import ServiceError
 from .classic.queued import QUEUE_METHODS, QueuedCall, stat_files
-from .jobs import MAINTENANCE
+from .jobs import MAINTENANCE, USER
 from .services_jobs import PRUNE_WAIT
 
 if TYPE_CHECKING:
@@ -244,9 +244,11 @@ class WindowMixin:
             self._start_crc_repair(library)
             requested = False
             with self._lock:
-                if self._prune_job is None and self.scan_allowed():
+                allowed = self.scan_allowed()
+                catalogs = getattr(library, "_catalog_records_for_read", None)
+                if self._prune_job is None and (allowed or (catalogs and catalogs())):
                     self._start_prune(library)
-                    requested = True
+                    requested = allowed
             if requested:
                 self.request_scan()
             if self.refresh_status() is not None:
@@ -314,11 +316,12 @@ class WindowMixin:
     def _steam_idle(self) -> None:
         """Rebuild the game-backed services after Steam went idle on an install, if a game update changed them.
 
-        The services are rebuilt as a settings change does it (once no job runs) when a built game's resource version
-        changed. An unchanged version does nothing.
+        The services are rebuilt once the job queue is idle. Changed catalog versions are accepted in class 3
+        without swapping. Validation and copies leave the library lock free until records are saved.
         """
         with self._lock:
             games = [game for game in (self._game, *self._other_games.values()) if game is not None]
+            library = self._library
         changed = False
         for game in games:
             check = getattr(game, "resource_changed", None)
@@ -328,9 +331,20 @@ class WindowMixin:
                 logger.debug("cannot read the resource version after Steam went idle", exc_info=True)
             if changed:
                 break
-        if changed:
+        catalog_due = getattr(library, "_catalog_reload_due", None)
+        if changed or (catalog_due and catalog_due(library.installs())):
             logger.info("the game's resource version changed: rebuilding the game services")
-            self._on_settings_changed()
+            self.reload_game()
+            if self._startup_ready:
+                library = self.library
+                pins = library.installs()
+                if getattr(library, "_catalog_reload_due", None) and library._catalog_reload_due(pins):
+
+                    def refresh(log: Any, progress: Any) -> None:
+                        library.refresh_catalogs(pins)
+                        self._start_prune(library)
+
+                    self.submit("mods.catalogUpdate", refresh, writes="game", library=library, rank=USER)
 
     def raise_window(self) -> None:
         """Show and raise the window for a second start of the program on this data directory.

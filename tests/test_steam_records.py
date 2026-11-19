@@ -104,15 +104,25 @@ def test_the_bundles_of_an_install_come_from_the_depot_cache_of_its_library(stea
     library, install, game_data, official, keep, listed = steam
     files = steam_records.OfficialFiles()
     assert files.bundles(game_data) == {}  # no depot cache: no list
+    assert files.catalog(game_data) is None
     keep(listed, gid=1)
     assert files.bundles(game_data) == {}  # a list of another build is not this install's
-    keep({**listed, "BlueArchive.exe": b"exe", f"{RESOURCE}/GameData/Windows/sub/x.bundle": b"x"})
+    catalog = b"official catalog"
+    keep(
+        {
+            **listed,
+            "BlueArchive.exe": b"exe",
+            f"{RESOURCE}/GameData/Windows/sub/x.bundle": b"x",
+            f"{RESOURCE}/Catalog/Windows/catalog_Windows.bytes": catalog,
+        }
+    )
     expected = {
         official.name: steam_records.OfficialFile(
             len(listed[next(iter(listed))]), hashlib.sha1(official.read_bytes()).hexdigest()
         )
     }
     assert files.bundles(game_data) == expected == files.bundles(install)
+    assert files.catalog(install) == steam_records.OfficialFile(len(catalog), hashlib.sha1(catalog).hexdigest())
     assert files.bundles(library.parent / "elsewhere") == {}
 
 

@@ -1,7 +1,9 @@
 """Exercise catalog storage and interrupted swaps on private synthetic installs."""
 
+import contextlib
 import hashlib
 import os
+import shutil
 import threading
 import zlib
 from concurrent.futures import ThreadPoolExecutor
@@ -17,11 +19,17 @@ from test_library import FakeAlt, FakeCatalog, game_bundle, make_mod
 
 from bmpt.core.errors import ServiceError
 from bmpt.host.config import Settings
-from bmpt.host.store_formats import CATALOG_JOURNALS, parse_json
-from bmpt.library import ModLibrary, safety, tested_build
+from bmpt.host.data_upgrade import DataUpgrade
+from bmpt.host.steam_records import OfficialFile
+from bmpt.host.store_formats import CATALOG_JOURNALS, parse_json, read_runtime
+from bmpt.library import ModLibrary, fingerprint, safety, tested_build
 from bmpt.library.catalog_switch import MODS_DIR, catalog_paths
-from bmpt.library.service import catalog as catalog_service
+from bmpt.library.service import catalog as catalog_service, updating
 from bmpt.unity import ccdb
+from bmpt.webui.api import build_api
+from bmpt.webui.jobs import START
+from bmpt.webui.services import Services
+from bmpt.webui.services_jobs import JobsMixin
 
 
 @pytest.fixture
@@ -325,14 +333,15 @@ def test_swap_passes_the_pin_to_the_existing_write_gate(prepared):
     assert not library._journals()
 
 
-def test_recovery_preserves_new_official_catalog_with_new_resource_version(prepared, monkeypatch):
+@pytest.mark.parametrize("parseable", [True, False])
+def test_recovery_preserves_new_official_catalog_with_new_resource_version(prepared, monkeypatch, parseable):
     library, pin, live = prepared.library, prepared.pin, prepared.live
     library._swap_catalog(pin, "mods")
     with monkeypatch.context() as patch:
         _interrupt_after(prepared, patch, "swapping")
         with pytest.raises(_Interrupted):
             library._swap_catalog(pin, "official")
-    new_official = ccdb.write(replace(synthetic_catalog(), keys=b"updated catalog"))
+    new_official = ccdb.write(replace(synthetic_catalog(), keys=b"updated catalog")) if parseable else b"new bytes"
     live.write_bytes(new_official)
     live.with_suffix(".hash").write_bytes(b"updated build stamp")
     with library._transaction_lock():
@@ -397,7 +406,7 @@ def switch_install(tmp_path, monkeypatch, header_only_bundles):
 
 @pytest.fixture
 def catalog_install(switch_install):
-    switch_install.library._enter_catalog_mode(switch_install.pin)
+    switch_install.library._migrate_catalog(switch_install.pin)
     return switch_install
 
 
@@ -572,7 +581,7 @@ def test_toggle_rebuilds_placements_when_the_build_key_changes(catalog_install):
 
 
 @pytest.mark.parametrize("keep_side_copy", [True, False])
-def test_missing_official_library_copy_only_blocks_redirects(catalog_install, keep_side_copy):
+def test_missing_official_library_copy_falls_back_to_file_replacement(catalog_install, keep_side_copy):
     env = catalog_install
     lib = env.library
     lib.toggle(False, True)
@@ -584,8 +593,8 @@ def test_missing_official_library_copy_only_blocks_redirects(catalog_install, ke
     if not keep_side_copy:
         (env.live.parent / MODS_DIR / f"official-{record['rv'][:12]}.bytes").unlink()
     result = lib.toggle(True, False)
-    assert [(item["entry"]["core"], item["code"]) for item in result.failed] == [("test_spr", "catalog_changed")]
-    assert {item["core"] for item in result.done} == {"preload_spr", "unlisted_spr"}
+    assert not result.failed
+    assert {item["core"] for item in result.done} == {"test_spr", "preload_spr", "unlisted_spr"}
     assert env.live.read_bytes() == env.official
 
 
@@ -828,20 +837,32 @@ def test_restore_drift_swaps_back_to_recorded_redirects(catalog_install, monkeyp
     expected = env.live.read_bytes()
     env.live.write_bytes(env.official)
     (entry,) = lib.scan(cores={"test_spr"}).entries
+    assert entry.state == "reset"
     monkeypatch.setattr(lib, "_generate_catalog", lambda *args: pytest.fail("Unexpected regeneration"))
+    swaps = []
+    rename = catalog_service.replace_file
+
+    def swapped(source, destination):
+        swaps.append(destination)
+        return rename(source, destination)
+
+    monkeypatch.setattr(catalog_service, "replace_file", swapped)
     result = lib.restore_drift([{"install": entry.install, "core": entry.core, "state": entry.state}])
     assert [item["core"] for item in result.done] == ["test_spr"]
     assert env.live.read_bytes() == expected
+    assert swaps == [env.live]
 
 
 @pytest.mark.parametrize("catalog_mode", [False, True])
-def test_prune_releases_configured_original_only_in_catalog_mode(switch_install, catalog_mode):
+def test_prune_releases_configured_original_only_in_catalog_mode(switch_install, catalog_mode, monkeypatch):
     env = switch_install
     lib, pin = env.library, env.pin
     path = env.files["test"][0]
     source, upload = env.add("test")
     if catalog_mode:
-        lib._enter_catalog_mode(pin)
+        lib._migrate_catalog(pin)
+    else:
+        monkeypatch.setattr(catalog_service, "mode_of", lambda _: ("files", "missing_catalog"))
     lib.apply("test", source)
     lib.toggle(False, True)
     kept = lib.root / "originals" / path.name
@@ -855,3 +876,785 @@ def test_prune_releases_configured_original_only_in_catalog_mode(switch_install,
         assert env.live.read_bytes() == env.official
         assert not (lib.root / "catalogs.json").exists()
         assert not (path.parent / MODS_DIR).exists()
+
+
+def _steam_update(env, *, renamed=False, removed=False, library=None):
+    old = env.files["test"][0]
+    gone = env.files["held"][0]
+    ids = ccdb.parse(env.official).ids
+    if renamed:
+        new = game_bundle(old.parent, "test_spr", date="2026-02-01", payload=b"renamed official")
+        old.unlink()
+        ids = [bundle_id(LOAD, new.name) if item == bundle_id(LOAD, old.name) else item for item in ids]
+    if removed:
+        gone.unlink()
+        ids.remove(bundle_id(LOAD, gone.name))
+    newer = ccdb.write(replace(synthetic_catalog(), ids=ids, keys=b"new official catalog"))
+    env.live.write_bytes(newer)
+    env.live.with_suffix(".hash").write_bytes(b"new resource version")
+    (library or env.library)._steam_files.catalog = lambda _: OfficialFile(len(newer), hashlib.sha1(newer).hexdigest())
+    return newer
+
+
+def test_catalog_update_drops_retired_targets_and_reapplies_after_check(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    for core in ("test", "held", "second"):
+        source, _ = env.add(core)
+        lib.apply(core, source)
+    old = lib._catalog_record(pin)
+    old_side = list((env.live.parent / MODS_DIR).iterdir())
+    retired = {env.files["test"][0].name, env.files["held"][0].name}
+    placed = {name: lib._placed_path(pin, item) for name, item in old["redirects"].items()}
+    newer = _steam_update(env, renamed=True, removed=True)
+    events = []
+    rename = catalog_service.replace_file
+
+    def swapped(source, destination):
+        events.append(destination)
+        return rename(source, destination)
+
+    monkeypatch.setattr(catalog_service, "replace_file", swapped)
+    assert lib.update_due()["due"]
+    assert lib.update_due()["outdated"]
+    lib.prepare_catalogs()
+    record = lib._catalog_record(pin)
+    assert set(record["redirects"]) == old["redirects"].keys() - retired
+    assert record["live"] == "official" and record["mods"] is None
+    assert env.live.read_bytes() == newer and not events
+    assert all(path.is_file() for path in old_side)
+    states = {entry.core: entry.state for entry in lib.scan().entries}
+    assert {key: states[key] for key in ("test_spr", "held_spr", "second_spr")} == {
+        "test_spr": "updated",
+        "held_spr": "missing",
+        "second_spr": "updated",
+    }
+    with pytest.raises(ServiceError, match="catalog_changed"):
+        lib._regenerate(pin)
+    assert not events
+    monkeypatch.setattr(lib, "_scan_allowed", lambda: False)
+    impact = lib.update_impact(pin)
+    assert {row["core"] for row in impact["mods"] if row.get("target_retired")} == {"test_spr", "held_spr"}
+    assert {row["core"] for row in lib.last_impact(pin)["mods"]} == {"test_spr", "held_spr"}
+    assert env.live.read_bytes() == newer
+    lib._reapply_catalog_update(pin, impact["version"])
+    record = lib._catalog_record(pin)
+    unchanged = env.files["second"][0].name
+    assert record["redirects"] == {unchanged: old["redirects"][unchanged]}
+    assert env.live.read_bytes() == ccdb.redirect(newer, {unchanged: placed[unchanged].name}, MODS_DIR)
+    assert events == [env.live]
+    assert lib._view([pin], "recorded").entry(pin, "second_spr").state == "ok"
+    assert "test_spr" in lib.profiles.read()["folders"][pin.key]["updated"]
+    lib.prune()
+    assert not any(path.exists() for path in old_side)
+    assert [name for name, path in placed.items() if path.is_file()] == [unchanged]
+
+
+def test_catalog_update_while_mods_are_off_never_swaps(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, _ = env.add("second")
+    lib.apply("second", source)
+    lib.toggle(False, True)
+    old = lib._catalog_record(pin)
+    newer = _steam_update(env)
+    monkeypatch.setattr(catalog_service, "replace_file", lambda *_: pytest.fail("Unexpected catalog swap"))
+    wrong = OfficialFile(len(newer), old["official"]["sha1"])
+    for evidence in (None, wrong):
+        monkeypatch.setattr(lib._steam_files, "catalog", lambda _, evidence=evidence: evidence)
+        lib.refresh_catalogs([pin])
+        assert lib._catalog_record(pin) == old
+    right = OfficialFile(len(newer), hashlib.sha1(newer).hexdigest())
+    monkeypatch.setattr(lib._steam_files, "catalog", lambda _: right)
+    lib.prepare_catalogs()
+    lib.update_impact(pin)
+    record = lib._catalog_record(pin)
+    assert record["rv"] != old["rv"]
+    assert record["redirects"] == old["redirects"]
+    assert record["live"] == "official" and record["mods"] is None
+    assert env.live.read_bytes() == newer
+    lib.prune()
+    assert not (env.live.parent / MODS_DIR / f"mods-{old['rv'][:12]}.bytes").exists()
+
+
+def test_start_resumes_catalog_reapply_after_check_is_recorded(catalog_install):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, _ = env.add("second")
+    lib.apply("second", source)
+    newer = _steam_update(env)
+    lib.prepare_catalogs()
+    record = lib._catalog_record(pin)
+    with pytest.raises(ServiceError, match="catalog_changed"):
+        lib.impact_seen(pin.key, record["rv"], checked=True)
+    lib.update_impact(pin)
+    assert lib.update_due()["outdated"]
+    lib.prepare_catalogs()
+    assert env.live.read_bytes() == newer
+    lib._reapply_catalog_update(pin, record["rv"])
+    record = lib._catalog_record(pin)
+    assert not record["reapply"]
+    assert env.live.read_bytes() == ccdb.redirect(
+        newer, {name: item["placed"] for name, item in record["redirects"].items()}, MODS_DIR
+    )
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_migration_places_recorded_bytes_with_mods_on_or_off(switch_install, monkeypatch, enabled):
+    env = switch_install
+    lib, pin = env.library, env.pin
+    source, upload = env.add("test", fixed=True)
+    lib.apply("test", source)
+    if not enabled:
+        with monkeypatch.context() as patch:
+            patch.setattr(catalog_service, "mode_of", lambda _: ("files", "missing_catalog"))
+            lib.toggle(False, True)
+        monkeypatch.setattr(catalog_service, "replace_file", lambda *_: pytest.fail("Unexpected catalog swap"))
+    progress = []
+    assert lib.update_due()["outdated"]
+    lib.prepare_catalogs(progress=progress.append)
+    record = lib._catalog_record(pin)
+    assert record["migrated"] and record["mode"] == "catalog"
+    assert record["live"] == ("mods" if enabled else "official")
+    assert record["redirects"].keys() == {path.name for path in env.files["test"]}
+    assert lib._placed_path(pin, record["redirects"][upload.name]).read_bytes() == upload.read_bytes()
+    assert env.live.read_bytes() == (
+        ccdb.redirect(env.official, {name: item["placed"] for name, item in record["redirects"].items()}, MODS_DIR)
+        if enabled
+        else env.official
+    )
+    assert all(path.read_bytes() == env.originals[path] for path in env.files["test"])
+    assert progress[-1]["fraction"] == 1
+    assert not lib.update_due()["outdated"]
+
+
+def test_start_cover_job_forwards_catalog_progress(switch_install):
+    env = switch_install
+    lib = env.library
+    source, _ = env.add("second")
+    lib.apply("second", source)
+    assert lib.update_due()["outdated"]
+    submitted = []
+    services = SimpleNamespace(
+        library=lib,
+        classic=SimpleNamespace(starting=contextlib.nullcontext),
+        classic_open=lambda: False,
+        _check_pin=lambda *_: None,
+        submit_catalog_reapply=lambda *_: None,
+        submit=lambda kind, run, **options: submitted.append((kind, run, options)),
+    )
+    JobsMixin.submit_refresh_costumes(services)
+    ((kind, run, options),) = submitted
+    assert kind == "mods.refreshCostumes"
+    assert options == {"writes": "game", "library": lib, "rank": START}
+    progress = []
+    run(lambda _: None, progress.append)
+    assert len(progress) >= 2 and progress[-1]["fraction"] == 1
+    assert lib._catalog_record(env.pin)["migrated"]
+
+
+def test_migration_waits_to_publish_when_a_game_update_needs_checking(switch_install):
+    env = switch_install
+    lib, pin = env.library, env.pin
+    lib.update_due()
+    source, upload = env.add("second")
+    lib.apply("second", source)
+    newer = _steam_update(env)
+    assert lib.update_due()["due"]
+    lib.prepare_catalogs()
+    record = lib._catalog_record(pin)
+    assert record["redirects"] and not record["migrated"]
+    assert env.live.read_bytes() == newer
+    target = env.files["second"][0]
+    assert target.read_bytes() == upload.read_bytes()
+    lib.update_impact(pin)
+    assert env.live.read_bytes() == newer
+    lib.prepare_catalogs()
+    record = lib._catalog_record(pin)
+    assert record["live"] == "mods" and record["migrated"]
+    assert target.read_bytes() == env.originals[target]
+
+
+@pytest.mark.parametrize(
+    "checkpoint",
+    [
+        "_view",
+        "_place_entry",
+        "_generate_catalog",
+        "_timed_swap",
+        "_restore_migrated_entry",
+        "_save_catalog_record",
+        "published_catalog",
+        "published_bundle",
+    ],
+)
+def test_migration_resumes_after_every_checkpoint(switch_install, monkeypatch, checkpoint):
+    env = switch_install
+    lib, pin = env.library, env.pin
+    for core in ("test", "second"):
+        source, _ = env.add(core)
+        lib.apply(core, source)
+    lib.update_due()
+    monkeypatch.setattr(lib, "_let_others_in", lambda: 0)
+    owner, name = {
+        "published_catalog": (catalog_service, "replace_file"),
+        "published_bundle": (lib, "_save"),
+    }.get(checkpoint, (lib, checkpoint))
+    original = getattr(owner, name)
+
+    def crash(*args, **kwargs):
+        if checkpoint == "published_bundle":
+            assert env.files["second"][0].read_bytes() == env.originals[env.files["second"][0]]
+            raise _Interrupted()
+        result = original(*args, **kwargs)
+        if checkpoint != "_save_catalog_record" or args[1].get("migrated"):
+            raise _Interrupted()
+        return result
+
+    with monkeypatch.context() as patch:
+        patch.setattr(owner, name, crash)
+        with pytest.raises(_Interrupted):
+            lib._migrate_catalog(pin)
+    reopened = ModLibrary(lib.root, lib.catalog, lib.game, lib.settings, scan_allowed=lambda: True)
+    monkeypatch.setattr(reopened, "_let_others_in", lambda: 0)
+    reopened.prepare_catalogs()
+    record = reopened._catalog_record(pin)
+    assert record["migrated"] and record["live"] == "mods"
+    assert record["redirects"].keys() == {path.name for core in ("test", "second") for path in env.files[core]}
+    assert env.live.read_bytes() == ccdb.redirect(
+        env.official, {name: item["placed"] for name, item in record["redirects"].items()}, MODS_DIR
+    )
+    assert all(path.read_bytes() == data for path, data in env.originals.items())
+    assert not reopened._journals()
+    state = read_runtime(reopened.root / "state.json")
+    assert all(state["applied"][str(path)]["official"] for core in ("test", "second") for path in env.files[core])
+
+
+def test_migration_keeps_the_redirect_and_written_file_when_official_is_missing(switch_install):
+    env = switch_install
+    lib, pin = env.library, env.pin
+    source, upload = env.add("second")
+    (target,) = env.files["second"]
+    lib.apply("second", source)
+    (lib.root / "originals" / target.name).unlink()
+    lib.prepare_catalogs()
+    record = lib._catalog_record(pin)
+    assert record["migrated"] and record["live"] == "mods"
+    assert target.read_bytes() == lib._placed_path(pin, record["redirects"][target.name]).read_bytes()
+    assert target.read_bytes() == upload.read_bytes()
+    lib.judge_unfinished()
+    assert lib.profiles.read()["unfinished"] == [{"install": pin.key, "core": "second_spr", "why": "stuck"}]
+
+
+def test_running_game_defers_migration_to_the_next_toggle(switch_install, monkeypatch):
+    env = switch_install
+    lib, pin = env.library, env.pin
+    source, upload = env.add("second")
+    lib.apply("second", source)
+
+    def running():
+        raise ServiceError("game_running")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(safety, "_sandboxed", lambda paths: False)
+        patch.setattr(safety, "check_game_not_running", running)
+        lib.prepare_catalogs()
+        assert lib._catalog_record(pin) == {"mode": "files"}
+        assert env.files["second"][0].read_bytes() == upload.read_bytes()
+    lib.toggle(True, True)
+    assert lib._catalog_record(pin)["migrated"]
+    assert env.files["second"][0].read_bytes() == env.originals[env.files["second"][0]]
+
+
+@pytest.mark.parametrize(("invalid", "code"), [(b"CCDB\x02", "catalog_unsupported"), (b"CCDB\x01", "catalog_invalid")])
+def test_migration_retries_guard_refusal_on_a_new_resource_version(switch_install, monkeypatch, invalid, code):
+    env = switch_install
+    lib, pin = env.library, env.pin
+    env.live.write_bytes(invalid)
+    lib.prepare_catalogs()
+    old = lib._catalog_record(pin)
+    assert (old["mode"], old["reason"], old["migrated"]) == ("files", code, None)
+    with monkeypatch.context() as patch:
+        patch.setattr(lib, "_keep_official_catalog", lambda _: pytest.fail("Repeated refusal"))
+        lib.prepare_catalogs()
+    env.live.write_bytes(env.official)
+    env.live.with_suffix(".hash").write_bytes(b"new version")
+    lib.prepare_catalogs()
+    record = lib._catalog_record(pin)
+    assert record["rv"] != old["rv"] and record["migrated"] and record["mode"] == "catalog"
+
+
+@pytest.mark.parametrize("foreign", [False, True])
+def test_start_safety_net_recovers_only_the_damaged_managed_catalog(catalog_install, monkeypatch, foreign):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, _ = env.add("second")
+    lib.apply("second", source)
+    monkeypatch.setattr(lib, "_scan_allowed", lambda: False)
+    assert not lib.update_due()["outdated"]
+    replacement = ccdb.write(replace(synthetic_catalog(), keys=b"foreign catalog")) if foreign else b"damaged"
+    env.live.write_bytes(replacement)
+    assert lib.update_due()["outdated"]
+    notices = lib.prepare_catalogs()
+    assert env.live.read_bytes() == (replacement if foreign else env.official)
+    assert [notice["code"] for notice in notices] == ([] if foreign else ["catalog_restored"])
+    assert lib._catalog_record(pin)["live"] == ("mods" if foreign else "official")
+    assert not lib._journals()
+
+
+def test_japan_install_is_never_migrated(switch_install, monkeypatch):
+    env = switch_install
+    lib = env.library
+    japan = replace(env.pin, server="japan")
+    monkeypatch.setattr(lib, "installs", lambda: [japan])
+    lib.prepare_catalogs()
+    assert lib._catalog_record(japan) == {"mode": "files"}
+    assert not (lib.root / "catalogs.json").exists()
+    assert env.live.read_bytes() == env.official
+
+
+@pytest.mark.parametrize("problem", ["missing", "changed", "before_swap", "verify"])
+def test_migration_rechecks_live_and_placed_bytes_before_restoring(switch_install, monkeypatch, problem):
+    env = switch_install
+    lib, pin = env.library, env.pin
+    for core in ("second", "test"):
+        source, _ = env.add(core)
+        lib.apply(core, source)
+    target = env.files["test"][0]
+    applied = target.read_bytes()
+    with monkeypatch.context() as patch:
+        generate = lib._generate_catalog
+
+        def interrupted(*args):
+            generate(*args)
+            raise _Interrupted()
+
+        patch.setattr(lib, "_generate_catalog", interrupted)
+        with pytest.raises(_Interrupted):
+            lib.prepare_catalogs()
+    record = lib._catalog_record(pin)
+    placed = lib._placed_path(pin, record["redirects"][target.name])
+    if problem == "missing":
+        placed.unlink()
+    elif problem == "changed":
+        placed.write_bytes(b"modified placement")
+    elif problem == "verify":
+        restore = lib._restore_migrated_entry
+
+        def steam_verify(pin, core, redirects):
+            if core == "test_spr":
+                env.live.write_bytes(env.official)
+            return restore(pin, core, redirects)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(lib, "_restore_migrated_entry", steam_verify)
+            lib.prepare_catalogs()
+        assert env.live.read_bytes() == env.official
+        assert target.read_bytes() == applied
+        assert not lib._catalog_record(pin)["migrated"]
+    reopened = ModLibrary(lib.root, lib.catalog, lib.game, lib.settings, scan_allowed=lambda: True)
+    if problem == "before_swap":
+        prepare = reopened._prepare_catalog_swap
+        publish = catalog_service.replace_file
+
+        def remove_placement(*args):
+            prepare(*args)
+            placed.unlink()
+
+        def publish_only_with_placement(source, destination):
+            assert placed.is_file()
+            publish(source, destination)
+
+        monkeypatch.setattr(reopened, "_prepare_catalog_swap", remove_placement)
+        monkeypatch.setattr(catalog_service, "replace_file", publish_only_with_placement)
+    reopened.prepare_catalogs()
+    record = reopened._catalog_record(pin)
+    assert record["migrated"] and record["live"] == "mods"
+    assert placed.read_bytes() == applied
+    assert target.read_bytes() == env.originals[target]
+    assert read_runtime(lib.root / "state.json")["applied"][str(target)]["official"]
+    assert env.live.read_bytes() == ccdb.redirect(
+        env.official, {name: item["placed"] for name, item in record["redirects"].items()}, MODS_DIR
+    )
+
+
+@pytest.mark.parametrize("operation", ["_refresh_catalog_version", "_migrate_catalog"])
+def test_catalog_error_during_toggle_keeps_file_replacement(switch_install, monkeypatch, operation):
+    env = switch_install
+    lib, pin = env.library, env.pin
+    source, upload = env.add("second")
+    lib.apply("second", source)
+    target = env.files["second"][0]
+
+    def changed(*args):
+        if operation == "_migrate_catalog" and not lib.profiles.read()["enabled"]:
+            assert target.read_bytes() == env.originals[target]
+        raise ServiceError("catalog_changed")
+
+    monkeypatch.setattr(lib, operation, changed)
+    assert not lib.toggle(False, True).failed
+    assert target.read_bytes() == env.originals[target]
+    assert not lib.toggle(True, False).failed
+    assert target.read_bytes() == upload.read_bytes()
+    assert env.live.read_bytes() == env.official
+    record = lib._catalog_record(pin)
+    assert "reason" not in record or record["reason"] is None
+    assert record.get("live", "official") == "official"
+
+
+@pytest.mark.parametrize("change", ["missing", "crc_tail", "same_mods", "steam_verify"])
+def test_start_checks_missing_and_stale_catalog_stamps(catalog_install, change):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, _ = env.add("second")
+    lib.apply("second", source)
+    mods = env.live.read_bytes()
+    if change == "missing":
+        env.live.unlink()
+    else:
+        env.live.write_bytes({"crc_tail": mods[:-4], "same_mods": mods, "steam_verify": env.official}[change])
+    assert lib.update_due()["outdated"]
+    notices = lib.prepare_catalogs()
+    assert [notice["code"] for notice in notices] == (["catalog_restored"] if change in ("missing", "crc_tail") else [])
+    current = lib._catalog_record(pin)
+    kind = "mods" if change == "same_mods" else "official"
+    assert env.live.read_bytes() == (mods if kind == "mods" else env.official)
+    assert current["live"] == kind and current[kind]["mtime"] == env.live.stat().st_mtime_ns
+    assert not lib.update_due()["outdated"]
+    if change == "steam_verify":
+        entries = lib.scan().entries
+        assert [entry.state for entry in entries if entry.core == "second_spr"] == ["reset"]
+        result = lib.restore_drift([{"install": pin.key, "core": "second_spr", "state": "reset"}])
+        assert not result.failed and env.live.read_bytes() == mods
+
+
+def test_resource_stamp_arrives_before_the_catalog(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, _ = env.add("second")
+    lib.apply("second", source)
+    old = lib._catalog_record(pin)
+    monkeypatch.setattr(lib, "_scan_allowed", lambda: False)
+    env.live.write_bytes(env.official)
+    env.live.with_suffix(".hash").write_bytes(b"new resource version")
+    version = lib.resource_version(pin)
+    for data in (
+        env.official,
+        b"CCDB\x01",
+        ccdb.redirect(env.official, {env.files["second"][0].name: "a" * 40 + ".bundle"}, MODS_DIR)[:-4],
+    ):
+        env.live.write_bytes(data)
+        lib.prepare_catalogs()
+        assert lib._catalog_record(pin) == old and env.live.read_bytes() == data
+        with pytest.raises(ServiceError, match="catalog_changed"):
+            lib.update_impact(pin)
+        with pytest.raises(ServiceError, match="catalog_changed"):
+            lib.impact_seen(pin.key, version, checked=True)
+        folder = lib.profiles.read()["folders"][pin.key]
+        assert (folder.get("impact") or {}).get("version") != version
+    newer = _steam_update(env)
+    lib.prepare_catalogs()
+    assert lib.update_impact(pin)["version"] == version
+    assert lib.profiles.read()["folders"][pin.key]["impact"]["catalog_sha1"] == hashlib.sha1(newer).hexdigest()
+    assert env.live.read_bytes() == newer
+
+
+def test_confirmed_guard_refusal_marks_fallback_and_prunes_without_consent(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, upload = env.add("second")
+    lib.apply("second", source)
+    old = lib._catalog_record(pin)
+    placed = lib._placed_path(pin, next(iter(old["redirects"].values())))
+    side = list((env.live.parent / MODS_DIR).iterdir())
+    library_copy = lib._catalog_library_copy(pin, old["rv"])
+    refused = b"CCDB\x02"
+    env.live.write_bytes(refused)
+    env.live.with_suffix(".hash").write_bytes(b"new resource version")
+    monkeypatch.setattr(
+        lib._steam_files, "catalog", lambda _: OfficialFile(len(refused), hashlib.sha1(refused).hexdigest())
+    )
+    lib.prepare_catalogs()
+    record = lib._catalog_record(pin)
+    assert record["mode"] == "files" and record["reason"] == "catalog_unsupported"
+    assert lib._view([pin], "full").entry(pin, "second_spr").state == "updated"
+    target = env.files["second"][0]
+    assert env.live.read_bytes() == refused and target.read_bytes() == env.originals[target]
+    monkeypatch.setattr(lib, "_scan_allowed", lambda: False)
+    jobs = []
+
+    def submit(kind, run, **options):
+        assert kind == "library.prune" and options["writes"] == "game"
+        jobs.append(run)
+        return "prune"
+
+    services = SimpleNamespace(
+        timings=SimpleNamespace(measure=lambda _: contextlib.nullcontext()), scan_allowed=lambda: False, submit=submit
+    )
+    Services._start_prune(services, lib)
+    (prune,) = jobs
+    with monkeypatch.context() as patch:
+        patch.setattr(lib, "_prune_originals", lambda *_: pytest.fail("Catalog-only job pruned originals"))
+        lib._write_check = lambda _: (_ for _ in ()).throw(ServiceError("classic_open"))
+        prune(None, None)
+        assert placed.exists() and all(path.exists() for path in side)
+        lib._write_check = None
+        prune(None, None)
+    assert not placed.exists() and not library_copy.exists() and not any(path.exists() for path in side)
+    applied = lib.restore_drift([{"install": pin.key, "core": "second_spr", "state": "updated"}])
+    assert not applied.failed and target.read_bytes() == upload.read_bytes()
+    assert env.live.read_bytes() == refused
+
+
+def test_partial_catalog_reapply_retains_pending_entries_after_reopening(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    sources = {}
+    for core in ("second", "failed"):
+        source, _ = env.add(core)
+        lib.apply(core, source)
+        sources[core] = source
+    _steam_update(env)
+    lib.prepare_catalogs()
+    version = lib.update_impact(pin)["version"]
+    with monkeypatch.context() as patch:
+        reuse = lib._reusable_redirects
+
+        def fail_one(pin, core, *args):
+            if core == "failed_spr":
+                raise ServiceError("bundle_invalid")
+            return reuse(pin, core, *args)
+
+        patch.setattr(lib, "_reusable_redirects", fail_one)
+        lib._reapply_catalog_update(pin, version)
+    record = lib._catalog_record(pin)
+    assert record["pending"] == {"failed_spr": sources["failed"]}
+    assert list(record["redirects"]) == [env.files["second"][0].name]
+    reopened = ModLibrary(lib.root, lib.catalog, lib.game, lib.settings, scan_allowed=lambda: True)
+    reopened._reapply_catalog_update(pin, version)
+    record = reopened._catalog_record(pin)
+    assert record["pending"] == {} and not record["reapply"]
+    assert set(record["redirects"]) == {env.files[core][0].name for core in sources}
+
+
+def test_app_info_without_a_game_does_not_wait_for_migration(tmp_path, monkeypatch):
+    monkeypatch.setattr("bmpt.webui.api.register_students", lambda *_: None)
+    services = SimpleNamespace(
+        game_found=lambda: False,
+        safe_mode=False,
+        _startup_ready=False,
+        library=SimpleNamespace(_catalog_start_due=lambda: True),
+        jobs=SimpleNamespace(wait=lambda *_: pytest.fail("app.info waited for a catalog job")),
+        submit_refresh_costumes=lambda: pytest.fail("app.info started a catalog job"),
+        state=SimpleNamespace(consent=None, spine_consent=None, preview_cache=True, flag=lambda _: False),
+        preview_cache=SimpleNamespace(generation=0),
+        cache_dir=lambda: tmp_path,
+        data_dir=tmp_path,
+        window=None,
+        mute=False,
+        debug=False,
+    )
+    result = build_api(services).call("app.info", None)
+    assert result["result"]["gameFound"] is False
+
+
+def test_impact_queues_a_separate_per_install_game_writer(catalog_install):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, _ = env.add("second")
+    lib.apply("second", source)
+    newer = _steam_update(env)
+    lib.prepare_catalogs()
+    jobs = []
+    services = SimpleNamespace(
+        _startup_ready=False,
+        classic=SimpleNamespace(starting=contextlib.nullcontext),
+        submit=lambda kind, run, **options: jobs.append((kind, run, options)),
+    )
+    services.submit_catalog_reapply = lambda *args: JobsMixin.submit_catalog_reapply(services, *args)
+    JobsMixin.submit_update_impact(services, lib, pin, False)
+    assert jobs[0][0] == "mods.impact" and jobs[0][2] == {}
+    jobs[0][1](lambda _: None, None)
+    assert env.live.read_bytes() == newer
+    assert jobs[1][0] == "mods.catalogReapply" and jobs[1][2] == {"writes": "game", "rank": START, "library": lib}
+    jobs[1][1](lambda _: None, None)
+    assert lib._catalog_record(pin)["live"] == "mods"
+
+
+def test_catalog_migration_uses_the_managed_legacy_fence(switch_install, tmp_path, monkeypatch):
+    env = switch_install
+    original_lib, pin = env.library, env.pin
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "webui.json").write_text(f'{{"prefs": {{"data_id": "0123456789ab", "data_path": "{data}"}}}}')
+    (data / "library").mkdir()
+    settings = Settings(data / "config.toml")
+    settings.set("game_resource_dir", str(pin.root))
+    settings.save()
+    upgrade = DataUpgrade(data, qualify=lambda _: "apfs")
+    try:
+        ready = upgrade.run()
+        assert ready["status"] == "ready", ready
+        fences = []
+        lock = upgrade._lock
+
+        def observed(stack, path, reason):
+            fences.append((path, reason))
+            return lock(stack, path, reason)
+
+        monkeypatch.setattr(upgrade, "_lock", observed)
+        with (
+            pytest.raises(ServiceError, match="official_unavailable"),
+            upgrade.game_write([env.live], pin.root, lambda *_: False),
+        ):
+            pytest.fail("Legacy bundle write accepted a catalog without a legacy original")
+        lib = ModLibrary(
+            upgrade.paths.library_epoch,
+            original_lib.catalog,
+            original_lib.game,
+            original_lib.settings,
+            game_write_gate=upgrade.game_write,
+            catalog_write_gate=upgrade.catalog_write,
+        )
+        lib.prepare_catalogs()
+        record = lib._catalog_record(pin)
+        assert record["mode"] == "catalog" and record["migrated"]
+        assert (upgrade.paths.legacy_library / "transactions.lock", "olderVersion") in fences
+        assert env.live.read_bytes() == env.official
+        backup = lib._catalog_library_copy(pin, record["rv"])
+        with upgrade.catalog_write(backup, record["official"]["sha1"]):
+            assert backup.read_bytes() == env.official
+        with pytest.raises(ServiceError, match="official_invalid"), upgrade.catalog_write(backup, "0" * 40):
+            pytest.fail("Catalog gate accepted a mismatched SHA-1")
+    finally:
+        upgrade.close()
+
+
+@pytest.mark.parametrize("code", ["steam_busy", "classic_open"])
+def test_mid_job_catalog_refusals_leave_other_install_available(switch_install, tmp_path, monkeypatch, code):
+    env = switch_install
+    lib, pin = env.library, env.pin
+    other_root = tmp_path / "other"
+    shutil.copytree(pin.root, other_root)
+    other = lib._pin(other_root, "global")
+    other_live = catalog_paths(other).live
+    source, upload = env.add("second")
+    lib.apply("second", source, pin=pin)
+    lib.apply("second", source, pin=other)
+    blocked = False
+    place = lib._place_entry
+
+    def placed(current, *args, **kwargs):
+        nonlocal blocked
+        result = place(current, *args, **kwargs)
+        if current == pin:
+            blocked = True
+        return result
+
+    def refuse(root):
+        if blocked and root == pin.root:
+            raise ServiceError(code)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(lib, "_place_entry", placed)
+        if code == "steam_busy":
+            patch.setattr(safety, "check_steam_idle", refuse)
+        else:
+            patch.setattr(lib, "_write_check", lambda current: refuse(current.root))
+        lib.prepare_catalogs()
+    first = lib._catalog_record(pin)
+    second = lib._catalog_record(other)
+    assert not first["migrated"] and not first["redirects"]
+    assert second["migrated"] and second["live"] == "mods"
+    assert env.live.read_bytes() == env.official and other_live.read_bytes() != env.official
+    target = env.files["second"][0]
+    assert target.read_bytes() == upload.read_bytes()
+    reopened = ModLibrary(lib.root, lib.catalog, lib.game, lib.settings, scan_allowed=lambda: True)
+    reopened.prepare_catalogs()
+    assert reopened._catalog_record(pin)["migrated"]
+    assert reopened._catalog_record(other) == second
+    assert target.read_bytes() == env.originals[target]
+    for current in (pin, other):
+        assert read_runtime(lib.root / "catalogs.json")["installs"][current.key]["live"] == "mods"
+    _steam_update(env, library=reopened)
+    reopened.prepare_catalogs()
+    version = reopened.update_impact(pin)["version"]
+
+    def busy_elsewhere(root):
+        if root == other_root:
+            raise ServiceError("steam_busy")
+
+    monkeypatch.setattr(safety, "check_steam_idle", busy_elsewhere)
+    reopened._reapply_catalog_update(pin, version)
+    assert reopened._catalog_record(pin)["live"] == "mods"
+    assert not reopened._catalog_record(pin)["pending"]
+
+
+def test_placement_checks_expected_bytes_after_copy(switch_install, monkeypatch):
+    env = switch_install
+    lib, pin = env.library, env.pin
+    source, upload = env.add("second")
+    lib.apply("second", source)
+    target = env.files["second"][0]
+    sha1 = hashlib.sha1(upload.read_bytes()).hexdigest()
+    copy = catalog_service.atomic_copy
+
+    def change_after_selection(source, destination):
+        if ".bundle." in destination.name and destination.suffix == ".tmp":
+            assert not lib._lock._lock._is_owned()
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(b"changed during copy")
+        else:
+            copy(source, destination)
+
+    monkeypatch.setattr(catalog_service, "atomic_clone", lambda *_: False)
+    monkeypatch.setattr(catalog_service, "atomic_copy", change_after_selection)
+    lib.prepare_catalogs()
+    assert env.live.read_bytes() == env.official
+    assert target.read_bytes() == upload.read_bytes()
+    assert not lib._catalog_record(pin)["redirects"]
+    assert not (target.parent / MODS_DIR / f"{sha1}.bundle").exists()
+
+
+def test_updating_renamed_target_publishes_new_redirect(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, _ = env.add("second")
+    lib.apply("second", source)
+    old = env.files["second"][0]
+    new = game_bundle(old.parent, "second_spr", date="2026-02-01", payload=b"new official")
+    old.unlink()
+    ids = [
+        bundle_id(LOAD, new.name) if item == bundle_id(LOAD, old.name) else item
+        for item in ccdb.parse(env.official).ids
+    ]
+    official = ccdb.write(replace(synthetic_catalog(), ids=ids))
+    env.live.write_bytes(official)
+    env.live.with_suffix(".hash").write_bytes(b"new version")
+    monkeypatch.setattr(
+        lib._steam_files, "catalog", lambda _: OfficialFile(len(official), hashlib.sha1(official).hexdigest())
+    )
+    lib.prepare_catalogs()
+    monkeypatch.setattr(lib, "_impact_of", lambda *args, **kwargs: (fingerprint.REBUILT, {}))
+    result = lib.update_impact(pin)
+    assert result["mods"][0]["impact"] == "rebuilt" and result["mods"][0]["target_retired"]
+    lib.impact_seen(pin.key, result["version"], checked=True)
+    monkeypatch.setattr(lib, "_plan_targets", lambda *_: [new])
+    monkeypatch.setattr(lib, "_plan", lambda *_: [])
+    rebuilt = []
+
+    def rebuild(paths, targets, output, *args, **kwargs):
+        rebuilt.append(make_mod(new, output, payload=b"rebuilt mod"))
+        return SimpleNamespace(
+            success=True, no_match=False, all_unchanged=False, file_pairs=[SimpleNamespace(output=rebuilt[-1])]
+        )
+
+    monkeypatch.setattr(updating, "rebuild", rebuild)
+    assert not lib.update(source[4:], pin=pin).unchanged
+    assert not lib.last_impact(pin)["mods"]
+    lib.apply("second", source)
+    record = lib._catalog_record(pin)
+    assert set(record["redirects"]) == {new.name}
+    placed = lib._placed_path(pin, record["redirects"][new.name])
+    assert env.live.read_bytes() == ccdb.redirect(official, {new.name: placed.name}, MODS_DIR)
+    assert placed.read_bytes() == lib._paths(lib._record(source[4:]))[0].read_bytes()

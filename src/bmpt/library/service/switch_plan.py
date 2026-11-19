@@ -190,6 +190,7 @@ class SwitchPlanMixin:
         expected: dict[Path, str] | None = None,
         kept_current: list[str] | None = None,
         untested: bool = True,
+        before_write: Callable[[], None] | None = None,
     ) -> list[Path]:
         """Write prepared files over game files as one unit, keeping what they replace.
 
@@ -214,6 +215,7 @@ class SwitchPlanMixin:
                     build_keys,
                     create_backup=create_backup,
                     untested=untested,
+                    **({"before_write": before_write} if before_write else {}),
                     **({"expected": expected} if expected else {}),
                     **({"kept_current": kept_current} if kept_current is not None else {}),
                 )
@@ -223,7 +225,13 @@ class SwitchPlanMixin:
 
     @contextlib.contextmanager
     def _writable(
-        self, paths: list[Path], pin: Pin, *, recovering: bool = False, resource_dirs: list[Path] | None = None
+        self,
+        paths: list[Path],
+        pin: Pin,
+        *,
+        recovering: bool = False,
+        resource_dirs: list[Path] | None = None,
+        catalog: tuple[Path | None, str | None] | None = None,
     ) -> Iterator[None]:
         """Run the checks right before game files are written.
 
@@ -233,11 +241,12 @@ class SwitchPlanMixin:
         if self._write_check is not None:
             self._write_check(pin)
         self._check_idle([pin])
-        legacy_gate = (
-            self._game_write_gate(paths, pin.root, self._is_official_as)
-            if self._game_write_gate
-            else contextlib.nullcontext()
-        )
+        legacy_gate = contextlib.nullcontext()
+        if catalog is not None:
+            if self._catalog_write_gate is not None:
+                legacy_gate = self._catalog_write_gate(*catalog)
+        elif self._game_write_gate is not None:
+            legacy_gate = self._game_write_gate(paths, pin.root, self._is_official_as)
         with (
             toggle_timing.enter(
                 "game_file_preflight",
@@ -773,9 +782,12 @@ class SwitchPlanMixin:
         expected: dict[Path, str] | None = None,
         kept_current: list[str] | None = None,
         untested: bool = True,
+        before_write: Callable[[], None] | None = None,
     ) -> list[Path]:
         kept = {target: path for target, path in replacements.items() if self._managed and self._is_kept(path)}
         options = dict(create_backup=create_backup, expected=expected, kept_current=kept_current, untested=untested)
+        if before_write is not None:
+            options["before_write"] = before_write
         with contextlib.ExitStack() as resources:
             if kept:
                 work = Path(
@@ -801,6 +813,7 @@ class SwitchPlanMixin:
         expected: dict[Path, str] | None = None,
         kept_current: list[str] | None = None,
         untested: bool = True,
+        before_write: Callable[[], None] | None = None,
     ) -> list[Path]:
         from ...gameassets.costume_rule import COSTUME_RULE
 
@@ -828,6 +841,8 @@ class SwitchPlanMixin:
         }
         old_applied = dict(self._applied)
         stamp = now()
+        # Migration stages and verifies bundles outside the library lock. Ordinary writes already hold it.
+        state_lock = self._lock if before_write is not None else contextlib.nullcontext()
 
         def records() -> dict[str, dict[str, Any]]:
             out = {}
@@ -859,13 +874,14 @@ class SwitchPlanMixin:
 
         if not changed:
             new = records()
-            if any(self._applied.get(path) != record for path, record in new.items()):
-                self._applied.update(new)
-                try:
-                    self._save()
-                except (OSError, ServiceError):
-                    self._applied = old_applied
-                    raise
+            with state_lock:
+                if any(self._applied.get(path) != record for path, record in new.items()):
+                    self._applied.update(new)
+                    try:
+                        self._save()
+                    except (OSError, ServiceError):
+                        self._applied = old_applied
+                        raise
             return []
         written: list[Path] = []
         kept_now: list[Path] = []  # originals this call kept from the game file itself
@@ -953,6 +969,8 @@ class SwitchPlanMixin:
                     transaction["phase"] = "writing"
                     atomic_json(journal, transaction)
                     stage = "write"
+                    if before_write is not None:
+                        before_write()
                     for i, (target, prepared) in enumerate(changed.items(), 1):
                         check_resource_path(target, dirs)
                         if source == "official" and prepared == self._original_path(target):
@@ -977,8 +995,10 @@ class SwitchPlanMixin:
                             )
                     saving_state = True
                     stage = "state"
-                    self._applied.update(records())
-                    self._save()
+                    new = records()
+                    with state_lock:
+                        self._applied.update(new)
+                        self._save()
                 except Exception as error:
                     self._applied = old_applied
                     try:

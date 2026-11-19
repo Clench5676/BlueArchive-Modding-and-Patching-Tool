@@ -96,6 +96,7 @@ class ModLibrary(
         write_check: Callable[[Pin], None] | None = None,
         steam_files: steam_records.OfficialFiles | None = None,
         game_write_gate: Callable | None = None,
+        catalog_write_gate: Callable | None = None,
     ) -> None:
         """Load a library and recover pending managed writes before accepting new changes.
 
@@ -110,6 +111,7 @@ class ModLibrary(
                 None adds no gate. The web UI uses it to refuse writes while a classic window is open.
             steam_files: Shared official-file cache, also usable by error reports; None creates one.
             game_write_gate: Context holding verified legacy restore paths through a managed game write.
+            catalog_write_gate: Context excluding older writers during catalog writes.
         """
         self.root = Path(root).resolve()
         self._managed = epoch_root(self.root, "library") is not None
@@ -126,6 +128,7 @@ class ModLibrary(
         self._scan_allowed_input = scan_allowed
         self._write_check = write_check
         self._game_write_gate = game_write_gate
+        self._catalog_write_gate = catalog_write_gate
         self._lock = _LibraryLock()
         self._hashes = Fingerprints()
         # cross-bundle pointers of a file by its SHA-1, and the objects of a game file's CABs by its revision
@@ -181,12 +184,14 @@ class ModLibrary(
         self._rig_matches: dict[tuple, dict] = {}
         self._mod_masks: dict[tuple, dict] = {}
         self._impacts: dict[tuple, tuple[str, dict]] = {}  # judged impacts of game updates (_impact_of)
-        self._impact_cache: dict[str, tuple[str, dict]] = {}  # the last summary per install (update_impact)
+        self._impact_cache: dict[str, tuple[tuple, dict]] = {}  # the last summary per install (update_impact)
         self._untested_ok: dict[
             tuple[str, str], set[str]
         ] = {}  # confirmed cores of an untested build (confirm_untested)
         self._maps_cache: tuple[tuple, Any] | None = None
         self.profiles = Profiles(self.root)
+        self._catalog_restores: set[str] = set()
+        self._catalog_recovery_blocked: set[str] = set()
         self._catalog_idle = threading.Event()
         self._catalog_idle.set()
         self._catalog_identifications: dict[Path, tuple[tuple[int, int, str, str | None], CatalogKind | None]] = {}

@@ -1334,6 +1334,24 @@ class DataUpgrade:
                         raise ServiceError("official_unavailable", file=target, folder=str(install))
             yield
 
+    @contextmanager
+    def catalog_write(self, backup: Path | None, sha1: str | None) -> Iterator[None]:
+        """Exclude older game writers and verify the kept catalog before a live write."""
+        if self.paths is None:
+            raise ServiceError("library_recovery_pending")
+        legacy = self.paths.legacy_library
+        with ExitStack() as fences:
+            try:
+                if files.present(legacy):
+                    self._lock(fences, legacy / "transactions.lock", "olderVersion")
+                if backup is not None:
+                    devmode.check_read(backup)
+                    if backup.resolve() != backup or files.digest(backup, "sha1") != sha1:
+                        raise ServiceError("official_invalid", file=backup)
+            except (OSError, ValueError, UpgradeBlocked) as error:
+                raise ServiceError("library_recovery_pending", file=legacy) from error
+            yield
+
     def classic_read_only(self) -> bool:
         """Return whether classic game-writing commands lack a proven private install."""
         try:

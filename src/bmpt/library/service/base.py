@@ -539,7 +539,7 @@ class _View:
         self._catalog_live: dict[str, str | None] = {}
         self._catalog_updated: dict[str, bool] = {}
         if pins and not official_only:
-            installs = library._catalog_document()["installs"]
+            installs = library._catalog_records_for_read()
             for pin in pins:
                 record = installs.get(pin.key)
                 if not record or record["mode"] != MODE_CATALOG or not record["redirects"]:

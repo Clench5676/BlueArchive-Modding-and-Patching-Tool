@@ -605,6 +605,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
                         write_check=self._write_check,
                         steam_files=self.steam_files,
                         game_write_gate=self.upgrade.game_write if self.upgrade else None,
+                        catalog_write_gate=self.upgrade.catalog_write if self.upgrade else None,
                     )
                 lock = getattr(built, "_lock", None)
                 if lock is not None and hasattr(lock, "on_wait"):
@@ -656,11 +657,18 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         return self._thumbnail_service
 
     def _start_prune(self, library: Any) -> None:
+        records = getattr(library, "_catalog_records_for_read", None)
+        game_files = bool(records and records())
+
         def prune(log: Any, progress: Any) -> list[str]:
             with self.timings.measure("library.prune"):
-                return [str(p) for p in library.prune()]
+                options = {"game_files": game_files, "catalog_only": game_files and not self.scan_allowed()}
+                if records is None:
+                    options = {}
+                return [str(p) for p in library.prune(**options)]
 
-        self._prune_job = self.submit("library.prune", prune, writes="library", library=library, rank=MAINTENANCE)
+        writes = "game" if game_files else "library"
+        self._prune_job = self.submit("library.prune", prune, writes=writes, library=library, rank=MAINTENANCE)
 
     def cache_dir(self) -> Path:
         """Return where consented game assets are cached.
