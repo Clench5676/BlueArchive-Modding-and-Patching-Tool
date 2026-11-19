@@ -47,6 +47,10 @@ own:
   renderers and particle systems (:func:`_halo_transplant`). Every other case (a source without a halo, a boss's
   halo, anything below the followed node that points elsewhere) hides everything the slot's halo draws.
 
+- set pieces (``chibi_setpieces``): what a costume mesh holds beside clothing, a seat the chibi sits in or a prop
+  her clips bring out at times, belongs to the slot's animation. The source's draw nothing on the slot; the slot's
+  own are drawn again by a renderer of their own, on the slot's bones.
+
 The caller supplies official copies of the files (``adapt``'s ``index``) and saves the changed bundles.
 
 The modules: ``skeleton`` (the shared limits and the skeleton), ``parts`` (renderer roles, clips, meshes),
