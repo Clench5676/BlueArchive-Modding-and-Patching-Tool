@@ -1,6 +1,7 @@
 // Ordinary LobbyCommon/ChatDialog/Talk balloon; original NGUI sprite, font and padding follow the clicked actor.
 import * as NGUI from "../ui/ngui.js";
 import { rpc as defaultRpc } from "../core/api.js";
+import { readSerialized } from "../core/serialized-fields.js";
 import { language } from "../core/i18n.js";
 import { S } from "../core/util.js";
 import { talkExpression } from "./student-hall-portraits.js";
@@ -425,8 +426,9 @@ export function createDialogue({
       flight.promise = Promise.resolve()
         .then(() => call("studentHall.dialogueLayout", {}, { signal: requestSignal }))
         .then((value) => {
-          if (!requestSignal?.aborted) template = value;
-          return value;
+          const layout = readSerialized(value);
+          if (!requestSignal?.aborted) template = layout;
+          return layout;
         })
         .finally(() => {
           if (layoutFlight === flight) layoutFlight = null;
@@ -806,10 +808,12 @@ export function createMemorialLobbyDialogue({
     const value = text,
       language = lang,
       turn = version;
-    template ||= Promise.resolve(call("studentHall.dialogueLayout", {})).catch((error) => {
-      template = null;
-      throw error;
-    });
+    template ||= Promise.resolve(call("studentHall.dialogueLayout", {}))
+      .then(readSerialized)
+      .catch((error) => {
+        template = null;
+        throw error;
+      });
     const talk = await template;
     await ui.init?.();
     if (disposed || turn !== version || value !== text || language !== lang) return;

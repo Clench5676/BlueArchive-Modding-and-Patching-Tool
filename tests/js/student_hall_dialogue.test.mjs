@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { dialogueText } from "../../src/bmpt/web/js/detail/dialogue-text.js";
 import { spriteBorders, sliceAxis, slicePoint } from "../../src/bmpt/web/js/ui/sprite-slices.js";
 import { freezeShown, freezeWhileLoading } from "../../src/bmpt/web/js/detail/preview-lifecycle.js";
+import { readSerialized } from "../../src/bmpt/web/js/core/serialized-fields.js";
 
 class Element {
   constructor() {
@@ -64,13 +65,14 @@ globalThis.studentHallDialogueHarness = {
   },
   URL: { createObjectURL: () => `blob:voice-${nextTimer}`, revokeObjectURL: (url) => revoked.push(url) },
   freezeWhileLoading,
+  readSerialized,
 };
 let source = await readFile(
   new URL("../../src/bmpt/web/js/student-hall/student-hall-dialogue.js", import.meta.url),
   "utf8",
 );
 source = source.replace(/^import [^;]*;$/gm, "");
-source = `const {NGUI, defaultRpc, language, S, talkExpression, setTimeout, clearTimeout, URL, spriteBorders, sliceAxis, slicePoint, dialogueText, freezeWhileLoading} = globalThis.studentHallDialogueHarness;\n${source}`;
+source = `const {NGUI, defaultRpc, language, S, talkExpression, setTimeout, clearTimeout, URL, spriteBorders, sliceAxis, slicePoint, dialogueText, freezeWhileLoading, readSerialized} = globalThis.studentHallDialogueHarness;\n${source}`;
 const {
   createDialogue,
   memoryMemo,
@@ -140,6 +142,16 @@ const template = () => ({
     },
   ],
 });
+// The Talk layout as the server exports it, with the serialized field names in full.
+const EXPORTED_NODE = { pos: "localPosition" };
+const EXPORTED_WIDGET = { cls: "className", sprite: "spriteName", w_: "width", h_: "height", align: "alignment" };
+const exportedFields = (object, names) =>
+  Object.fromEntries(Object.entries(object).map(([key, value]) => [names[key] ?? key, value]));
+const exported = (node) => ({
+  ...exportedFields(node, EXPORTED_NODE),
+  widgets: node.widgets.map((widget) => exportedFields(widget, EXPORTED_WIDGET)),
+  children: node.children.map(exported),
+});
 const find = (tree, path) =>
   path.split("/").reduce((node, key) => node.children.find((child) => child.name === key), tree);
 const entry = (id = "one", alt = "hoshino") => ({ id, alt, x: 600, y: 1120, scale: 1 });
@@ -171,7 +183,7 @@ function fixture(extra = {}) {
       const result = extra.call(method, params, options);
       if (result !== undefined) return result;
     }
-    if (method === "studentHall.dialogueLayout") return template();
+    if (method === "studentHall.dialogueLayout") return exported(template());
     if (method === "studentHall.lines")
       return {
         lines: {
@@ -1160,6 +1172,13 @@ test("the Student Hall and memorial lobby use one prepareBalloon and CSS contrib
     assert.doesNotMatch(rule[1], /background|border-radius|color|font|padding|bottom:|left:/);
 });
 
+test("the exported Talk layout names its fields in full", () => {
+  const talk = exported(template());
+  assert.deepEqual(talk.children[1].localPosition, [79, -45]);
+  assert.equal("pos" in talk.children[1], false);
+  assert.equal(talk.children[1].widgets[0].className, "UILabel");
+});
+
 test("camera motion repositions an existing Talk drawing, flips when needed and fullscreen keeps it", async () => {
   const host = new Element(),
     classes = new Set(),
@@ -1178,7 +1197,7 @@ test("camera motion repositions an existing Talk drawing, flips when needed and 
     ui: { ...balloonUi, render: async (tree) => draws.push(tree) },
     call: async (method, params) => {
       reads.push([method, params]);
-      return template();
+      return exported(template());
     },
     raf: (fn) => frames.push(fn),
     later: studentHallDialogueHarness.setTimeout,
