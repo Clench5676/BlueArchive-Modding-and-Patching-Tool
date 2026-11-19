@@ -318,7 +318,7 @@ let state = null;
 let explainedHere = false; // the explanation was shown in this page (mods.state follows a moment later)
 let inFlight = false; // a toggle (or Retry) this page started runs
 let names = async () => (e) => e?.alt || e?.core || ""; // main.js gives the alts' names (the student list's data)
-let refreshPage = async () => {}; // main.js resolves this once the visible page has refreshed and drawn
+let refreshPage = async (_result) => {}; // main.js resolves this once the visible page has refreshed and drawn
 const REFRESH_CAP = 15000;
 let host = null,
   els = null;
@@ -411,7 +411,8 @@ export async function refresh() {
  * Set up the top bar's switch and the events it follows.
  * @param {object} [options]
  * @param {() => ((entry: object) => string)} [options.names] Gives the function that names an entry's alt.
- * @param {() => Promise<void>} [options.refreshPage] Resolves once the visible page has refreshed and drawn.
+ * @param {(result: object) => Promise<void>} [options.refreshPage] Takes the toggle's result; resolves once the
+ *     visible page has refreshed and drawn.
  */
 export async function init(options = {}) {
   if (options.names) names = options.names;
@@ -618,7 +619,7 @@ async function run(params) {
         let timer;
         try {
           await Promise.race([
-            Promise.resolve().then(refreshPage),
+            Promise.resolve().then(() => refreshPage(result)),
             new Promise((resolve) => {
               timer = setTimeout(resolve, REFRESH_CAP);
             }),
@@ -705,6 +706,7 @@ export async function trayToggle(data = {}) {
 
 // Only adopted entries, failures or unfinished work need a result popup.
 async function finished(result) {
+  if (!resultSummary(result, () => "")) return; // nothing to tell: the student names are not read for it
   const nameOf = await names().catch(() => undefined);
   const summary = resultSummary(result, nameOf);
   if (!summary) return;

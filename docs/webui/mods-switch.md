@@ -57,7 +57,9 @@ configuration: Off puts every entry of every known install back to official, On 
 - **What a writer job switched** (`library.changed`): the student list is read again, thumbnails under the changed cores
   are forgotten, and the detail screen reloads the current resource type under a still of the scene, waiting while a popup or
   fullscreen view is open. The screen's reads of `student.get` have no client deadline (a writer job can hold the
-  library lock); a read that finishes after the screen was read anew is dropped.
+  library lock); a read that finishes after the screen was read anew is dropped. The Student Hall shows library
+  mods and official copies, never the game files as they are: a change of game files or of the switch leaves it
+  standing and only reads its list of choices again; it is drawn again when the mod list changed.
 - **While mods are off** an apply only saves the choice (the apply job's `deferred`); the switch popup reads Save.
 - **The tray's events** are followed like the page's own toggle (see [Tray](desktop.md#tray)).
 - **Catalog notices** (`ModSwitch.tellCatalog`, with the start popups and later whenever no popup is open): one
@@ -87,7 +89,8 @@ setting.
   what built it (a fingerprint of the builder code and of the packages that shape the bytes,
   `catalog/data/builder_fingerprints.json`, written by `scripts/build_builder_fingerprints.py`; the costume rule
   for a costume). A toggle reuses an output while the first part holds. An output of another builder stays in use
-  and is built again by the start job behind the start cover (`refresh_builds`), never inside a toggle.
+  and is built again by the start job behind the start cover (`refresh_builds`), never inside a toggle. That
+  refresh takes no kept copy another builder made: it builds the output and drops the copy.
   Apply and restore of one entry place (or reuse) its file, generate a catalog and swap. Official files are never
   overwritten. A core whose files the catalog does not name, or that lie outside `GameData/Windows`, is switched by
   file replacement in the same folder.
