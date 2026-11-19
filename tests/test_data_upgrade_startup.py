@@ -134,6 +134,8 @@ def test_first_start_handoff_and_bootstrap_run_log(tmp_path, monkeypatch, caplog
             return self
 
     window = SimpleNamespace(events=SimpleNamespace(shown=Shown()), destroy=closed.set)
+    marked = []
+    monkeypatch.setattr("bmpt.webui.native.mark_dev_dock", lambda: marked.append(True))
 
     def check_bootstrap(app):
         state = json.loads(_request(app, "/upgrade/state", token=app.token)[1])
@@ -145,8 +147,10 @@ def test_first_start_handoff_and_bootstrap_run_log(tmp_path, monkeypatch, caplog
     def native_start(**_):
         app = apps[-1]
         assert app.recovery()["upgradeHandoff"] == handoff
-        assert len(window.events.shown) == 1
-        window.events.shown[0]()
+        assert len(window.events.shown) == 2
+        for callback in window.events.shown:
+            callback()
+        assert marked == [True]
         check_bootstrap(app)
         if handoff == "relaunch":
             assert closed.wait(2)
