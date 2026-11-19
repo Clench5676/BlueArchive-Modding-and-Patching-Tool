@@ -179,6 +179,8 @@ class ModLibrary(
         # how each kept original was verified: Steam's list or the CRC rule alone
         self._original_checks = OriginalChecks(self.root, self._hashes)
         self._backfill_misses: set[tuple] = set()
+        # an install's checked catalog paths, reused for a moment (_catalog_paths)
+        self._catalog_paths_kept: dict[str, tuple] = {}
         # the official rigs of portraits kept per game release, and what was matched against them (_archived_rigs)
         self.rigs = rig_archive.RigArchive(self.root / "rigs")
         self._rig_matches: dict[tuple, dict] = {}

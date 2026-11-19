@@ -19,6 +19,7 @@ from .. import profiles as profiles_mod
 from .. import mod_progress, safety, toggle_timing
 from ..catalog_switch import MODE_CATALOG, MODE_FILES, mode_of
 from ..judge import (
+    LIBRARY_SOURCES,
     sorted_resource_types,
     core_of,
     distinguishing_folders,
@@ -30,7 +31,18 @@ from ..records import (
     Pin,
     ToggleResult,
 )
-from .base import SAVE_EVERY, STOPPING, _Entry, _Unread, _View, _background, _errors, _folder_size, _serialized
+from .base import (
+    SAVE_EVERY,
+    STANDING_STEP,
+    STOPPING,
+    _Entry,
+    _Unread,
+    _View,
+    _background,
+    _errors,
+    _folder_size,
+    _serialized,
+)
 
 
 logger = logging.getLogger(__package__)
@@ -206,6 +218,11 @@ class EnableMixin:
         ``expect`` is the intent the caller saw (``state_changed`` otherwise); Retry is the same call with ``expect``
         equal to the current intent.
 
+        On an install switched by its catalog, the swap alone switches every entry whose placed files and
+        official-named files are as recorded (``_standing_on``, ``_standing_off``): they are not read again. Such an
+        install's Off makes no pass over the game files; files that are neither official nor a library source are
+        left to the scan that follows.
+
         Args:
             enabled: Desired master-switch intent; False restores official files and True applies choices.
             expect: Intent observed by the caller, checked before changing it; repeat enabled for Retry.
@@ -304,6 +321,7 @@ class EnableMixin:
         """
         found: list[_Entry] = []
         files_only = set() if files_only is None else files_only
+        full_toggle = drift is None and retry is None
 
         def check_pins() -> None:
             if catalog_reconcile:
@@ -325,16 +343,20 @@ class EnableMixin:
                 refresh(self, pins, log)
                 config = self.profiles.read()
             allowed = drift is None and self._scan_allowed()  # Keep consent fixed for planning and execution.
-            # an Off with scan consent plans from the files as they are now: its own pass, read outside the lock
+            # an Off with scan consent plans from the files as they are now: its own pass, read outside the lock.
+            # An install switched by its catalog is turned off by the swap alone: files that are neither official
+            # nor a library source are left to the scan that follows the toggle
+            swapped = self._catalog_records_for_read() if drift is None and not enabled and allowed and pins else {}
+            scanned = [pin for pin in pins if swapped.get(pin.key, {}).get("mode") != MODE_CATALOG]
             view = (
-                self._view(pins, "scan", config, snapshot=True, official_only=True)
-                if drift is None and not enabled and allowed
+                self._view(scanned, "scan", config, snapshot=True, official_only=True)
+                if drift is None and not enabled and allowed and scanned
                 else None
             )
         if view is not None:
             # previews go first: one loads while the pass runs (which pauses itself while a chibi preview is exported)
             with _errors("toggle"), toggle_timing.stage("off_scan"):
-                found = view.entries(pins, background=True)
+                found = view.entries(scanned, background=True)
         with toggle_timing.enter("library_wait", self._lock), _errors("toggle"), toggle_timing.stage("plan"):
             if view is not None:  # what the start checked may have changed during the pass
                 self._check_start(pins, True, expect)
@@ -396,6 +418,13 @@ class EnableMixin:
                         redirected = {mapped.slot(core_of(name)) for name in record["redirects"]}
                         plan.extend((pin, core) for core in sorted(redirected) if (key, core) not in planned)
             toggle_timing.planned(len(plan))
+            standing: dict[tuple[str, str], dict[str, dict]] = {}
+            if enabled and full_toggle:
+                with toggle_timing.stage("standing_check"):
+                    for key, pin in catalog_pins.items():
+                        cores = [core for current, core in plan if current.key == key]
+                        for core, redirects in self._standing_on(pin, cores, config, installs[key]).items():
+                            standing[(key, core)] = redirects
             if enabled:  # an On, its Retry or Apply Mod Configuration: confirmed before the intent changes
                 self._untested_plan(plan, config, drift is not None)
             with toggle_timing.stage("progress_identity"):
@@ -437,14 +466,15 @@ class EnableMixin:
         stop: ServiceError | None = None
         was_paced = getattr(_background, "paced", False)
         _background.paced = True  # other callers of the library go first between its entries (_let_others_in)
-        line = mod_progress.ItemProgress(progress, len(plan), "apply" if enabled else "restore")
+        line = mod_progress.ItemProgress(progress, max(1, len(plan) - len(standing)), "apply" if enabled else "restore")
         batches: dict[str, dict[str, dict]] = {key: {} for key in catalog_pins}
         reached: dict[str, dict[str, dict]] = {key: {} for key in catalog_pins}
         off_redirects: dict[str, set[str]] = {}
         failed_off: set[tuple[str, str]] = set()
         unavailable: set[str] = set()
         catalog_done: dict[str, list[dict]] = {key: [] for key in catalog_pins}
-        full_toggle = drift is None and retry is None
+        settled: dict[str, list[str]] = {}
+        walked = 0
         try:
             with self._catalog_transaction() if catalog_pins else contextlib.nullcontext():
                 if not enabled:
@@ -473,9 +503,35 @@ class EnableMixin:
                         else:
                             if record["live"] == "mods":
                                 off_redirects[key] = redirected
-                for i, (pin, core) in enumerate(plan, 1):
+                                if full_toggle:
+                                    with self._lock, toggle_timing.stage("standing_check"):
+                                        for core in self._standing_off(
+                                            pin, redirected & {c for p, c in plan if p.key == key}
+                                        ):
+                                            standing[(key, core)] = {}
+                position = 0
+                for pin, core in plan:
                     if cancel and cancel():
                         break
+                    if (pin.key, core) in standing:
+                        # nothing of it is read or written: the swap alone switches it
+                        item = self._toggle_entry(pin, core, identities.get((pin.key, core)))
+                        toggle_timing.standing()
+                        if enabled:
+                            batches[pin.key].update(standing[(pin.key, core)])
+                            reached[pin.key][core] = item
+                            catalog_done[pin.key].append(item)
+                            outcomes[(pin.key, core)] = "pending"
+                        else:
+                            settled.setdefault(pin.key, []).append(core)
+                            result["done"].append(item)
+                            outcomes[(pin.key, core)] = None
+                            cores.add(core)
+                            resource_types.add(item["resource_type"])
+                        continue
+                    position += 1
+                    walked += 1
+                    i = position
                     with toggle_timing.stage("preview_yield"):
                         self._let_others_in()
                     with toggle_timing.enter("library_wait", self._lock), toggle_timing.entry():
@@ -630,18 +686,22 @@ class EnableMixin:
                                 result["failed"].append({"entry": item, **error.to_json()})
                                 outcomes[(key, core)] = "pending"
                             continue
+                        settled.setdefault(key, []).extend(item["core"] for item in catalog_done[key])
                         for item in catalog_done[key]:
                             core = item["core"]
-                            self._clear_marker(pin, core)
-                            self._selection_error(pin, [core], None)
                             result["done"].append(item)
                             outcomes[(key, core)] = None
                             cores.add(core)
                             resource_types.add(item["resource_type"])
         finally:
             _background.paced = was_paced
-        # An interrupted run leaves its last saved checkpoint for Retry.
-        if not catalog_reconcile:
+        by_key = {pin.key: pin for pin in pins}
+        for key, done_cores in settled.items():
+            with _errors("toggle"):
+                self._clear_done(by_key[key], done_cores)
+        # An interrupted run leaves its last saved checkpoint for Retry. A run that walked no entry wrote no game file
+        # and kept no original: it leaves the prune to maintenance.
+        if not catalog_reconcile and (walked or not standing):
             with toggle_timing.enter("library_wait", self._lock), toggle_timing.stage("prune"):
                 self._prune_quietly()
         with _errors("toggle"):
@@ -662,13 +722,97 @@ class EnableMixin:
             result["held"],
         )
 
-    def _toggle_entry(self, pin: Pin, core: str) -> dict[str, str]:
+    def _toggle_entry(self, pin: Pin, core: str, identity: dict | None = None) -> dict[str, str]:
+        identity = identity or {}
         return {
             "install": pin.key,
             "core": core,
-            "resource_type": self._resource_type(core, pin) or "portrait",
-            "alt": self._core_map(pin).key(core) or core,
+            "resource_type": identity.get("resource_type") or self._resource_type(core, pin) or "portrait",
+            "alt": identity.get("alt") or self._core_map(pin).key(core) or core,
         }
+
+    def _standing_on(self, pin: Pin, cores: list[str], config: dict | None, record: dict) -> dict[str, dict[str, dict]]:
+        """Find the entries of an On that the catalog swap alone switches, with their recorded redirects.
+
+        An entry stands when its configured library source still has every part's redirect recorded for the
+        catalog's resource version, each placed file is there as recorded and still fits the source
+        (``_reusable_redirects``), and every official-named part is official. Such an entry was admitted when its
+        redirect was recorded; nothing of it is read again, no bundle is opened. Any doubt leaves the entry to
+        ``_reach``. Class 2, under the library lock in steps of ``STANDING_STEP`` entries, stepping aside for a
+        waiting preview or page read between steps.
+        """
+        configured = (((config or {}).get("folders") or {}).get(pin.key) or {}).get("configured") or {}
+        standing: dict[str, dict[str, dict]] = {}
+        stamp_of = None
+        for number, core in enumerate(cores):
+            if number and number % STANDING_STEP == 0 and hasattr(self._lock, "step_aside"):
+                self._lock.step_aside()
+            source = (configured.get(core) or {}).get("source")
+            if not isinstance(source, str) or not source.startswith(LIBRARY_SOURCES):
+                continue
+            try:
+                if self._catalog_needs_mod_update(record, core, source):
+                    continue
+                targets = self._spine_parts(core, pin)
+                if not targets or not self._catalog_targets(pin, targets, record):
+                    continue
+                if not all(self._untouched_official(path) for path in targets):
+                    continue
+                stamp_of = self._placed_stamps(pin) if stamp_of is None else stamp_of
+                redirects = self._reusable_redirects(
+                    pin,
+                    core,
+                    targets,
+                    source,
+                    self._resource_type(core, pin) or "portrait",
+                    record=record,
+                    stamp_of=stamp_of,
+                )
+            except (OSError, ValueError, ServiceError):
+                continue
+            if redirects:
+                standing[core] = redirects
+        return standing
+
+    def _standing_off(self, pin: Pin, cores: set[str]) -> list[str]:
+        """Find the redirected entries of an Off that the swap to the official catalog alone switched.
+
+        Those are the entries of the redirect set that was live whose official-named parts are all official: nothing
+        is left to restore. Class 2, under the library lock, in steps as ``_standing_on``.
+        """
+        standing = []
+        for number, core in enumerate(sorted(cores)):
+            if number and number % STANDING_STEP == 0 and hasattr(self._lock, "step_aside"):
+                self._lock.step_aside()
+            try:
+                targets = self._spine_parts(core, pin)
+                if targets and all(self._untouched_official(path) for path in targets):
+                    standing.append(core)
+            except (OSError, ValueError, ServiceError):
+                continue
+        return standing
+
+    def _untouched_official(self, path: Path) -> bool:
+        """Tell whether an official-named game file holds official bytes, by its record and date, else its hash."""
+        return self._unchanged_official(path) or self._is_official(path)
+
+    def _clear_done(self, pin: Pin, cores: list[str]) -> None:
+        """Drop the update markers and write errors of entries a toggle finished, in one save."""
+
+        def change(data: dict) -> bool:
+            folder = data["folders"].get(pin.key) or {}
+            choices, updated = folder.get("configured") or {}, folder.get("updated") or {}
+            changed = False
+            for core in cores:
+                if updated.pop(core, None) is not None:
+                    changed = True
+                choice = choices.get(core)
+                if choice is not None and choice.pop("error", None) is not None:
+                    changed = True
+            return changed
+
+        if cores:
+            self._update_profiles(change)
 
     def _check_start(self, pins: list[Pin], intent: bool, expect: bool | None, *, scoped: bool = False) -> None:
         """Check what a toggle, Retry or Apply Mod Configuration checks before it plans.

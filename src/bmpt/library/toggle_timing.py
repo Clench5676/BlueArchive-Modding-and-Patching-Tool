@@ -23,7 +23,7 @@ class _Toggle:
         self.prefix = f"{_PREFIX}{self.direction}."
         self.seconds: Counter[str] = Counter()
         self.copies: Counter[_Copy] = Counter()
-        self.planned = self.attempted = 0
+        self.planned = self.attempted = self.standing = 0
         self.copy: _Copy | None = None
 
 
@@ -43,11 +43,12 @@ def toggle(enabled: bool) -> Iterator[None]:
         elapsed = time.perf_counter() - started
         spans.record(run.prefix + "total", elapsed, quiet=True)
         logger.info(
-            "Mods %s timing: %d/%d entries attempted in %.3f s; rebuilt=%d reused=%d direct=%d; %s",
+            "Mods %s timing: %d/%d entries attempted in %.3f s; standing=%d rebuilt=%d reused=%d direct=%d; %s",
             run.direction,
             run.attempted,
             run.planned,
             elapsed,
+            run.standing,
             run.copies["rebuilt"],
             run.copies["reused"],
             run.copies["direct"],
@@ -107,6 +108,13 @@ def planned(count: int) -> None:
     run = _current.get()
     if run is not None:
         run.planned = count
+
+
+def standing(count: int = 1) -> None:
+    """Count entries the catalog swap alone switches: nothing of them is read or written."""
+    run = _current.get()
+    if run is not None:
+        run.standing += count
 
 
 def prepared(copy: _Copy) -> None:

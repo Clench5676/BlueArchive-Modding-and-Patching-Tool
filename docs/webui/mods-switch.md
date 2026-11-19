@@ -76,6 +76,12 @@ setting.
   the official ones in a `ModBundles` subfolder, each named after the SHA-1 of its bytes, and the App generates a
   catalog that points the modded parts at them. A switch is one swap of the live catalog: a verified copy beside it,
   then a rename. Off swaps the official catalog back and leaves the placed files, so the next On is one swap again.
+  An entry whose placed files are there as recorded for its configured source, and whose official-named files are
+  official, is switched by the swap alone: nothing of it is read again, and a placed file that is the mod's own file
+  stays valid across program versions. Only entries that changed since (the mod's files, the configured source, a
+  placed file, an official-named file) go through the per-entry steps. An Off makes no pass over the game files
+  first: files that are neither official nor a library source are found by the scan that follows the toggle and
+  offered by "Mods Not in the Library"; until then such a file stays as it is.
   Apply and restore of one entry place (or reuse) its file, generate a catalog and swap. Official files are never
   overwritten. A core whose files the catalog does not name, or that lie outside `GameData/Windows`, is switched by
   file replacement in the same folder.

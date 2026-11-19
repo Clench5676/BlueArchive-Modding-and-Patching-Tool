@@ -55,6 +55,7 @@ logger = logging.getLogger(__package__)
 
 SPACE_MARGIN = 512 * 1024 * 1024  # left free on the library's volume by an Off and an adoption
 SAVE_EVERY = (10, 2.0)  # a toggle saves its unfinished list every 10 entries or 2 s
+STANDING_STEP = 50  # entries a toggle checks by stat in one step under the library lock
 BUILT_TEMP_MAX_AGE = 60 * 60  # seconds before an abandoned built copy can be cleared
 COSTUME_PREVIEWS = 4  # costume previews kept in built/previews (one folder per build signature)
 # times a costume preview is built again when its build signature changed while it was built (costume_preview)

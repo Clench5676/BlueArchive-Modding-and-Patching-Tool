@@ -5,14 +5,17 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import logging
+import os
 import re
 import shutil
+import time
 import uuid
 import zlib
 from collections.abc import Callable, Iterable, Mapping
 from functools import lru_cache
 from os import stat_result
 from pathlib import Path
+from stat import S_ISREG
 from typing import Literal
 
 from ...core import devmode, filelock
@@ -38,6 +41,7 @@ _SIDE_COPY = re.compile(r"(?:official|mods)-([0-9a-f]{12})\.bytes")
 _PLACED = re.compile(r"[0-9a-f]{40}\.bundle")
 _LOAD_PREFIX = "{PlatformUtils.AddressableLoadPath}"
 _GUARD_REFUSALS = ("catalog_unsupported", "catalog_invalid")
+_PATHS_KEPT = 2.0  # seconds an install's checked catalog paths are reused
 CatalogKind = Literal["official", "mods"]
 
 
@@ -626,6 +630,34 @@ class CatalogMixin:
             match = digest(path, "sha1") == sha1
         return path, stamp, match
 
+    def _placed_stamps(self, pin: Pin) -> Callable[[Document, bool], tuple[Document, bool]]:
+        """Give a reader of placed files' stamps that resolves each placed folder once.
+
+        The reader takes a redirect and whether a changed date may be settled by the file's SHA-1, and gives what
+        ``_placed_stamp`` gives without the path. A placed folder that resolves elsewhere, or a placed file that is a
+        link, is refused as there. It reads no bundle; a pass over every redirect of an install is one short step.
+        """
+        bundles = self._catalog_paths(pin, recovering=True).mods_dir.parent
+        folders: dict[str, Path] = {}
+
+        def stamp_of(redirect: Document, full: bool) -> tuple[Document, bool]:
+            folder = folders.get(redirect["dir"])
+            if folder is None:
+                folder = bundles.parent.parent / redirect["dir"] / MODS_DIR
+                if folder.resolve() != folder:
+                    raise ServiceError("game_file_outside_resources", file=folder)
+                folders[redirect["dir"]] = folder
+            path = folder / redirect["placed"]
+            stat = os.lstat(path)
+            if not S_ISREG(stat.st_mode):
+                raise ServiceError("game_file_outside_resources", file=path)
+            match = _matches_stat(stat, redirect)
+            if not match and full and stat.st_size == redirect["size"]:
+                match = digest(path, "sha1") == path.stem
+            return {"sha1": path.stem, "size": stat.st_size, "mtime": stat.st_mtime_ns}, match
+
+        return stamp_of
+
     @toggle_timing.stage("place")
     def _place(self, pin: Pin, name: str, source_file: Path, *, expected: str | None = None) -> Document:
         """Place one prepared bundle during a class 2 entry step under the library and transaction locks.
@@ -694,35 +726,82 @@ class CatalogMixin:
         return kind
 
     def _reusable_redirects(
-        self, pin: Pin, core: str, targets: list[Path], source: str, resource_type: str
+        self,
+        pin: Pin,
+        core: str,
+        targets: list[Path],
+        source: str,
+        resource_type: str,
+        *,
+        record: Document | None = None,
+        stamp_of: Callable[[Document, bool], tuple[Document, bool]] | None = None,
     ) -> dict[str, Document] | None:
-        """Check a class 2 entry's placed files and current build under the library lock for one core."""
-        record = self._catalog_record_for(pin)
+        """Check a class 2 entry's placed files and current build under the library lock for one core.
+
+        A placed file is reused when it carries a current build key, or when its bytes are what a mod made for these
+        parts places as it is: the mod's own file of the target's name, else the target's official copy (compared by
+        the SHA-1 in the placed name against the hash cache, no bundle read). Such a file does not depend on the
+        program that placed it. ``record`` and ``stamp_of`` let a pass over many entries read them once.
+        """
+        record = self._catalog_record_for(pin) if record is None else record
         saved = {target.name: record["redirects"].get(target.name) for target in targets}
         if any(not item or item["source"] != source for item in saved.values()):
             return None
+        own: dict[str, Path] | None = None
+        builds: set[str] | None = None
         if source.startswith("mod:"):
-            builds = self._current_builds(pin, core, self._record(source[4:]), targets)
-        elif source.startswith("alt:"):
-            try:
-                inputs = self._switch_alt_sources(pin, source[4:], resource_type)
-                builds = {self._build_signature(inputs, targets, pin)}
-            except (OSError, ServiceError):
+            mod = self._records.get(source[4:])
+            if mod is None:
                 return None
-        else:
+            if mod["resource_type"] in ("other", "chibi") or core_of(mod["files"][0]) == core:
+                own = {path.name: path for path in self._paths(mod)}
+        elif not source.startswith("alt:"):
             return None
+        stamp_of = self._placed_stamps(pin) if stamp_of is None else stamp_of
         redirects = {}
-        for name, redirect in saved.items():
-            if redirect["build"] not in builds:
-                return None
+        for target in targets:
+            redirect = saved[target.name]
+            if not (own is not None and self._placed_as_is(pin, target, redirect, own)):
+                if builds is None:
+                    builds = self._redirect_builds(pin, core, targets, source, resource_type)
+                if redirect["build"] not in builds:
+                    return None
             try:
-                _, stamp, match = self._placed_stamp(pin, redirect, full=True)
+                stamp, match = stamp_of(redirect, True)
             except (OSError, ServiceError):
                 return None
             if not match:
                 return None
-            redirects[name] = {**redirect, "size": stamp["size"], "mtime": stamp["mtime"]}
+            redirects[target.name] = {**redirect, "size": stamp["size"], "mtime": stamp["mtime"]}
         return redirects
+
+    def _redirect_builds(self, pin: Pin, core: str, targets: list[Path], source: str, resource_type: str) -> set[str]:
+        """Give the build keys a placement of ``source`` over a core's parts signs now (none when it cannot be told)."""
+        if source.startswith("mod:"):
+            return self._current_builds(pin, core, self._record(source[4:]), targets)
+        try:
+            inputs = self._switch_alt_sources(pin, source[4:], resource_type)
+            return {self._build_signature(inputs, targets, pin)}
+        except (OSError, ServiceError):
+            return set()
+
+    def _placed_as_is(self, pin: Pin, target: Path, redirect: Document, own: Mapping[str, Path]) -> bool:
+        """Tell whether a placed file holds the bytes a mod made for this part places unchanged.
+
+        Those are the mod's own file of the target's name, or the target's official copy when the mod has no file
+        of that name. Hashes come from the cache by file revision; a file that cannot be read is no match.
+        """
+        try:
+            sha1 = Path(redirect["placed"]).stem
+            origin = own.get(target.name)
+            if origin is None:
+                # the game file itself is the official copy while nothing wrote over it
+                if self._hashes.get(target).sha1 == sha1 and self._untouched_official(target):
+                    return True
+                origin = self._official_for(target, pin)
+            return self._hashes.get(origin).sha1 == sha1
+        except (OSError, ServiceError):
+            return False
 
     def _place_entry(
         self,
@@ -786,9 +865,10 @@ class CatalogMixin:
                 ]
             with self._lock.unlocked(), _errors("regenerate catalog"):
                 redirects = {}
+                stamp_of = self._placed_stamps(pin)
                 for group in groups:
                     try:
-                        if all(self._placed_stamp(pin, item, full=True)[2] for item in group.values()):
+                        if all(stamp_of(item, True)[1] for item in group.values()):
                             redirects.update(group)
                     except (OSError, ServiceError):
                         if group.keys() & staged.keys():
@@ -916,13 +996,23 @@ class CatalogMixin:
         return path
 
     def _catalog_paths(self, pin: Pin, *, recovering: bool = False) -> CatalogPaths:
-        devmode.check_read(pin.root)
-        paths = catalog_paths(pin, allow_missing=True)
-        if paths is None:
-            raise ServiceError("catalog_unsupported")
+        """Give an install's catalog paths, checked to lie inside it.
+
+        The layout and its path checks are kept for ``_PATHS_KEPT`` seconds per install: a pass over every redirect
+        asks once per file. Whether the live catalog is there is read each time.
+        """
+        kept = self._catalog_paths_kept.get(pin.key)
+        if kept is None or kept[0] != pin or time.monotonic() - kept[1] > _PATHS_KEPT:
+            devmode.check_read(pin.root)
+            paths = catalog_paths(pin, allow_missing=True)
+            if paths is None:
+                raise ServiceError("catalog_unsupported")
+            check_resource_path(paths.live, [pin.root])
+            self._catalog_paths_kept[pin.key] = (pin, time.monotonic(), paths)
+        else:
+            paths = kept[2]
         if not recovering and not paths.live.is_file():
             raise ServiceError("catalog_changed")
-        check_resource_path(paths.live, [pin.root])
         return paths
 
     def _catalog_record_for(self, pin: Pin) -> Document:
