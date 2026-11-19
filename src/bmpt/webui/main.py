@@ -377,7 +377,6 @@ def _run_window(s: Services, server: Server, debug: bool) -> None:
         if sys.platform == "darwin":
             native.keep_web_view_black(window)
             commands = native.install_window_commands(s, s.chrome)
-            native.mark_dev_dock()
         logger.info("Native lifecycle: before-show complete")
 
     window.events.before_show += before_show
@@ -385,6 +384,8 @@ def _run_window(s: Services, server: Server, debug: bool) -> None:
     def on_shown():
         lifecycle["shown"] = True
         logger.info("Native lifecycle: shown")
+        # the process has its Dock entry only once the window is up
+        native.mark_dev_dock()
         if s.chrome.active:
             s.chrome.host.dispatch(s.chrome.refresh)
 
@@ -633,12 +634,13 @@ def _serve_bootstrap(
         else:
             import webview
 
-            from .native import window_title
+            from .native import mark_dev_dock, window_title
 
             window = webview.create_window(
                 window_title(), server.url, width=1200, height=760, background_color="#000000"
             )
             app.raise_window = lambda: (window.show(), window.restore())
+            window.events.shown += mark_dev_dock
             instance.publish(server.port, app.raise_token)
             if start_upgrade:
                 window.events.shown += lambda: threading.Thread(
