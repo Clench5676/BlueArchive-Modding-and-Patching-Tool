@@ -907,7 +907,9 @@ export async function openHelp() {
   const lines = helpLines(state || s).map((l) =>
     l.button ? { text: l.text, button: { label: l.button.label, fn: act[l.button.id] } } : l.text,
   );
-  await Popup.message({ title: T("mods.switch"), lines, width: 2098, fitTogether: [0, 1], plain: true });
+  // the basics and the method lines share one text size; lines with a button keep their own
+  const fitTogether = lines.flatMap((l, i) => (typeof l === "string" ? [i] : []));
+  await Popup.message({ title: T("mods.switch"), lines, width: 2098, fitTogether, plain: true });
 }
 
 /** Settings' mod cache cleanup: a library job; kept originals stay, Off needs them. */
