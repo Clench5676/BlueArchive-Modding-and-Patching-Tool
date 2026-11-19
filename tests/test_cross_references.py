@@ -241,11 +241,24 @@ def lobby_clip(name, reference, sample_rate):
     return clip
 
 
-@pytest.mark.parametrize("entry_point", ["apply", "toggle", "toggle_retry", "startup_retry"])
-@pytest.mark.parametrize("needs_crc_fix", [False, True])
-def test_lobby_update_preserves_official_animation_event_references(
-    env, monkeypatch, caplog, entry_point, needs_crc_fix
-):
+def clips(path, reference, sample_rate, payload, *, extra=False):
+    """A lobby part whose clips point into the shared part; ``extra`` adds an object only the official part has."""
+    objects = [
+        (1, 74, lobby_clip("Intro", reference, sample_rate)),
+        (2, 74, lobby_clip("Idle", 6, sample_rate)),
+        (3, 49, {"m_Name": "Note4", "m_Script": payload}),
+    ]
+    if extra:
+        objects.append((4, 49, {"m_Name": "Extra", "m_Script": "extra"}))
+    return unity_bundle(path, cab="CAB-clips", references=[SHARED], objects=objects)
+
+
+def apply_lobby_clips(env, monkeypatch, caplog, entry_point, needs_crc_fix, *, older):
+    """Apply a lobby mod whose Intro clip points at an object a game update removed from the shared part.
+
+    ``older``: the official clips part gains an object, so the mod's part is of an older release by its structure
+    and is added as it is rather than as a current file. Returns the clips part and the mod's clips file.
+    """
     restore_metadata(monkeypatch)
     monkeypatch.setattr(integrity, "inspect", inspect_bundle)
     core = "test_home_gl"
@@ -255,20 +268,7 @@ def test_lobby_update_preserves_official_animation_event_references(
         parts[index] = rename_crc(
             unity_bundle(parts[index], cab=f"CAB-part-{index}", name=f"Note{index}", payload=b"official" * 8)
         )
-
-    def clips(path, reference, sample_rate, payload):
-        return unity_bundle(
-            path,
-            cab="CAB-clips",
-            references=[SHARED],
-            objects=[
-                (1, 74, lobby_clip("Intro", reference, sample_rate)),
-                (2, 74, lobby_clip("Idle", 6, sample_rate)),
-                (3, 49, {"m_Name": "Note4", "m_Script": payload}),
-            ],
-        )
-
-    parts[4] = rename_crc(clips(parts[4], 6, 30, "official"))
+    parts[4] = rename_crc(clips(parts[4], 6, 30, "official", extra=older))
     source_dir = env.tmp / "input"
     sources = [
         unity_bundle(
@@ -279,8 +279,9 @@ def test_lobby_update_preserves_official_animation_event_references(
     sources.append(rename_crc(clips(source_dir / parts[4].name, 5, 60, "modded")))
     assert integrity.replacement_key(sources[2].name) == integrity.replacement_key(parts[4].name)
     assert sources[2].name != parts[4].name
-    assert integrity.Inspection().structure(sources[2]) == integrity.Inspection().structure(parts[4])
-    (mod,) = env.library.add_files("memorialLobby", sources, direct=True)
+    same_structure = integrity.Inspection().structure(sources[2]) == integrity.Inspection().structure(parts[4])
+    assert same_structure is not older
+    (mod,) = env.library.add_files("memorialLobby", sources, direct=not older)
     if entry_point != "apply":
         assert not env.library.toggle(False, True).failed
         assert env.library.apply(mod.target, f"mod:{mod.id}", resource_type="memorialLobby").deferred
@@ -312,7 +313,7 @@ def test_lobby_update_preserves_official_animation_event_references(
             assert result is not None and not result.failed and result.done, result
             assert "error" not in env.library.profiles.read()["folders"][pin.key]["configured"][core]
 
-    memorial_lobby_intro, idle, text = Bundle.load(target).env.objects
+    memorial_lobby_intro, idle, text, *rest = Bundle.load(target).env.objects
     assert memorial_lobby_intro.read_typetree()["m_Events"][0]["objectReferenceParameter"] == {
         "m_FileID": 1,
         "m_PathID": 6,
@@ -320,12 +321,69 @@ def test_lobby_update_preserves_official_animation_event_references(
     assert memorial_lobby_intro.read_typetree()["m_SampleRate"] == 30
     assert idle.read_typetree()["m_SampleRate"] == 60
     assert text.read().m_Script == "modded"
-    demotions = [
-        record.message
-        for record in caplog.records
-        if "points at objects the game no longer holds, updating it as a file of an older release" in record.message
-    ]
-    assert len(demotions) == 1 and sources[2].name in demotions[0]
+    assert [obj.read().m_Script for obj in rest] == (["extra"] if older else [])
+    return target, sources[2]
+
+
+def logged(caplog, text):
+    return [record.message for record in caplog.records if text in record.message]
+
+
+DEMOTED = "points at objects the game no longer holds, updating it as a file of an older release"
+STALE_UPDATE = "carries references to objects the game no longer holds; their animation clips keep the official ones"
+
+
+@pytest.mark.parametrize("entry_point", ["apply", "toggle", "toggle_retry", "startup_retry"])
+@pytest.mark.parametrize("needs_crc_fix", [False, True])
+def test_lobby_update_preserves_official_animation_event_references(
+    env, monkeypatch, caplog, entry_point, needs_crc_fix
+):
+    _, source = apply_lobby_clips(env, monkeypatch, caplog, entry_point, needs_crc_fix, older=False)
+    demotions = logged(caplog, DEMOTED)
+    assert len(demotions) == 1 and source.name in demotions[0]
+
+
+@pytest.mark.parametrize("entry_point", ["apply", "toggle", "toggle_retry", "startup_retry"])
+@pytest.mark.parametrize("needs_crc_fix", [False, True])
+def test_older_release_lobby_update_preserves_official_animation_event_references(
+    env, monkeypatch, caplog, entry_point, needs_crc_fix
+):
+    _, source = apply_lobby_clips(env, monkeypatch, caplog, entry_point, needs_crc_fix, older=True)
+    assert not logged(caplog, DEMOTED)
+    updates = logged(caplog, STALE_UPDATE)
+    assert updates and all(message.startswith(source.name) for message in updates)
+
+
+@pytest.mark.parametrize("entry_point", ["apply", "toggle"])
+def test_older_release_other_update_preserves_official_animation_event_references(
+    env, monkeypatch, caplog, entry_point
+):
+    env.parts = []
+    generated(env, monkeypatch)
+    env.original = rename_crc(shared(env.original, [(5, 114), (6, 114)]))
+    target = game_bundle(env.game_dir, "common", category="ui", part="004")
+    target = rename_crc(clips(target, 6, 30, "official", extra=True))
+    source = rename_crc(clips(env.tmp / "input" / target.name, 5, 60, "modded"))
+    assert source.name != target.name
+    assert integrity.Inspection().structure(source) != integrity.Inspection().structure(target)
+    (mod,) = env.library.add_files("other", [source])
+    if entry_point == "toggle":
+        assert not env.library.toggle(False, True).failed
+        assert env.library.apply(mod.target, f"mod:{mod.id}", resource_type="other").deferred
+    env.original.unlink()
+    env.original = rename_crc(shared(env.original, [(6, 114)]))
+    with caplog.at_level(logging.INFO, logger="bmpt.library.service"):
+        if entry_point == "apply":
+            assert target in env.library.apply(mod.target, f"mod:{mod.id}", resource_type="other").files
+        else:
+            assert not env.library.toggle(True, False).failed
+    intro, idle, text, extra = Bundle.load(target).env.objects
+    assert intro.read_typetree()["m_Events"][0]["objectReferenceParameter"] == {"m_FileID": 1, "m_PathID": 6}
+    assert intro.read_typetree()["m_SampleRate"] == 30
+    assert idle.read_typetree()["m_SampleRate"] == 60
+    assert (text.read().m_Script, extra.read().m_Script) == ("modded", "extra")
+    updates = logged(caplog, STALE_UPDATE)
+    assert updates and all(message.startswith(mod.file.name) for message in updates)
 
 
 def test_plan_logs_an_uncheckable_whole_file(env, monkeypatch, caplog):

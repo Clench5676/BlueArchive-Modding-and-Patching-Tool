@@ -50,6 +50,9 @@ from .base import POINTER_CACHE, RECOVERY_RETRY, _has_successor
 
 logger = logging.getLogger(__package__)
 
+# A layout lookup per referencing file: {CAB: {path id: class id}}, None for a CAB found nowhere.
+_World = Callable[[Path], Callable[[str], dict[int, int] | None]]
+
 
 class SwitchPlanMixin:
     """Planning and writing a switch: staging, the transaction journals, recovery and the checks of a write."""
@@ -66,8 +69,9 @@ class SwitchPlanMixin:
     ) -> list[PlannedGroup]:
         """Plan install groups, demoting stale whole files before a build.
 
-        Comparisons only ask for targets, without reference reads; ``stale`` carries the references the whole-file
-        shortcut already found dangling.
+        Files updated into their parts carry their dangling references too (``_stale_updates``), so their clips keep
+        the official ones. Comparisons only ask for targets, without reference reads; ``stale`` carries the
+        references the whole-file shortcut already found dangling.
         """
         paths = self._paths(record)
         files = {path.name: path for path in paths}
@@ -109,6 +113,14 @@ class SwitchPlanMixin:
                 )
             else:
                 planned.extend(self._groups_of(resolution))
+        if check_references:
+            updates = {
+                file.mod_path: group.target_paths
+                for group in planned
+                for file in group.files
+                if file.action == Action.UPDATE and file.mod_path not in stale
+            }
+            stale.update(self._stale_updates(updates, current, pin, targets=targets))
         if stale:
             for group in planned:
                 for file in group.files:
@@ -621,37 +633,30 @@ class SwitchPlanMixin:
         self._layout_cache.move_to_end(key)
         return layouts
 
-    @toggle_timing.stage("pointer_check")
-    def _broken_references(
-        self, replacements: Mapping[Path, Path], pin: Pin, *, targets: Collection[Path] = ()
-    ) -> dict[Path, set[pointers.Pointer]]:
-        """Find the written files of ``replacements`` ({target: prepared}) that point at objects the game does not hold.
-
-        That is a pointer into another bundle's CAB whose object is gone there or of a type the field cannot hold
-        (``pointers.dangling``); the result is {target: those pointers}. ``targets`` completes a planned entry: its
-        omitted parts use official copies where available, else the current files, as the write will. A CAB resolves
-        within that resulting entry first, and only outside it to the install (``CabIndex``); one found nowhere is left
-        to the missing-part checks. A file that is the target's official copy is not judged, and what the official copy
-        itself points at in vain, against the official files, is not held against a file (the game's own data then has
-        it too).
-        """
+    def _officials(self, targets: Collection[Path], pin: Pin) -> dict[Path, Path | None]:
+        """Give each target's official copy, None where none is available."""
         official: dict[Path, Path | None] = {}
-        for target in dict.fromkeys((*targets, *replacements)):
+        for target in dict.fromkeys(targets):
             try:
                 official[target] = self._official_for(target, pin)
             except ServiceError as error:
                 if error.code not in ("official_unavailable", "official_invalid"):
                     raise
                 official[target] = None
-        written = [
-            target
-            for target, prepared in replacements.items()
-            if official[target] is None or self._hashes.get(official[target]).sha1 != self._hashes.get(prepared).sha1
-        ]
-        if not written:
-            return {}
+        return official
+
+    def _reference_worlds(
+        self, official: Mapping[Path, Path | None], replacements: Mapping[Path, Path], pin: Pin, *, log_level: int
+    ) -> tuple[_World, _World]:
+        """Give the layouts a write's pointers are judged against, as (resulting, official) worlds.
+
+        Each world maps a referencing file (a hint for the CAB index) to {CAB: {path id: class id}} lookups. The
+        resulting world is the entry as the write leaves it: ``replacements`` ({target: prepared}) over the official
+        copies of ``official``'s targets, the current file where a target has none. The official world holds the
+        official copies alone. A CAB resolves within the entry first, and only outside it to the install
+        (``CabIndex``); one found nowhere gives None, left to the missing-part checks.
+        """
         index = self._cab_index(pin)
-        log_level = logging.INFO if targets else logging.DEBUG
 
         def layouts(path: Path) -> dict[str, dict[int, int]]:
             try:
@@ -660,7 +665,7 @@ class SwitchPlanMixin:
                 log_failure(logger, log_level, f"Could not read the object layout of {path.name}", error)
                 return {}
 
-        def world(files: Mapping[Path, Path | None]) -> Callable[[Path], Callable[[str], dict[int, int] | None]]:
+        def world(files: Mapping[Path, Path | None]) -> _World:
             own: dict[str, Path] = {}
             for path in files.values():
                 if path is not None:
@@ -682,7 +687,31 @@ class SwitchPlanMixin:
             target: replacements.get(target, original if original is not None else target)
             for target, original in official.items()
         }
-        current, baseline = world(resulting), world(official)
+        return world(resulting), world(official)
+
+    @toggle_timing.stage("pointer_check")
+    def _broken_references(
+        self, replacements: Mapping[Path, Path], pin: Pin, *, targets: Collection[Path] = ()
+    ) -> dict[Path, set[pointers.Pointer]]:
+        """Find the written files of ``replacements`` ({target: prepared}) that point at objects the game does not hold.
+
+        That is a pointer into another bundle's CAB whose object is gone there or of a type the field cannot hold
+        (``pointers.dangling``); the result is {target: those pointers}. ``targets`` completes a planned entry: its
+        omitted parts use official copies where available, else the current files, as the write will
+        (``_reference_worlds``). A file that is the target's official copy is not judged, and what the official copy
+        itself points at in vain, against the official files, is not held against a file (the game's own data then has
+        it too).
+        """
+        official = self._officials((*targets, *replacements), pin)
+        written = [
+            target
+            for target, prepared in replacements.items()
+            if official[target] is None or self._hashes.get(official[target]).sha1 != self._hashes.get(prepared).sha1
+        ]
+        if not written:
+            return {}
+        log_level = logging.INFO if targets else logging.DEBUG
+        current, baseline = self._reference_worlds(official, replacements, pin, log_level=log_level)
         broken: dict[Path, set[pointers.Pointer]] = {}
         for target in written:
             found = pointers.dangling(self._pointers_of(replacements[target], log_level=log_level), current(target))
@@ -736,6 +765,57 @@ class SwitchPlanMixin:
                 ", ".join(sorted(current[target].name for target in broken)),
             )
         return {current[target]: found for target, found in broken.items()}
+
+    @toggle_timing.stage("pointer_check")
+    def _stale_updates(
+        self,
+        updates: Mapping[Path, Collection[Path]],
+        current: Mapping[Path, Path],
+        pin: Pin,
+        *,
+        targets: Collection[Path],
+    ) -> dict[Path, set[pointers.Pointer]]:
+        """Find dangling references by source file among the files an entry's write updates rather than writes whole.
+
+        ``updates`` is {source: the targets it updates}, ``current`` the same write's whole replacements ({target:
+        source}) and ``targets`` the entry's full targets. A source of an older release may point into a sibling part's
+        CAB at an object the current game no longer holds; its clips would carry that pointer into the part as raw
+        bytes. Pointers are judged against the entry as the write leaves it (``_reference_worlds``), less what the
+        updated parts' official copies themselves point at in vain. The result goes to ``rebuild(stale_pointers=)``,
+        which keeps the official clips for the clips carrying them. A source that cannot be read gives no evidence (the
+        write's own check judges the result).
+
+        Runs inside the class 2 entry step under the library lock; the pointer reads are kept by SHA-1
+        (``_pointers_of``).
+        """
+        updates = {source: list(updated) for source, updated in updates.items() if updated}
+        if not updates:
+            return {}
+        stale: dict[Path, set[pointers.Pointer]] = {}
+        try:
+            entry = (*targets, *current, *(target for updated in updates.values() for target in updated))
+            official = self._officials(entry, pin)
+            resulting, baseline = self._reference_worlds(official, current, pin, log_level=logging.INFO)
+            for source, updated in updates.items():
+                found = pointers.dangling(self._pointers_of(source, log_level=logging.INFO), resulting(updated[0]))
+                for target in updated:
+                    if found and official[target] is not None:
+                        found -= pointers.dangling(
+                            self._pointers_of(official[target], log_level=logging.INFO), baseline(target)
+                        )
+                if found:
+                    stale[source] = found
+        except (ServiceError, OSError, ValueError) as error:
+            names = ", ".join(sorted(source.name for source in updates))
+            log_failure(logger, logging.WARNING, f"Could not check mod references for {names}", error)
+            return {}
+        for source in sorted(stale):
+            logger.info(
+                "%s carries references to objects the game no longer holds; "
+                "their animation clips keep the official ones",
+                source.name,
+            )
+        return stale
 
     def _check_references(self, changed: Mapping[Path, Path], pin: Pin) -> None:
         """Make the last reference check of a write.
