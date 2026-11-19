@@ -17,7 +17,7 @@ from ...core.errors import ServiceError
 from ...core.logging_utils import log_failure
 from .. import profiles as profiles_mod
 from .. import mod_progress, safety, toggle_timing
-from ..catalog_switch import MODE_CATALOG
+from ..catalog_switch import MODE_CATALOG, MODE_FILES, mode_of
 from ..judge import (
     sorted_resource_types,
     core_of,
@@ -36,6 +36,17 @@ from .base import SAVE_EVERY, STOPPING, _Entry, _Unread, _View, _background, _er
 logger = logging.getLogger(__package__)
 
 
+def _method(pin: Pin, record: dict[str, Any] | None) -> dict[str, Any]:
+    """How an install switches mods, as its catalog record says; an install without one replaces files."""
+    if isinstance(record, dict) and record.get("mode") in (MODE_CATALOG, MODE_FILES):
+        return {"method": record["mode"], "methodReason": record.get("reason"), "methodVersion": record.get("rv")}
+    try:
+        reason = mode_of(pin)[1]
+    except OSError:
+        reason = None
+    return {"method": MODE_FILES, "methodReason": reason, "methodVersion": None}
+
+
 class EnableMixin:
     """The Enable Mods switch: its status, the toggle run, unfinished entries and their prompts."""
 
@@ -45,7 +56,10 @@ class EnableMixin:
         Include known installs, the current install, intent, configured count, and
         reason (mod_configuration_unreadable or None). Each install's
         ``distinct`` is the shortest trailing part of its path that tells it from the other installs of its server
-        (for the install label, "Global (BlueArchive)"), None when it is the only one of its server.
+        (for the install label, "Global (BlueArchive)"), None when it is the only one of its server. ``method`` is
+        how mods are switched there (``catalog`` or ``files``), ``methodReason`` why an install uses files (a
+        refusal code of the catalog checks, or a layout reason), and ``methodVersion`` the resource version that
+        answer was recorded for; they come from the catalog store, read without the library lock.
         """
         pins = self.installs()
         named = {pin.key for pin in self._named_pins()}
@@ -57,6 +71,7 @@ class EnableMixin:
         for roots in servers.values():
             if len(roots) > 1:
                 distinct.update(distinguishing_folders(roots))
+        catalogs = self._catalog_records_for_read()
         out: dict[str, Any] = {
             "installs": [
                 {
@@ -66,6 +81,7 @@ class EnableMixin:
                     "folder": str(pin.root),
                     "named": pin.key in named,
                     "distinct": distinct.get(pin.key),
+                    **_method(pin, catalogs.get(pin.key)),
                 }
                 for pin in pins
             ],

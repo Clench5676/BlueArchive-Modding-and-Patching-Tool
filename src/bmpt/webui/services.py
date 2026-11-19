@@ -29,6 +29,7 @@ from ..core.logging_utils import log_failure
 from .classic.native import NativeOps, native_ops
 from .classic.queued import ClassicQueue
 from .classic.window import ClassicWindow
+from ..library.catalog_switch import MODE_FILES
 from ..library.relocate import relocate
 from .events import EventBus
 from .jobs import MAINTENANCE, JobRunner
@@ -84,6 +85,19 @@ def folder_writable(folder: Path) -> bool:
             os.unlink(name)
         except OSError:
             pass
+
+
+# The catalog checks' refusals after which an install replaces files for the rest of its resource version
+METHOD_FALLBACKS = ("catalog_unsupported", "catalog_invalid")
+
+
+def _method_notice(item: dict[str, Any], told: dict[str, Any]) -> bool:
+    """Whether an install fell back to file replacement for a resource version not told yet."""
+    return (
+        item.get("method") == MODE_FILES
+        and item.get("methodReason") in METHOD_FALLBACKS
+        and told.get(item.get("key")) != item.get("methodVersion")
+    )
 
 
 class ModsSnapshot:
@@ -993,10 +1007,11 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         It comes from the snapshot, the preferences, the game watch, the classic window and the jobs.
 
         Returns:
-            The labelled ``installs`` and the ``current`` one, ``enabled``, ``available`` with the ``reason`` it is
-            not, the ``scan`` consent, the counts of ``pending``, ``stuck``, ``left``, ``held``, ``drift``,
-            ``untracked``, ``damaged`` and ``sourceMissing`` entries, the ``queued`` calls, when it was ``scanned``,
-            the tray flags, ``busy`` and the toggle's ``progress``.
+            The labelled ``installs`` (each with its switch ``method``, ``methodReason`` and ``methodNotice``: a
+            fallback to file replacement not told yet for this resource version) and the ``current`` one, ``enabled``,
+            ``available`` with the ``reason`` it is not, the ``scan`` consent, the counts of ``pending``, ``stuck``,
+            ``left``, ``held``, ``drift``, ``untracked``, ``damaged`` and ``sourceMissing`` entries, the ``queued``
+            calls, when it was ``scanned``, the tray flags, ``busy`` and the toggle's ``progress``.
         """
         status = self.snapshot.status()
         if status is None:
@@ -1016,11 +1031,14 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
             pending, stuck, left = unfinished["pending"], unfinished["stuck"], unfinished["left"]
         reason, params = self._reason(status)
         strings = self._strings()
+        told = self.state.get("method_notices")
+        told = told if isinstance(told, dict) else {}
         installs = [
             {
-                **{k: v for k, v in item.items() if k != "distinct"},
+                **{k: v for k, v in item.items() if k not in ("distinct", "methodVersion")},
                 "label": install_label(strings, item.get("server", "global"), item.get("distinct")),
                 "distinct": item.get("distinct"),
+                "methodNotice": _method_notice(item, told),
             }
             for item in status.get("installs") or []
         ]
@@ -1082,6 +1100,25 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
         if cached is None or cached[0] != lang:
             cached = self._strings_cache = (lang, ui_strings(lang))
         return cached[1]
+
+    def method_notice_seen(self, install: str) -> None:
+        """Record that an install's fallback to file replacement was told, for its current resource version.
+
+        Args:
+            install: The install's key, as ``mods.state`` lists it.
+
+        Raises:
+            ServiceError: The install is not listed (``bad_params``).
+        """
+        status = self.snapshot.status() or self.refresh_status() or {}
+        item = next((i for i in status.get("installs") or [] if i.get("key") == install), None)
+        if item is None:
+            raise ServiceError("bad_params", key="install")
+        told = self.state.get("method_notices")
+        told = dict(told) if isinstance(told, dict) else {}
+        told[install] = item.get("methodVersion")
+        self.state.set("method_notices", told)
+        self.publish_state()
 
     def publish_state(self) -> None:
         """Publish ``mods.state`` to the pages and the tray; a failure is logged."""

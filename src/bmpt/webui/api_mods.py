@@ -222,6 +222,14 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         s.publish_state()
         return {}
 
+    @rpc.method("mods.methodNoticeSeen")
+    def mods_method_notice_seen(install: str) -> dict[str, Any]:
+        """Record that an install's fallback to file replacement was told for its current resource version."""
+        if not isinstance(install, str):
+            raise ServiceError("bad_params", key="install")
+        s.method_notice_seen(install)
+        return {}
+
     @rpc.method("mods.scan")
     def mods_scan(dismissed: bool = False) -> dict[str, bool]:
         """Request a scan; the result comes as ``library.scanned``.

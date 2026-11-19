@@ -90,6 +90,26 @@ def test_missing_store_defaults_to_files_mode(install):
     assert orphan.exists()
 
 
+def test_status_names_each_install_switch_method_from_the_store(prepared, monkeypatch):
+    library, pin = prepared.library, prepared.pin
+    monkeypatch.setattr(library, "installs", lambda: [pin])
+    record = library._catalog_record(pin)
+    library._save_catalog_record(pin, {**record, "mode": "catalog", "reason": None})
+    item = library.status()["installs"][0]
+    assert (item["method"], item["methodReason"], item["methodVersion"]) == ("catalog", None, record["rv"])
+    library._save_catalog_record(pin, {**record, "mode": "files", "reason": "catalog_invalid"})
+    item = library.status()["installs"][0]
+    assert (item["method"], item["methodReason"], item["methodVersion"]) == ("files", "catalog_invalid", record["rv"])
+    # before any record: file replacement, with the layout's reason when the install cannot use the catalog
+    (library.root / "catalogs.json").unlink()
+    assert library.status()["installs"][0]["method"] == "files"
+    assert library.status()["installs"][0]["methodReason"] is None
+    japan = library._pin(pin.root, "japan")
+    monkeypatch.setattr(library, "installs", lambda: [japan])
+    item = library.status()["installs"][0]
+    assert (item["method"], item["methodReason"], item["methodVersion"]) == ("files", "unsupported_server", None)
+
+
 def test_keep_and_generate_retain_verified_copies(prepared):
     library, pin, live = prepared.library, prepared.pin, prepared.live
     record = library._catalog_record(pin)
@@ -1658,3 +1678,12 @@ def test_updating_renamed_target_publishes_new_redirect(catalog_install, monkeyp
     placed = lib._placed_path(pin, record["redirects"][new.name])
     assert env.live.read_bytes() == ccdb.redirect(official, {new.name: placed.name}, MODS_DIR)
     assert placed.read_bytes() == lib._paths(lib._record(source[4:]))[0].read_bytes()
+
+
+def test_impact_rows_carry_a_retired_target_in_the_wire_spelling():
+    from bmpt.webui.contract import wire_value
+
+    row = {"id": "1", "resource_type": "portrait", "impact": "rebuilt", "target_retired": True}
+    assert wire_value({"mods": [row]}) == {
+        "mods": [{"id": "1", "resourceType": "portrait", "impact": "rebuilt", "targetRetired": True}]
+    }
