@@ -35,6 +35,10 @@ from .skeleton import (
 
 logger = logging.getLogger(__package__)
 
+PELVIS = "Bip001 Pelvis"
+SEATED = math.radians(60)  # the slot's thigh rests turned this far against the costume's: the costume sits
+LAP = 0.4  # ... and what the pelvis holds turns with the thigh in full from this share of the thigh's length on
+
 
 @dataclass
 class Costume:
@@ -746,6 +750,99 @@ def _anchor_move(
     return m
 
 
+def _stand(
+    target: Skeleton,
+    source: Skeleton,
+    flat: Flat,
+    carried: Mapping[int, int] | None,
+    t_rest: list[np.ndarray],
+    s_rest: list[np.ndarray],
+    columns: Mapping[int, int],
+    local: np.ndarray,
+    blended: np.ndarray,
+) -> None:
+    """Stand up what a seated costume lays over its thighs and binds to the pelvis (``refit``), in place.
+
+    A chibi modelled sitting (Himari in her wheelchair) rests with her thighs pointing forward, and the lap of her
+    skirt is skinned to the pelvis alone: her own clips never raise her. Refitted to a standing slot, the legs turn
+    down with their own anchors while the lap stays where the pelvis leaves it, a shelf in front of the thighs. Where
+    the slot's thigh rests turned ``SEATED`` or more against the costume's (and no nearer than that to a half
+    turn: a rig built the other way round is not seated), each vertex anchored on the pelvis turns
+    with the thigh it lies along: nothing behind the hip joint, the thigh's whole turn from ``LAP`` of the thigh's
+    length on, about the joint; between the two thighs, by its distance to each.
+
+    Args:
+        target: Slot skeleton supplying the destination rest.
+        source: Costume skeleton supplying the seated rest.
+        flat: Costume geometry at the source's rest.
+        carried: Unmatched-branch to source-carrier map used by fit_anchor.
+        t_rest: Slot rest world matrices.
+        s_rest: Source rest world matrices.
+        columns: Source node to its anchor-move column (``refit``).
+        local: Per influence, its anchor-move column.
+        blended: Per-vertex blended anchor moves, changed in place.
+    """
+    pelvis = source.first(PELVIS)
+    if pelvis is None or (hit := fit_anchor(target, source, pelvis, carried)) is None or hit[0] != pelvis:
+        return
+    base = _anchor_move(target, source, *hit, "refitted", t_rest, s_rest, carried)
+    on_pelvis = sorted(
+        {
+            column
+            for n, column in columns.items()
+            if column and (at := fit_anchor(target, source, n, carried)) is not None and at[0] == pelvis
+        }
+    )
+    total = flat.weights.sum(axis=1)
+    share = np.where(np.isin(local, on_pelvis), flat.weights, 0.0).sum(axis=1) / np.maximum(total, 1e-12)
+    rows = np.where(share > 0)[0]
+    if not len(rows):
+        return
+    points = flat.vertices[rows]
+    turns, nearness = [], []
+    for side in ("L", "R"):
+        thigh, calf = source.first(f"Bip001 {side} Thigh"), source.first(f"Bip001 {side} Calf")
+        if thigh is None or calf is None:
+            continue
+        hit = fit_anchor(target, source, thigh, carried)
+        if hit is None or hit[0] != thigh:
+            continue
+        # the thigh's move against the pelvis's, in the source's space: a turn about the hip joint
+        against = _inverse(base, PELVIS) @ _anchor_move(target, source, *hit, "refitted", t_rest, s_rest, carried)
+        u, _, vt = np.linalg.svd(against[:3, :3])
+        turn = u @ vt
+        angle = math.acos(min(1.0, max(-1.0, (float(np.trace(turn)) - 1) / 2)))
+        if not SEATED <= angle <= math.pi - SEATED:  # past that the rig is built another way round, not seated
+            continue
+        axis = np.array([turn[2, 1] - turn[1, 2], turn[0, 2] - turn[2, 0], turn[1, 0] - turn[0, 1]])
+        axis /= 2 * math.sin(angle)
+        joint = s_rest[thigh][:3, 3]
+        along = s_rest[calf][:3, 3] - joint
+        length = float(np.linalg.norm(along))
+        if length < 1e-6:
+            continue
+        along /= length
+        reach = (points - joint) @ along
+        part = np.clip(reach / (LAP * length), 0.0, 1.0)
+        part = part * part * (3 - 2 * part)
+        cross = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+        angles = (part * angle)[:, None, None]
+        spin = np.eye(3)[None] + np.sin(angles) * cross[None] + (1 - np.cos(angles)) * (cross @ cross)[None]
+        moved = joint + part[:, None] * ((against @ np.r_[joint, 1.0])[:3] - joint)
+        one = np.tile(np.eye(4), (len(rows), 1, 1))
+        one[:, :3, :3] = spin
+        one[:, :3, 3] = moved - np.einsum("nij,j->ni", spin, joint)
+        turns.append(one)
+        off = points - joint - np.clip(reach, 0.0, length)[:, None] * along[None]
+        nearness.append(1.0 / np.maximum(np.einsum("ni,ni->n", off, off), 1e-8))
+    if not turns:
+        return
+    near = np.array(nearness)
+    near /= near.sum(axis=0)
+    stood = np.einsum("sn,snij->nij", near, np.array(turns))
+    blended[rows] += share[rows, None, None] * (base[None] @ stood - base[None])
+
+
 def refit(
     target: Skeleton, source: Skeleton, flat: Flat, carried: Mapping[int, int] | None = None, shape: str = "refitted"
 ) -> Fit:
@@ -789,6 +886,8 @@ def refit(
     stack = np.array(matrices)
     local = np.vectorize(lambda n: columns.get(int(n), 0), otypes=[int])(np.where(flat.weights > 0, flat.joints, -1))
     blended = drawn(Skin(flat.vertices, local, flat.weights, flat.edges), stack, np.eye(4))
+    if shape == "refitted":
+        _stand(target, source, flat, carried, t_rest, s_rest, columns, local, blended)
     vertices = np.einsum("nij,nj->ni", blended, np.c_[flat.vertices, np.ones(len(flat.vertices))])[:, :3]
     delta = vertices - flat.vertices
     changed = np.linalg.norm(delta - np.median(delta, axis=0), axis=1) if len(delta) else np.zeros(0)
