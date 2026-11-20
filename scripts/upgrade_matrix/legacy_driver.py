@@ -63,7 +63,9 @@ def _available(package: str, name: str):
     try:
         return _module(package, name)
     except ModuleNotFoundError as error:
-        if error.name != f"{package}.{name}":
+        # The module or one of its parent packages may be missing in an older release.
+        full = f"{package}.{name}"
+        if error.name is None or not (full == error.name or full.startswith(f"{error.name}.")):
             raise
         return None
 

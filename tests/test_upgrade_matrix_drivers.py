@@ -97,3 +97,14 @@ def test_interrupted_catalog_journal_recovers_or_waits(case):
     document["prefs"]["upgrade_matrix_edit"] = True
     preferences.write_text(json.dumps(document), encoding="utf-8")
     assert _current(case, "import")["reason"] == "recoveryPending"
+
+
+def test_feature_detection_tolerates_a_missing_parent_package(monkeypatch):
+    # Older releases lack whole packages the current code has, such as the host package.
+    monkeypatch.syspath_prepend(str(DRIVERS))
+    spec = importlib.util.spec_from_file_location("upgrade_matrix_legacy_driver", DRIVERS / "legacy_driver.py")
+    driver = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(driver)
+    assert driver._available("bmpt", "upgrade_matrix_absent.store_formats") is None
+    assert driver._available("bmpt", "upgrade_matrix_absent") is None
+    assert driver._available("bmpt", "host.store_formats") is not None
