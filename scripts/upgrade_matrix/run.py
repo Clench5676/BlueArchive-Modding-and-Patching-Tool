@@ -17,6 +17,7 @@ from collections import Counter
 from pathlib import Path
 
 from crash_driver import start_worker
+from environment import LOCAL_GIT, case_environment
 
 # Each row's source. The generation-2 test builds were never tagged, so they are pinned by commit.
 RELEASES = {
@@ -53,7 +54,6 @@ DECLINED_JOURNALS = {"T": ("outside", "missing"), "D": ("outside", "missing")}
 RC_RELEASES = ("0.7.0-rc.3", "0.7.0-rc.5", "main")
 MANIFESTS = {"library.json", "data.json"}
 LOGS = (".bmpt-upgrade", "runtime")
-LOCAL_GIT = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", "GIT_ALLOW_PROTOCOL": "file"}
 
 
 def _offline(*command: str) -> list[str]:
@@ -103,47 +103,13 @@ def _archive(repo: Path, ref: str, source: Path) -> str:
     return commit
 
 
-def _environment(case: Path, cache: Path) -> dict:
-    profile, temp = case / "home", case / "tmp"
-    for path in (profile, temp):
-        path.mkdir(parents=True, exist_ok=True)
-    env = os.environ.copy()
-    for key in ("PYTEST_ADDOPTS", "PYTHONPATH", "BAMT_TEST_GAME_DIR", "VIRTUAL_ENV", "CONDA_PREFIX"):
-        env.pop(key, None)
-    env.update(
-        {
-            **LOCAL_GIT,
-            "UV_OFFLINE": "1",
-            "UV_PYTHON_DOWNLOADS": "never",
-            "UV_NO_MANAGED_PYTHON": "1",
-            "UV_CACHE_DIR": str(cache),
-            "HOME": str(profile),
-            "USERPROFILE": str(profile),
-            "APPDATA": str(profile / "AppData" / "Roaming"),
-            "LOCALAPPDATA": str(profile / "AppData" / "Local"),
-            "XDG_CACHE_HOME": str(profile / ".cache"),
-            "XDG_CONFIG_HOME": str(profile / ".config"),
-            "TMPDIR": str(temp),
-            "TEMP": str(temp),
-            "TMP": str(temp),
-            "BAMT_DATA_DIR": str(case / "data"),
-            "BAMT_GAME_DIRS_GLOBAL": "",
-            "BAMT_GAME_DIRS_JAPAN": "",
-            "BAMT_DEV_ROOTS": str(case),
-            "BAMT_DEV_WRITABLE": str(case),
-            "PYTHONDONTWRITEBYTECODE": "1",
-        }
-    )
-    return env
-
-
 def _worker(source: Path, case: Path, cache: Path, release: str, operation: str, *arguments: str) -> dict:
     python = source / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     script = Path(__file__).with_name("legacy_driver.py").resolve()
     result = subprocess.run(
         _offline(str(python), str(script), operation, release, str(case), *arguments),
         cwd=source,
-        env=_environment(case, cache),
+        env=case_environment(case, cache),
         capture_output=True,
         text=True,
         timeout=120,
@@ -457,7 +423,7 @@ def _release(
     source.mkdir(parents=True)
     commit = _archive(repo, RELEASES[release], source)
     report = {"release": release, "commit": commit}
-    env = _environment(scratch / "install", cache)
+    env = case_environment(scratch / "install", cache)
     result = subprocess.run(
         _offline(str(uv), "sync", "--offline", "--frozen", "--python", str(interpreter)),
         cwd=source,
