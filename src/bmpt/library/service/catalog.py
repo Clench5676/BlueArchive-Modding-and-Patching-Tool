@@ -876,12 +876,14 @@ class CatalogMixin:
         *,
         drop: set[str] | None = None,
         replace_all: bool = False,
+        keep_official: bool = False,
     ) -> bool:
         """Publish the configured redirects in a class 2 transaction.
 
         Snapshot configuration under the library lock. Verification, generation and each atomic swap leave
         the lock free for foreground reads. Each catalog store save takes it briefly. Return whether the
-        live catalog changed.
+        live catalog changed. ``keep_official``: an official live catalog stays live (mods are off); the redirect
+        set is generated beside it for the next On.
         """
         staged = staged or {}
         with self._catalog_transaction():
@@ -944,6 +946,8 @@ class CatalogMixin:
                         self._generate_catalog(pin, redirects)
                 elif redirects != record["redirects"]:
                     self._save_catalog_record(pin, {**record, "redirects": redirects})
+                if keep_official and current == "official":
+                    return False
                 self._timed_swap(pin, "mods")
                 return changed or current == "official"
 

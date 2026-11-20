@@ -308,6 +308,7 @@ class EnableMixin:
         catalog_reconcile: bool = False,
         files_only: set[str] | None = None,
         fallback: bool = False,
+        staged_only: bool = False,
     ) -> ToggleResult:
         """Run a toggle, Retry, Apply Mod Configuration or the start's retry of failed writes.
 
@@ -318,6 +319,9 @@ class EnableMixin:
         Class 2 and the class 3 catalog reconcile take the library lock for planning and for one entry at a time,
         yielding between entries. Catalog preparation and publication share a transaction. Generation and swaps
         release the lock. Class 3 leaves pruning to maintenance.
+
+        ``staged_only``, with ``drift`` and mods off: the listed entries of an install switched by its catalog are
+        built and placed and the redirect set is published beside the live catalog, which stays the official one.
         """
         found: list[_Entry] = []
         files_only = set() if files_only is None else files_only
@@ -366,9 +370,10 @@ class EnableMixin:
                 plan = [(pins[0], self._core_map(pins[0]).slot(core)) for core in retry]
                 listed = {}
             elif drift is not None:
-                if not current:  # mods off: official files are the intent, there is no drift to apply
+                if not current and not staged_only:
+                    # mods off: official files are the intent, there is no drift to apply
                     raise ServiceError("state_changed")
-                enabled = current
+                enabled = True
                 by_key = {pin.key: pin for pin in pins}
                 plan = [
                     (by_key[item["install"]], item["core"].lower())
@@ -636,7 +641,13 @@ class EnableMixin:
                                 check_pins()
                             if key in unavailable:
                                 raise ServiceError("catalog_changed")
-                            self._regenerate(pin, batches[key], drop=set(reached[key]), replace_all=full_toggle)
+                            self._regenerate(
+                                pin,
+                                batches[key],
+                                drop=set(reached[key]),
+                                replace_all=full_toggle,
+                                **({"keep_official": True} if staged_only and not current else {}),
+                            )
                         except ServiceError as error:
                             if error.code in STOPPING:
                                 stop = error

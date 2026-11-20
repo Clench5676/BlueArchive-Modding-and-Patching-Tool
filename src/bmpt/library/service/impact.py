@@ -755,7 +755,7 @@ class ImpactMixin:
     def _stale_builds(self, pin: Pin, config: dict[str, Any]) -> list[str]:
         """List the entries whose placed outputs another builder made.
 
-        Those are the configured entries of an install switched by its catalog, with mods on, that hold a redirect
+        Those are the configured entries of an install switched by its catalog, mods on or off, that hold a redirect
         whose build key names another builder than the current one (``builders.fingerprint``, the costume rule for a
         costume) and whose bytes are neither the mod's own file nor the official part. They stay in use as they are;
         ``refresh_builds`` builds them again. Records, stats and the hash cache only: no bundle is opened.
@@ -768,7 +768,6 @@ class ImpactMixin:
             or record["mode"] != MODE_CATALOG
             or not record["redirects"]
             or record["rv"] != self.resource_version(pin)
-            or not profiles_mod.enabled(config)
         ):
             return []
         configured = ((config.get("folders") or {}).get(pin.key) or {}).get("configured") or {}
@@ -809,8 +808,10 @@ class ImpactMixin:
 
         A toggle keeps using an output whose inputs are unchanged (``_build_fits``); a new builder fingerprint asks
         for it to be built again, here: class 3 behind the start cover, one entry per step with a yield between
-        entries and its own progress, then one catalog publication. What cannot be written now (the game runs,
-        the classic window, mods off) or fails keeps its output and waits for the next start.
+        entries and its own progress, then one catalog publication. With mods off the outputs are built and placed
+        and the redirect set is published beside the official catalog, which stays live: the next On is the swap
+        alone. What cannot be written now (the game runs, the classic window) or fails keeps its output and waits
+        for the next start.
 
         Args:
             pin: Game install and server the operation is fixed to; None uses the current install.
@@ -829,7 +830,7 @@ class ImpactMixin:
             entries = [{"install": pin.key, "core": core, "state": "updated"} for core in stale]
             self._fresh_builds_only = True
             try:
-                self._run(None, None, [pin], log, progress, None, entries, catalog_reconcile=True)
+                self._run(None, None, [pin], log, progress, None, entries, catalog_reconcile=True, staged_only=True)
             finally:
                 self._fresh_builds_only = False
             with self._lock:

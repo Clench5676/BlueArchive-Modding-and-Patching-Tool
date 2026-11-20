@@ -1957,6 +1957,31 @@ def test_redirected_parts_name_the_official_copy_behind_them(catalog_install):
     assert any(item.has_kept_official for item in files)
 
 
+def test_output_of_another_builder_is_built_again_at_start_with_mods_off(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, _ = env.add("test")
+    lib.apply("test", source)
+    record = lib._catalog_record(pin)
+    current = builders.fingerprint()
+    older = {name: {**item, "build": item["build"].split(".")[0]} for name, item in record["redirects"].items()}
+    lib._save_catalog_record(pin, {**record, "redirects": older})
+    monkeypatch.setattr(lib, "_placed_as_is", lambda *args: False)  # as a rebuilt output would be
+    lib.toggle(False, True)
+    assert lib._stale_builds(pin, lib.profiles.read()) == ["test_spr"]
+    assert lib.refresh_builds() == ["test_spr"]
+    rebuilt = lib._catalog_record(pin)
+    assert all(item["build"].endswith(f".{current}") for item in rebuilt["redirects"].values())
+    # mods stay off: the official catalog is still the live one, the redirect set waits beside it
+    assert rebuilt["live"] == "official" and env.live.read_bytes() == env.official
+    assert not lib.status()["enabled"]
+    assert lib._stale_builds(pin, lib.profiles.read()) == []
+    assert lib.refresh_builds() == []
+    monkeypatch.setattr(lib, "_reach", lambda *args, **kwargs: pytest.fail("the On walked a refreshed entry"))
+    assert [item["core"] for item in lib.toggle(True, False).done] == ["test_spr"]
+    assert env.live.read_bytes() != env.official
+
+
 def test_output_under_a_key_of_an_older_program_is_built_again_once(catalog_install, monkeypatch):
     env = catalog_install
     lib, pin = env.library, env.pin
