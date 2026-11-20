@@ -118,9 +118,9 @@
       "masked_import_lines_sha256": "9a2558090e5b5d89ef3001392847ad9608e06cdaf339a1d58b1e53e1530087dc"
     },
     "src/ba_modding_toolkit/gui/app.py": {
-      "blob": "d4aa3d5d04573a7a38846c79c706c08db037264a",
-      "non_import_ast_sha256": "f79837e73a0b5a46d5e87776bca8588a99562c641f2d94a5e25354ac912e3fc3",
-      "masked_import_lines_sha256": "dec7cd71e1a33802dbef6122e45ce5fe87a4337419d5d448a04410fccf7c37d2"
+      "blob": "b70a8bf4d2a5418cace0da1a71b05647f93a1ac9",
+      "non_import_ast_sha256": "92fcceb40fd6d269e7a1358923698881ff48050d4bce573981df910b1736f0c3",
+      "masked_import_lines_sha256": "ab1defbc15a252717547697a739de6752c88b7f961dc3a2c52a4dc9b2c29e8b0"
     },
     "src/ba_modding_toolkit/gui/components.py": {
       "blob": "aaf100806492e8f076f07615b9cc415ca3962d67",
