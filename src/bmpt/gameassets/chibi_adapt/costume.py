@@ -20,6 +20,7 @@ from .skeleton import (
     BIPED_ROOT,
     CARRIER_SAMPLES,
     CARRIER_SHARE,
+    STOWED_SHOWN,
     HEAD,
     HIDDEN,
     NEAR,
@@ -191,11 +192,13 @@ def stowed(
     wrench, skinned in her body mesh below a ``Prop_root`` the slot lacks, rests 40 cm beside her, and every clip of
     hers keys it to her hip. ``carriers`` measures from the rest and finds no bone that explains it, so the slot's
     clips, which never key it, leave it where it rests while her body moves away. For such a branch (outside the
-    Biped, no carrier, its vertices skinned to it alone, held by the first probe pose, the idle, at its size and
-    more than ``NEAR`` away from where its parent would carry its rest): the bone the slot has by name that moves it
+    Biped, no carrier, its vertices skinned to it alone, shown by the first probe pose, the idle, and
+    more than ``NEAR`` away from where its parent would carry its rest; branches skinning a vertex together count as
+    one, whatever ``carriers`` found for one of them): the bone the slot has by name that moves it
     most alike measured from the idle, under the share ``carriers`` asks. Keyed by the branch's top node: the
     carrier, the branch's vertex rows and per row the move that puts it where the idle holds it against that carrier,
-    at the carrier's rest. A prop the idle hides or scales retains its existing placement.
+    at the carrier's rest, at the size the idle draws it (some clips hold a prop smaller than it is modelled). A
+    prop the idle hides (drawn under ``STOWED_SHOWN`` of its size) retains its existing placement.
 
     Args:
         target: Slot skeleton defining available Biped carrier names.
@@ -216,20 +219,47 @@ def stowed(
     ]
     weighted = flat.weights > 0
     out = {}
-    for n in unmatched(target, source, flat):
-        if source.nodes[n].name.startswith("Bip001") or (m := _branch_top(target, source, n)) in carried or m in out:
+    # branches skinning a vertex together are one prop (a strap on a row of bones below the root)
+    tops = sorted(
+        {
+            _branch_top(target, source, n)
+            for n in unmatched(target, source, flat)
+            if not source.nodes[n].name.startswith("Bip001")
+        }
+    )
+    top_of = np.full(len(source.nodes), -1)
+    for m in tops:
+        top_of[[m, *source.descendants(m)]] = m
+    link = {m: m for m in tops}
+
+    def find(m: int) -> int:
+        while link[m] != m:
+            link[m] = link[link[m]]
+            m = link[m]
+        return m
+
+    per_vertex = np.where(weighted & (flat.joints >= 0), top_of[np.maximum(flat.joints, 0)], -1)
+    for row in np.unique(per_vertex[(per_vertex >= 0).sum(axis=1) > 1], axis=0).tolist():
+        hit = sorted({find(m) for m in row if m >= 0})
+        for other in hit[1:]:
+            link[other] = hit[0]
+    groups: dict[int, list[int]] = {}
+    for m in tops:
+        groups.setdefault(find(m), []).append(m)
+    for m, members in sorted(groups.items()):
+        if all(member in carried for member in members):
             continue
-        branch = {m, *source.descendants(m)}
+        branch = {b for member in members for b in (member, *source.descendants(member))}
         inside = np.isin(flat.joints, sorted(branch)) & weighted
         rows = np.where(inside.any(axis=1))[0]
         if not len(rows) or (inside[rows] != weighted[rows]).any():  # skinned to the body too: not a loose prop
             continue
         bones = sorted(set(flat.joints[rows][weighted[rows]].tolist()))
         if any(
-            not 0.9 < abs(np.linalg.det(ref[b][:3, :3])) / max(abs(np.linalg.det(rest[b][:3, :3])), 1e-12) < 1.1
+            abs(np.linalg.det(ref[b][:3, :3])) / max(abs(np.linalg.det(rest[b][:3, :3])), 1e-12) < STOWED_SHOWN**3
             for b in bones
         ):
-            continue  # the idle hides or scales it: a prop the clips show and hide, not one they carry
+            continue  # the idle hides it: a prop the clips show and hide, not one they carry
         parent = _kept_ancestor(target, source, m)
         moves = {b: ref[b] @ np.linalg.inv(rest[b]) for b in bones}
         dominant = flat.joints[rows, np.argmax(flat.weights[rows], axis=1)]
@@ -237,8 +267,8 @@ def stowed(
         points = np.c_[flat.vertices[rows[sample]], np.ones(len(sample))]
         at_rest = points @ (ref[parent] @ np.linalg.inv(rest[parent])).T if parent is not None else points
         held = np.einsum("nij,nj->ni", np.array([moves[b] for b in dominant[sample]]), points)
-        if float(np.linalg.norm(held - at_rest, axis=1).mean()) <= NEAR:
-            continue  # it rests where the clips hold it
+        if len(members) == 1 and float(np.linalg.norm(held - at_rest, axis=1).mean()) <= NEAR:
+            continue  # it rests where the clips hold it: ``carriers`` judged it from there
         errors = np.zeros(len(present))
         stay = 0.0
         for pose in poses:
@@ -265,6 +295,8 @@ def stowed(
             np.eye(4),
         )
         out[m] = (c, rows, row_moves)
+        for member in members[1:]:
+            out[member] = (c, rows[:0], row_moves[:0])
     if out:
         logger.debug(
             "Costume props stowed by the source's clips, carried by: %s",

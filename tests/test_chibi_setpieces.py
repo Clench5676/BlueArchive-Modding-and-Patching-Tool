@@ -76,11 +76,37 @@ def test_a_thing_standing_beside_her_all_the_time_is_none():
     assert "bone_prop" not in {s.nodes[p.top].name for p in sp.set_pieces(costume, flat, _pose(s), [])}
 
 
+def test_a_thing_no_body_bone_holds_moves_on_its_own():
+    s, costume, flat = _made_up()
+    idle = _pose(s)
+    poses = []
+    for step in range(1, 5):  # the body walks one way, the prop flies another
+        pose = [m.copy() for m in idle]
+        for i in (RIG, PELVIS, CHAIR, WHEEL, SKIRT):
+            pose[i][0, 3] += 0.1 * step
+        pose[PROP][2, 3] += 0.3 * (step % 2) + 0.1 * step
+        poses.append(pose)
+    kinds = {s.nodes[p.top].name: p.kind for p in sp.set_pieces(costume, flat, idle, poses)}
+    assert kinds == {"bone_chair": "seat", "bone_prop": "own"}
+
+
+def test_a_thing_a_body_bone_holds_is_none():
+    s, costume, flat = _made_up()
+    idle = _pose(s)
+    poses = []
+    for step in range(1, 5):  # the prop goes where the pelvis goes
+        pose = [m.copy() for m in idle]
+        for i in (RIG, PELVIS, CHAIR, WHEEL, SKIRT, PROP):
+            pose[i][0, 3] += 0.1 * step
+        poses.append(pose)
+    assert "bone_prop" not in {s.nodes[p.top].name for p in sp.set_pieces(costume, flat, idle, poses)}
+
+
 def test_a_seat_most_poses_lift_off_the_floor_is_none():
     s, costume, flat = _made_up()
     idle = _pose(s)
     lifted = [m.copy() for m in idle]
-    for i in (CHAIR, WHEEL):
+    for i in (RIG, PELVIS, CHAIR, WHEEL, SKIRT):  # she jumps, and it goes up with her
         lifted[i][1, 3] += 0.5
     assert sp.set_pieces(costume, flat, idle, [lifted, lifted]) == []
     assert [p.kind for p in sp.set_pieces(costume, flat, idle, [idle, idle, idle, lifted])] == ["seat"]
@@ -148,9 +174,51 @@ def test_official_the_slot_keeps_its_wheelchair(view, tmp_path):  # noqa: F811
 
 
 @official
-@pytest.mark.parametrize("source,top", [("nodoka_original", "bone_telescope_main"), ("ch0280", "bone_acc")])
-def test_official_a_prop_the_clips_bring_out_stays_behind(view, tmp_path, source, top):  # noqa: F811
-    """A thing the source's clips show for a skill (Nodoka's telescope, Neru (School Uniform)'s prop) is hidden by
-    her idle; another slot's clips never hide it, so it draws nothing there."""
+@pytest.mark.parametrize(
+    "source,top",
+    [
+        ("nodoka_original", "bone_telescope_main"),  # shown for a skill, hidden by her idle
+        ("ch0280", "bone_acc"),
+        ("ch0070", "prop_root"),  # Seia's bird flies around her by curves of its own
+        ("ch9997", "bone_Bag_01"),  # a bag swung on its strap
+    ],
+)
+def test_official_a_prop_of_the_sources_animation_stays_behind(view, tmp_path, source, top):  # noqa: F811
+    """A thing only the source's clips handle draws nothing on another slot, whose clips never key it: it would be
+    shown all the time, or hang still in the air."""
     result, *_ = _switch(view, tmp_path, "shigure_original", source)
     assert result.left == [top]
+
+
+@official
+@pytest.mark.parametrize(
+    "source,branch,carrier",
+    [
+        ("ch0282", "bone_prop_root", "Bip001 L UpperArm"),  # Karin (School)'s bag, drawn at nine tenths of its size
+        ("ch0258_02", "bone_AccRoot", "Bip001 Spine"),  # an accessory her clips draw at a third of its size
+    ],
+)
+def test_official_a_prop_the_idle_draws_smaller_is_stowed(view, source, branch, carrier):  # noqa: F811
+    """A prop the source's clips key onto her body at another size than it is modelled goes with the body bone that
+    carries it, instead of staying where it rests."""
+    from bmpt.gameassets.chibi import BundleGraph, chibi_root
+    from bmpt.gameassets.chibi_adapt import costume as mc
+
+    files, index = view
+
+    def load(graph, dev):
+        own = [p for p in files if p.name.startswith(f"character-{dev}-_mxload")]
+        root, _, _ = chibi_root(graph, own, dev)
+        skeleton = ma.Skeleton.of(graph, root)
+        return skeleton, ma.prefab_clips(graph, skeleton, ma.own_prefabs(ma._chibi_prefabs(graph, own), dev))
+
+    with BundleGraph(index) as graph:
+        t, _ = load(graph, "shigure_original")
+        s, clips = load(graph, source)
+        idle = next(iter(s.poses(ma.pick(clips, ma.IDLE_CLIPS)[:1], frames=1)), None)
+        parts = [p for p in ma.roles(s, idle) if p.role in ("primary", "costume")]
+        costume = Costume(s, parts, [ma.skin_of(p.mesh) for p in parts])
+        flat = ma.flatten(costume, s.world())
+        poses = ma.probe_poses(s, clips)
+        stowed = mc.stowed(t, s, flat, poses, mc.carriers(t, s, flat, poses))
+        assert {s.nodes[m].name: s.nodes[c].name for m, (c, _, _) in stowed.items()} == {branch: carrier}
