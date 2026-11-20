@@ -1063,6 +1063,30 @@ def test_official_another_characters_face_follows_the_slots_expressions_about_it
 
 
 @official
+def test_official_what_hangs_below_a_moved_face_bone_goes_with_it(view):
+    """Himari <- Aris: Aris's eye rings are skinned to bones below her eye bones that no slot has. Her eye bones
+    rest three centimetres from Himari's and become new bones; the rings go with those, not with Himari's eye bones,
+    whose idle turns them about another place and took the rings off the eyes."""
+    from ba_modding_toolkit.bundle import Bundle
+
+    files, index = view
+    target, source = "ch0159", "aris_original"
+    result = ma.adapt(
+        index=index,
+        resolver=None,
+        target_files=_slot(files, target),
+        target_dev=target,
+        source_files=[p for p in files if re.match(rf"character-{source}-_mxload", p.name)],
+        source_dev=source,
+        open_writable=Bundle.load,
+    )
+    face = result.hems.face
+    assert face is not None
+    eyes = {face.names.index(name) for name in ("Bip001 Xtra_eyeL_costume", "Bip001 Xtra_eyeR_costume")}
+    assert len(face.riders) == 6 and set(face.riders.values()) == eyes
+
+
+@official
 def test_official_a_bag_mounted_on_an_upper_arm_hangs_from_the_shoulder(view):
     """Airi <- Airi (Band): the shoulder bag and its strap hang from a mount below Airi (Band)'s right upper arm that
     Airi lacks and that skins nothing itself. On Airi they go with the right clavicle, not with the arm, so the bag

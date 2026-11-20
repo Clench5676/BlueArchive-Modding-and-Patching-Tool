@@ -182,6 +182,9 @@ class Skirt:
     clips: int = 0  # clips given curves
     solved: dict[tuple[str, int], tuple[list[int], list[dict[int, np.ndarray]]]] = field(default_factory=dict)
     anchors: list[int] = field(default_factory=list)  # per bone, the slot node a root hangs off (empty: ``anchor``)
+    riders: dict[int, int] = field(
+        default_factory=dict
+    )  # source node with no bone of its own -> the chain bone it goes with
 
     def node(self, k: int) -> int:
         """Return the destination slot node index for chain bone k."""

@@ -24,6 +24,9 @@ def face_retarget(target: Costume, source: Costume, plan_: Plan, fit: Fit) -> Sk
     Bones displaced by at least FACE_OFFSET, together with their face-bone ancestors,
     become slot bones below the head. FaceRetarget drives expressions around the source
     landmarks. The bones follow the head into the bound shape, as flatten places the face.
+    What the source hangs below such a bone without a slot bone of its own (Aris's eye rings below her eye bone) was
+    mapped onto the slot bone the new bone follows; it goes with the new bone instead (``riders``), so it stays on
+    the eye it is drawn on when the slot's expression turns that bone about another place.
 
     Args:
         target: Slot costume whose head and expression bones drive the new face bones.
@@ -95,7 +98,16 @@ def face_retarget(target: Costume, source: Costume, plan_: Plan, fit: Fit) -> Sk
         return None
     chains = ms.Chains(t_head, parents, local, rest)
     solver = FaceRetarget(chains, t_head, [plan_.mapping[n] for n in sources], t_rest)
-    return Skirt(sources, names, parents, locals_, t_head, solver, -1)
+    riders: dict[int, int] = {}
+    for n in sorted(used):
+        if n < 0 or n in new or n not in plan_.mapping:
+            continue
+        above = ss.nodes[n].parent
+        while above is not None and above != s_head and above not in new:
+            above = ss.nodes[above].parent
+        if above in new and plan_.mapping[n] == plan_.mapping[above]:
+            riders[n] = new[above]
+    return Skirt(sources, names, parents, locals_, t_head, solver, -1, riders=riders)
 
 
 @dataclass

@@ -366,6 +366,8 @@ def _adapt(
         skirt_bones(t_skeleton, skirt)
         for k, n in enumerate(skirt.sources):
             result.mapping[n] = skirt.node(k)
+        for n, k in skirt.riders.items():
+            result.mapping[n] = skirt.node(k)
         anchor_hashes = {zlib.crc32(t_skeleton.nodes[a].path.encode()) for a in (skirt.anchors or [skirt.anchor])}
         for clip in t_clips:
             bindings = graph.tree(clip)["m_ClipBindingConstant"]["genericBindings"]
