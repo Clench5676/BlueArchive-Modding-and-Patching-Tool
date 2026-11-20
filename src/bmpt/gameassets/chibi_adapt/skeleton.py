@@ -52,6 +52,7 @@ SHAPES = ("stored", "drawn", "moved", "refitted")
 SHAPE_MARGIN = 0.02  # a later shape is taken when it stretches this share less
 CARRIER_SAMPLES = 200  # vertices measured, about, per unmatched bone
 CARRIER_SHARE = 0.5  # a carrier moves an unmatched bone's vertices at most this much as far off as its parent does
+STOWED_SHOWN = 0.25  # a prop the idle draws at this share of its modelled size or more is shown, and may be stowed
 HIDDEN = 1e-6  # a bone a pose scales to this share of its rest volume or less is hidden
 
 # clips whose poses judge the mapping, by name suffix; the idle comes first
