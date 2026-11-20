@@ -975,6 +975,48 @@ def own_keys(skeleton: Skeleton, clips: Iterable[Any], nodes: list[int]) -> dict
     return out
 
 
+SCALE_KEYED = 1e-4  # a scale curve varying less than this is no motion
+
+
+def own_scales(skeleton: Skeleton, clips: Iterable[Any], nodes: list[int]) -> dict[tuple[str, ...], tuple]:
+    """Index source scale keys by clip-name suffixes, as own_keys indexes rotation keys.
+
+    Args:
+        skeleton: Source hierarchy supplying binding paths and clip readers through its graph.
+        clips: Source AnimationClips contributing local scale curves.
+        nodes: Source node order defining the bone indices stored in each suffix's scale map.
+
+    Returns:
+        Per suffix, the clip's frame times scaled to 0..1 and, per index into ``nodes`` whose scale it varies, the
+        local scales there (frames by 3).
+    """
+    by_hash = {zlib.crc32(skeleton.nodes[n].path.encode()): n for n in nodes}
+    index = {n: k for k, n in enumerate(nodes)}
+    out: dict[tuple[str, ...], tuple] = {}
+    for clip in clips:
+        tree = skeleton.graph.tree(clip)
+        bindings = tree["m_ClipBindingConstant"]["genericBindings"]
+        if not any(b["typeID"] == 4 and b["attribute"] == 3 and b["path"] in by_hash for b in bindings):
+            continue
+        decoded = decode_clip(tree)
+        times = np.asarray(decoded.times, float)
+        frames = len(times)
+        scales = {}
+        for node, attributes in bind_tracks(bindings, decoded.curves, by_hash).items():
+            if 3 not in attributes:
+                continue
+            v = np.array([np.resize(np.asarray(part, float), frames) for part in attributes[3]]).T
+            if float(np.ptp(v, axis=0).max()) > SCALE_KEYED:
+                scales[index[node]] = v
+        if not scales:
+            continue
+        phases = (times - times[0]) / max(float(times[-1] - times[0]), 1e-9) if frames > 1 else np.zeros(1)
+        tokens = [t for t in (clip.peek_name() or "").lower().split("_") if t]
+        for i in range(0 if len(tokens) == 2 else 1, len(tokens) - 1):  # a shared clip's whole name too (Normal_Idle)
+            out.setdefault(tuple(tokens[i:]), (phases, scales))
+    return out
+
+
 def springs(target: Costume, source: Costume, plan_: Plan, s_clips: list[Any], fit: Fit) -> list[Skirt]:
     """Build swinging secondary chains away from the legs for Optimize Physics.
 
@@ -1096,9 +1138,21 @@ class FaceRetarget:
     them, following the slot's expressions: in every frame of a slot clip each new bone takes the turn and the move
     its slot bone of the same name makes against the head, about its own place (a lid closes about the source's eye,
     not the slot's). slots records the slot bone each new bone follows.
+
+    Bones in ``rigid`` are what the source hangs below a face bone and animates itself (Aris's eye rings): they keep
+    their rest place below their parent, and ``scales`` holds the scale keys of the source's own clips for them, by
+    clip-name suffix (``own_scales``), which a slot clip of that name takes over its own length (``scaled``).
     """
 
-    def __init__(self, chains: ms.Chains, head: int, slots: list[int], t_rest: list[np.ndarray]):
+    def __init__(
+        self,
+        chains: ms.Chains,
+        head: int,
+        slots: list[int],
+        t_rest: list[np.ndarray],
+        rigid: Iterable[int] = (),
+        scales: Mapping[tuple[str, ...], tuple] | None = None,
+    ):
         """Prepare face motion relative to the destination head's rest frame.
 
         Args:
@@ -1106,8 +1160,11 @@ class FaceRetarget:
             head: Destination head node index used as the expression reference frame.
             slots: Destination face node followed by each added bone, in chain order.
             t_rest: Destination skeleton world matrices at rest.
+            rigid: Chain bones that stay at rest below their parent, a chain bone before them.
+            scales: Source scale keys by clip-name suffix, their bone indices those of the chain.
         """
         self.chains, self.head, self.slots = chains, head, slots
+        self.rigid, self.scales = set(rigid), dict(scales or {})
         self.roots = list(range(len(slots)))
         inverse = np.linalg.inv(t_rest[head])
         self.rel0 = [inverse @ t_rest[m] for m in slots]  # the slot bones against the head at rest
@@ -1134,6 +1191,9 @@ class FaceRetarget:
             back = np.linalg.inv(world[self.head])
             placed: list[np.ndarray] = []
             for k, m in enumerate(self.slots):
+                if k in self.rigid:
+                    placed.append(placed[ch.parents[k]] @ ch.local[k])
+                    continue
                 rel = back @ world[m]
                 turn = _rotation(rel) @ _rotation(self.rel0[k]).T
                 w = self.new0[k].copy()
@@ -1149,10 +1209,35 @@ class FaceRetarget:
         moving = {
             k
             for k in self.roots
-            if any(not np.allclose(t[k], out[0][k], atol=1e-6) for t in out)
-            or not np.allclose(out[0][k], ch.hanging(k), atol=1e-6)
+            if k not in self.rigid
+            and (
+                any(not np.allclose(t[k], out[0][k], atol=1e-6) for t in out)
+                or not np.allclose(out[0][k], ch.hanging(k), atol=1e-6)
+            )
         }
         return [{k: t[k] for k in sorted(moving)} for t in out]
+
+    def scaled(self, name: str, times: Sequence[float]) -> dict[int, np.ndarray]:
+        """Take the source's scale keys of the clip a slot clip's name matches, over the slot clip's span.
+
+        Args:
+            name: Slot clip name whose trailing lower-case tokens select the source clip.
+            times: Slot sample times in seconds, normalized across their first-to-last span.
+
+        Returns:
+            Local scales (times by 3) per chain bone the matching source clip scales; empty without a match.
+        """
+        tokens = [t for t in name.lower().split("_") if t]
+        match = next(
+            (self.scales[tuple(tokens[i:])] for i in range(len(tokens) - 1) if tuple(tokens[i:]) in self.scales),
+            None,
+        )
+        if match is None or not len(times):
+            return {}
+        phases, scales = match
+        start, span = float(times[0]), max(float(times[-1]) - float(times[0]), 1e-9)
+        at = np.clip((np.asarray(times, float) - start) / span, 0.0, 1.0)
+        return {k: np.stack([np.interp(at, phases, v[:, c]) for c in range(3)], axis=1) for k, v in scales.items()}
 
     def posed(self, pose: Sequence[np.ndarray], turns: Mapping[int, np.ndarray]) -> np.ndarray:
         """Place added face bones under the slot pose's head using scale-free local turns."""
@@ -1273,7 +1358,8 @@ def skirt_curves(
     """Add solved chain rotation and position curves to a slot clip's dense grid.
 
     Interpolate skirt_sequence turns and shifts, or reuse measured solutions. Spring.keyed
-    clips receive curves for every bone their source keys turn, rather than only chain roots.
+    clips receive curves for every bone their source keys turn, rather than only chain roots. A face's bones with
+    scale keys of the source's own (FaceRetarget.scaled) receive scale curves.
 
     Args:
         skeleton: Destination hierarchy including the added bones and their animation binding paths.
@@ -1284,7 +1370,8 @@ def skirt_curves(
         step: No-argument yield/cancellation callback during on-demand pose sampling and solving.
 
     Returns:
-        Number of bones receiving curves, or None for a clip layout the writer does not edit.
+        Number of scalar curves added (7 per turned bone: rotation and position; 3 per scaled bone), or None for
+        a clip layout the writer does not edit.
     """
     grid = ms.dense_grid(tree)
     if grid is None:
@@ -1294,8 +1381,17 @@ def skirt_curves(
     times = clip_times(tree)
     frames, turns = skirt.solved.get(key) or skirt_sequence(skeleton, skirt.solver, tree, prepared=prepared, step=step)
     roots = sorted(turns[0]) if turns else []
+    template = tree["m_ClipBindingConstant"]["genericBindings"][0]
+    scaled = skirt.solver.scaled(str(tree.get("m_Name") or ""), grid) if isinstance(skirt.solver, FaceRetarget) else {}
+    if scaled:  # the source's own scale keys for a clip it has by name
+        bones = sorted(scaled)
+        ms.add_dense_curves(
+            tree,
+            [ms.scale_binding(template, skeleton.nodes[skirt.node(k)].path) for k in bones],
+            np.concatenate([scaled[k] for k in bones], axis=1),
+        )
     if not roots:
-        return 0
+        return 3 * len(scaled)
     rotations = np.array([[ms.quaternion(t[root][:3, :3]) for root in roots] for t in turns])
     positions = np.array([[t[root][:3, 3] for root in roots] for t in turns])
     at = np.clip(grid, times[0], times[-1])
@@ -1309,10 +1405,9 @@ def skirt_curves(
             columns.append(np.repeat(rotations[:1, r], len(grid), axis=0))
             columns.append(np.repeat(positions[:1, r], len(grid), axis=0))
     samples = np.concatenate(columns, axis=1)
-    template = tree["m_ClipBindingConstant"]["genericBindings"][0]
     bindings = []
     for root in roots:
         path = skeleton.nodes[skirt.node(root)].path
         bindings += [ms.rotation_binding(template, path), ms.position_binding(template, path)]
     ms.add_dense_curves(tree, bindings, samples)
-    return len(roots)
+    return 7 * len(roots) + 3 * len(scaled)

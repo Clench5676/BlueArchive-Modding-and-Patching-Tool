@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 import numpy as np
 
@@ -12,13 +12,13 @@ from .. import chibi_skirts as ms
 from ..costume_cache import decode_clip
 from .costume import Costume, Fit, Plan, face_bone, flatten
 from .skeleton import HEAD, _inverse, trs
-from .skirts import FACE_OFFSET, FaceRetarget, Skirt
+from .skirts import FACE_OFFSET, FaceRetarget, Skirt, own_scales
 
 
 logger = logging.getLogger(__package__)
 
 
-def face_retarget(target: Costume, source: Costume, plan_: Plan, fit: Fit) -> Skirt | None:
+def face_retarget(target: Costume, source: Costume, plan_: Plan, fit: Fit, s_clips: Iterable[Any] = ()) -> Skirt | None:
     """Build added face bones for source landmarks displaced from their name-matched slot bones.
 
     Bones displaced by at least FACE_OFFSET, together with their face-bone ancestors,
@@ -26,13 +26,16 @@ def face_retarget(target: Costume, source: Costume, plan_: Plan, fit: Fit) -> Sk
     landmarks. The bones follow the head into the bound shape, as flatten places the face.
     What the source hangs below such a bone without a slot bone of its own (Aris's eye rings below her eye bone) was
     mapped onto the slot bone the new bone follows; it goes with the new bone instead (``riders``), so it stays on
-    the eye it is drawn on when the slot's expression turns that bone about another place.
+    the eye it is drawn on when the slot's expression turns that bone about another place. Such a bone hanging
+    straight below a new bone, whose scale the source's own clips key (the rings' pulse), becomes a new bone too,
+    at rest below its parent; the slot's clips take those scale keys from the source's clip of their name.
 
     Args:
         target: Slot costume whose head and expression bones drive the new face bones.
         source: Incoming costume supplying face landmarks, skin influences, and ancestor structure.
         plan_: Bone mapping identifying corresponding named slot expression bones.
         fit: Bound costume shape carrying the source landmarks into destination space.
+        s_clips: Source clips whose scale keys the bones hanging below a new face bone keep.
 
     Returns:
         Added face-bone Skirt, or None without displaced landmarks, shared heads, or reproducible rest transforms.
@@ -71,6 +74,25 @@ def face_retarget(target: Costume, source: Costume, plan_: Plan, fit: Fit) -> Sk
             n = ss.nodes[n].parent
     sources = sorted(wanted)
     new = {n: k for k, n in enumerate(sources)}
+    # what hangs below a new face bone without a slot bone of its own, mapped onto the slot bone that one follows
+    hanging: dict[int, int] = {}
+    for n in sorted(used):
+        if n < 0 or n in new or n not in plan_.mapping:
+            continue
+        above = ss.nodes[n].parent
+        while above is not None and above != s_head and above not in new:
+            above = ss.nodes[above].parent
+        if above in new and plan_.mapping[n] == plan_.mapping[above]:
+            hanging[n] = above
+    pulsing = sorted(n for n, above in hanging.items() if ss.nodes[n].parent == above)
+    keys = own_scales(ss, s_clips, pulsing) if pulsing else {}
+    keyed = sorted({pulsing[k] for _, scales in keys.values() for k in scales})
+    faces = len(sources)
+    sources += keyed
+    new = {n: k for k, n in enumerate(sources)}
+    scales = {
+        suffix: (phases, {new[pulsing[k]]: v for k, v in found.items()}) for suffix, (phases, found) in keys.items()
+    }
     parents = [new.get(ss.nodes[n].parent, -1) for n in sources]
     rest = np.array([carry @ s_rest[n] for n in sources])
     local = np.array([np.linalg.inv(rest[p] if p >= 0 else t_rest[t_head]) @ rest[k] for k, p in enumerate(parents)])
@@ -97,16 +119,10 @@ def face_retarget(target: Costume, source: Costume, plan_: Plan, fit: Fit) -> Sk
         logger.debug("Face bones left on the slot's: rest not reproduced")
         return None
     chains = ms.Chains(t_head, parents, local, rest)
-    solver = FaceRetarget(chains, t_head, [plan_.mapping[n] for n in sources], t_rest)
-    riders: dict[int, int] = {}
-    for n in sorted(used):
-        if n < 0 or n in new or n not in plan_.mapping:
-            continue
-        above = ss.nodes[n].parent
-        while above is not None and above != s_head and above not in new:
-            above = ss.nodes[above].parent
-        if above in new and plan_.mapping[n] == plan_.mapping[above]:
-            riders[n] = new[above]
+    solver = FaceRetarget(
+        chains, t_head, [plan_.mapping[n] for n in sources], t_rest, range(faces, len(sources)), scales
+    )
+    riders = {n: new[above] for n, above in hanging.items() if n not in new}
     return Skirt(sources, names, parents, locals_, t_head, solver, -1, riders=riders)
 
 

@@ -337,7 +337,7 @@ def write_copies(writer, changes, destinations, holders, skeleton, clip_skirts, 
         if any(n is None for n in bones):
             raise ma.refuse("arm clip edit not verified", clip=change.clip.peek_name(), what="added curve layout")
         if sum(bones):
-            problem = ma.clip_edit_error(before_arms, tree, 7 * sum(bones))
+            problem = ma.clip_edit_error(before_arms, tree, sum(bones))
             if problem:
                 raise ma.refuse("clip edit not verified", clip=change.clip.peek_name(), what=problem)
         cab = destinations[key]

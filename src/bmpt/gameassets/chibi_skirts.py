@@ -989,6 +989,16 @@ def position_binding(template: Mapping[str, Any], path: str) -> dict:
     return _transform_binding(template, path, 1)
 
 
+def scale_binding(template: Mapping[str, Any], path: str) -> dict:
+    """Create a three-curve local-scale Transform binding.
+
+    Args:
+        template: Existing generic binding whose remaining schema fields are preserved.
+        path: Transform hierarchy path below the animated root, hashed with CRC32.
+    """
+    return _transform_binding(template, path, 3)
+
+
 def _transform_binding(template: Mapping[str, Any], path: str, attribute: int) -> dict:
     binding = dict(template)
     binding.update(path=zlib.crc32(path.encode()), attribute=attribute, typeID=4, customType=0, isPPtrCurve=0)

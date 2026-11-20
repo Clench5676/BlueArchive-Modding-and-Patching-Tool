@@ -353,7 +353,7 @@ def _adapt(
     )
     step()
     phase("face")
-    face = face_retarget(target, source, result, result.fit) if result.fit is not None else None
+    face = face_retarget(target, source, result, result.fit, s_clips) if result.fit is not None else None
     if face is not None:  # another character's face: its eye, brow and mouth bones follow the slot's expressions
         chained.append(face)
     step()
@@ -813,8 +813,8 @@ def _adapt(
         )
         if edited and None not in bones and sum(bones):
             obj.save_typetree(tree)
-            # each bone with curves got a rotation (4 curves) and a position (3): read the saved clip back
-            problem = clip_edit_error(before, saved_tree(obj), 7 * sum(bones))
+            # read the saved clip back: the curves added, every curve it had kept
+            problem = clip_edit_error(before, saved_tree(obj), sum(bones))
             if problem is not None:
                 raise refuse("clip edit not verified", clip=clip.peek_name(), what=problem)
             for skirt in edited:

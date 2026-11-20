@@ -145,14 +145,14 @@ def test_judged_sequence_reuse_writes_identical_clip_curves(monkeypatch):
     skirt = ma.Skirt([0, 1], ["a", "b"], [-1, 0], [], 0, solver, 3)
     measured = ma.skirt_sequence(skeleton, solver, tree, prepared=prepared)
     old = copy.deepcopy(tree)
-    assert ma.skirt_curves(skeleton, skirt, old) == 1
+    assert ma.skirt_curves(skeleton, skirt, old) == 7
     skirt.solved[("clip", 1)] = measured
 
     def unexpected(*args, **kwargs):
         raise AssertionError("judged sequence was solved again")
 
     patch_everywhere(monkeypatch, [ma], "skirt_sequence", unexpected)
-    assert ma.skirt_curves(skeleton, skirt, tree, ("clip", 1)) == 1
+    assert ma.skirt_curves(skeleton, skirt, tree, ("clip", 1)) == 7
     assert tree == old
 
 
