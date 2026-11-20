@@ -74,15 +74,21 @@ def _recover(upgrade) -> dict:
     sys.path.insert(0, str(tests))
     fixture = runpy.run_path(str(tests / "test_library.py"))
     helpers = runpy.run_path(str(tests / "conftest.py"))
-    variant = fixture["FakeVariant"]("test", "test_spr", "test_home_gl")
-    other = fixture["FakeVariant"]("other", "other_spr", family="other")
-    catalog = fixture["FakeCatalog"](variant, other)
+    catalog = fixture["FakeCatalog"](
+        fixture["FakeAlt"]("test", "test_spr", "test_home_gl"),
+        fixture["FakeAlt"]("other", "other_spr", student="other"),
+    )
     with MonkeyPatch.context() as patch:
         helpers["header_only_bundles"].__wrapped__(patch)
         patch.setattr(safety, "check_game_not_running", lambda *_args, **_kwargs: None)
         try:
             library = ModLibrary(
-                paths.library_epoch, catalog, object(), Settings(paths.config), game_write_gate=upgrade.game_write
+                paths.library_epoch,
+                catalog,
+                object(),
+                Settings(paths.config),
+                game_write_gate=upgrade.game_write,
+                catalog_write_gate=upgrade.catalog_write,
             )
             library._recover_pending()
         except ServiceError as error:

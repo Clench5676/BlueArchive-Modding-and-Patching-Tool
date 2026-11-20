@@ -66,6 +66,37 @@ def _available(package: str, name: str):
         return None
 
 
+def _screen_names(package: str) -> bool:
+    """Tell whether the release holds stored data under the screens' names while it runs.
+
+    Such a release translates its own field names back to the older ones in ``legacy_document`` when it writes a
+    store outside a generation folder, so callers pass it the names its own code uses.
+    """
+    store = _available(package, "host.store_formats")
+    return store is not None and hasattr(store, "legacy_document")
+
+
+def _first(package: str, *names: str):
+    """Return the first module of ``names`` the release has, else None."""
+    return next((module for name in names if (module := _available(package, name)) is not None), None)
+
+
+def _fake_alt(fixture: dict, key: str, portrait: str, memorial_lobby: str | None = None, student: str = "test"):
+    """Build the catalog fixture's alt under the name the release's tests use."""
+    if "FakeAlt" in fixture:
+        return fixture["FakeAlt"](key, portrait, memorial_lobby, student=student)
+    return fixture["FakeVariant"](key, portrait, memorial_lobby, family=student)
+
+
+def _thumbnails(package: str, root: Path):
+    """Open the release's thumbnail store, named Thumbnails or Photographs."""
+    module = _available(package, "library.thumbnails")
+    if module is not None and hasattr(module, "Thumbnails"):
+        return module.Thumbnails(root)
+    module = _available(package, "library.photographs")
+    return module.Photographs(root) if module is not None else None
+
+
 def _settings(env, data: Path) -> None:
     env.settings.path = data / "config.toml"
     (env.game_dir / "GameData" / "Windows").mkdir(parents=True, exist_ok=True)
@@ -119,7 +150,7 @@ def _fixture_png() -> str:
 
 
 def _seed_camera(package: str, env, fixture: dict, patch, observed: list[str]) -> None:
-    camera = _available(package, "library.lobby_camera")
+    camera = _first(package, "library.memorial_lobby_camera", "library.lobby_camera")
     if camera is None:
         return
     helpers = runpy.run_path(str(Path.cwd() / "tests" / "test_lobby_camera.py"))
@@ -157,7 +188,7 @@ def _seed_collection(package: str, env, fixture: dict, patch, observed: list[str
     portrait_edit = _available(package, "library.portrait_edit")
     if portrait_edit is None:
         return
-    photographs = _module(package, "library.photographs").Photographs(env.root)
+    photographs = _thumbnails(package, env.root)
     photo = photographs.selection("test")
     if not photo:
         raise RuntimeError("The capture fixture is absent")
@@ -187,38 +218,56 @@ def _seed_collection(package: str, env, fixture: dict, patch, observed: list[str
 
 
 def _seed_optional(package: str, state, env, release: str, observed: list[str]) -> None:
+    screen_names = _screen_names(package)
+    source = "alt:other" if screen_names else "variant:other"
     if hasattr(state, "set_aliases"):
         state.set_aliases("test", ["literal variant:favorite", "test_spr"])
-        state.set("roster", {"merged": True, "recruit": "yes"})
-        state.set("lobby_zoom_out", release != "0.1.0-alpha.2")
-        if release != "0.1.0-alpha.2":
-            state.set("lobby_zoom", "game")
-        state.set("lobby_post", False)
+        if screen_names:
+            state.set("student_list", {"group_alts": True, "releaseStatus": "yes"})
+            state.set("memorial_lobby_zoom_out_mode", "gameView")
+            state.set("memorial_lobby_post_processing", False)
+        else:
+            state.set("roster", {"merged": True, "recruit": "yes"})
+            state.set("lobby_zoom_out", release != "0.1.0-alpha.2")
+            if release != "0.1.0-alpha.2":
+                state.set("lobby_zoom", "game")
+            state.set("lobby_post", False)
         observed.append("U.aliases")
     if hasattr(state, "set_preview_source"):
-        state.set_preview_source(str(env.game_dir.resolve()), "test", "spr", "variant:other")
+        state.set_preview_source(str(env.game_dir.resolve()), "test", "portrait" if screen_names else "spr", source)
         observed.append("U.preview")
     if _available(package, "webui.batch_import"):
-        state.set("batch_import", {"strategy": "cont_name_type", "types": ["Texture2D"], "workers": 2})
+        if screen_names:
+            options = {"matchStrategy": "containerNameType", "assetTypes": ["Texture2D"], "threads": 2}
+        else:
+            options = {"strategy": "cont_name_type", "types": ["Texture2D"], "workers": 2}
+        state.set("batch_import", options)
         observed.append("J")
     hall = _available(package, "webui.student_hall")
     if hall is not None:
-        value = hall.empty_hall()
         portrait, memorial = str(UUID(int=1)), str(UUID(int=2))
-        value["portraits"] = [{"id": portrait, "variant": "test", "source": "official", "mirror": True}]
-        value["memorials"] = [{"id": memorial, "variant": "test", "source": "official"}]
+        if hasattr(hall, "save_student_hall"):
+            value = hall.empty_student_hall()
+            value["portraits"] = [{"id": portrait, "alt": "test", "source": "official", "flipHorizontal": True}]
+            value["memorialLobbies"] = [{"id": memorial, "alt": "test", "source": "official"}]
+            value["mode"] = "memorialLobby"
+            save, viewed = hall.save_student_hall, "student_hall_viewed"
+        else:
+            value = hall.empty_hall()
+            value["portraits"] = [{"id": portrait, "variant": "test", "source": "official", "mirror": True}]
+            value["memorials"] = [{"id": memorial, "variant": "test", "source": "official"}]
+            value["mode"] = "memorial"
+            save, viewed = hall.save_hall, "hall_viewed"
         value["active"] = memorial
-        value["mode"] = "memorial"
-        saved = hall.save_hall(state, value, value["revision"])
-        hall.save_hall(state, {**saved, "mode": "portraits"}, saved["revision"])
-        state.set("hall_viewed", ["test:official"])
+        saved = save(state, value, value["revision"])
+        save(state, {**saved, "mode": "portraits"}, saved["revision"])
+        state.set(viewed, ["test:official"])
         observed.append("H")
-    captures = _available(package, "library.photographs")
-    if captures is not None:
-        photographs = captures.Photographs(env.root)
+    photographs = _thumbnails(package, env.root)
+    if photographs is not None:
         png = _fixture_png()
-        saved = photographs.save("test", png, "portrait", "expression", source="variant:other")
-        photographs.save("test", png, "lobby", action="Idle", source="official")
+        saved = photographs.save("test", png, "portrait", "expression", source=source)
+        photographs.save("test", png, "memorialLobby" if screen_names else "lobby", action="Idle", source="official")
         photographs.save("other", png, "portrait", source="official")
         photographs.select("test", saved["saved"])
         photographs.select("other", None)
@@ -254,19 +303,23 @@ def _seed_package(package: str, root: Path, env, mod, observed: list[str]) -> No
         observed.append("A")
     exports = _available(package, "webui.export_service")
     if exports is not None:
-        services = SimpleNamespace(settings=env.settings, state=None, catalog=env.catalog)
+        # Releases that guard output folders ask the services; the fixture folder is inside the case.
+        services = SimpleNamespace(
+            settings=env.settings, state=None, catalog=env.catalog, check_output=lambda _folder: None
+        )
         pin = env.library.current_pin()
         target = exports._pin_target(env.library, env.settings, pin)
         if target != {"server": "global", "platform": "windows"}:
             raise RuntimeError(f"The fixture did not resolve to a Global Windows export target: {target}")
+        accepted = inspect.signature(exports.export_zip).parameters
         parameters = dict(
             scope="single",
             target=f"mod:{mod.id}",
             folder=root / "output",
-            kind=None,
+            **{"resource_type" if "resource_type" in accepted else "kind": None},
             **target,
         )
-        if "log" in inspect.signature(exports.export_zip).parameters:
+        if "log" in accepted:
             parameters.update(log=lambda *_: None, progress=lambda *_: None)
         exports.export_zip(services, env.library, pin, **parameters)
         observed.append("Y.package")
@@ -310,7 +363,12 @@ def _fault_journals(package: str, boundary: str) -> None:
                 raise OSError("Fixture interrupted while publishing the import")
             if kind == "D" and expected == "gameBackedUp" and phase == "active" and data.get("games"):
                 stop(path)
-            if kind == "D" and expected == "photoBackedUp" and phase == "active" and data.get("photo"):
+            if (
+                kind == "D"
+                and expected == "photoBackedUp"
+                and phase == "active"
+                and data.get("thumbnail", data.get("photo"))
+            ):
                 stop(path)
 
         return fault
@@ -442,8 +500,8 @@ def _seed(root: Path, package: str, release: str, interrupt: str | None) -> dict
     if interrupt and interrupt.startswith("D:"):
         _fault_journals(package, interrupt)
         if interrupt == "D:photoBackedUp":
-            photographs = _module(package, "library.photographs").Photographs(env.root)
-            env.library.delete_photograph("test", photographs.selection("test"), confirm=True)
+            delete = getattr(env.library, "delete_thumbnail", None) or env.library.delete_photograph
+            delete("test", _thumbnails(package, env.root).selection("test"), confirm=True)
         else:
             parameters = {"confirm": True} if "confirm" in inspect.signature(env.library.remove).parameters else {}
             env.library.remove(mod.id, **parameters)
@@ -463,9 +521,10 @@ def _older(root: Path, package: str, operation: str) -> dict:
     fixture = runpy.run_path(str(Path.cwd() / "tests" / "test_library.py"))
     library_cls = fixture["ModLibrary"]
     settings = fixture["Settings"](data / "config.toml")
-    variant = fixture["FakeVariant"]("test", "test_spr", "test_home_gl")
-    other = fixture["FakeVariant"]("other", "other_spr", family="other")
-    catalog = fixture["FakeCatalog"](variant, other)
+    catalog = fixture["FakeCatalog"](
+        _fake_alt(fixture, "test", "test_spr", "test_home_gl"),
+        _fake_alt(fixture, "other", "other_spr", student="other"),
+    )
     with MonkeyPatch.context() as patch:
         patch.setattr(fixture["safety"], "check_game_not_running", lambda *_: None)
         patch.setattr(fixture["Bundle"], "check_need_crc", lambda *_args, **_kw: False)
