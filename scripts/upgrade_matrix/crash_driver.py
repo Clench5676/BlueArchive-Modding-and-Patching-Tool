@@ -6,7 +6,6 @@ import argparse
 import json
 import os
 import queue
-import runpy
 import subprocess
 import sys
 import tempfile
@@ -14,6 +13,9 @@ import threading
 from collections.abc import Iterable
 from pathlib import Path
 
+from generation_two import catalog_summary, epoch_library, pending, seed_catalog
+
+TESTS = Path(__file__).resolve().parents[2] / "tests"
 BOUNDARIES = (
     "discovery",
     "locking",
@@ -51,6 +53,8 @@ def _worker(data: Path, boundary: str, action: str, target: Path | None) -> int:
             upgrade.relocate(target)
         if state["status"] == "ready" and action == "recover":
             state.update(_recover(upgrade))
+        if state["status"] == "ready" and action == "catalog":
+            state.update(_catalog(upgrade, data.parent))
         if state["status"] == "ready" and action == "acknowledge":
             upgrade.acknowledge()
             state = upgrade.state()
@@ -63,34 +67,21 @@ def _worker(data: Path, boundary: str, action: str, target: Path | None) -> int:
 
 
 def _recover(upgrade) -> dict:
-    from pytest import MonkeyPatch
-
     from bmpt.core.errors import ServiceError
-    from bmpt.host.config import Settings
-    from bmpt.library import ModLibrary, safety
 
-    paths = upgrade.paths
-    tests = Path(__file__).resolve().parents[2] / "tests"
-    sys.path.insert(0, str(tests))
-    fixture = runpy.run_path(str(tests / "test_library.py"))
-    helpers = runpy.run_path(str(tests / "conftest.py"))
-    variant = fixture["FakeVariant"]("test", "test_spr", "test_home_gl")
-    other = fixture["FakeVariant"]("other", "other_spr", family="other")
-    catalog = fixture["FakeCatalog"](variant, other)
-    with MonkeyPatch.context() as patch:
-        helpers["header_only_bundles"].__wrapped__(patch)
-        patch.setattr(safety, "check_game_not_running", lambda *_args, **_kwargs: None)
-        try:
-            library = ModLibrary(
-                paths.library_epoch, catalog, object(), Settings(paths.config), game_write_gate=upgrade.game_write
-            )
+    epoch = upgrade.paths.library_epoch
+    try:
+        with epoch_library(upgrade, TESTS) as library:
             library._recover_pending()
-        except ServiceError as error:
-            return {"recovery": "blocked", "code": error.code}
-    pending = sorted(
-        str(path.relative_to(paths.library_epoch)) for path in paths.library_epoch.glob("*/*/journal.json")
-    )
-    return {"recovery": "deferred" if pending else "settled", "pending": pending}
+    except ServiceError as error:
+        return {"recovery": "blocked", "code": error.code}
+    found = pending(epoch)
+    return {"recovery": "deferred" if found else "settled", "pending": found, "catalog": catalog_summary(epoch)}
+
+
+def _catalog(upgrade, case: Path) -> dict:
+    with epoch_library(upgrade, TESTS) as library:
+        return seed_catalog(library, case, TESTS)
 
 
 def start_worker(
