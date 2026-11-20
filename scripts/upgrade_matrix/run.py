@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -17,22 +18,27 @@ from pathlib import Path
 
 from crash_driver import start_worker
 
-RELEASES = (
-    "0.1.0-alpha",
-    "0.1.0-alpha.1",
-    "0.1.0-alpha.2",
-    "0.1.0-alpha.3",
-    "0.1.0-beta",
-    "0.2.1",
-    "0.3.0",
-    "0.4.0",
-    "0.4.1",
-    "0.5.0",
-    "0.6.0",
-    "0.7.0-rc.3",
-    "0.7.0-rc.5",
-    "main",
-)
+# Each row's source. The generation-2 test builds were never tagged, so they are pinned by commit.
+RELEASES = {
+    "0.1.0-alpha": "refs/tags/0.1.0-alpha",
+    "0.1.0-alpha.1": "refs/tags/0.1.0-alpha.1",
+    "0.1.0-alpha.2": "refs/tags/0.1.0-alpha.2",
+    "0.1.0-alpha.3": "refs/tags/0.1.0-alpha.3",
+    "0.1.0-beta": "refs/tags/0.1.0-beta",
+    "0.2.1": "refs/tags/0.2.1",
+    "0.3.0": "refs/tags/0.3.0",
+    "0.4.0": "refs/tags/0.4.0",
+    "0.4.1": "refs/tags/0.4.1",
+    "0.5.0": "refs/tags/0.5.0",
+    "0.6.0": "refs/tags/0.6.0",
+    "0.7.0-rc.3": "refs/tags/0.7.0-rc.3",
+    "0.7.0-rc.5": "refs/tags/0.7.0-rc.5",
+    "0.7.0-rc.12": "b269e3e88c924960d9e6e5ac2310ebe356140a70",
+    "0.7.0-rc.13": "8e73119cbed550d93e26adf2f22688ab2ddf7ce2",
+    "main": "refs/heads/main",
+}
+# Rows that write generation-2 data themselves, with the library format their own upgrade writes.
+GENERATION_TWO = {"0.7.0-rc.12": "2.0", "0.7.0-rc.13": "2.1"}
 JOURNAL_RELEASES = {
     "T": ("0.2.1", "0.3.0", "0.4.0", "0.4.1", "0.5.0", "0.6.0", "0.7.0-rc.3", "0.7.0-rc.5", "main"),
     "I": ("0.5.0", "0.6.0", "0.7.0-rc.3", "0.7.0-rc.5", "main"),
@@ -46,6 +52,7 @@ PHASES = {
 DECLINED_JOURNALS = {"T": ("outside", "missing"), "D": ("outside", "missing")}
 RC_RELEASES = ("0.7.0-rc.3", "0.7.0-rc.5", "main")
 MANIFESTS = {"library.json", "data.json"}
+LOGS = (".bmpt-upgrade", "runtime")
 LOCAL_GIT = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", "GIT_ALLOW_PROTOCOL": "file"}
 
 
@@ -300,6 +307,132 @@ def _case(
     }
 
 
+def _stored(case: Path) -> dict[str, str]:
+    """Hash every stored file of a case, legacy and generation-2, apart from locks and the upgrade's own logs."""
+    found = {}
+    for name in ("data", "work"):
+        for path, digest in _hashes(case / name, include_private=True).items():
+            if Path(path).parts[: len(LOGS)] != LOGS:
+                found[f"{name}/{path}"] = digest
+    return found
+
+
+def _unchanged(case: Path, before: dict[str, str], what: str) -> None:
+    after = _stored(case)
+    if after != before:
+        changed = sorted(path for path in before.keys() | after.keys() if before.get(path) != after.get(path))
+        raise RuntimeError(f"{what} changed stored files: {changed[:20]}")
+
+
+@contextlib.contextmanager
+def _trial(case: Path, label: str):
+    """Run one trial on the case at its own path, then put the seed back for the next one.
+
+    Stored data names its folders by absolute path, so a copy elsewhere would read as a moved library.
+    """
+    seed = case.with_name(f"{case.name}-{label}-seed")
+    shutil.copytree(case, seed, copy_function=shutil.copy2)
+    try:
+        yield
+    finally:
+        case.rename(case.with_name(f"{case.name}-{label}"))
+        seed.rename(case)
+
+
+def _edit_legacy_preferences(case: Path) -> None:
+    path = case / "data" / "webui.json"
+    document = json.loads(path.read_bytes())
+    document.setdefault("prefs", {})["upgrade_matrix_edit"] = True
+    path.write_text(json.dumps(document, indent=1), encoding="utf-8")
+
+
+def _refuses_catalog_library(source: Path, case: Path, cache: Path, release: str) -> str:
+    """Let the current code add catalog stores, then check the release refuses the library without writing."""
+    library = case / "work" / "library" / "library.json"
+    with _trial(case, "fenced"):
+        fenced = start_worker(case / "data", action="catalog")
+        if fenced["status"] != "ready" or not fenced.get("catalog"):
+            raise RuntimeError(f"The current code did not keep a catalog for {release}: {fenced}")
+        head = json.loads(library.read_bytes())
+        if head["min_reader_version"] != "2.1":
+            raise RuntimeError(f"The first catalog write did not fence the library: {head['min_reader_version']}")
+        before = _stored(case)
+        refused = _worker(source, case, cache, release, "upgrade")
+        if refused["reason"] != "newerFormat":
+            raise RuntimeError(f"{release} did not refuse a library with catalog stores: {refused}")
+        _unchanged(case, before, f"{release} refusing a library with catalog stores")
+    return refused["reason"]
+
+
+def _catalog_journal(source: Path, case: Path, cache: Path, release: str) -> dict:
+    """Compare the current code with the release on an interrupted catalog swap in the release's library."""
+    data, game = case / "data", case / "work" / "catalog-game"
+    with _trial(case, "catalog"):
+        receipt = _worker(source, case, cache, release, "catalog")
+        journal = Path(receipt.get("catalogJournal", ""))
+        if not journal.is_file() or not journal.resolve().is_relative_to(case / "work" / "library"):
+            raise RuntimeError(f"{release} did not leave an interrupted catalog journal: {receipt}")
+        with _trial(case, "catalog-old-only"):
+            control = _worker(source, case, cache, release, "reopen")
+            control_game = _hashes(game, include_private=True)
+        with _trial(case, "catalog-current"):
+            before = _stored(case)
+            opened = start_worker(data)
+            if opened["status"] != "ready":
+                raise RuntimeError(f"The current code did not open {release} with a catalog journal: {opened}")
+            _unchanged(case, before, f"Opening {release} with a catalog journal")
+            recovered = start_worker(data, action="recover")
+            for key in ("recovery", "pending", "catalog"):
+                if recovered.get(key) != control.get(key):
+                    raise RuntimeError(f"{release} catalog recovery differs from its own: {recovered} vs {control}")
+            if _hashes(game, include_private=True) != control_game:
+                raise RuntimeError(f"{release} catalog recovery left different game bytes")
+        _edit_legacy_preferences(case)
+        with _trial(case, "catalog-reimport-old-only"):
+            old_reimport = _worker(source, case, cache, release, "reimport")
+        with _trial(case, "catalog-reimport-current"):
+            before = _stored(case)
+            changed = start_worker(data)
+            reimport = start_worker(data, action="import")
+            if changed["status"] != "changed" or reimport["reason"] != "recoveryPending":
+                raise RuntimeError(f"Re-import over a pending catalog journal must wait: {changed} then {reimport}")
+            if old_reimport["reason"] != reimport["reason"]:
+                raise RuntimeError(f"{release} re-import differs from its own: {reimport} vs {old_reimport}")
+            _unchanged(case, before, f"Re-importing {release} over a catalog journal")
+    return {
+        "old": control["recovery"],
+        "new": recovered["recovery"],
+        "catalog": recovered["catalog"],
+        "reimport": reimport["reason"],
+        "oldOnlyControl": True,
+    }
+
+
+def _generation_two_case(source: Path, case: Path, cache: Path, release: str, interrupts: bool) -> dict:
+    """Open the generation-2 data a test build wrote, without an upgrade where none is due."""
+    case.mkdir()
+    seed = _worker(source, case, cache, release, "seed")
+    written = _worker(source, case, cache, release, "upgrade")
+    if written["status"] != "ready" or written.get("notice") is not None:
+        raise RuntimeError(f"{release} did not open its own upgrade: {written}")
+    head = json.loads((case / "work" / "library" / "library.json").read_bytes())
+    expected = GENERATION_TWO[release]
+    if (head["format_version"], head["min_reader_version"]) != (expected, expected):
+        raise RuntimeError(f"{release} wrote library format {head['format_version']}, not {expected}")
+    with _trial(case, "current"):
+        before = _stored(case)
+        opened = start_worker(case / "data")
+        if opened["status"] != "ready" or opened.get("notice") is not None:
+            raise RuntimeError(f"The current code did not open {release} as ready: {opened}")
+        _unchanged(case, before, f"Opening {release}")
+    report = {"legacy": seed["writers"], "libraryFormat": expected, "opened": "ready", "status": "ready"}
+    if expected == "2.0":
+        report["catalogStores"] = _refuses_catalog_library(source, case, cache, release)
+    if interrupts and expected != "2.0":
+        report["catalogJournal"] = _catalog_journal(source, case, cache, release)
+    return report
+
+
 def _recovery_cases(release: str):
     for store, releases in JOURNAL_RELEASES.items():
         if release not in releases:
@@ -322,8 +455,7 @@ def _release(
 ) -> dict:
     source = scratch / "source"
     source.mkdir(parents=True)
-    ref = "refs/heads/main" if release == "main" else f"refs/tags/{release}"
-    commit = _archive(repo, ref, source)
+    commit = _archive(repo, RELEASES[release], source)
     report = {"release": release, "commit": commit}
     env = _environment(scratch / "install", cache)
     result = subprocess.run(
@@ -341,10 +473,13 @@ def _release(
             return {**report, "status": "failed", "sandboxError": detail.strip()}
         return {**report, "status": "offlineDependencyUnavailable", "dependencyError": detail}
     try:
-        report.update(_case(source, scratch / "baseline", cache, release))
+        if release in GENERATION_TWO:
+            report.update(_generation_two_case(source, scratch / "baseline", cache, release, interrupts))
+        else:
+            report.update(_case(source, scratch / "baseline", cache, release))
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         report.update(status="failed", error=str(error))
-    if interrupts:
+    if interrupts and release not in GENERATION_TWO:
         results = []
         for interrupt, mutation in _recovery_cases(release):
             folder = "-".join((interrupt.replace(":", "-"), mutation or "intact"))

@@ -17,6 +17,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
 
+from generation_two import catalog_summary, epoch_library, fake_alt, open_data, pending, seed_catalog
+
 
 def _reject_network(event: str, args: tuple) -> None:
     if event in {"socket.connect", "socket.getaddrinfo", "socket.gethostbyname", "socket.sendto", "webbrowser.open"}:
@@ -79,13 +81,6 @@ def _screen_names(package: str) -> bool:
 def _first(package: str, *names: str):
     """Return the first module of ``names`` the release has, else None."""
     return next((module for name in names if (module := _available(package, name)) is not None), None)
-
-
-def _fake_alt(fixture: dict, key: str, portrait: str, memorial_lobby: str | None = None, student: str = "test"):
-    """Build the catalog fixture's alt under the name the release's tests use."""
-    if "FakeAlt" in fixture:
-        return fixture["FakeAlt"](key, portrait, memorial_lobby, student=student)
-    return fixture["FakeVariant"](key, portrait, memorial_lobby, family=student)
 
 
 def _thumbnails(package: str, root: Path):
@@ -522,8 +517,8 @@ def _older(root: Path, package: str, operation: str) -> dict:
     library_cls = fixture["ModLibrary"]
     settings = fixture["Settings"](data / "config.toml")
     catalog = fixture["FakeCatalog"](
-        _fake_alt(fixture, "test", "test_spr", "test_home_gl"),
-        _fake_alt(fixture, "other", "other_spr", student="other"),
+        fake_alt(fixture, "test", "test_spr", "test_home_gl"),
+        fake_alt(fixture, "other", "other_spr", student="other"),
     )
     with MonkeyPatch.context() as patch:
         patch.setattr(fixture["safety"], "check_game_not_running", lambda *_: None)
@@ -558,10 +553,49 @@ def _older(root: Path, package: str, operation: str) -> dict:
         return result
 
 
+def _generation_two(root: Path, operation: str) -> dict:
+    """Run the release's own data upgrade and, once it opens, one operation on its generation-2 library."""
+    from bmpt.core.errors import ServiceError
+
+    tests = Path.cwd() / "tests"
+    upgrade, state = open_data(root / "data", "import" if operation == "reimport" else "retry")
+    try:
+        result = {key: state.get(key) for key in ("status", "reason", "notice")}
+        if state["status"] != "ready" or operation == "reimport":
+            return result
+        epoch = upgrade.paths.library_epoch
+        if operation == "upgrade" and state.get("notice"):
+            upgrade.acknowledge()
+            result["notice"] = upgrade.state().get("notice")
+        elif operation == "catalog":
+
+            def stop(journal: Path) -> None:
+                print(json.dumps({"catalogJournal": str(journal)}), flush=True)
+                os._exit(91)
+
+            with epoch_library(upgrade, tests) as library:
+                seed_catalog(library, root, tests, stop)
+        elif operation == "reopen":
+            try:
+                with epoch_library(upgrade, tests) as library:
+                    library._recover_pending()
+            except ServiceError as error:
+                result.update(recovery="blocked", code=error.code)
+            else:
+                result["recovery"] = "deferred" if pending(epoch) else "settled"
+            result.update(pending=pending(epoch), catalog=catalog_summary(epoch))
+        return result
+    finally:
+        upgrade.close()
+
+
+GENERATION_TWO_OPERATIONS = ("upgrade", "reimport", "catalog", "reopen")
+
+
 def main() -> None:
     """Run one fixture operation in the tag's installed dependency environment."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("seed", "inspect", "downgrade", "recover"))
+    parser.add_argument("operation", choices=("seed", "inspect", "downgrade", "recover", *GENERATION_TWO_OPERATIONS))
     parser.add_argument("release")
     parser.add_argument("case", type=Path)
     parser.add_argument("--interrupt")
@@ -576,6 +610,8 @@ def main() -> None:
     package = "bmpt" if (Path.cwd() / "src" / "bmpt").is_dir() else "ba_modding_toolkit"
     if args.operation == "seed":
         result = _seed(root, package, args.release, args.interrupt)
+    elif args.operation in GENERATION_TWO_OPERATIONS:
+        result = _generation_two(root, args.operation)
     else:
         sys.path.insert(0, str(Path.cwd() / "tests"))
         result = _older(root, package, args.operation)
