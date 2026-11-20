@@ -296,6 +296,34 @@ def test_the_refit_carries_each_vertex_by_its_anchor():
     assert np.allclose(whole.vertices, [[0.2, 1.0, 0.0], [0.5, 1.2, 0.0]]) and whole.largest == pytest.approx(0.0)
 
 
+def _legs(seated):
+    """A pelvis 1 m up with two thighs 0.5 m long: pointing forward (+Z) on a seated rig, down on a standing one."""
+    turn = (0, 0, 0, 1) if seated else (np.sin(np.pi / 4), 0, 0, np.cos(np.pi / 4))
+    bones = [("Bip001", 0, (0, 0, 0), (0, 0, 0, 1)), ("Bip001 Pelvis", 1, (0, 1, 0), (0, 0, 0, 1))]
+    for k, (side, x) in enumerate((("L", 0.1), ("R", -0.1))):
+        bones.append((f"Bip001 {side} Thigh", 2, (x, 0, 0), turn))
+        bones.append((f"Bip001 {side} Calf", 3 + 2 * k, (0, 0, 0.5), (0, 0, 0, 1)))
+    return _skeleton(bones)
+
+
+def test_a_seated_costume_stands_up_what_the_pelvis_holds_over_the_thighs():
+    """Himari's skirt lies over her thighs and is skinned to the pelvis: she never stands. On a standing slot the lap
+    turns down with the thigh it lies along, about the hip joint; what sits behind the joint stays with the pelvis."""
+    source, target = _legs(seated=True), _legs(seated=False)
+    pelvis, thigh = source.first("Bip001 Pelvis"), source.first("Bip001 L Thigh")
+    points = [[0.1, 1.1, -0.1], [0.1, 1.1, 0.4], [0.1, 1.1, 0.4], [-0.1, 1.1, 0.4]]
+    flat = _flat(points, [pelvis, pelvis, thigh, pelvis])
+    fit = ma.refit(target, source, flat)
+    assert np.allclose(fit.vertices[0], points[0])  # behind the hip joint: the pelvis's
+    assert np.allclose(fit.vertices[1], [0.1, 0.6, 0.1])  # over the thigh: down in front of it
+    assert np.allclose(fit.vertices[1], fit.vertices[2])  # where the thigh's own vertex goes
+    assert np.allclose(fit.vertices[3], [-0.1, 0.6, 0.1])  # the other thigh's side
+    assert np.allclose(fit.linear[1] @ [0, 1, 0], [0, 0, 1])  # its normal turns along: up becomes forward
+    # the joints' moves alone turn nothing, and a standing costume on a standing slot keeps its shape
+    assert np.allclose(ma.refit(target, source, flat, shape="moved").vertices, points)
+    assert np.allclose(ma.refit(target, _legs(seated=False), flat).vertices, points)
+
+
 def test_a_face_goes_with_the_head_whatever_its_eye_bones():
     """Midori (Battle)'s face on Midori: the eye bones (Bip001 bone_eye_D_L, named Bip001 like the Biped) rest
     elsewhere on the slot's face rig; refitting the eyelid by them pulled the eye out of the face. The face's vertices
