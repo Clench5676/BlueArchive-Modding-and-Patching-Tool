@@ -125,9 +125,16 @@ one card picture at a time and stores it (a picture that fails or takes over 20 
 job (`thumbnails.applyDefaults`) writes each shared Collection bundle once, composing outside the library lock, and
 chooses the written defaults in the App. `thumbnails.defaults` decides first whether the run is due, from the
 launch history before the release notes record this launch. A write that fails leaves its bundle, the configuration and the
-manifest as they were. The marker (`thumbnailDefaults` in the profile's tour history) is set only after a run with
-nothing failed or left, so the next start tries again. It waits for a later start without a game, without the Spine
-licence, or while a classic window is open with mods on.
+manifest as they were. The marker (`thumbnailDefaults` in the profile's tour history) is set once a run has nothing
+left to try: a refusal of the moment (`LATER` in `library/service/base.py`) or an interrupted run is tried again at
+the next start, a refusal that stays (such as `official_unavailable`) is not, and pictures that failed to render are
+tried at most `RENDER_TRIES` starts. It waits for a later start without a game, without the Spine licence, or while a
+classic window is open with mods on.
+
+On data upgraded from the old format, the legacy fence (`game_write` in `host/data_upgrade.py`) asks for an official
+copy an older build can restore from (its kept original or the file's `.backup`) only for files an older build
+manages: a path its state applied, or a core its profiles configure, built or troubleshoot. Other files, such as the
+Collection bundles, are written without one; after a downgrade, Steam's file check brings them back.
 
 Capture uploads are bounded to 48 MiB encoded PNG data and 64–4096 pixels per dimension. Capture methods that
 accept PNG data have the larger HTTP body allowance. Assets use `/asset/thumbnails/<alt>/<id>.png` and

@@ -4,8 +4,10 @@ After an upgrade from an earlier version, every alt that still shows its default
 default (the student list card's picture) as its App thumbnail and on the game's Collection portrait. The page
 renders the pictures one at a time under the start cover, before the first screen, and stores them
 (``thumbnails.storeDefault``); one start-up game writer job then applies them, one journaled write per shared
-Collection group. The profile's marker is set only once a run
-finished with nothing left, so an interrupted or failed run is tried again at the next start.
+Collection group. The profile's marker is set once a run finished with nothing left to try: a refusal of the
+moment (the game running, Steam busy, ...) or an interrupted run is tried again at the next start, a refusal that
+stays (no official copy, a changed target) is not, and pictures that failed to render are tried at most
+``RENDER_TRIES`` starts.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 from ..core import preview_gate
 from ..core.errors import ServiceError
 from ..library.records import DefaultThumbnailsResult
-from ..library.service.base import STOPPING
+from ..library.service.base import LATER, STOPPING
 from bmpt.engine import get_version_info, t
 
 from .jobs import START
@@ -30,6 +32,8 @@ logger = logging.getLogger(__name__)
 
 KIND = "thumbnails.applyDefaults"
 MARKER = "thumbnailDefaults"  # in the profile's tours history: "pending" or "done"
+TRIES = "thumbnailDefaultsTries"  # starts whose pictures did not all render
+RENDER_TRIES = 3
 
 
 def decide(state: UiState, current: str) -> None:
@@ -69,8 +73,38 @@ def finish(state: UiState) -> None:
 
     def change(history: dict) -> None:
         history[MARKER] = "done"
+        history.pop(TRIES, None)
 
     state.update_tours(change)
+
+
+def rendered(state: UiState, complete: bool) -> bool:
+    """Count a start whose pictures did not all render; True once the run counts as rendered.
+
+    Args:
+        state: The profile's UI state.
+        complete: Whether the page rendered every candidate this start.
+
+    Returns:
+        ``complete``, or True after ``RENDER_TRIES`` starts that each left pictures out: those alts keep their
+        default then, instead of holding the start cover at every start.
+    """
+    if complete:
+        return True
+    tries = []
+
+    def change(history: dict) -> None:
+        count = history.get(TRIES)
+        history[TRIES] = (count if isinstance(count, int) and count > 0 else 0) + 1
+        tries.append(history[TRIES])
+
+    state.update_tours(change)
+    return tries[0] >= RENDER_TRIES
+
+
+def retried(failed: list[dict]) -> bool:
+    """Whether a failed write is worth another start: a refusal of the moment, not one that stays."""
+    return any(item.get("code") in LATER for item in failed)
 
 
 class ThumbnailDefaults:
@@ -157,7 +191,8 @@ class ThumbnailDefaults:
 
         Args:
             alts: The alts whose generated default the page stored or found stored.
-            complete: Whether the page rendered every candidate; without it the marker stays unset.
+            complete: Whether the page rendered every candidate; without it the marker stays unset for at most
+                ``RENDER_TRIES`` starts.
 
         Returns:
             The job's id; None when nothing is to be written, or the run waits for a later start. With nothing to
@@ -173,6 +208,7 @@ class ThumbnailDefaults:
         if reason:
             logger.info("Default thumbnails left for a later start: %s", reason)
             return None
+        complete = rendered(s.state, bool(complete))
         if not alts:
             if complete:
                 finish(s.state)
@@ -180,7 +216,7 @@ class ThumbnailDefaults:
         with s.classic.starting():
             if s.classic_open() and library.intent()["enabled"]:
                 return None
-            return self._submit(library, library.current_pin(), alts, bool(complete))
+            return self._submit(library, library.current_pin(), alts, complete)
 
     def _submit(self, library: Any, pin: Any, alts: list[str], complete: bool) -> str:
         """Queue the job that applies the alts' generated defaults, one write at a time.
@@ -222,8 +258,10 @@ class ThumbnailDefaults:
                 cores.append(items[0][1]["bundle"])
                 for alt in selected:
                     s.events.publish("thumbnails.changed", {"alt": alt})
-            if complete and not failed:
-                finish(s.state)
+            if complete and not retried(failed):
+                finish(s.state)  # a refusal that stays is not tried at every start
+            if failed and not retried(failed):
+                logger.warning("Default thumbnails left as they are for %d alts", sum(len(f["alts"]) for f in failed))
             return DefaultThumbnailsResult(chosen, _cores(cores), failed)
 
         return s.submit(KIND, run, writes="game", library=library, rank=START)

@@ -1524,11 +1524,17 @@ def test_catalog_migration_uses_the_managed_legacy_fence(switch_install, tmp_pat
             return lock(stack, path, reason)
 
         monkeypatch.setattr(upgrade, "_lock", observed)
+        # a file the older build never wrote or configured needs no restore path of its own
+        with upgrade.game_write([env.live], pin.root, lambda *_: False):
+            pass
+        tracked = upgrade._legacy_tracked
+        monkeypatch.setattr(upgrade, "_legacy_tracked", lambda: ({env.live.resolve()}, set()))
         with (
             pytest.raises(ServiceError, match="official_unavailable"),
             upgrade.game_write([env.live], pin.root, lambda *_: False),
         ):
             pytest.fail("Legacy bundle write accepted a catalog without a legacy original")
+        monkeypatch.setattr(upgrade, "_legacy_tracked", tracked)
         lib = ModLibrary(
             upgrade.paths.library_epoch,
             original_lib.catalog,

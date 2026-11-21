@@ -984,3 +984,53 @@ def test_update_restart_requires_no_older_neighbor(tmp_path, monkeypatch):
     )
     monkeypatch.setenv("BAMT_UPDATE_APPLIED", "1")
     assert updater.consume_upgrade_handoff() is False
+
+
+def test_game_write_needs_a_legacy_restore_path_only_for_files_an_older_build_manages(tmp_path):
+    from bmpt.library.judge import core_of
+
+    game = tmp_path / "game"
+    game.mkdir()
+    applied = game / "uis-applied-_mxload-2024-11-18_assets_all_1.bundle"
+    configured = game / "uis-configured-_mxload-2024-11-18_assets_all_2.bundle"
+    untouched = game / "uis-01_common-14_charactercollect-_mxload-2024-11-18_assets_all_3.bundle"
+    for path in (applied, configured, untouched):
+        path.write_bytes(path.name.encode())
+    data = _data(tmp_path / "data")
+    (data / "config.toml").write_text(f'[Directories]\ngame_resource_dir = "{game}"\n')
+    _write(data / "library" / "state.json", {"version": 1, "mods": [], "applied": {}})
+    _write(
+        data / "library" / "profiles.json",
+        {
+            "version": 1,
+            "folders": {
+                str(game): {
+                    "configured": {core_of(configured.name): {"variant": "a", "kind": "other", "source": "official"}}
+                }
+            },
+        },
+    )
+    upgrade = _open(data)
+    try:
+        assert upgrade.run()["status"] == "ready"
+        tracked_paths, tracked_cores = upgrade._legacy_tracked()
+        assert core_of(configured.name) in tracked_cores and not tracked_paths
+        with upgrade.game_write([untouched], game, lambda *_: False):
+            pass
+        with (
+            pytest.raises(ServiceError, match="official_unavailable"),
+            upgrade.game_write([configured], game, lambda *_: False),
+        ):
+            pytest.fail("A file an older build configured was written without a restore path")
+        upgrade._legacy_tracked = lambda: ({applied.resolve()}, set())
+        with (
+            pytest.raises(ServiceError, match="official_unavailable"),
+            upgrade.game_write([applied], game, lambda *_: False),
+        ):
+            pytest.fail("A file an older build applied was written without a restore path")
+        backup = applied.with_name(applied.name + ".backup")
+        backup.write_bytes(applied.read_bytes())
+        with upgrade.game_write([applied], game, lambda path, name: path == backup):
+            pass
+    finally:
+        upgrade.close()
