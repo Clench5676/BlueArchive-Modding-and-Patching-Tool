@@ -259,6 +259,40 @@ def test_a_failed_write_leaves_its_bundle_and_the_manifest_and_keeps_the_marker(
     assert not thumbnail_defaults.pending(w.services.state)
 
 
+def test_a_refusal_that_stays_ends_the_run(world, monkeypatch):
+    w = world
+    _upgrade(w)
+    _store_defaults(w)
+    second = w.files["c"]
+    before = second.read_bytes()
+    store = w.library._store
+
+    def refuse_second(files, *args, **kwargs):
+        if second.name in files:
+            raise ServiceError("official_unavailable", file=second.name)
+        return store(files, *args, **kwargs)
+
+    monkeypatch.setattr(w.library, "_store", refuse_second)
+    result = _finish(w.services, w.services.thumbnail_defaults.apply(["a", "b", "c"], True))
+    assert [(item["alts"], item["code"]) for item in result["failed"]] == [(["c"], "official_unavailable")]
+    assert second.read_bytes() == before and w.store.selection("c") is None
+    assert w.store.selection("a") == w.store.builtin("a")
+    # not tried again at every start
+    assert not thumbnail_defaults.pending(w.services.state)
+    assert w.services.thumbnail_defaults.candidates() == {"due": False, "candidates": []}
+
+
+def test_pictures_that_keep_failing_are_given_up_after_a_few_starts(world):
+    w = world
+    _upgrade(w)
+    for _ in range(thumbnail_defaults.RENDER_TRIES - 1):
+        assert w.services.thumbnail_defaults.apply([], False) is None
+        assert thumbnail_defaults.pending(w.services.state)
+    assert w.services.thumbnail_defaults.apply([], False) is None
+    assert not thumbnail_defaults.pending(w.services.state)
+    assert thumbnail_defaults.TRIES not in w.services.state.tours()
+
+
 def test_a_failed_write_inside_one_step_rolls_back_its_bundle(world, monkeypatch):
     w = world
     _store_defaults(w)
