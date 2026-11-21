@@ -397,7 +397,7 @@ class ModsMixin:
         groups: dict = {}
         for index, (alt, descriptor) in enumerate(items):
             if index % 25 == 24:
-                self._lock.step_aside()  # a whole roster: a preview or a page read waiting goes first
+                self._lock.step_aside()  # the whole student list: a preview or a page read waiting goes first
             if self._default_thumbnail(alt, descriptor, pin) is not None:
                 groups.setdefault(portrait_edit.group(self, descriptor, pin), []).append((alt, descriptor))
         return groups
