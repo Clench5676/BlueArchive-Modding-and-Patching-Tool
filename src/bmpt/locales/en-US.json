@@ -478,6 +478,8 @@
 			"actionOptimize": "Optimizing physics",
 			"modsProcess": "Processing Mods",
 			"modsApply": "Applying Mods",
+			"defaultThumbnails": "Create Default Thumbnails",
+			"defaultThumbnailsApply": "Apply Default Thumbnails",
 			"modsRestore": "Restoring Mods",
 			"modsCheck": "Checking Mods",
 			"modCount": "{action} ({current}/{total}): ",

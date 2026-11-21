@@ -17,14 +17,14 @@ import * as StudentHall from "../student-hall/student-hall.js";
 import * as Settings from "../settings/settings.js";
 import * as Update from "./update.js";
 import * as Tours from "./tours.js";
-import { on, rpc, spinePrefix } from "../core/api.js";
+import { on, rpc, spinePrefix, waitJob } from "../core/api.js";
 import { setLibraryWaiting } from "../detail/preview-lifecycle.js";
 import { L, T, errorText, setStrings, languageRefresh } from "../core/i18n.js";
 import { neighbour, visit } from "../student-list/student-list-order.js";
 import { hasAsset, primaryKind, tabOfKind } from "../mods/switch-sources.js";
 import { renderNav, setTitle, setTopActions } from "./nav.js";
 import { confirmQuit, quitKey } from "./quit.js";
-import { forget, thumbnailScope, thumbnailsBusy } from "../detail/thumbs.js";
+import { forget, thumbnailScope } from "../detail/thumbs.js";
 import { applyDefaultThumbnails } from "./default-thumbnails.js";
 import { setSpineConsent, spineAllowed } from "../spine/spine-runtime.js";
 import { $, fitStage } from "../core/util.js";
@@ -719,17 +719,29 @@ async function route() {
   }
 }
 
-// The generated default thumbnails after an upgrade (default-thumbnails.js): a card's picture, rendered while the page
-// shows no preview of its own (the detail page, the Student Hall, Now Loading, a card's thumbnail being drawn)
-function defaultThumbnails(blocked) {
+// The generated default thumbnails after an upgrade (default-thumbnails.js), under the start cover before the first
+// screen: the cards' pictures rendered, then written, each with its progress line; the start watchdog holds meanwhile
+async function defaultThumbnails() {
   const scope = thumbnailScope();
-  return applyDefaultThumbnails({
-    rpc,
-    students: studentList,
-    render: (p) => scope.thumb(p.base, "studentList", null, p.memorialLobby, p.framing, p.background),
-    spine: spineAllowed,
-    busy: () => blocked() || thumbnailsBusy() || !$("screen-detail").hidden || !$("screen-student-hall").hidden,
-  }).finally(() => scope.cancel());
+  try {
+    return await applyDefaultThumbnails({
+      rpc,
+      waitJob,
+      students: studentList,
+      render: (p) => scope.thumb(p.base, "studentList", null, p.memorialLobby, p.framing, p.background),
+      spine: spineAllowed,
+      task: async (run) => {
+        const release = globalThis.BAMTRecovery?.hold?.();
+        try {
+          return await Loading.task(run, { label: T("progress.defaultThumbnails") });
+        } finally {
+          release?.();
+        }
+      },
+    });
+  } finally {
+    scope.cancel();
+  }
 }
 
 // The first-run sequence: the cursor, the start popups, the update check and the feature tour. It needs a game
@@ -778,8 +790,6 @@ async function firstRun() {
   if (!info.safeMode) {
     await sessionReady;
     await Update.afterUpgrade({ blocked }).catch((err) => console.warn("release notes after an upgrade", err));
-    // background work after the notes: the tours do not wait for it
-    defaultThumbnails(blocked).catch((err) => console.warn("default thumbnails", err));
   }
   Tours.start({ info, ready: sessionReady, blocked }).catch((err) => console.warn("feature tour", err));
 }
@@ -958,6 +968,8 @@ async function start() {
   // a game update since the last start: asked, and checked under the loading screen, before the first screen
   // (update-impact.js gate; the summary follows with the start popups)
   await timed("update-check", () => Impact.gate()).catch((err) => console.error("update check", err));
+  // the first start after an upgrade: the generated default thumbnails, made and applied under the loading screen
+  await timed("default-thumbnails", defaultThumbnails).catch((err) => console.error("default thumbnails", err));
   await timed("first-screen", route);
   // the student list's prefabs, the slowest to export after a game update: asked for once the first screen is up
   // (earlier they slow its own exports), never awaited, and taken up by StudentList.show()

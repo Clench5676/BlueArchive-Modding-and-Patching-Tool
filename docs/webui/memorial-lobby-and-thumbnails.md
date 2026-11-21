@@ -114,14 +114,17 @@ use the thumbnail store's lock.
 | `thumbnails.restore` | `alt, png?` | Default restore job ID; clears App choice after success |
 | `thumbnails.defaults` | | `due`, `candidates` (`alt`, `builtin`) of the generated defaults after an upgrade |
 | `thumbnails.storeDefault` | `alt, png` | `saved`: the alt's generated default, stored without choosing or applying it |
-| `thumbnails.applyDefaults` | `alts, complete?` | Background writer job ID, or null when nothing is written |
+| `thumbnails.applyDefaults` | `alts, complete?` | Start-up writer job ID, or null when nothing is written |
 
 Generated defaults after an upgrade (`webui/thumbnail_defaults.py`, `app/default-thumbnails.js`): on a profile's
 first start after an upgrade (fresh data only records the marker), each alt whose App thumbnail is still its default
 and whose Collection texture shows the official art gets the student list card's picture as its App thumbnail and in
-the game. The page renders one card picture at a time while no preview is in the foreground and stores it; one
-class 4 job (`thumbnails.applyDefaults`) writes each shared Collection bundle once, composing outside the library
-lock, and chooses the written defaults in the App. A write that fails leaves its bundle, the configuration and the
+the game. It runs under the start cover before the first screen (`start()` in `main.js`, after the update impact
+gate), with the progress lines `progress.defaultThumbnails` and `progress.defaultThumbnailsApply`: the page renders
+one card picture at a time and stores it (a picture that fails or takes over 20 s is skipped), then one class 3
+job (`thumbnails.applyDefaults`) writes each shared Collection bundle once, composing outside the library lock, and
+chooses the written defaults in the App. `thumbnails.defaults` decides first whether the run is due, from the
+launch history before the release notes record this launch. A write that fails leaves its bundle, the configuration and the
 manifest as they were. The marker (`thumbnailDefaults` in the profile's tour history) is set only after a run with
 nothing failed or left, so the next start tries again. It waits for a later start without a game, without the Spine
 licence, or while a classic window is open with mods on.

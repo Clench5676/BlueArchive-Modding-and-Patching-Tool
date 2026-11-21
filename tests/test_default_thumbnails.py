@@ -20,7 +20,8 @@ from bmpt.host.config import Settings
 from bmpt.library import ModLibrary, portrait_edit, safety, storage
 from bmpt.library.judge import core_of
 from bmpt.webui import thumbnail_defaults
-from bmpt.webui.jobs import MAINTENANCE, USER
+from bmpt.engine import t
+from bmpt.webui.jobs import START, USER
 from bmpt.webui.services import Services
 from bmpt.webui.state import UiState
 from ba_modding_toolkit.searching import get_search_dirs
@@ -348,8 +349,48 @@ def test_a_waiting_user_job_goes_between_two_writes(world, monkeypatch):
     deadline = time.monotonic() + 120
     while w.services.jobs.get(first).pending and time.monotonic() < deadline:
         time.sleep(0.02)
-    assert w.services.jobs.get(first).result["left"] == ["c"]
+    handed = w.services.jobs.get(first).result
+    assert handed["left"] == ["c"]
+    assert w.services.jobs.get(handed["next"]).kind == thumbnail_defaults.KIND
     _finish(w.services, first)
     assert [entry[0] for entry in order] == ["step", "user", "step"]
     assert not thumbnail_defaults.pending(w.services.state)
-    assert MAINTENANCE > USER
+
+
+def test_the_job_is_start_up_work_and_counts_its_writes(world):
+    w = world
+    _upgrade(w)
+    _store_defaults(w)
+    job = w.services.thumbnail_defaults.apply(["a", "b", "c"], True)
+    assert w.services.jobs.get(job).rank == START
+    _finish(w.services, job)
+    progress = w.services.jobs.get(job).progress
+    assert (progress["label"], progress["current"], progress["total"]) == (
+        t("webui.progress.defaultThumbnailsApply"),
+        2,
+        2,
+    )
+
+
+@pytest.mark.parametrize(
+    "history, consent, due",
+    [
+        ({"notes": {"highest": "0.0.1"}}, None, True),  # an earlier version ran on this profile
+        ({}, True, True),  # a profile from before the launch history, with its asset answer
+        ({}, None, False),  # fresh data
+        ({"notes": {"highest": "999.0.0"}}, None, False),  # a downgrade
+    ],
+)
+def test_the_candidates_decide_the_marker_from_the_previous_launch(world, monkeypatch, history, consent, due):
+    w = world
+    state = w.services.state
+    state.update_tours(lambda stored: stored.update(copy.deepcopy(history)))
+    monkeypatch.setattr(state, "had_asset_consent", consent is not None)
+    monkeypatch.setattr(thumbnail_defaults, "get_version_info", lambda: {"version": "0.7.0-rc.2"})
+    listed = w.services.thumbnail_defaults.candidates()
+    assert listed["due"] is due
+    assert state.tours()[thumbnail_defaults.MARKER] == ("pending" if due else "done")
+    # the release notes recording this launch afterwards changes nothing
+    thumbnail_defaults.decide(state, "0.7.0-rc.2")
+    state.update_tours(lambda stored: stored.update(notes={"highest": "0.7.0-rc.2"}))
+    assert w.services.thumbnail_defaults.candidates()["due"] is due

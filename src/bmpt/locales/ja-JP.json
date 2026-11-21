@@ -478,6 +478,8 @@
 			"actionOptimize": "物理効果の最適化",
 			"modsProcess": "MOD処理",
 			"modsApply": "MOD適用",
+			"defaultThumbnails": "デフォルトサムネイル生成",
+			"defaultThumbnailsApply": "デフォルトサムネイル適用",
 			"modsRestore": "MOD復元",
 			"modsCheck": "MODチェック",
 			"modCount": "{action}（{current}/{total}）：",

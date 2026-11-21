@@ -246,7 +246,7 @@ class JobsMixin:
     def _after_writer(self, library: Any, kind: str, result: Any, failed: bool) -> None:
         started = time.perf_counter()
         library = library if library is not None else self._library
-        startup = not self._startup_ready and kind in ("mods.refreshCostumes", "mods.catalogReapply")
+        startup = not self._startup_ready and kind in ("mods.refreshCostumes", "mods.catalogReapply", DEFAULTS_KIND)
         if library is not None and kind != "library.judge" and not startup:
             try:
                 library.judge_unfinished()

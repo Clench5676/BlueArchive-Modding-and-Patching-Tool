@@ -72,9 +72,6 @@ function harness({ first = NO_GAME } = {}) {
       },
     },
     Prompts: { isBusy: () => false },
-    defaultThumbnails: async (blocked) => {
-      log.push(["defaults", typeof blocked]);
-    },
     startPopups: () => [
       ["consent", async () => {}],
       ["spine", async () => {}],
@@ -167,14 +164,6 @@ test("a start with a game runs the sequence once, after the page told the server
     "the release notes after an upgrade come before the feature tour, which reads the same launch history",
   );
   assert.deepEqual(
-    h.log.filter((item) => ["notes", "defaults"].includes(item[0])),
-    [
-      ["notes", "function"],
-      ["defaults", "function"],
-    ],
-    "the generated default thumbnails start after the release notes, with the start's busy checks",
-  );
-  assert.deepEqual(
     h.log.find((item) => item[0] === "notes"),
     ["notes", "function"],
   );
@@ -188,7 +177,6 @@ test("a safe-mode start shows no release notes after an upgrade", async () => {
   await booting;
   await flush();
   assert.equal(count(h, "notes"), 0);
-  assert.equal(count(h, "defaults"), 0);
   assert.equal(count(h, "tour"), 1);
 });
 
