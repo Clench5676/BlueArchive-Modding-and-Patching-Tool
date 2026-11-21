@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import hashlib
 import io
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -14,6 +16,7 @@ from UnityPy.helpers.ResourceReader import get_resource_data
 from ..core import devmode
 from bmpt.engine import Bundle, SaveOptions
 from ..core.errors import ServiceError
+from ..core.logging_utils import log_failure
 from ..core.openfiles import temporary_directory
 from ..unity.texture_guard import texture_image
 from . import profiles
@@ -24,6 +27,7 @@ if TYPE_CHECKING:
     from .records import ApplyResult, Pin
     from .service import ModLibrary
 
+logger = logging.getLogger(__name__)
 TAG = "student_list_thumbnails"
 
 
@@ -481,16 +485,105 @@ def apply(
         ServiceError: A target, source, or official copy is unavailable, composition fails,
             or the protected game writer refuses the change.
     """
+    return apply_many(library, [(alt, thumbnail, png, descriptor)], pin, log, progress, configure_only=configure_only)
+
+
+def group(library: ModLibrary, descriptor: dict, pin: Pin) -> tuple[str, str]:
+    """Name the write a Collection texture's thumbnail belongs to: the textures of one group compose in one write.
+
+    Args:
+        library: Library supplying the pinned install's bundle index and the configured recipes.
+        descriptor: Collection target metadata containing bundle filename and exact texture name.
+        pin: Game install and server the operation is fixed to.
+
+    Returns:
+        The live Collection core and the configured slot whose recipe holds the texture's choice.
+
+    Raises:
+        ServiceError: The target is missing, duplicated, or superseded (thumbnail_target_unavailable).
+    """
+    target = target_file(library, descriptor, pin)
+    return core_of(target.name), _configuration(library, descriptor, pin)[0]
+
+
+def default_state(library: ModLibrary, descriptor: dict, pin: Pin, builtin: str | None) -> str:
+    """Say what a Collection texture is configured to show, before a generated default is applied over it.
+
+    Args:
+        library: Library supplying the configured recipes.
+        descriptor: Collection target metadata containing bundle filename and exact texture name.
+        pin: Game install and server the operation is fixed to.
+        builtin: The ID of the alt's generated default thumbnail; None when it has none yet.
+
+    Returns:
+        ``official`` for the official art (nothing configured, or a recipe that keeps the texture official),
+        ``own`` when it shows ``builtin`` already, ``other`` for anything else: another thumbnail, a Mod of the
+        shared bundle, or a recipe on a base that is not official.
+
+    Raises:
+        ServiceError: The target is missing, duplicated, or superseded (thumbnail_target_unavailable).
+    """
+    target_file(library, descriptor, pin)
+    _slot, configured, record = _configuration(library, descriptor, pin)
+    source = configured.get("source")
+    if not source or source == "official":
+        return "official"
+    meta = (record or {}).get(TAG)
+    if not isinstance(meta, dict):
+        return "other"
+    item = (meta.get("choices") or {}).get(descriptor["name"])
+    if isinstance(item, dict):
+        chosen = item.get("thumbnail")
+        return "official" if chosen is None else "own" if chosen == builtin else "other"
+    return "official" if meta.get("base_official") is True else "other"
+
+
+def apply_many(
+    library: ModLibrary,
+    items: list[tuple[str, str | None, bytes | None, dict]],
+    pin: Pin,
+    log,
+    progress,
+    *,
+    configure_only: bool = False,
+    atomic: bool = False,
+) -> ApplyResult:
+    """Compose the thumbnail choices of one Collection group into one journaled write.
+
+    Args:
+        library: Library storing the recipe and composing it with other choices in the bundle.
+        items: ``(alt, thumbnail, png, descriptor)`` per texture, as ``apply`` takes them; every descriptor names
+            another texture of the same ``group``.
+        pin: Game install and server the operation is fixed to.
+        log: Receives user-facing operation messages.
+        progress: Receives game-write progress; None disables reporting.
+        configure_only: Whether to defer game writes even when the master switch is on.
+        atomic: Whether a failure also puts the saved choices back and drops the composite it stored, leaving the
+            configuration as it was. The library lock is then given up while the bundle is composed: nothing is
+            written before that ends, and this thread's job holds the mod writer lock throughout.
+
+    Returns:
+        Applied or deferred result identifying the affected shared Collection core.
+
+    Raises:
+        ServiceError: A target, source, or official copy is unavailable, the textures are not one group's,
+            composition fails, or the protected game writer refuses the change.
+    """
+    alt, _key, _png, descriptor = items[0]
     target = target_file(library, descriptor, pin)
     core = core_of(target.name)
+    slot, configured, record = _configuration(library, descriptor, pin)
+    names = [other["name"] for _alt, _key, _png, other in items]
+    if len(set(names)) != len(names) or any(group(library, other, pin) != (core, slot) for *_, other in items[1:]):
+        raise ServiceError("thumbnail_target_unavailable")
+    restoring = all(key is None for _alt, key, _png, _descriptor in items)
     official = library._official_for(target, pin)
     before = library._hashes.get(target).sha1
     config = library.profiles.read() or {}
-    slot, configured, record = _configuration(library, descriptor, pin)
     configured_source = configured.get("source", "official")
     meta = copy.deepcopy((record or {}).get(TAG) or {})
     if (
-        thumbnail is None
+        restoring
         and configured_source == "official"
         and (library._hashes.get(target).sha1 == library._hashes.get(official).sha1)
     ):
@@ -499,90 +592,115 @@ def apply(
         )
     if not configure_only and profiles.enabled(config):
         library._check_stopping(pin)  # refused for the moment: nothing built, the choice as it was
-    with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
-        work = Path(temporary)
-        edits = {descriptor["name"]: png}
-        if record is not None and slot != core:
-            if not meta.get("base_official"):
-                raise ServiceError("thumbnail_target_unavailable")
-            loaded = Bundle.load(official)
-            if loaded is None:
-                raise ServiceError("bundle_invalid", file=official)
-            names = {obj.peek_name() for obj in loaded.env.objects if obj.type.name == "Texture2D"}
-            choices = {name: value for name, value in meta.get("choices", {}).items() if name in names}
-            for name, value in choices.items():
-                if name != descriptor["name"] and value.get("thumbnail"):
-                    edits[name] = library.thumbnails.image(value["alt"], value["thumbnail"])
-            meta["choices"] = choices
-            base = official
-        elif record is not None:
-            base = library._install_direct(record, [target], work / "base", log, progress, pin)[target]
-        else:
-            base = target
-        # Preserve an outside change instead of rebuilding over it from stale configured bytes.
-        part = library._view([pin], "full", config).part(target, pin, "other")
-        if profiles.enabled(config) and part.carried not in ("official", configured_source):
-            base, meta = target, {}
-            edits = {descriptor["name"]: png}
-        if "base_official" not in meta:
-            meta["base_official"] = library._hashes.get(base).sha1 == library._hashes.get(official).sha1
-        choices = meta.setdefault("choices", {})
-        choices[descriptor["name"]] = {"alt": alt, "thumbnail": thumbnail}
-        if (
-            thumbnail is None
-            and meta["base_official"]
-            and all(item.get("thumbnail") is None for item in choices.values())
-        ):
-            result = library.apply(core, "official", resource_type="other", pin=pin, log=log, progress=progress)
-            if slot != core:
-                _default_missing(library, pin, slot, descriptor["name"])
-                _drop_migrated_choices(library, pin)
-            _prune_composites(library)
-            return _result(result, alt, core)
-        directory = work / "composite"
-        directory.mkdir()
-        output = directory / target.name
-        patch_portraits(base, official, output, edits, compression="lz4", crc=library.settings.crc_needed(target))
-        files = {target.name: output}
-        saved = library._store(files, "Student thumbnail", other_target(files), "other", metadata={TAG: meta})
-        source = f"mod:{saved['id']}"
-        if configure_only or not profiles.enabled(config):
-            library._defer(pin, stored_target(saved), {core: core}, source)
-            result = ThumbnailApplyResult(alt, source, [], unchanged=True, deferred=True, cores=[core])
-        else:
-            from .service.base import _ChoiceChange
+    from .service.base import _ChoiceChange
 
-            change = _ChoiceChange(library, pin, stored_target(saved), source)
-            try:
-                change.configure({core: core})
-                files = library._commit(
-                    {target: library._paths(saved)[0]},
-                    source,
-                    log,
-                    progress,
-                    pin,
-                    prune=False,
-                    expected={target: before},
+    change = None
+    try:
+        with temporary_directory(prefix=devmode.LIBRARY_STAGING_PREFIX) as temporary:
+            work = Path(temporary)
+            edits = {other["name"]: png for _alt, _key, png, other in items}
+            if record is not None and slot != core:
+                if not meta.get("base_official"):
+                    raise ServiceError("thumbnail_target_unavailable")
+                loaded = Bundle.load(official)
+                if loaded is None:
+                    raise ServiceError("bundle_invalid", file=official)
+                textures = {obj.peek_name() for obj in loaded.env.objects if obj.type.name == "Texture2D"}
+                choices = {name: value for name, value in meta.get("choices", {}).items() if name in textures}
+                for name, value in choices.items():
+                    if name not in edits and value.get("thumbnail"):
+                        edits[name] = library.thumbnails.image(value["alt"], value["thumbnail"])
+                meta["choices"] = choices
+                base = official
+            elif record is not None:
+                base = library._install_direct(record, [target], work / "base", log, progress, pin)[target]
+            else:
+                base = target
+            # Preserve an outside change instead of rebuilding over it from stale configured bytes.
+            part = library._view([pin], "full", config).part(target, pin, "other")
+            if profiles.enabled(config) and part.carried not in ("official", configured_source):
+                base, meta = target, {}
+                edits = {other["name"]: png for _alt, _key, png, other in items}
+            if "base_official" not in meta:
+                meta["base_official"] = library._hashes.get(base).sha1 == library._hashes.get(official).sha1
+            choices = meta.setdefault("choices", {})
+            for owner, key, _png, other in items:
+                choices[other["name"]] = {"alt": owner, "thumbnail": key}
+            if restoring and meta["base_official"] and all(item.get("thumbnail") is None for item in choices.values()):
+                result = library.apply(core, "official", resource_type="other", pin=pin, log=log, progress=progress)
+                if slot != core:
+                    for name in names:
+                        _default_missing(library, pin, slot, name)
+                    _drop_migrated_choices(library, pin)
+                _prune_composites(library)
+                return _result(result, alt, core)
+            directory = work / "composite"
+            directory.mkdir()
+            output = directory / target.name
+            # about a second on a shared bundle, whatever the number of edits: previews and page reads go meanwhile
+            with library._lock.unlocked() if atomic else contextlib.nullcontext():
+                patch_portraits(
+                    base, official, output, edits, compression="lz4", crc=library.settings.crc_needed(target)
                 )
-                library._selection_error(pin, [core], None)
-                library._clear_marker(pin, core)
-                result = ThumbnailApplyResult(alt, source, files, unchanged=not files, cores=[core])
-            except Exception as error:
-                if not change.refused(error):
-                    library._selection_error(
+            files = {target.name: output}
+            saved = library._store(files, "Student thumbnail", other_target(files), "other", metadata={TAG: meta})
+            source = f"mod:{saved['id']}"
+            if configure_only or not profiles.enabled(config):
+                if atomic:
+                    change = _ChoiceChange(library, pin, stored_target(saved), source)
+                    change.configure({core: core})
+                else:
+                    library._defer(pin, stored_target(saved), {core: core}, source)
+                result = ThumbnailApplyResult(alt, source, [], unchanged=True, deferred=True, cores=[core])
+            else:
+                change = _ChoiceChange(library, pin, stored_target(saved), source)
+                try:
+                    change.configure({core: core})
+                    files = library._commit(
+                        {target: library._paths(saved)[0]},
+                        source,
+                        log,
+                        progress,
                         pin,
-                        [core],
-                        error.to_json()
-                        if isinstance(error, ServiceError)
-                        else {"code": "library_io_error", "params": {"file": str(target)}},
+                        prune=False,
+                        expected={target: before},
                     )
-                raise
-            finally:
-                change.close()
+                    library._selection_error(pin, [core], None)
+                    library._clear_marker(pin, core)
+                    result = ThumbnailApplyResult(alt, source, files, unchanged=not files, cores=[core])
+                except Exception as error:
+                    if not change.refused(error) and not atomic:
+                        library._selection_error(
+                            pin,
+                            [core],
+                            error.to_json()
+                            if isinstance(error, ServiceError)
+                            else {"code": "library_io_error", "params": {"file": str(target)}},
+                        )
+                    raise
+                finally:
+                    if not atomic:
+                        change.close()
+    except BaseException:
+        if atomic:
+            _undo(library, pin, change)
+        raise
+    if atomic and change is not None:
+        change.close()
     _drop_migrated_choices(library, pin)
     # Captured PNGs persist; only obsolete compiled composites can be discarded.
     _prune_composites(library)
     return result
+
+
+def _undo(library: ModLibrary, pin: Pin, change) -> None:
+    """Put an atomic write's saved choices back and drop the composite it stored, never masking its failure."""
+    try:
+        if change is not None and change.saved:
+            library._put_back_choices(pin, change.saved)
+        _prune_composites(library)
+    except Exception as error:
+        log_failure(logger, logging.WARNING, "Thumbnail choices not put back", error)
 
 
 def refresh_missing(library: ModLibrary, pins: list[Pin], log) -> None:
