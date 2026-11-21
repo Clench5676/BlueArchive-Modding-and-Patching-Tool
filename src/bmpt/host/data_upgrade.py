@@ -1301,6 +1301,37 @@ class DataUpgrade:
                     roots.add(path.parent.resolve())
         return roots
 
+    def _legacy_tracked(self) -> tuple[set[Path], set[str]]:
+        """The game files an older build manages: the paths its state applied and the cores its profiles name.
+
+        Configured, built and troubleshooting choices count, so a file an older build would write or restore when
+        it runs again keeps needing a restore path it understands.
+        """
+        paths = self.paths
+        if paths is None:
+            return set(), set()
+        legacy = paths.legacy_library
+        applied: set[Path] = set()
+        cores: set[str] = set()
+        if files.present(legacy / "state.json"):
+            state = load_document("S", legacy / "state.json", generation=1)
+            for key in state.get("applied", {}):
+                path = Path(key)
+                if path.is_absolute():
+                    applied.add(path.resolve())
+        if files.present(legacy / "profiles.json"):
+            profiles = load_document("P", legacy / "profiles.json", generation=1)
+            folders = [*(profiles.get("folders") or {}).values()]
+            for folder in folders:
+                if isinstance(folder, dict):
+                    for field in ("configured", "built"):
+                        cores.update(str(core).lower() for core in folder.get(field) or {})
+            troubleshoot = profiles.get("troubleshoot") or {}
+            for entries in (troubleshoot.get("folders") or {}).values() if isinstance(troubleshoot, dict) else ():
+                if isinstance(entries, dict):
+                    cores.update(str(core).lower() for core in entries)
+        return applied, cores
+
     @contextmanager
     def game_write(
         self,
@@ -1308,7 +1339,14 @@ class DataUpgrade:
         install: Path,
         is_official: Callable[[Path, str], bool],
     ) -> Iterator[None]:
-        """Guard a game footprint using restore paths understood by older builds."""
+        """Guard a game footprint using restore paths understood by older builds.
+
+        A file an older build manages (``_legacy_tracked``) is written only while an official copy it can restore
+        from is in place: the older library's kept original or the file's ``.backup``. A file no older build ever
+        wrote or configured needs none: an older build leaves it alone, and Steam's file check brings it back.
+        """
+        from ..library.judge import core_of
+
         paths = self.paths
         if paths is None:
             raise ServiceError("library_recovery_pending")
@@ -1318,11 +1356,14 @@ class DataUpgrade:
                 if files.present(legacy):
                     self._lock(fences, legacy / "transactions.lock", "olderVersion")
                 roots = self._legacy_game_roots()
+                applied, cores = self._legacy_tracked()
             except (OSError, ValueError, UpgradeBlocked) as error:
                 raise ServiceError("library_recovery_pending", file=legacy) from error
             shared = any(install.is_relative_to(root) or root.is_relative_to(install) for root in roots)
             if shared:
                 for target in targets:
+                    if target.resolve() not in applied and core_of(target.name) not in cores:
+                        continue
                     options = (legacy / "originals" / target.name, target.with_name(target.name + ".backup"))
                     if not any(
                         devmode.allows_read(path)
