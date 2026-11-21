@@ -1523,6 +1523,27 @@ textarea {
   display: none;
 }
 
+/* the DEV badge of a dev run's page (server.py serves it only in dev mode): a development mark with no counterpart in
+   the game, pinned to the window's bottom-left corner over the bottom bar's edge and above every screen and loading
+   cover, never taking the pointer */
+.dev-mark {
+  position: fixed;
+  left: 4px;
+  bottom: 4px;
+  z-index: 2147483646;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: #e5332a;
+  color: #fff;
+  font:
+    700 11px / 1.2 -apple-system,
+    "Segoe UI",
+    sans-serif;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* the game's touch effect (cursor.js): over everything, never in the way of the pointer; the glow layer adds its light
    to what is below (screen), the shade layer under it only darkens (multiply) */
 .touch-fx {

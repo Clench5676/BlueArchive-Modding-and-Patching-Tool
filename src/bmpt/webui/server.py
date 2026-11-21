@@ -22,6 +22,7 @@ from typing import Any, Callable, Iterable
 from urllib.parse import parse_qs, unquote
 from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
 
+from ..core import devmode
 from ..core.errors import ServiceError
 from .events import EventBus
 from .instance import RAISE_HEADER, RAISE_PATH
@@ -331,6 +332,8 @@ class WebApp:
             body = body.replace(
                 b"</head>", f'<meta name="bamt-ui-exports" content="{HTTP_EXPORT_SCHEMA}"></head>'.encode()
             )
+            if devmode.active():
+                body = _mark_dev_page(body)
         if file.suffix.lower() == ".css":
             body = re.sub(rb'(/asset/ui/[^"\s)]+)', lambda m: m[1] + b"?export=" + HTTP_EXPORT_SCHEMA.encode(), body)
         if rel == "index.html" and self.ui_cached():
@@ -354,6 +357,20 @@ class WebApp:
 
     def _text(self, start_response: Callable, status: str, text: str) -> list[bytes]:
         return self._respond(start_response, status, text.encode("utf-8"), "text/plain; charset=utf-8")
+
+
+def _mark_dev_page(body: bytes) -> bytes:
+    """Mark the page of a dev run: ``[DEV]`` before its title and a ``DEV`` badge in a corner of the window.
+
+    Only dev mode serves the badge, so a user's App has neither in its page. main.js keeps the prefix on the titles
+    it sets while it finds the badge.
+
+    Args:
+        body: The page as read from ``index.html``.
+    """
+    prefix = devmode.TITLE_PREFIX.encode()
+    body = body.replace(b"<title>", b"<title>" + prefix, 1)
+    return body.replace(b"<body>", b'<body>\n  <div class="dev-mark" aria-hidden="true">DEV</div>', 1)
 
 
 class _ThreadingServer(socketserver.ThreadingMixIn, WSGIServer):

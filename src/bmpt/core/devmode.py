@@ -44,6 +44,9 @@ ROOTS = "BAMT_DEV_ROOTS"
 WRITABLE = "BAMT_DEV_WRITABLE"
 # The library stages a switch in temporary folders named so (library/service/); the mod installer writes there
 LIBRARY_STAGING_PREFIX = "bamt-library-"
+# What dev mode puts before window titles and the Dock name: fixed and untranslated, so a dev run is told apart from
+# the user's own App in every language
+TITLE_PREFIX = "[DEV] "
 
 
 def data_dir() -> Path | None:
@@ -69,6 +72,17 @@ def game_dirs(region: str) -> list[Path] | None:
 def active() -> bool:
     """Whether dev mode is on (``BAMT_DEV_ROOTS`` or ``BAMT_DEV_WRITABLE`` is set, even to nothing)."""
     return ROOTS in os.environ or WRITABLE in os.environ
+
+
+def title(text: str) -> str:
+    """Return a window title as dev mode shows it: ``TITLE_PREFIX`` before it in dev mode, unchanged otherwise.
+
+    Args:
+        text: The title; one that already starts with the prefix keeps a single one.
+    """
+    if not active() or text.startswith(TITLE_PREFIX):
+        return text
+    return TITLE_PREFIX + text
 
 
 def roots() -> list[Path]:

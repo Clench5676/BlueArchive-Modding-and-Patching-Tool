@@ -36,6 +36,7 @@ import { installCloseGuard } from "../window/window-close.js";
 import { installVerticalWheel } from "../ui/horizontal-scroll.js";
 import { startGate, upgradedNoticeFor } from "./data-upgrade.js";
 import { COLOUR } from "../ui/ui-tokens.js";
+import { pageTitle } from "./dev-mark.js";
 
 // the data upgrade notice first (data-upgrade.js): nothing of the App runs until the data is open in its format
 const upgradeState = await startGate();
@@ -90,7 +91,7 @@ async function timed(phase, work) {
 let stepCards = null;
 
 function relabelShell() {
-  document.title = T("top.students");
+  document.title = pageTitle(T("top.students"));
   document.querySelector(".topbar .back").setAttribute("aria-label", T("a11y.back"));
   $("fs-exit").setAttribute("aria-label", T("memorialLobby.exit"));
   $("top-option").setAttribute("aria-label", T("settings.button"));
@@ -851,7 +852,7 @@ async function start() {
   StudentList.init(ctx.prefs?.studentList);
   setStrings(info.language, await timed("strings", () => rpc("i18n.strings", { lang: info.language })));
   Loading.relabel();
-  document.title = T("top.students");
+  document.title = pageTitle(T("top.students"));
   document.querySelector(".topbar .back").setAttribute("aria-label", T("a11y.back"));
   $("fs-exit").setAttribute("aria-label", T("memorialLobby.exit"));
   $("top-option").setAttribute("aria-label", T("settings.button"));
