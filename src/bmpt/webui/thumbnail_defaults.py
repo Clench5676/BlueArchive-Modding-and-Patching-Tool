@@ -2,8 +2,9 @@
 
 After an upgrade from an earlier version, every alt that still shows its default thumbnail gets its generated
 default (the student list card's picture) as its App thumbnail and on the game's Collection portrait. The page
-renders the pictures one at a time and stores them (``thumbnails.storeDefault``); one background game writer job
-then applies them, one journaled write per shared Collection group. The profile's marker is set only once a run
+renders the pictures one at a time under the start cover, before the first screen, and stores them
+(``thumbnails.storeDefault``); one start-up game writer job then applies them, one journaled write per shared
+Collection group. The profile's marker is set only once a run
 finished with nothing left, so an interrupted or failed run is tried again at the next start.
 """
 
@@ -16,7 +17,9 @@ from ..core import preview_gate
 from ..core.errors import ServiceError
 from ..library.records import DefaultThumbnailsResult
 from ..library.service.base import STOPPING
-from .jobs import MAINTENANCE
+from bmpt.engine import get_version_info, t
+
+from .jobs import START
 from .state import UiState
 from .tours import version_key
 
@@ -32,8 +35,8 @@ MARKER = "thumbnailDefaults"  # in the profile's tours history: "pending" or "do
 def decide(state: UiState, current: str) -> None:
     """Record, once per profile, whether the generated defaults are due: after an upgrade, never on fresh data.
 
-    Called before the launch is recorded for the release notes (``tours.notes_launch``), which still holds the
-    previous launch's version then.
+    Called by ``thumbnails.defaults`` under the start cover, before the release notes record the launch
+    (``tours.notes_launch``): the history still holds the previous launch's version then. A downgrade is no upgrade.
 
     Args:
         state: The profile's UI state.
@@ -116,6 +119,8 @@ class ThumbnailDefaults:
         """
         s = self.services
         library = s.library
+        if not getattr(s, "safe_mode", False):
+            decide(s.state, get_version_info().get("version") or "")
         if not pending(s.state):
             return {"due": False, "candidates": []}
         reason = self._blocked(library)
@@ -146,7 +151,7 @@ class ThumbnailDefaults:
         return {"saved": saved}
 
     def apply(self, alts: list[str], complete: bool) -> str | None:
-        """Apply the stored generated defaults of some alts, in a background game writer job.
+        """Apply the stored generated defaults of some alts, in a start-up game writer job.
 
         Args:
             alts: The alts whose generated default the page stored or found stored.
@@ -178,9 +183,11 @@ class ThumbnailDefaults:
     def _submit(self, library: Any, pin: Any, alts: list[str], complete: bool) -> str:
         """Queue the job that applies the alts' generated defaults, one write at a time.
 
-        Class 4: one write holds the library lock for the shared bundle's store and journaled write (the bundle is
-        composed with the lock given up); between writes it yields to the foreground previews (``preview_gate``)
-        and to page reads (the lock is free), and hands what is left to a new job when one of a higher class waits.
+        Class 3, under the start cover: one write holds the library lock for the shared bundle's store and
+        journaled write (the bundle is composed with the lock given up); between writes it yields to the foreground
+        previews (``preview_gate``) and to page reads (the lock is free), and hands what is left to a new job when
+        one of a higher class waits (``next`` in the result, which the page waits for in turn). Its progress counts
+        the writes.
         """
         s = self.services
 
@@ -188,13 +195,15 @@ class ThumbnailDefaults:
             s._check_pin(library, pin)
             groups = list(library.default_thumbnail_groups(self._targets(alts), pin).values())
             chosen, cores, failed = [], [], []
+            label = t("webui.progress.defaultThumbnailsApply")
             for index, items in enumerate(groups):
                 if index:
                     preview_gate.step(lambda: s.jobs.closing)
-                    if s.jobs.outranked(MAINTENANCE) and not s.jobs.closing:
+                    if s.jobs.outranked(START) and not s.jobs.closing:
                         left = [alt for rest in groups[index:] for alt, _descriptor in rest]
-                        self._submit(library, pin, left, complete)
-                        return DefaultThumbnailsResult(chosen, cores, failed, left)
+                        following = self._submit(library, pin, left, complete)
+                        return DefaultThumbnailsResult(chosen, _cores(cores), failed, left, following)
+                progress(index + 1, len(groups), label)
                 if s.classic_open() and library.intent()["enabled"]:
                     failed.append({"alts": [alt for alt, _descriptor in items], "code": "classic_open"})
                     break
@@ -215,7 +224,7 @@ class ThumbnailDefaults:
                 finish(s.state)
             return DefaultThumbnailsResult(chosen, _cores(cores), failed)
 
-        return s.submit(KIND, run, writes="game", library=library, rank=MAINTENANCE)
+        return s.submit(KIND, run, writes="game", library=library, rank=START)
 
 
 def _cores(bundles: list[str]) -> list[str]:

@@ -478,6 +478,8 @@
 			"actionOptimize": "물리 효과 최적화",
 			"modsProcess": "모드 처리",
 			"modsApply": "모드 적용",
+			"defaultThumbnails": "기본 썸네일 생성",
+			"defaultThumbnailsApply": "기본 썸네일 적용",
 			"modsRestore": "모드 복원",
 			"modsCheck": "모드 검사",
 			"modCount": "{action} ({current}/{total}): ",

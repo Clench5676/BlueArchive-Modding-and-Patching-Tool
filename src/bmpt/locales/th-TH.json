@@ -478,6 +478,8 @@
 			"actionOptimize": "กำลังปรับเอฟเฟกต์ฟิสิกส์",
 			"modsProcess": "กำลังประมวลผล Mod",
 			"modsApply": "กำลังใช้ Mod",
+			"defaultThumbnails": "กำลังสร้างภาพย่อเริ่มต้น",
+			"defaultThumbnailsApply": "กำลังใช้ภาพย่อเริ่มต้น",
 			"modsRestore": "กำลังคืนค่า Mod",
 			"modsCheck": "กำลังตรวจสอบ Mod",
 			"modCount": "{action} ({current}/{total}): ",

@@ -64,6 +64,9 @@ function runStart(gameFound) {
         log.push(["update-check"]);
       },
     },
+    defaultThumbnails: async () => {
+      log.push(["default-thumbnails"]);
+    },
     Detail: {},
     StudentHall: {},
     Settings: {},
@@ -96,10 +99,14 @@ function runStart(gameFound) {
 test("a start with a game asks for the student list's prefabs once its first screen is up, without waiting for them", async () => {
   const { log, screen, done } = runStart(true);
   await flush();
-  assert.deepEqual(log, [["update-check"], ["route"]], "the first screen's exports go first");
+  assert.deepEqual(
+    log,
+    [["update-check"], ["default-thumbnails"], ["route"]],
+    "the default thumbnails under the start cover, then the first screen's exports",
+  );
   screen.resolve();
   await done;
-  assert.deepEqual(log, [["update-check"], ["route"], ["preload"]]);
+  assert.deepEqual(log, [["update-check"], ["default-thumbnails"], ["route"], ["preload"]]);
 });
 
 test("a start without a game asks for no prefabs", async () => {

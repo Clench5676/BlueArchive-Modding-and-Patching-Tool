@@ -478,6 +478,8 @@
 			"actionOptimize": "优化物理效果",
 			"modsProcess": "处理 Mod",
 			"modsApply": "应用 Mod",
+			"defaultThumbnails": "生成默认大头照",
+			"defaultThumbnailsApply": "应用默认大头照",
 			"modsRestore": "还原 Mod",
 			"modsCheck": "检查 Mod",
 			"modCount": "{action}（{current}/{total}）：",

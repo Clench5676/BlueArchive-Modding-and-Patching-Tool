@@ -176,6 +176,7 @@ class DefaultThumbnailsResult(JsonResult):
     cores: list[str] = field(default_factory=list)
     failed: list[dict[str, Any]] = field(default_factory=list)  # {"alts", "code"} per write that failed
     left: list[str] = field(default_factory=list)  # alts handed to the job queued after a higher class's
+    next: str | None = None  # that job's id
     resource_types: list[str] = field(default_factory=lambda: ["other"])
 
 
