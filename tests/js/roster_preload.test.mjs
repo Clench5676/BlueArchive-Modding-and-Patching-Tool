@@ -46,6 +46,7 @@ function runStart(gameFound) {
     previewCache: { configure() {} },
     setStrings() {},
     T: (key) => key,
+    pageTitle: (text) => text,
     notify() {},
     errorText: String,
     document: { title: "", querySelector: el, fonts: { ready: Promise.resolve() } },

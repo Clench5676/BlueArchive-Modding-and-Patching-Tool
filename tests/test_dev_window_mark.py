@@ -1,4 +1,4 @@
-"""The dev mode mark on the native window title and the macOS Dock (bmpt.webui.native)."""
+"""The dev mode mark on the native window title, the macOS Dock (bmpt.webui.native) and the served page."""
 
 import sys
 import types
@@ -21,9 +21,18 @@ def test_window_title_is_the_app_title_outside_dev_mode():
 
 
 @pytest.mark.parametrize("variable", ["BAMT_DEV_ROOTS", "BAMT_DEV_WRITABLE"])
-def test_window_title_ends_with_dev_in_dev_mode(monkeypatch, variable):
+def test_window_title_starts_with_dev_in_dev_mode(monkeypatch, variable):
     monkeypatch.setenv(variable, "")
-    assert native.window_title() == t("ui.app_title") + " (DEV)"
+    assert native.window_title() == "[DEV] " + t("ui.app_title")
+
+
+def test_dev_title_keeps_a_single_prefix(monkeypatch):
+    from bmpt.core import devmode
+
+    assert devmode.title("[DEV] App") == "[DEV] App"
+    monkeypatch.setenv("BAMT_DEV_ROOTS", "")
+    assert devmode.title("App") == "[DEV] App"
+    assert devmode.title("[DEV] App") == "[DEV] App"
 
 
 @pytest.fixture
@@ -63,7 +72,7 @@ def test_dock_mark_sets_the_badge_and_the_name_in_dev_mode(monkeypatch, fake_app
     monkeypatch.setenv("BAMT_DEV_ROOTS", "")
     monkeypatch.setattr(sys, "platform", "darwin")
     native.mark_dev_dock()
-    assert fake_appkit == [("callAfter",), ("badge", "DEV"), ("name", "Python (DEV)")]
+    assert fake_appkit == [("callAfter",), ("badge", "DEV"), ("name", "[DEV] Python")]
 
 
 def test_dock_mark_survives_failures(monkeypatch, fake_appkit):
@@ -77,3 +86,50 @@ def test_dock_mark_survives_failures(monkeypatch, fake_appkit):
     sys.modules["AppKit"].NSApplication.sharedApplication().dockTile().setBadgeLabel_ = broken
     native.mark_dev_dock()
     assert fake_appkit == [("callAfter",)]
+
+
+def test_dock_mark_leaves_a_marked_name(monkeypatch, fake_appkit):
+    monkeypatch.setenv("BAMT_DEV_ROOTS", "")
+    monkeypatch.setattr(sys, "platform", "darwin")
+    running = types.SimpleNamespace(localizedName=lambda: "[DEV] Python")
+    monkeypatch.setattr(sys.modules["AppKit"].NSRunningApplication, "currentApplication", lambda: running)
+    native.mark_dev_dock()
+    assert fake_appkit == [("callAfter",), ("badge", "DEV")]
+
+
+def _page(monkeypatch, dev: bool) -> bytes:
+    import io
+
+    from bmpt.webui.events import EventBus
+    from bmpt.webui.rpc import RpcRegistry
+    from bmpt.webui.server import WebApp
+
+    if dev:
+        monkeypatch.setenv("BAMT_DEV_ROOTS", "")
+    app = WebApp(RpcRegistry(), EventBus(), token="tok")
+    environ = {
+        "REQUEST_METHOD": "GET",
+        "PATH_INFO": "/index.html",
+        "QUERY_STRING": "",
+        "CONTENT_LENGTH": "0",
+        "wsgi.input": io.BytesIO(b""),
+        "HTTP_X_BAMT_TOKEN": "tok",
+    }
+    status = []
+    body = b"".join(app(environ, lambda s, headers: status.append(s)))
+    assert status == ["200 OK"]
+    return body
+
+
+def test_page_has_no_dev_mark_outside_dev_mode(monkeypatch):
+    body = _page(monkeypatch, dev=False)
+    assert b"<title>Blue Archive Modding and Patching Tool</title>" in body
+    assert b"dev-mark" not in body
+    assert b"[DEV]" not in body
+
+
+def test_page_carries_the_title_prefix_and_the_badge_in_dev_mode(monkeypatch):
+    body = _page(monkeypatch, dev=True)
+    assert b"<title>[DEV] Blue Archive Modding and Patching Tool</title>" in body
+    assert body.count(b'<div class="dev-mark" aria-hidden="true">DEV</div>') == 1
+    assert body.index(b"dev-mark") > body.index(b"<body>")

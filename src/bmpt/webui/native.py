@@ -350,20 +350,13 @@ def install_edit_menu() -> None:
     AppHelper.callAfter(install)
 
 
-DEV_SUFFIX = " (DEV)"
-
-
 def window_title() -> str:
-    """Return the native window's title: the App's name, marked ``(DEV)`` in dev mode.
-
-    The mark is fixed and untranslated, so a dev run is told apart from the user's own App in every language.
-    """
+    """Return the native window's title: the App's name, with ``[DEV]`` before it in dev mode (``devmode.title``)."""
     from bmpt.engine import t
 
     from ..core import devmode
 
-    title = t("ui.app_title")
-    return title + DEV_SUFFIX if devmode.active() else title
+    return devmode.title(t("ui.app_title"))
 
 
 def _set_launch_services_name(name: str) -> bool:
@@ -411,7 +404,7 @@ def _set_launch_services_name(name: str) -> bool:
 
 
 def mark_dev_dock() -> None:
-    """Mark the App's Dock icon in dev mode: a ``DEV`` badge, and ``(DEV)`` after the name the Dock shows.
+    """Mark the App's Dock icon in dev mode: a ``DEV`` badge, and ``[DEV]`` before the name the Dock shows.
 
     Does nothing outside dev mode and on other systems than macOS. A failure is logged and never stops the App.
     """
@@ -435,7 +428,8 @@ def mark_dev_dock() -> None:
             logger.debug("dev mode Dock badge not set", exc_info=True)
         try:
             name = str(AppKit.NSRunningApplication.currentApplication().localizedName() or "")
-            if name and not name.endswith(DEV_SUFFIX) and not _set_launch_services_name(name + DEV_SUFFIX):
+            marked = devmode.title(name)
+            if name and marked != name and not _set_launch_services_name(marked):
                 logger.debug("LaunchServices refused the dev mode display name")
         except Exception:
             logger.debug("dev mode display name not set", exc_info=True)
