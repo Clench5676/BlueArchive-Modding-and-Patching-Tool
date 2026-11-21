@@ -169,6 +169,17 @@ class ThumbnailApplyResult(ApplyResult):
 
 
 @dataclass(frozen=True)
+class DefaultThumbnailsResult(JsonResult):
+    """Generated default thumbnails applied to shared Collection slots, one write per slot."""
+
+    alts: list[str] = field(default_factory=list)  # App thumbnail now the alt's generated default
+    cores: list[str] = field(default_factory=list)
+    failed: list[dict[str, Any]] = field(default_factory=list)  # {"alts", "code"} per write that failed
+    left: list[str] = field(default_factory=list)  # alts handed to the job queued after a higher class's
+    resource_types: list[str] = field(default_factory=lambda: ["other"])
+
+
+@dataclass(frozen=True)
 class UpdateResult(JsonResult):
     """A rebuilt library mod and its retained previous version."""
 

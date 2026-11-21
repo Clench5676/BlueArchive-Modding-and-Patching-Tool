@@ -670,6 +670,15 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
             self._thumbnail_service = Thumbnails(self)
         return self._thumbnail_service
 
+    @property
+    def thumbnail_defaults(self):
+        """The generated default thumbnails of the first start after an upgrade, made on first use."""
+        from .thumbnail_defaults import ThumbnailDefaults
+
+        if not hasattr(self, "_thumbnail_defaults"):
+            self._thumbnail_defaults = ThumbnailDefaults(self)
+        return self._thumbnail_defaults
+
     def _start_prune(self, library: Any) -> None:
         records = getattr(library, "_catalog_records_for_read", None)
         game_files = bool(records and records())

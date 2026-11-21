@@ -253,6 +253,17 @@ class JobRunner:
         with self._lock:
             return any(j.kind in kinds and j.pending for j in self._jobs.values())
 
+    def outranked(self, rank: int) -> bool:
+        """Return whether a job of a higher class than ``rank`` waits in the queue.
+
+        A job of a lower class checks it between its steps: it starts no new step while one waits.
+
+        Args:
+            rank: The asking job's class: ``USER``, ``START`` or ``MAINTENANCE``.
+        """
+        with self._lock:
+            return any(j.state == "queued" and j.rank < rank for j in self._jobs.values())
+
     def running(self) -> Job | None:
         """Return the job that runs now, or None."""
         with self._lock:
