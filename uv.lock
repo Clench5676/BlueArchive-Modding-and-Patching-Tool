@@ -53,7 +53,7 @@ wheels = [
 
 [[package]]
 name = "blue-archive-modding-and-patching-tool"
-version = "0.7.0rc17"
+version = "0.7.0rc18"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
