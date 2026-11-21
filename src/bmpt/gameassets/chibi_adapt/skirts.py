@@ -975,7 +975,7 @@ def own_keys(skeleton: Skeleton, clips: Iterable[Any], nodes: list[int]) -> dict
     return out
 
 
-SCALE_KEYED = 1e-4  # a scale curve varying less than this is no motion
+SCALE_KEYED = 1e-4  # a scale curve within this of its bone's rest scale throughout keys nothing
 
 
 def own_scales(skeleton: Skeleton, clips: Iterable[Any], nodes: list[int]) -> dict[tuple[str, ...], tuple]:
@@ -987,8 +987,9 @@ def own_scales(skeleton: Skeleton, clips: Iterable[Any], nodes: list[int]) -> di
         nodes: Source node order defining the bone indices stored in each suffix's scale map.
 
     Returns:
-        Per suffix, the clip's frame times scaled to 0..1 and, per index into ``nodes`` whose scale it varies, the
-        local scales there (frames by 3).
+        Per suffix, the clip's frame times scaled to 0..1 and, per index into ``nodes`` whose scale it keys away
+        from the bone's rest scale (varying, or held at another size: one of Aris's rings stays smaller through
+        whole clips), the local scales there (frames by 3).
     """
     by_hash = {zlib.crc32(skeleton.nodes[n].path.encode()): n for n in nodes}
     index = {n: k for k, n in enumerate(nodes)}
@@ -1006,7 +1007,7 @@ def own_scales(skeleton: Skeleton, clips: Iterable[Any], nodes: list[int]) -> di
             if 3 not in attributes:
                 continue
             v = np.array([np.resize(np.asarray(part, float), frames) for part in attributes[3]]).T
-            if float(np.ptp(v, axis=0).max()) > SCALE_KEYED:
+            if float(np.abs(v - np.asarray(skeleton.nodes[node].local[2], float)).max()) > SCALE_KEYED:
                 scales[index[node]] = v
         if not scales:
             continue

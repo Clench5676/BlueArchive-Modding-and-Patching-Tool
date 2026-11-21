@@ -1094,8 +1094,8 @@ def test_official_another_characters_face_follows_the_slots_expressions_about_it
 def test_official_what_hangs_below_a_moved_face_bone_goes_with_it(view):
     """Himari <- Aris: Aris's eye rings are skinned to bones below her eye bones that no slot has. Her eye bones
     rest three centimetres from Himari's and become new bones; the rings go with those, not with Himari's eye bones,
-    whose idle turns them about another place and took the rings off the eyes. The rings Aris's clips pulse keep that
-    pulse in Himari's clips of the same names."""
+    whose idle turns them about another place and took the rings off the eyes. The rings Aris's clips scale keep that
+    scale in Himari's clips of the same names."""
     from ba_modding_toolkit.bundle import Bundle
 
     files, index = view
@@ -1113,14 +1113,18 @@ def test_official_what_hangs_below_a_moved_face_bone_goes_with_it(view):
     assert face is not None
     eyes = {face.names.index(name) for name in ("Bip001 Xtra_eyeL_costume", "Bip001 Xtra_eyeR_costume")}
     rings = {k for k, name in enumerate(face.names) if "Eyering" in name}
-    # the rings her clips pulse are new bones below the new eye bones; the one she never scales rides along
-    assert len(rings) == 4 and {face.parents[k] for k in rings} == eyes and face.solver.rigid == rings
-    assert len(face.riders) == 2 and set(face.riders.values()) == eyes
+    inner = {k for k in rings if face.names[k].startswith(("bone_Eyering_L_01", "bone_Eyering_R_01"))}
+    # every ring her clips scale is a new bone below a new eye bone: the two that pulse, and the inner one she
+    # holds smaller through whole clips
+    assert len(rings) == 6 and len(inner) == 2 and {face.parents[k] for k in rings} == eyes
+    assert face.solver.rigid == rings and not face.riders
     # a slot clip takes the scale keys of Aris's clip of its name over its own length, mirrored side included
     scaled = face.solver.scaled("CH0159_Normal_Idle", np.linspace(0.0, 5.0, 11))
-    assert set(scaled) == rings and all(v.shape == (11, 3) for v in scaled.values())
+    assert set(scaled) == rings - inner and all(v.shape == (11, 3) for v in scaled.values())
     assert all(0.9 < abs(v).min() < 0.95 and abs(abs(v).max() - 1.0) < 1e-3 for v in scaled.values())
     assert {float(np.sign(v[0, 0])) for v in scaled.values()} == {1.0, -1.0}
+    walk = face.solver.scaled("CH0159_Cafe_Walk", np.linspace(0.0, 7.0, 15))
+    assert set(walk) == rings and all(np.allclose(abs(walk[k]), 0.861, atol=1e-3) for k in inner)
     assert face.solver.scaled("CH0159_Formation_Idle", [0.0, 1.0]) == {}  # no keys of hers for that clip
 
 
