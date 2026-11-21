@@ -33,10 +33,12 @@ MARKER = "thumbnailDefaults"  # in the profile's tours history: "pending" or "do
 
 
 def decide(state: UiState, current: str) -> None:
-    """Record, once per profile, whether the generated defaults are due: after an upgrade, never on fresh data.
+    """Record, once per profile, whether the generated defaults are due: after another version ran, never on fresh data.
 
     Called by ``thumbnails.defaults`` under the start cover, before the release notes record the launch
-    (``tours.notes_launch``): the history still holds the previous launch's version then. A downgrade is no upgrade.
+    (``tours.notes_launch``): the history still holds the previous launch's version then. A lower version counts
+    too: the history keeps only the highest version, and a pre-release after a local stable build of the same
+    version is below it while that build never had these defaults.
 
     Args:
         state: The profile's UI state.
@@ -51,7 +53,7 @@ def decide(state: UiState, current: str) -> None:
             return
         notes = history.get("notes") if isinstance(history.get("notes"), dict) else {}
         high = version_key(notes.get("highest")) or version_key(history.get("highest"))
-        upgrade = (high is None and state.had_asset_consent) or (high is not None and current_key > high)
+        upgrade = (high is None and state.had_asset_consent) or (high is not None and current_key != high)
         history[MARKER] = "pending" if upgrade else "done"
 
     state.update_tours(change)

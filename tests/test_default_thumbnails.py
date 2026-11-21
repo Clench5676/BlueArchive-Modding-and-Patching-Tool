@@ -378,7 +378,8 @@ def test_the_job_is_start_up_work_and_counts_its_writes(world):
         ({"notes": {"highest": "0.0.1"}}, None, True),  # an earlier version ran on this profile
         ({}, True, True),  # a profile from before the launch history, with its asset answer
         ({}, None, False),  # fresh data
-        ({"notes": {"highest": "999.0.0"}}, None, False),  # a downgrade
+        ({"notes": {"highest": "999.0.0"}}, None, True),  # a lower version after a higher one
+        ({"notes": {"highest": "0.7.0"}}, None, True),  # a pre-release after the stable build of its version
     ],
 )
 def test_the_candidates_decide_the_marker_from_the_previous_launch(world, monkeypatch, history, consent, due):
