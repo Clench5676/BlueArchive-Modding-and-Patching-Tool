@@ -745,6 +745,9 @@ function request(
   });
 }
 
+/** Whether a thumbnail renders or waits to render: background work starts no new picture meanwhile. */
+export const thumbnailsBusy = () => running || queue.length > 0;
+
 function bump(item) {
   const at = queue.indexOf(item);
   if (at > 0) queue.unshift(...queue.splice(at, 1));

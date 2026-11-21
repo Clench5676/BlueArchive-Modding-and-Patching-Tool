@@ -591,6 +591,9 @@ function bootHarness({ compiled = true, startupUpdate = true } = {}) {
         events.push("upgrade-notes");
       },
     },
+    defaultThumbnails: async () => {
+      events.push("default-thumbnails");
+    },
   };
   // the first-run sequence, boot() and the start popups
   const bootCode = source.slice(source.indexOf("let sessionReady = null"), source.indexOf("async function start()"));
@@ -639,7 +642,7 @@ test("startup launches its update check only after reveal and finishes while the
   await offer;
   assert.deepEqual(
     h.events.slice(4),
-    ["scan", "impact", "drift", "untracked", "upgrade-notes"],
+    ["scan", "impact", "drift", "untracked", "upgrade-notes", "default-thumbnails"],
     "scan prompts never wait for the network check; the notes after an upgrade follow the start popups",
   );
   const blocked = h.blockers[0];
