@@ -90,6 +90,9 @@ def build_api(s: Services) -> RpcRegistry:
     from .thumbnails import register as register_thumbnails
 
     register_thumbnails(rpc, s)
+    from .thumbnail_defaults import register as register_thumbnail_defaults
+
+    register_thumbnail_defaults(rpc, s)
     from .tours import register as register_tours
 
     register_tours(rpc, s)

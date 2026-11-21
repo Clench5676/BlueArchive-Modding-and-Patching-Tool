@@ -430,6 +430,44 @@ class Thumbnails:
             self._write(data)
         return self.list(alt)
 
+    def select_many(self, choices: dict[str, str | None]) -> None:
+        """Persist several alts' app-thumbnail choices in one manifest write, after verifying each thumbnail.
+
+        Args:
+            choices: Alt keys mapped to a thumbnail ID of the same student, official, or None for the default.
+        """
+        self.root.mkdir(parents=True, exist_ok=True)
+        with self._lock, file_lock(self.root / "index.lock"):
+            self._cached = None
+            data = copy.deepcopy(self._read())
+            for alt, key in choices.items():
+                if key not in (None, "official"):
+                    self.image(alt, key)
+                data["selected"][alt] = key
+            self._write(data)
+
+    def builtin(self, alt: str) -> str | None:
+        """Return the ID of an alt's own generated default thumbnail, or None when it has none."""
+        with self._lock:
+            return self._builtin(self._read(), alt)
+
+    @staticmethod
+    def _builtin(data: _Manifest, alt: str) -> str | None:
+        return next(
+            (key for key, entry in data["thumbnails"].items() if entry["alt"] == alt and entry.get("builtin")), None
+        )
+
+    def uses_default(self, alt: str) -> bool:
+        """Whether an alt's App thumbnail is still its default: no choice, or its own generated default.
+
+        A selection row this code cannot use counts as a choice: it is never replaced.
+        """
+        with self._lock:
+            data = self._read()
+            if alt in data.held_selected:
+                return False
+            return self._chosen(data, alt) in (None, self._builtin(data, alt))
+
     def delete(self, alt: str, key: str, protected: set[str] = frozenset()) -> dict:
         """Delete a thumbnail and clear usable selections, preserving protected references.
 

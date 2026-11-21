@@ -313,12 +313,13 @@ def register(rpc: Any, services: Any) -> None:
     def app_upgrade_notes() -> dict:
         from .api import release_notes
 
+        from .thumbnail_defaults import decide
+
         current = get_version_info().get("version") or ""
-        due = (
-            getattr(services, "tours_ready", False)
-            and not getattr(services, "safe_mode", False)
-            and notes_launch(services.state, current)
-        )
+        launching = getattr(services, "tours_ready", False) and not getattr(services, "safe_mode", False)
+        if launching:
+            decide(services.state, current)  # before the launch is recorded: it reads the previous version
+        due = launching and notes_launch(services.state, current)
         own = release_notes(current) if due else {"version": current, "notes": ""}
         return {**own, "current": current, "due": bool(due and own["notes"])}
 

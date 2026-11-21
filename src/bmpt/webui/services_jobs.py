@@ -12,6 +12,7 @@ from ..core.errors import ServiceError
 from ..library import toggle_timing
 from bmpt.engine import parse_filename
 from .jobs import MAINTENANCE, START, USER
+from .thumbnail_defaults import KIND as DEFAULTS_KIND
 
 
 logger = logging.getLogger("bmpt.webui.services")  # the services log under one name
@@ -268,7 +269,7 @@ class JobsMixin:
             and (kind != "mods.add" or result or getattr(result, "installed", None) or replace_scan or pruned)
         ):
             changed = _changed_of(result)
-            cores = set(changed["cores"]) if not failed and kind in ("apply", "restore") else None
+            cores = set(changed["cores"]) if not failed and kind in ("apply", "restore", DEFAULTS_KIND) else None
             alt = getattr(result, "alt", None)
             if cores is not None and not cores and alt:
                 # nothing written (unchanged or deferred): only the configuration of the alt's cores changed

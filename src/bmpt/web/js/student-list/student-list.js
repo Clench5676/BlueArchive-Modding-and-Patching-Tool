@@ -6,7 +6,7 @@
 // (the game's pins) come first in each group. The view is kept across launches (settings key "studentList"), the search
 // for the session. Only the rows near the view are rendered.
 import { clipStudentListBand } from "./student-list-card.js";
-import { specialFraming } from "../detail/special-view.js";
+import { listPicture } from "./list-picture.js";
 import * as NGUI from "../ui/ngui.js";
 import * as Display from "../app/display.js";
 import * as Loading from "../app/loading.js";
@@ -18,13 +18,13 @@ import {
   toolbarTree,
 } from "./student-list-widgets.js";
 import { countNodes, countText, iconsOf } from "../mods/mod-counts.js";
-import { rpc, spineBase } from "../core/api.js";
+import { rpc } from "../core/api.js";
 import { L, T, language } from "../core/i18n.js";
 import { scrollbar } from "../ui/scrollbar.js";
 import { wheelScroller } from "../ui/horizontal-scroll.js";
 import { prioritise, thumbnailScope } from "../detail/thumbs.js";
 import { spineAllowed } from "../spine/spine-runtime.js";
-import { configuredKey, hasAsset, previewBase, primaryKind } from "../mods/switch-sources.js";
+import { hasAsset } from "../mods/switch-sources.js";
 import { $, RECRUIT, S, advanceOf, clone, glyphsOf } from "../core/util.js";
 import { DEFAULT_VIEW, arrange, normalizeView, order as orderOf } from "./student-list-order.js";
 
@@ -258,25 +258,9 @@ function cardTree(e) {
 
 const portraitOf = (e) => {
   if (e.thumbnail) return e.thumbnail;
-  if (!spineAllowed()) return e.officialThumbnail || null;
-  const thumb = thumbnailWork.thumb;
-  const kind = primaryKind(e),
-    alts = data.students.find((f) => f.key === e.student)?.alts || [];
-  // Chibi-only entries stay navigable without requesting a Spine skeleton for a GLB.
-  if (kind === "chibi") return e.officialThumbnail || null;
-  if (e.previewSources?.[kind] || configuredKey(e, kind)) {
-    return thumb(
-      previewBase(e, kind, false, alts),
-      "studentList",
-      null,
-      kind === "memorialLobby",
-      specialFraming(e),
-      e.background,
-    );
-  }
-  const core = kind === "portrait" ? e.portrait : e.memorialLobby;
-  return core
-    ? thumb(spineBase(kind, core), "studentList", null, kind === "memorialLobby", specialFraming(e), e.background)
+  const picture = spineAllowed() && listPicture(e, data.students.find((f) => f.key === e.student)?.alts || [], true);
+  return picture
+    ? thumbnailWork.thumb(picture.base, "studentList", null, picture.memorialLobby, picture.framing, picture.background)
     : e.officialThumbnail || null;
 };
 

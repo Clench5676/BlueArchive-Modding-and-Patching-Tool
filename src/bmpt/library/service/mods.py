@@ -376,6 +376,95 @@ class ModsMixin:
         png = self.thumbnails.image(alt, key) if key is not None else None
         return portrait_edit.apply(self, alt, key, png, descriptor, self._current(pin), log, progress)
 
+    @_serialized
+    def default_thumbnail_groups(self, items: list[tuple[str, dict]], pin: Pin | None = None) -> dict:
+        """Sort alts whose generated default may go to the game into the writes that would apply them.
+
+        An alt qualifies while its App thumbnail is the default or its own generated default, and its Collection
+        texture shows the official art or that generated default; ``apply_default_thumbnails`` checks again.
+
+        Args:
+            items: ``(alt, descriptor)`` pairs, the descriptor being the alt's Collection target.
+            pin: Game install and server the operation is fixed to; None uses the current install.
+
+        Returns:
+            ``(core, slot)`` (``portrait_edit.group``) mapped to the qualifying ``(alt, descriptor)`` pairs, in the
+            order given.
+        """
+        from .. import portrait_edit
+
+        pin = self._current(pin)
+        groups: dict = {}
+        for index, (alt, descriptor) in enumerate(items):
+            if index % 25 == 24:
+                self._lock.step_aside()  # a whole roster: a preview or a page read waiting goes first
+            if self._default_thumbnail(alt, descriptor, pin) is not None:
+                groups.setdefault(portrait_edit.group(self, descriptor, pin), []).append((alt, descriptor))
+        return groups
+
+    def _default_thumbnail(self, alt: str, descriptor: dict, pin: Pin) -> tuple[str | None, str] | None:
+        """Say whether an alt's generated default may go to its Collection texture.
+
+        Returns:
+            ``(builtin, state)`` (``builtin`` None while it is not made yet, ``state`` as ``default_state``
+            gives it), or None when the alt does not qualify.
+        """
+        from .. import portrait_edit
+
+        try:
+            target = self._alt(alt)
+            if getattr(target, "official_thumbnail", None) != descriptor.get("name"):
+                return None
+            builtin = self.thumbnails.builtin(alt)
+            if not self.thumbnails.uses_default(alt):
+                return None
+            state = portrait_edit.default_state(self, descriptor, pin, builtin)
+        except (KeyError, ServiceError):
+            return None
+        return (builtin, state) if state in ("official", "own") else None
+
+    @_serialized
+    @_mod_writer
+    def apply_default_thumbnails(
+        self,
+        items: list[tuple[str, dict]],
+        pin: Pin | None = None,
+        log: LogFunc = no_log,
+        progress: ProgressCallback | None = None,
+    ) -> list[str]:
+        """Apply the generated defaults of one write's alts to their Collection textures and make them the App's.
+
+        One journaled write of the shared Collection bundle (deferred while mods are off), then one manifest write
+        selecting each alt's generated default. An alt that no longer qualifies is left out. A failure leaves the
+        game file, the configuration and the manifest as they were.
+
+        Args:
+            items: ``(alt, descriptor)`` pairs of one ``default_thumbnail_groups`` entry.
+            pin: Game install and server the operation is fixed to; None uses the current install.
+            log: Receives user-facing operation messages.
+            progress: Receives game-write progress; None disables reporting.
+
+        Returns:
+            The alts whose App thumbnail is now their generated default.
+        """
+        from .. import portrait_edit
+
+        pin = self._current(pin)
+        edits, chosen = [], {}
+        for alt, descriptor in items:
+            found = self._default_thumbnail(alt, descriptor, pin)
+            if found is None or found[0] is None:
+                continue
+            builtin, state = found
+            if state == "official":
+                edits.append((alt, builtin, self.thumbnails.image(alt, builtin), descriptor))
+            chosen[alt] = builtin
+        if edits:
+            portrait_edit.apply_many(self, edits, pin, log, progress, atomic=True)
+        if chosen:
+            self.thumbnails.select_many(chosen)
+        return list(chosen)
+
     def _recognize_installed(self, mod_id: str, identity: frozenset) -> bool:
         """Adopt exact outside content without writing any game files."""
         record = self._records[mod_id]

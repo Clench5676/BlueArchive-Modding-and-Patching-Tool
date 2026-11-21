@@ -629,6 +629,11 @@ class UiState:
 
         self._update(update)
 
+    def tours(self) -> dict[str, Any]:
+        """Return a copy of the presentation history ``update_tours`` edits; empty when there is none."""
+        history = self._current().get("tours")
+        return copy.deepcopy(history) if isinstance(history, dict) else {}
+
     def get(self, key: str, default: Any = None) -> Any:
         """Read a preference.
 

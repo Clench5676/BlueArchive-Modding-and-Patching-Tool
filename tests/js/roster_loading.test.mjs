@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { hasAsset, primaryKind, configuredKey, previewBase } from "../../src/bmpt/web/js/mods/switch-sources.js";
+import { hasAsset } from "../../src/bmpt/web/js/mods/switch-sources.js";
+import { listPicture } from "../../src/bmpt/web/js/student-list/list-picture.js";
+import { spineBase } from "../../src/bmpt/web/js/core/api.js";
 
 const source = readFileSync(new URL("../../src/bmpt/web/js/student-list/student-list.js", import.meta.url), "utf8");
 const rowsCode = source.slice(source.indexOf("async function renderRow("), source.indexOf("function maxScroll("));
@@ -18,7 +20,10 @@ const flush = async () => {
 
 test("declined licence keeps collection portraits with a configured source and mods off", () => {
   const code = source.slice(source.indexOf("const portraitOf ="), source.indexOf("// --- rows near the view"));
-  const portraitOf = new Function("spineAllowed", `${code}\nreturn portraitOf;`)(() => false);
+  const portraitOf = new Function("spineAllowed", "listPicture", `${code}\nreturn portraitOf;`)(
+    () => false,
+    listPicture,
+  );
   assert.equal(
     portraitOf({ officialThumbnail: "/asset/collection/portrait.png", configured: { portrait: "mod:a" } }),
     "/asset/collection/portrait.png",
@@ -214,34 +219,23 @@ test("studentList fallback and configured-source stills receive the alt's defaul
       background: "/bg/practice-room",
       officialThumbnail: null,
     };
-  let enabled = true,
-    configured = false;
   const env = {
     spineAllowed: () => true,
     thumbnailWork: { thumb: (...args) => requested.push(args) },
-    primaryKind: () => "portrait",
     data: { students: [{ key: "student", alts: [student] }] },
-    modsState: () => ({ enabled }),
-    configuredKey: () => (configured ? "mod:incoming" : null),
-    previewBase: () => "configured-skeleton",
-    spineBase: () => "live-skeleton",
-    specialFraming: () => null,
-    hasAsset: () => true,
+    listPicture,
   };
   const portraitOf = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${code} return portraitOf;`)(
     env,
   );
   portraitOf(student);
-  configured = true;
-  portraitOf(student);
-  enabled = false;
+  student.configured = { portrait: "mod:incoming" };
   portraitOf(student);
   assert.deepEqual(
     requested.map((args) => [args[0], args[1], args[5]]),
     [
-      ["live-skeleton", "studentList", "/bg/practice-room"],
-      ["configured-skeleton", "studentList", "/bg/practice-room"],
-      ["configured-skeleton", "studentList", "/bg/practice-room"],
+      [spineBase("portrait", "np0189_spr"), "studentList", "/bg/practice-room"],
+      [spineBase("mod", "incoming"), "studentList", "/bg/practice-room"],
     ],
   );
 });
@@ -258,15 +252,9 @@ test("library-only student list cards use saved Mod previews without inventing l
         return args[0];
       },
     },
-    primaryKind,
-    configuredKey,
-    previewBase,
     hasAsset,
     data: { students: [{ key: "assigned", alts }] },
-    spineBase: () => {
-      throw new Error("No local core is available");
-    },
-    specialFraming: () => null,
+    listPicture,
   };
   const portraitOf = new Function("env", `const { ${Object.keys(env).join(", ")} } = env; ${code} return portraitOf;`)(
     env,

@@ -24,8 +24,9 @@ import { neighbour, visit } from "../student-list/student-list-order.js";
 import { hasAsset, primaryKind, tabOfKind } from "../mods/switch-sources.js";
 import { renderNav, setTitle, setTopActions } from "./nav.js";
 import { confirmQuit, quitKey } from "./quit.js";
-import { forget } from "../detail/thumbs.js";
-import { setSpineConsent } from "../spine/spine-runtime.js";
+import { forget, thumbnailScope, thumbnailsBusy } from "../detail/thumbs.js";
+import { applyDefaultThumbnails } from "./default-thumbnails.js";
+import { setSpineConsent, spineAllowed } from "../spine/spine-runtime.js";
 import { $, fitStage } from "../core/util.js";
 import { studentName } from "../core/names.js";
 import { previewCache } from "../detail/preview-cache.js";
@@ -718,6 +719,19 @@ async function route() {
   }
 }
 
+// The generated default thumbnails after an upgrade (default-thumbnails.js): a card's picture, rendered while the page
+// shows no preview of its own (the detail page, the Student Hall, Now Loading, a card's thumbnail being drawn)
+function defaultThumbnails(blocked) {
+  const scope = thumbnailScope();
+  return applyDefaultThumbnails({
+    rpc,
+    students: studentList,
+    render: (p) => scope.thumb(p.base, "studentList", null, p.memorialLobby, p.framing, p.background),
+    spine: spineAllowed,
+    busy: () => blocked() || thumbnailsBusy() || !$("screen-detail").hidden || !$("screen-student-hall").hidden,
+  }).finally(() => scope.cancel());
+}
+
 // The first-run sequence: the cursor, the start popups, the update check and the feature tour. It needs a game
 // folder, so it runs once per session: at the start, or, when the start found none, as soon as the folder is
 // chosen on the no-game screen (refreshConfiguration), without a restart. sessionReady is set by boot() once the
@@ -764,6 +778,8 @@ async function firstRun() {
   if (!info.safeMode) {
     await sessionReady;
     await Update.afterUpgrade({ blocked }).catch((err) => console.warn("release notes after an upgrade", err));
+    // background work after the notes: the tours do not wait for it
+    defaultThumbnails(blocked).catch((err) => console.warn("default thumbnails", err));
   }
   Tours.start({ info, ready: sessionReady, blocked }).catch((err) => console.warn("feature tour", err));
 }
