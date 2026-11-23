@@ -290,6 +290,9 @@ function toggleGroup(item) {
       if (tab === "chibi" && a) void pickAction(a);
     },
   }).catch(renderFailed);
+  // the clips its actions play are fetched while the list is read, so a pick plays at once
+  const clips = item.group.sections.flatMap((s) => s.actions.flatMap((a) => a.clips || []));
+  void ChibiLib().then((M) => tab === "chibi" && M.warmClips([...new Set(clips)]));
 }
 // An action picked on the bar plays at once when its clips are there (the chibi's GLB carries today's actions).
 // Otherwise they are fetched (chibi.js loadClips: the chibi route's ?clip=) while its group card shows the

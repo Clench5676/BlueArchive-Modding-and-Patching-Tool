@@ -85,7 +85,10 @@ clips, a field prefab's own list), from which the page groups the actions (`acti
 
 The default actions of the first battle form play from the GLB (`chibi.js` `ACTIONS`); any
 other plays its `clips` in turn, each once, the last looping or held by its own loop flag (a second form's retreat waits
-and fades as the first's). A clip the view does not hold yet is fetched first:
+and fades as the first's). A clip the view does not hold yet is fetched first, an action's clips all at once
+(`chibi.js` `addClips`); a clip asked for twice is fetched once. Opening a group's action list fetches the clips its
+actions play ahead of a pick (`warmClips`): one at a time, behind every clip a pick asks for, so the picked action
+usually plays at once; a newer list's warm-up replaces the one before, and the view's end stops every fetch.
 
 `GET /asset/chibi/<alt>.glb?source=<the shown source>&clip=<name>` -> one clip of that chibi as GLB
 (`chibi.py` `export_clip`), read from the same files as the chibi (official copies, a mod, an import, a switched
@@ -101,7 +104,9 @@ from the cache.
 
 The fetch is class 1 (the shown page's preview): the route counts as foreground (`preview_gate.foreground()`), one
 export step of about 0.5 s under the chibi lock, never behind a job; the page's deadline (15 s) counts only its own time
-in the foreground (`withPreviewTimeout`), not a wait for the library lock. While it loads, the action's group card shows
-the game's loading ring in its name's place; leaving the 3D tab, the alt or the screen aborts it with the costume
-checks (`detail.js` `stopCostumeChecks`); a step under way on the server finishes and stays cached. A failure leaves the
+in the foreground (`withPreviewTimeout`), not a wait for the library lock. A warm-up's fetches are the same class, one
+step at a time. While it loads, the action's group card shows the game's loading ring in its name's place; leaving the
+3D tab, the alt or the screen gives it up with the costume checks (`detail.js` `stopCostumeChecks`) and ends the
+view's fetches; picking another action gives up the wait only, and the clip under way is still added. A step under way
+on the server finishes and stays cached. A failure leaves the
 action that played before and shows "Preview unavailable" (`detail.failed`) for that action only.

@@ -242,6 +242,12 @@ class ImportsMixin:
         return mod_versions(entries, installed)
 
     def _cab_index(self, pin: Pin) -> CabIndex:
+        # The install the game assets read: their index, kept with the preview cache and read ahead in the
+        # background (CabIndex.warm), so a costume build or an import never reads every bundle's directory itself.
+        game = self.game
+        shared = getattr(game, "_cab_discovery", None)
+        if shared is not None and tuple(getattr(game, "resource_dirs", ())) == tuple(pin.dirs):
+            return shared()
         key = (pin.key, tuple(pin.dirs))
         if key not in self._cab_indexes:
             self._cab_indexes[key] = CabIndex(pin.dirs)

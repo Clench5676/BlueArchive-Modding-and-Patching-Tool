@@ -14,6 +14,7 @@ from typing import Any, Callable
 from ..lines import global_lines as globallines
 from ..catalog.special import SPECIAL_PREFIX
 from ..catalog.records import alt_resource_core
+from ..core import preview_gate, spans
 from ..core.errors import ServiceError
 from bmpt.engine import i18n_manager, parse_filename
 from ..lines.kivo import clip_id
@@ -520,7 +521,12 @@ def register(rpc: RpcRegistry, s: Services) -> None:
 
     @rpc.method("memorialLobby.warm")
     def memorial_lobby_warm() -> None:
-        """Warm the memorial prefab index once per game. CAB dependencies resolve on demand."""
+        """Warm the memorial prefab index and the CAB names once per game.
+
+        Background maintenance (class 4): the CAB names are read a chunk at a time, yielding to the foreground
+        previews between chunks (``CabIndex.warm``), so a preview that has to search every bundle for a dependency
+        finds them read.
+        """
         if not s.game_found():
             return
         game = s.game
@@ -534,6 +540,11 @@ def register(rpc: RpcRegistry, s: Services) -> None:
                 game._memorial_lobby_prefabs()
             except Exception:  # the memorial lobby builds them again when it needs them
                 logger.debug("Cannot build the memorial lobby indexes", exc_info=True)
+            try:
+                with spans.span("cab-discovery.warm"):
+                    game._cab_discovery().warm(pause=preview_gate.step)
+            except Exception:  # a preview resolves its own names when it needs them
+                logger.debug("Cannot warm the CAB names", exc_info=True)
 
         threading.Thread(target=build, name="memorial-lobby-warm", daemon=True).start()
 

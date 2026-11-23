@@ -287,3 +287,30 @@ def test_eviction_bounds_metadata_and_scan_orders_without_losing_resolution(tmp_
         assert index.resolve({"cab-missing"}, hint) == {}
     assert len(index._orders) <= 2
     assert index.resolve({"cab-0"}) == {"cab-0": str(paths[0])}
+
+
+def test_warm_reads_every_bundle_in_chunks_pausing_outside_the_lock_and_saves_once(tmp_path, monkeypatch):
+    game = tmp_path / "game"
+    game.mkdir()
+    paths = [bundle(game, f"part{i}.bundle", f"CAB-{i}") for i in range(5)]
+    cache = PreviewCache(tmp_path / "cache", allowed=True)
+    read, calls = reader_calls()
+    index = CabIndex([game], cache=cache, reader=read)
+    writes, pauses = [], []
+    original = cache.put
+    monkeypatch.setattr(cache, "put", lambda *args, **kw: writes.append(1) or original(*args, **kw))
+
+    def pause():
+        assert index._lock.acquire(blocking=False)  # a preview resolving its names gets in between two chunks
+        index._lock.release()
+        pauses.append(len(calls))
+
+    index.warm(pause=pause, chunk=2)
+    assert sorted(calls) == sorted(paths) and pauses == [0, 2, 4] and writes == [1]
+
+    def forbidden(path):
+        pytest.fail("Warmed names must not be read again")
+
+    second = CabIndex([game], cache=PreviewCache(cache.root, allowed=True), reader=forbidden)
+    assert second.resolve({"cab-3", "cab-absent"}) == {"cab-3": str(paths[3])}
+    second.warm()
