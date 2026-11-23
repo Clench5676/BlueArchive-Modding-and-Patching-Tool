@@ -315,6 +315,28 @@ class CabIndex:
             found = {name: path for name, path in found.items() if name in self._read(Path(path))}
             return found
 
+    def warm(self, pause: Callable[[], None] = lambda: None, chunk: int = 256) -> None:
+        """Read the CAB names of every bundle ahead of the first request that has to search them all.
+
+        Background work: the index is held for one chunk at a time (about 0.05 s unread, a stat per bundle once
+        read), so a preview resolving its own names waits for one chunk at most. The names are saved once at the end.
+
+        Args:
+            pause: Called before each chunk, outside the index's lock: where the caller yields to the foreground.
+            chunk: Bundles read per hold of the index.
+        """
+        with self._lock:
+            self._sync()
+            paths = list(self._inventory())
+        for start in range(0, len(paths), chunk):
+            pause()
+            with self._lock:
+                self._sync()
+                for path in paths[start : start + chunk]:
+                    self._read(path)
+        with self.batch():  # saves what was read
+            pass
+
     def all(self, predicate: Callable[[Path], bool] = lambda path: True) -> dict[str, str]:
         """Build a full CAB index, reusing revision-checked file metadata.
 
