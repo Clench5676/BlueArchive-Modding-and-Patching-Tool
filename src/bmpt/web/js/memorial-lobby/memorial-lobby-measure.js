@@ -66,6 +66,17 @@ export function gridOf(G) {
 // `out`, within its cell rects ([i0, i1, j0, j1], inclusive); additive FX and see-through parts never count
 export function paint(grid, l, sk, targets) {
   const { X0, Y0, gw } = grid;
+  // the targets' rects laid flat, so a triangle walks them without building anything: outs[k] with
+  // spans[4k..4k+3] = i0, i1, j0, j1
+  const outs = [],
+    flat = [];
+  for (const [out, rects] of targets)
+    for (const r of rects) {
+      outs.push(out);
+      flat.push(r[0], r[1], r[2], r[3]);
+    }
+  const spans = Int32Array.from(flat),
+    count = outs.length;
   const tri = (ax, ay, bx, by, cx, cy) => {
     const area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
     if (Math.abs(area) < 1e-6) return;
@@ -73,22 +84,28 @@ export function paint(grid, l, sk, targets) {
       I1 = Math.floor((Math.max(ax, bx, cx) - X0) / CELL);
     const J0 = Math.floor((Math.min(ay, by, cy) - Y0) / CELL),
       J1 = Math.floor((Math.max(ay, by, cy) - Y0) / CELL);
-    for (const [out, rects] of targets)
-      for (const r of rects) {
-        const i0 = Math.max(I0, r[0]),
-          i1 = Math.min(I1, r[1]),
-          j0 = Math.max(J0, r[2]),
-          j1 = Math.min(J1, r[3]);
-        for (let j = j0; j <= j1; j++)
-          for (let i = i0; i <= i1; i++) {
-            if (out[j * gw + i]) continue; // painted already
-            const px = X0 + (i + 0.5) * CELL,
-              py = Y0 + (j + 0.5) * CELL;
-            const w0 = ((bx - px) * (cy - py) - (by - py) * (cx - px)) / area,
-              w1 = ((cx - px) * (ay - py) - (cy - py) * (ax - px)) / area;
-            if (w0 >= -1e-6 && w1 >= -1e-6 && 1 - w0 - w1 >= -1e-6) out[j * gw + i] = 1;
-          }
+    for (let k = 0; k < count; k++) {
+      const i0 = Math.max(I0, spans[k * 4]),
+        i1 = Math.min(I1, spans[k * 4 + 1]),
+        j0 = Math.max(J0, spans[k * 4 + 2]),
+        j1 = Math.min(J1, spans[k * 4 + 3]);
+      if (!(i0 <= i1 && j0 <= j1)) continue;
+      const out = outs[k];
+      for (let j = j0; j <= j1; j++) {
+        const py = Y0 + (j + 0.5) * CELL,
+          ay0 = ay - py,
+          by0 = by - py,
+          cy0 = cy - py,
+          row = j * gw;
+        for (let i = i0; i <= i1; i++) {
+          if (out[row + i]) continue; // painted already
+          const px = X0 + (i + 0.5) * CELL;
+          const w0 = ((bx - px) * cy0 - by0 * (cx - px)) / area,
+            w1 = ((cx - px) * ay0 - cy0 * (ax - px)) / area;
+          if (w0 >= -1e-6 && w1 >= -1e-6 && 1 - w0 - w1 >= -1e-6) out[row + i] = 1;
+        }
       }
+    }
   };
   for (const slot of sk.drawOrder) {
     const a = slot.getAttachment();
