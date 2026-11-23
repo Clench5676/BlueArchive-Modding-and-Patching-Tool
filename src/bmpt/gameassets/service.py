@@ -888,7 +888,8 @@ class GameAssets(ChibisMixin):
         stamps = spine_stamps(paths)
         left = sorted([str(path), sorted(types)] for path, types in skip.items())
         key = "spine/" + json.dumps([stamps, left] if left else stamps)
-        with self._lock(key):
+        # the timings tell a wait for another request extracting the same files from the extraction itself
+        with spans.held("spine-files", self._lock(key)):
             generation, disk_generation = self.cache.generation, self._preview_generation()
             value = self.cache.get(_SCHEMA + key, version=self.cache_version, disk=False)
             if value is None:
@@ -899,7 +900,8 @@ class GameAssets(ChibisMixin):
                     except (ValueError, UnicodeError, TypeError):
                         self.preview_cache.discard(self._preview_key(key))
                 if value is None:
-                    value = extract_spine(paths, skip) if skip else extract_spine(paths)
+                    with spans.span("spine-files.extract"):
+                        value = extract_spine(paths, skip) if skip else extract_spine(paths)
                     if spine_stamps(paths) != stamps:
                         raise AssetNotFound("spine changed during extraction")
                     if self.preview_cache is not None and self.preview_cache.allowed:
