@@ -423,6 +423,11 @@ class ChibiView {
     this.clips = new Map();
     // every clip by its name (the base GLB's and the ones added on demand, addClips)
     this.named = new Map();
+    // the clips being fetched by name (clipLoad), the asks under way that a warm-up waits behind (addClips), and the
+    // abort of every clip fetch when the view goes
+    this.clipLoads = new Map();
+    this.urgent = new Set();
+    this.clipAbort = new AbortController();
     // renderers a clip switches (an expression's alternative face), each with its state at rest
     this.switches = new Map();
     gltf.animations.forEach((clip, i) => {
@@ -501,42 +506,85 @@ class ChibiView {
     }
   }
 
-  // Clips by name (the GLB's extras.clips) the shown GLB does not carry, fetched one at a time from the chibi route
-  // (?clip=, the same source as the chibi) and added: their tracks moved onto the shown chibi's nodes (retarget), a
-  // renderer a clip switches found in the shown chibi, or, when the GLB left it out (an EX skill's alternative face),
-  // taken from the clip's GLB onto the shown skeleton, hidden at rest. Rejects when one cannot be read or does not
-  // fit; the clips added before stay.
+  // Clips by name (the GLB's extras.clips) the shown GLB does not carry, fetched from the chibi route (?clip=, the
+  // same source as the chibi), all of them at once, and added: their tracks moved onto the shown chibi's nodes
+  // (retarget), a renderer a clip switches found in the shown chibi, or, when the GLB left it out (an EX skill's
+  // alternative face), taken from the clip's GLB onto the shown skeleton, hidden at rest. Rejects when one cannot be
+  // read or does not fit; the others are still added. The signal gives up the wait only: a fetch under way ends with
+  // the view, and its clip is added for the next ask.
   async addClips(names, { signal } = {}) {
-    for (const name of names) {
-      if (this.named.has(name)) continue;
-      const gltf = await readGlb(chibiUrl(this.key, this.source, name), signal);
-      if (this.disposed) {
-        discardScene(gltf.scene);
-        return;
-      }
-      const cj = gltf.parser.json,
-        cp = gltf.parser;
-      const cnodes = await Promise.all((cj.nodes || []).map((_, i) => cp.getDependency("node", i)));
-      const clip = gltf.animations[0] && retarget(gltf.animations[0], cj, cnodes, this.nodes, this.json);
-      if (!clip) {
-        discardScene(gltf.scene);
-        throw new Error(`${name}: the clip does not fit the shown chibi`);
-      }
-      const textures = await gltfTextures(gltf);
-      if (this.disposed || this.named.has(name)) {
-        discardScene(gltf.scene);
-        for (const t of textures) t.dispose();
-        return;
-      }
-      const extras = cj.animations[0].extras || {};
-      const toggles = [];
-      for (const t of extras.toggles || []) {
-        const key = this.switchOf(t.node, cj, cp, cnodes, gltf, textures);
-        if (key != null) toggles.push({ ...t, node: key });
-      }
-      this.textures.push(...textures);
-      this.named.set(name, { clip, ...extras, toggles });
+    signal?.throwIfAborted();
+    const asked = Promise.all(names.filter((n) => !this.named.has(n)).map((n) => this.clipLoad(n)));
+    const urgent = asked.catch(() => {}).finally(() => this.urgent.delete(urgent));
+    this.urgent.add(urgent);
+    if (!signal) return void (await asked);
+    let stop;
+    const given = new Promise((_, reject) => {
+      stop = () => reject(signal.reason);
+      signal.addEventListener("abort", stop, { once: true });
+    });
+    try {
+      await Promise.race([asked, given]);
+    } finally {
+      signal.removeEventListener("abort", stop);
     }
+  }
+
+  // Clips an action list offers, fetched ahead of a pick one at a time, behind every clip asked for (addClips): a
+  // pick finds them there. A new call replaces the one before; a clip that fails is left to the pick that asks for it.
+  async warmClips(names) {
+    const run = (this.warmRun = {});
+    for (const name of names) {
+      while (this.urgent.size && !this.disposed) await Promise.all(this.urgent);
+      if (this.disposed || this.warmRun !== run) return;
+      if (!this.named.has(name)) await this.clipLoad(name).catch(() => {});
+    }
+  }
+
+  // one clip's fetch, shared by everyone asking for it meanwhile
+  clipLoad(name) {
+    let load = this.clipLoads.get(name);
+    if (!load) {
+      load = this.fetchClip(name).finally(() => this.clipLoads.delete(name));
+      this.clipLoads.set(name, load);
+    }
+    return load;
+  }
+
+  async fetchClip(name) {
+    let gltf;
+    try {
+      gltf = await readGlb(chibiUrl(this.key, this.source, name), this.clipAbort.signal);
+    } catch (err) {
+      if (this.disposed) return;
+      throw err;
+    }
+    if (this.disposed) {
+      discardScene(gltf.scene);
+      return;
+    }
+    const cj = gltf.parser.json,
+      cp = gltf.parser;
+    const cnodes = await Promise.all((cj.nodes || []).map((_, i) => cp.getDependency("node", i)));
+    const clip = gltf.animations[0] && retarget(gltf.animations[0], cj, cnodes, this.nodes, this.json);
+    if (!clip) {
+      discardScene(gltf.scene);
+      throw new Error(`${name}: the clip does not fit the shown chibi`);
+    }
+    const textures = await gltfTextures(gltf);
+    if (this.disposed || this.named.has(name)) {
+      discardScene(gltf.scene);
+      for (const t of textures) t.dispose();
+      return;
+    }
+    const extras = cj.animations[0].extras || {};
+    const toggles = [];
+    for (const t of extras.toggles || []) {
+      const key = this.switchOf(t.node, cj, cp, cnodes, gltf, textures);
+      if (key != null) toggles.push({ ...t, node: key });
+    }
+    this.textures.push(...textures);
+    this.named.set(name, { clip, ...extras, toggles });
   }
 
   // The switch (this.switches' key) of the renderer at a hierarchy node an added clip toggles: the shown GLB's
@@ -1156,6 +1204,7 @@ class ChibiView {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.clipAbort?.abort();
     this.loadingFreeze?.dispose();
     this.renderer.setAnimationLoop(null);
     this.drawn?.();
@@ -1303,6 +1352,13 @@ export async function loadClips(names, { signal } = {}) {
   if (!v?.named) return false;
   await v.addClips(names, { signal });
   return v === view && !v.disposed;
+}
+/**
+ * Fetch clips ahead of a pick (ChibiView.warmClips): the ones an opened action list offers.
+ * @param {string[]} names
+ */
+export function warmClips(names) {
+  if (view?.named) void view.warmClips(names);
 }
 /**
  * Play an action of the bar: today's actions (ACTIONS) of the first battle form play by their slots; any other

@@ -255,3 +255,89 @@ test("a chain plays each clip once in turn and holds or loops the last by its ow
   assert.equal(view.slot.clip.name, "D02");
   assert.ok(view.action.clampWhenFinished);
 });
+
+// the route answering only when let through, so the order of the requests shows
+function heldRoute() {
+  const inner = globalThis.fetch,
+    asked = [],
+    gates = new Map();
+  globalThis.fetch = (url, options) => {
+    const clip = new URL(String(url.url || url), "http://x").searchParams.get("clip");
+    if (!clip || String(url.url || url).startsWith("data:")) return inner(url, options);
+    asked.push(clip);
+    return new Promise((resolve, reject) => {
+      options?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      gates.set(clip, () => resolve(inner(url, options)));
+    });
+  };
+  return { asked, pass: (clip) => gates.get(clip)(), restore: () => (globalThis.fetch = inner) };
+}
+const turnOf = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("the clips of an action are asked for at once, and a clip asked for twice is fetched once", async () => {
+  const view = await shown(),
+    route = heldRoute();
+  try {
+    const first = view.addClips(["X_Y_Exs", "X_Y_Missing"]),
+      second = view.addClips(["X_Y_Exs"]);
+    await turnOf();
+    assert.deepEqual(route.asked, ["X_Y_Exs", "X_Y_Missing"]);
+    route.pass("X_Y_Missing");
+    await assert.rejects(first, /HTTP 404/);
+    route.pass("X_Y_Exs");
+    await second;
+    await turnOf();
+    assert.ok(view.named.has("X_Y_Exs") && !view.urgent.size && !view.clipLoads.size);
+  } finally {
+    route.restore();
+    view.dispose();
+  }
+});
+
+test("a warm-up fetches one clip at a time behind the clips asked for, and a pick finds its clip there", async () => {
+  const view = await shown(),
+    route = heldRoute();
+  try {
+    const asked = view.addClips(["X_Y_Normal_Attack_Start"]).catch((err) => err);
+    const warm = view.warmClips(["X_Y_Formation_Idle", "X_Y_Missing", "X_Y_Exs"]);
+    await turnOf();
+    assert.deepEqual(route.asked, ["X_Y_Normal_Attack_Start"]); // nothing of the warm-up yet
+    route.pass("X_Y_Normal_Attack_Start");
+    assert.match(String(await asked), /does not fit/);
+    await turnOf();
+    assert.deepEqual(route.asked.slice(1), ["X_Y_Missing"]); // the GLB's own clip is not asked for; one at a time
+    route.pass("X_Y_Missing"); // a clip that fails is left out and the warm-up goes on
+    await turnOf();
+    await turnOf();
+    assert.deepEqual(route.asked.slice(2), ["X_Y_Exs"]);
+    const pick = view.addClips(["X_Y_Exs"]); // joins the warm-up's fetch
+    route.pass("X_Y_Exs");
+    await Promise.all([pick, warm]);
+    assert.equal(route.asked.length, 3);
+    assert.ok(view.named.has("X_Y_Exs"));
+  } finally {
+    route.restore();
+    view.dispose();
+  }
+});
+
+test("a view that goes ends its clip fetches without a failure, and a newer warm-up replaces the one before", async () => {
+  const view = await shown(),
+    route = heldRoute();
+  try {
+    const old = view.warmClips(["X_Y_Missing", "X_Y_Normal_Attack_Start"]);
+    await turnOf();
+    const next = view.warmClips(["X_Y_Exs"]);
+    await turnOf();
+    assert.deepEqual(route.asked, ["X_Y_Missing", "X_Y_Exs"]);
+    route.pass("X_Y_Missing");
+    await old;
+    assert.deepEqual(route.asked, ["X_Y_Missing", "X_Y_Exs"]); // the replaced one stops after its clip under way
+    const asked = view.addClips(["X_Y_Exs"]);
+    view.dispose();
+    await Promise.all([asked, next]);
+    assert.ok(!view.named.has("X_Y_Exs"));
+  } finally {
+    route.restore();
+  }
+});
