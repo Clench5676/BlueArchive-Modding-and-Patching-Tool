@@ -503,3 +503,55 @@ def test_fast_lzma_round_trips_and_stays_on_its_thread():
     assert helper.decompress_lzma(fast, True) == data
     assert helper.decompress_lzma(chunked, False) == data
     assert helper.compress_lzma(data, True) == normal
+
+
+def _numpy_trs(p, r, s):
+    """The NumPy-only transform: what ``trs`` must give byte for byte."""
+    import math
+
+    x, y, z, w = r
+    n = math.sqrt(x * x + y * y + z * z + w * w) or 1.0
+    x, y, z, w = x / n, y / n, z / n, w / n
+    rot = np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ]
+    )
+    m = np.eye(4)
+    m[:3, :3] = rot * np.array(list(s))
+    m[:3, 3] = list(p)
+    return m
+
+
+def test_transform_of_python_numbers_matches_numpy_bytes():
+    from bmpt.gameassets.chibi_adapt.skeleton import trs
+
+    rng = np.random.default_rng(7)
+    cases = [((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), ((-0.0, 0.0, 1), (0.0, -0.0, 0.0, 0.0), (1, -1.0, 0))]
+    for _ in range(300):
+        p, r, s = rng.normal(size=3), rng.normal(size=4), rng.normal(size=3) * 3
+        cases.append((p.tolist(), r.tolist(), s.tolist()))
+        cases.append((tuple(p.tolist()), tuple(r.tolist()), (1, 2, 3)))
+    cases.append(([float("nan"), 1.0, 2.0], [0.1, 0.2, 0.3, 0.9], [1.0, float("inf"), 1.0]))
+    for p, r, s in cases:
+        assert trs(p, r, s).tobytes() == _numpy_trs(p, r, s).tobytes()
+    single = (np.float32(0.3), np.float32(0.1), np.float32(-0.2), np.float32(0.9))  # NumPy scalars: NumPy arithmetic
+    assert (
+        trs([1.0, 2.0, 3.0], single, [1.0, 1.0, 1.0]).tobytes()
+        == _numpy_trs([1.0, 2.0, 3.0], single, [1.0, 1.0, 1.0]).tobytes()
+    )
+
+
+def test_clip_digest_packing_matches_numpy_bytes():
+    cases = [
+        ([0, 1, 2**32 - 1], "<u4", "I"),
+        ([1.5, 2.0], "<u4", "I"),
+        (np.arange(5, dtype=np.uint32), "<u4", "I"),
+        ([0.1, -0.0, float("inf"), 3], "<f8", "d"),
+        ([], "<f8", "d"),
+        (np.linspace(0, 1, 7), "<f8", "d"),
+    ]
+    for values, dtype, code in cases:
+        assert cc._packed(values, dtype, code) == np.asarray(values, dtype=dtype).tobytes()

@@ -134,8 +134,15 @@ def loaded_with(graph: BundleGraph, prefab_files: Iterable[Path], slot: Mapping[
 # --- skeleton ------------------------------------------------------------------------------------------------------
 
 
+_PLAIN = {float, int}
+
+
 def trs(p: Iterable[float], r: Iterable[float], s: Iterable[float]) -> np.ndarray:
     """Build a Unity-space 4 by 4 affine transform.
+
+    Python numbers (the decoded clips' and the hierarchy's) are multiplied out as Python floats, the same IEEE double
+    products the NumPy version takes, and the matrix built at once; anything else (NumPy scalars, whose arithmetic
+    can be single precision) takes the NumPy version.
 
     Args:
         p: Three-component local position in Unity units.
@@ -143,18 +150,29 @@ def trs(p: Iterable[float], r: Iterable[float], s: Iterable[float]) -> np.ndarra
         s: Three-component local axis scale.
     """
     x, y, z, w = r
+    s, p = list(s), list(p)
+    plain = {type(x), type(y), type(z), type(w), *map(type, s), *map(type, p)} <= _PLAIN
     n = math.sqrt(x * x + y * y + z * z + w * w) or 1.0
     x, y, z, w = x / n, y / n, z / n, w / n
-    rot = np.array(
-        [
-            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
-        ]
-    )
+    rot = [
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+    ]
+    if plain and len(s) == 3 and len(p) == 3:
+        sx, sy, sz = (float(v) for v in s)
+        return np.array(
+            [
+                [rot[0][0] * sx, rot[0][1] * sy, rot[0][2] * sz, p[0]],
+                [rot[1][0] * sx, rot[1][1] * sy, rot[1][2] * sz, p[1]],
+                [rot[2][0] * sx, rot[2][1] * sy, rot[2][2] * sz, p[2]],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            dtype=float,
+        )
     m = np.eye(4)
-    m[:3, :3] = rot * np.array(list(s))
-    m[:3, 3] = list(p)
+    m[:3, :3] = np.array(rot) * np.array(s)
+    m[:3, 3] = p
     return m
 
 

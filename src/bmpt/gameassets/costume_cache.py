@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import array
 import hashlib
 import io
 import os
+import sys
 import tempfile
 import threading
 import zipfile
 import zlib
 from collections import OrderedDict
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Mapping
 
 import numpy as np
 
@@ -198,6 +200,16 @@ class PoseStore:
                 path.unlink(missing_ok=True)
 
 
+def _packed(values: Any, dtype: str, code: str) -> bytes:
+    """The bytes of ``np.asarray(values, dtype=dtype)``; a list of Python numbers through ``array``, much faster."""
+    if type(values) is list and sys.byteorder == "little" and array.array(code).itemsize == np.dtype(dtype).itemsize:
+        try:
+            return array.array(code, values).tobytes()
+        except (TypeError, OverflowError):  # values ``array`` does not take as NumPy would (floats for words)
+            pass
+    return np.asarray(values, dtype=dtype).tobytes()
+
+
 def clip_digest(tree: Mapping) -> str:
     """Hash a clip's decoded sample-grid inputs, including in-place curve edits.
 
@@ -229,8 +241,8 @@ def clip_digest(tree: Mapping) -> str:
             )
         ).encode()
     )
-    for values, dtype in ((streamed["data"], "<u4"), (samples, "<f8"), (constant["data"], "<f8")):
-        digest.update(np.asarray(values, dtype=dtype).tobytes())
+    for values, dtype, code in ((streamed["data"], "<u4", "I"), (samples, "<f8", "d"), (constant["data"], "<f8", "d")):
+        digest.update(_packed(values, dtype, code))
     return digest.hexdigest()
 
 
