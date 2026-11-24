@@ -80,7 +80,7 @@ PREFAB_HINTS = {
     "UICharacterVisualMode": "ui-_mxload-prefabs-2025-07-02_assets_all_3863404692.bundle",
     "UIPopup_Option_PC": "ui-_mxload-prefabs-2025-11-28_assets_all_3994951711.bundle",
     # the loading screen (Resources/UI/UILoading.prefab) and its "Now Loading" indicator
-    "UILoading": "prologgroup-assets-_mx-resources-ui-_mxprolog-2026-04-13_assets_all_1341870950.bundle",
+    "UILoading": "prologgroup-assets-_mx-resources-ui-_mxprolog-2026-04-13_assets_all_2906738546.bundle",
     "UIRepeater": "ui-_mxload-prefabs-2025-07-02_assets_all_1187726256.bundle",
     # the loading ring a still being made shows in its place (UIRatioNoticePopup/Center/Popup/Base/LoadingIcon)
     "UIRatioNoticePopup": "ui-_mxload-prefabs-2025-07-02_assets_all_2108580176.bundle",
