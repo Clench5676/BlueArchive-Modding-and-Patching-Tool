@@ -17,8 +17,10 @@ from UnityPy.files import ObjectReader
 
 from bmpt.engine import Bundle
 from ..core.errors import ServiceError
+from . import typetree_writes
 
 logger = logging.getLogger(__name__)
+typetree_writes.install()  # every bundle written back packs its arrays of numbers at once: the same bytes
 _guard = threading.Lock()
 _locks: dict[Path, threading.RLock] = {}
 
