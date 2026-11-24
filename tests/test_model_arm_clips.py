@@ -478,6 +478,18 @@ def test_array_streamed_reader_samples_exactly_like_the_frame_by_frame_reader():
             assert set(streamed) == set(want[1])
             for k, values in want[1].items():
                 assert streamed[k].tobytes() == values.tobytes()
+    times = ac.clip_times(tree)
+    keyed = [(times[1] + 1e-6, [(2, 1.0, 0.0, 0.0, 4.0)]), (times[2], [(2, 0.0, 0.0, 1.0, -0.0), (5, 0, 0, 0, 1)])]
+    frames.extend(keyed)  # keys at a sample time and at its search bound
+    for disorder in (False, True):
+        if disorder:  # a curve whose keys are out of time order: searched one curve at a time
+            frames.append((0.125, [(4, 2.0, 1.0, 0.0, 3.0)]))
+        data["m_StreamedClip"]["data"] = ac.encode_streamed(frames)
+        for hold in (False, True):
+            got = ac.sample_curves(tree, range(7), hold_before=hold)[1]
+            want = _sample_curves_reference(tree, range(7), hold_before=hold)[1]
+            for k, values in want.items():
+                assert got[k].tobytes() == values.tobytes()
     data["m_StreamedClip"]["data"] = ac.encode_streamed([(-float("inf"), []), (float("inf"), [])])
     assert not {k: v for k, v in ac.sample_curves(tree, range(7))[1].items() if k < 7}
     data["m_StreamedClip"]["data"] = data["m_StreamedClip"]["data"][:-1] + [5]
