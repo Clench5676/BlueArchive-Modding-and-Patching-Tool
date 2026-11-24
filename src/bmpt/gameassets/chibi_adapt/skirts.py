@@ -1208,12 +1208,13 @@ class FaceRetarget:
                 local[:3, :3] = local[:3, :3] @ np.linalg.inv(ms.scale_of(local))
                 turns[k] = local
             out.append(turns)
+        # np.allclose per frame, as one np.isclose over the frames (allclose is isclose(...).all())
         moving = {
             k
             for k in self.roots
             if k not in self.rigid
             and (
-                any(not np.allclose(t[k], out[0][k], atol=1e-6) for t in out)
+                not np.isclose(np.array([t[k] for t in out]), out[0][k], atol=1e-6).all()
                 or not np.allclose(out[0][k], ch.hanging(k), atol=1e-6)
             )
         }
