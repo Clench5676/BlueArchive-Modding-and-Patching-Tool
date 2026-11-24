@@ -72,8 +72,7 @@ class _Writer:
         template = next((o for o in sf.objects.values() if o.type.name == type_name), None)
         if template is None:
             raise refuse("no object type in the slot", type=type_name)
-        new = object.__new__(type(template))
-        new.__dict__.update(template.__dict__)
+        new = copy.copy(template)  # a reader with slots has no __dict__ to copy
         new.path_id = self.fresh(sf)
         new.data = b""
         new.save_typetree(tree)
@@ -132,8 +131,7 @@ class _Writer:
             sf.types.append(copy.copy(src_type))
             index = len(sf.types) - 1
         template = next(iter(sf.objects.values()))
-        new = object.__new__(type(template))
-        new.__dict__.update(template.__dict__)
+        new = copy.copy(template)  # a reader with slots has no __dict__ to copy
         new.type_id, new.serialized_type, new.class_id, new.type = index, sf.types[index], source.class_id, source.type
         new.path_id = self.fresh(sf)
         new.data = b""
