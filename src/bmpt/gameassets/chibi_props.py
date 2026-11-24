@@ -239,7 +239,16 @@ def _ancestors(skeleton: ma.Skeleton, i: int) -> Iterable[int]:
         p = skeleton.nodes[p].parent
 
 
-def split_items(skeleton: ma.Skeleton, part: ma.Part) -> list[Item]:
+def _skin(mesh: Any, skins: dict[int, ma.Skin] | None) -> ma.Skin:
+    """``ma.skin_of(mesh)``, read once per mesh in ``skins`` (one measure's meshes, read but never changed)."""
+    if skins is None:
+        return ma.skin_of(mesh)
+    if id(mesh) not in skins:
+        skins[id(mesh)] = ma.skin_of(mesh)
+    return skins[id(mesh)]
+
+
+def split_items(skeleton: ma.Skeleton, part: ma.Part, skins: dict[int, ma.Skin] | None = None) -> list[Item]:
     """Split a renderer into bone branches joined into items by mesh triangles.
 
     Each skinned bone stands for the top of its branch among the renderer's bones.
@@ -247,12 +256,13 @@ def split_items(skeleton: ma.Skeleton, part: ma.Part) -> list[Item]:
     Args:
         skeleton: Chibi hierarchy defining ancestor relationships between skin bones.
         part: Renderer part whose dominant skin influences and triangles define items.
+        skins: Meshes already read by the caller's measure, by object; None reads the mesh.
 
     Returns:
         Items with vertex/triangle indices, or an empty list for unreadable or unskinned meshes.
     """
     try:
-        skin = ma.skin_of(part.mesh)
+        skin = _skin(part.mesh, skins)
     except Exception:  # an unskinned mesh or one that cannot be read: nothing to split
         return []
     bone_set = {b for b in part.bones if b is not None}
@@ -391,10 +401,11 @@ def measure(
     body_set = set(body)
     mounts, fx = _gear_nodes(skeleton, body_set)
     items: list[Item] = []
+    skins: dict[int, ma.Skin] = {}  # each mesh read once: the items, their measures and the enclosure read it
     for part in parts:
         if part.role in ("primary", "costume", "alternate", "copy", "halo") or part.mesh is None:
             continue
-        found = split_items(skeleton, part)
+        found = split_items(skeleton, part, skins)
         gear = any(_is_gear(skeleton, item, mounts, fx) for item in found)
         active = nodes[part.node].active and bool(g.tree(part.renderer)["m_Enabled"])
         for item in found:
@@ -428,9 +439,11 @@ def measure(
     )
     step()
     for item in items:
-        _measure_item(skeleton, item, rows, frames, seg_a, seg_b, body, body_inverse, body_scale, idle, idle_segs)
+        _measure_item(
+            skeleton, item, rows, frames, seg_a, seg_b, body, body_inverse, body_scale, idle, idle_segs, skins
+        )
         step()
-    _enclosure(skeleton, parts, items, frames, step)
+    _enclosure(skeleton, parts, items, frames, step, skins)
     return items
 
 
@@ -446,9 +459,10 @@ def _measure_item(
     body_scale: np.ndarray,
     idle: list[np.ndarray] | None,
     idle_segs: tuple[np.ndarray, np.ndarray] | None,
+    skins: dict[int, ma.Skin] | None = None,
 ) -> None:
     part = item.part
-    skin = ma.skin_of(part.mesh)
+    skin = _skin(part.mesh, skins)
     bp = ma.bindposes(skeleton.graph, part.mesh)
     count = len(skin.vertices)
     dom = skin.joints[np.arange(count), np.argmax(skin.weights, axis=1)]
@@ -551,7 +565,12 @@ def enclosed_points(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
 
 
 def _enclosure(
-    skeleton: ma.Skeleton, parts: list[ma.Part], items: list[Item], frames: list, step: Callable[[], None]
+    skeleton: ma.Skeleton,
+    parts: list[ma.Part],
+    items: list[Item],
+    frames: list,
+    step: Callable[[], None],
+    skins: dict[int, ma.Skin] | None = None,
 ) -> None:
     """Measure ``Item.enclosed`` for every item that may be packed.
 
@@ -566,7 +585,7 @@ def _enclosure(
         if part.role not in ("primary", "costume", "alternate") or part.mesh is None:
             continue
         try:
-            skin = ma.skin_of(part.mesh)
+            skin = _skin(part.mesh, skins)
             costume.append((part, skin, ma.bindposes(skeleton.graph, part.mesh)))
         except Exception:  # a part that cannot be read encloses nothing
             continue
@@ -601,7 +620,7 @@ def _enclosure(
 
     for item in wanted:
         try:
-            skin = ma.skin_of(item.part.mesh)
+            skin = _skin(item.part.mesh, skins)
             bp = ma.bindposes(skeleton.graph, item.part.mesh)
         except Exception:  # read by the measure already; a failure leaves it unjudged
             continue
