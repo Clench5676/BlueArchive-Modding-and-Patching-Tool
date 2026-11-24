@@ -194,8 +194,10 @@ def clip_edit_error(before: ClipBefore, tree: Mapping[str, Any], added: int) -> 
             return f"curve {index} missing"
         if streamed <= index < streamed + dense:
             same = np.allclose(got, values, rtol=0.0, atol=1e-6, equal_nan=True)
-        else:
-            same = np.array_equal(got, values, equal_nan=True)
+        else:  # list equality first: equal lists are equal arrays; NaN keys need the array comparison
+            same = (type(got) is list and type(values) is list and got == values) or np.array_equal(
+                got, values, equal_nan=True
+            )
         if not same:
             return f"curve {index} changed"
     return None

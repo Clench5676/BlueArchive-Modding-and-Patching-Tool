@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import array
 import pickle
 import struct
+import sys
 from collections import defaultdict, deque
 
 import numpy as np
@@ -398,13 +400,23 @@ def clip_times(tree):
 _KEY = np.dtype([("index", "<i4"), ("coefs", "<f4", (4,))])
 
 
+def _words(words) -> np.ndarray:
+    """``np.asarray(words, dtype="<u4")``, read-only; a list of Python ints through ``array``, much faster."""
+    if type(words) is list and sys.byteorder == "little" and array.array("I").itemsize == 4:
+        try:
+            return np.frombuffer(array.array("I", words), dtype="<u4")
+        except (TypeError, OverflowError):  # values ``array`` does not take as NumPy would
+            pass
+    return np.asarray(words, dtype="<u4")
+
+
 def _streamed_keys(words):
     """Read every key of a streamed clip in stream order.
 
     Each key holds its frame's time (float64), curve index and four cubic coefficients (float32). Frames are walked
     by their key counts; the keys are then read in one gather.
     """
-    w = np.asarray(words, dtype="<u4")
+    w = _words(words)
     starts, counts, pos, end = [], [], 0, len(w)
     while pos + 2 <= end:
         count = int(w[pos + 1])
@@ -422,6 +434,55 @@ def _streamed_keys(words):
     index = w[first].view("<i4")
     coefs = w[first[:, None] + np.arange(1, 5)].view("<f4")
     return times, index, coefs
+
+
+def _sampled_streamed(rows, key_at, cuts, times, hold_before):
+    """Sample each streamed curve (its keys ``rows[begin:end]`` between ``cuts``) at ``times``.
+
+    Every curve's key is found at once: the key times and the query times are ranked together (``np.unique``, equal
+    values one rank), so a curve's keys at or before a time are the entries of a sorted (curve, rank) list below the
+    time's (curve, rank). That is ``np.searchsorted(ks, times + 1e-6, side="right")`` per curve, which the cubic is
+    then taken from with the same products, elementwise, as one curve at a time. A curve whose key times are not in
+    order (where a binary search has no meaning to reproduce) takes the search one curve at a time.
+    """
+    curves = {}
+    begins, ends = cuts[:-1], cuts[1:]
+    filled = ends > begins
+    begins, ends = begins[filled], ends[filled]
+    query = times + 1e-6
+    within = np.ones(len(key_at), bool)
+    within[begins] = False
+    ordered = len(key_at) < 2 or bool((key_at[1:] >= key_at[:-1])[within[1:]].all())
+    if not ordered or not len(begins):
+        for begin, end in zip(begins, ends):
+            ks = key_at[begin:end]
+            at = np.maximum(0, np.searchsorted(ks, query, side="right") - 1)
+            curves[int(rows["index"][begin])] = _cubic(
+                rows["coefs"][begin:end][at].astype(float), times, ks[at], hold_before
+            )
+        return curves
+    ranks = np.unique(np.concatenate([key_at, query]), return_inverse=True)[1]
+    width = int(ranks.max()) + 1
+    curve = np.repeat(np.arange(len(begins)), ends - begins)
+    keys = curve * width + ranks[: len(key_at)]
+    wanted = np.arange(len(begins))[:, None] * width + ranks[len(key_at) :][None, :]
+    count = np.searchsorted(keys, wanted, side="right") - begins[:, None]
+    at = begins[:, None] + np.maximum(0, count - 1)
+    values = _cubic(rows["coefs"][at].astype(float), times, key_at[at], hold_before)
+    for k, begin in enumerate(begins):
+        curves[int(rows["index"][begin])] = values[k]
+    return curves
+
+
+def _cubic(chosen, times, ks, hold_before):
+    """The runtime decoder's cubic of each sample's key (``chosen`` coefficients, from key times ``ks``)."""
+    dt = np.maximum(0, times - ks)
+    values = ((chosen[..., 0] * dt + chosen[..., 1]) * dt + chosen[..., 2]) * dt + chosen[..., 3]
+    if hold_before:
+        # The scalar decoder holds c3 directly before the first key,
+        # preserving even its signed zero and non-finite coefficients.
+        values = np.where(times < ks, chosen[..., 3], values)
+    return values
 
 
 def sample_curves(tree, wanted, *, hold_before=False):
@@ -454,19 +515,7 @@ def sample_curves(tree, wanted, *, hold_before=False):
         order = np.argsort(rows["index"], kind="stable")
         rows, key_at = rows[order], key_at[order]
         cuts = np.r_[0, np.flatnonzero(np.diff(rows["index"])) + 1, len(rows)]
-        for begin, end in zip(cuts[:-1], cuts[1:]):
-            if end == begin:
-                continue
-            ks = key_at[begin:end]
-            at = np.maximum(0, np.searchsorted(ks, times + 1e-6, side="right") - 1)
-            chosen = rows["coefs"][begin:end][at].astype(float)
-            dt = np.maximum(0, times - ks[at])
-            values = ((chosen[:, 0] * dt + chosen[:, 1]) * dt + chosen[:, 2]) * dt + chosen[:, 3]
-            if hold_before:
-                # The scalar decoder holds c3 directly before the first key,
-                # preserving even its signed zero and non-finite coefficients.
-                values = np.where(times < ks[at], chosen[:, 3], values)
-            curves[int(rows["index"][begin])] = values
+        curves.update(_sampled_streamed(rows, key_at, cuts, times, hold_before))
     ns, nd = streamed["curveCount"], dense["m_CurveCount"]
     if nd and dense["m_FrameCount"]:
         samples = np.asarray(dense["m_SampleArray"]).reshape(dense["m_FrameCount"], nd)

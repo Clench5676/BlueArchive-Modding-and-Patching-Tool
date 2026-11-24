@@ -503,3 +503,101 @@ def test_fast_lzma_round_trips_and_stays_on_its_thread():
     assert helper.decompress_lzma(fast, True) == data
     assert helper.decompress_lzma(chunked, False) == data
     assert helper.compress_lzma(data, True) == normal
+
+
+def _numpy_trs(p, r, s):
+    """The NumPy-only transform: what ``trs`` must give byte for byte."""
+    import math
+
+    x, y, z, w = r
+    n = math.sqrt(x * x + y * y + z * z + w * w) or 1.0
+    x, y, z, w = x / n, y / n, z / n, w / n
+    rot = np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ]
+    )
+    m = np.eye(4)
+    m[:3, :3] = rot * np.array(list(s))
+    m[:3, 3] = list(p)
+    return m
+
+
+def test_transform_of_python_numbers_matches_numpy_bytes():
+    from bmpt.gameassets.chibi_adapt.skeleton import trs
+
+    rng = np.random.default_rng(7)
+    cases = [((0, 0, 0), (0, 0, 0, 1), (1, 1, 1)), ((-0.0, 0.0, 1), (0.0, -0.0, 0.0, 0.0), (1, -1.0, 0))]
+    for _ in range(300):
+        p, r, s = rng.normal(size=3), rng.normal(size=4), rng.normal(size=3) * 3
+        cases.append((p.tolist(), r.tolist(), s.tolist()))
+        cases.append((tuple(p.tolist()), tuple(r.tolist()), (1, 2, 3)))
+    cases.append(([float("nan"), 1.0, 2.0], [0.1, 0.2, 0.3, 0.9], [1.0, float("inf"), 1.0]))
+    for p, r, s in cases:
+        assert trs(p, r, s).tobytes() == _numpy_trs(p, r, s).tobytes()
+    single = (np.float32(0.3), np.float32(0.1), np.float32(-0.2), np.float32(0.9))  # NumPy scalars: NumPy arithmetic
+    assert (
+        trs([1.0, 2.0, 3.0], single, [1.0, 1.0, 1.0]).tobytes()
+        == _numpy_trs([1.0, 2.0, 3.0], single, [1.0, 1.0, 1.0]).tobytes()
+    )
+
+
+def test_clip_digest_packing_matches_numpy_bytes():
+    cases = [
+        ([0, 1, 2**32 - 1], "<u4", "I"),
+        ([1.5, 2.0], "<u4", "I"),
+        (np.arange(5, dtype=np.uint32), "<u4", "I"),
+        ([0.1, -0.0, float("inf"), 3], "<f8", "d"),
+        ([], "<f8", "d"),
+        (np.linspace(0, 1, 7), "<f8", "d"),
+    ]
+    for values, dtype, code in cases:
+        assert cc._packed(values, dtype, code) == np.asarray(values, dtype=dtype).tobytes()
+
+
+def _enclosed_reference(points, triangles):
+    """The enclosure test one point at a time over the triangles within its reach: what the batched one must give."""
+    from bmpt.gameassets.chibi_props import _DIRECTIONS, EDGE, RAY
+
+    out = np.zeros(len(points), bool)
+    if not len(triangles):
+        return out
+    low, high = triangles.min(axis=1), triangles.max(axis=1)
+    for k, origin in enumerate(points):
+        near = ((high >= origin - RAY) & (low <= origin + RAY)).all(axis=1)
+        if not near.any():
+            continue
+        a = triangles[near, 0]
+        e1, e2 = triangles[near, 1] - a, triangles[near, 2] - a
+        p = np.cross(_DIRECTIONS[:, None, :], e2[None])
+        det = np.einsum("tj,dtj->dt", e1, p)
+        ok = np.abs(det) > 1e-12
+        inverse = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+        s = origin[None] - a
+        u = np.einsum("tj,dtj->dt", s, p) * inverse
+        q = np.cross(s, e1)
+        v = np.einsum("dj,tj->dt", _DIRECTIONS, q) * inverse
+        t = np.einsum("tj,tj->t", e2, q)[None] * inverse
+        hit = ok & (u >= -EDGE) & (v >= -EDGE) & (u + v <= 1 + EDGE) & (t > 1e-4) & (t < RAY)
+        out[k] = bool(hit.any(axis=1).all())
+    return out
+
+
+def test_enclosure_of_points_matches_the_point_by_point_test():
+    from bmpt.gameassets import chibi_props as cp
+
+    rng = np.random.default_rng(3)
+    # a closed box of triangles, points inside, on the edge and outside it, and a far shell beyond the reach
+    corners = np.array([[x, y, z] for x in (-0.1, 0.1) for y in (-0.1, 0.1) for z in (-0.1, 0.1)])
+    faces = [(0, 1, 3), (0, 3, 2), (4, 6, 7), (4, 7, 5), (0, 4, 5), (0, 5, 1), (2, 3, 7), (2, 7, 6), (0, 2, 6)]
+    faces += [(0, 6, 4), (1, 5, 7), (1, 7, 3)]
+    box = corners[np.array(faces)]
+    far = rng.normal(size=(40, 3, 3)) * 0.05 + 2.0
+    triangles = np.concatenate([box, far, rng.normal(size=(60, 3, 3)) * 0.2])
+    points = np.concatenate([rng.normal(size=(30, 3)) * 0.05, [[0.1, 0.0, 0.0], [3.0, 3.0, 3.0], [0.5, 0.0, 0.0]]])
+    for tris in (box, triangles, triangles[:0]):
+        got = cp.enclosed_points(points, tris)
+        assert np.array_equal(got, _enclosed_reference(points, tris))
+    assert cp.enclosed_points(points[:5], box).all()

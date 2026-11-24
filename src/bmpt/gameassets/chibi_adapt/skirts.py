@@ -1185,6 +1185,7 @@ class FaceRetarget:
         """
         _, pose, _ = prepared if prepared is not None else skeleton.clip_frames(tree, [self.head, *self.slots])
         ch = self.chains
+        rest_back = [_rotation(rel0).T for rel0 in self.rel0]  # the slot bones' rest turns against the head, undone
         out: list[dict[int, np.ndarray]] = []
         for f in frames:
             step()
@@ -1196,7 +1197,7 @@ class FaceRetarget:
                     placed.append(placed[ch.parents[k]] @ ch.local[k])
                     continue
                 rel = back @ world[m]
-                turn = _rotation(rel) @ _rotation(self.rel0[k]).T
+                turn = _rotation(rel) @ rest_back[k]
                 w = self.new0[k].copy()
                 w[:3, :3] = turn @ w[:3, :3]
                 w[:3, 3] = self.new0[k][:3, 3] + rel[:3, 3] - self.rel0[k][:3, 3]
@@ -1207,12 +1208,13 @@ class FaceRetarget:
                 local[:3, :3] = local[:3, :3] @ np.linalg.inv(ms.scale_of(local))
                 turns[k] = local
             out.append(turns)
+        # np.allclose per frame, as one np.isclose over the frames (allclose is isclose(...).all())
         moving = {
             k
             for k in self.roots
             if k not in self.rigid
             and (
-                any(not np.allclose(t[k], out[0][k], atol=1e-6) for t in out)
+                not np.isclose(np.array([t[k] for t in out]), out[0][k], atol=1e-6).all()
                 or not np.allclose(out[0][k], ch.hanging(k), atol=1e-6)
             )
         }

@@ -995,7 +995,7 @@ def _judge(
     t_rest = target.skeleton.world()
     sv, sj, sw, se = shape.vertices, flat_source.joints, flat_source.weights, flat_source.edges
     tv, te, tdom = own_mesh.rest, own_mesh.edges, own_mesh.dominant
-    sdom = np.array([row[np.argmax(w)] for row, w in zip(sj, sw)])
+    sdom = sj[np.arange(len(sj)), np.argmax(sw, axis=1)] if len(sj) else np.array([])
     nodes = sorted(set(sj[sw > 0].tolist()))
     index = {n: k for k, n in enumerate(nodes)}
     joints = np.vectorize(lambda n: index.get(n, 0))(np.where(sj < 0, nodes[0], sj))
@@ -1010,6 +1010,15 @@ def _judge(
 
     def matrices(pose: list[np.ndarray], m: Mapping[int, int]) -> np.ndarray:
         return np.array([pose[m[n]] @ rest_inverse(m[n]) for n in nodes])
+
+    # each probe's skinned costume under the mapping as it stands: a group that follows leaves the mapping, and so
+    # the next group's skinning, as it was; one made rigid clears it
+    posed_probes: dict[int, np.ndarray] = {}
+
+    def probed(k: int) -> np.ndarray:
+        if k not in posed_probes:
+            posed_probes[k] = deform(flat, matrices(probes[k], mapping))
+        return posed_probes[k]
 
     groups: dict[int, list[int]] = {}
     for n in nodes:
@@ -1038,14 +1047,17 @@ def _judge(
             group_own = (
                 max((stretch(tv, posed, te, t_mask) for posed in posed_targets), default=1.0) if t_mask.any() else 1.0
             )
-            mine = max(stretch(reference, deform(flat, matrices(p, mapping)), se, mask) for p in probes)
+            mine = max(stretch(reference, probed(k), se, mask) for k in range(len(probes)))
             follow = mine <= max(STRETCH_FLOOR, group_own)
         choices[anchor] = "follow" if follow else "rigid"
         if not follow:
             for n in members:
                 mapping[n] = rigid
+            posed_probes.clear()
     rest = deform(flat, matrices(t_rest, mapping))
     if float(np.abs(rest - sv).max()) > 1e-4:
         raise refuse("rest pose not reproduced")
-    mine = max((stretch(reference, deform(flat, matrices(p, mapping)), se) for p in [t_rest, *probes]), default=1.0)
+    mine = max(
+        (stretch(reference, posed, se) for posed in [rest, *(probed(k) for k in range(len(probes)))]), default=1.0
+    )
     return Plan(mapping, choices, mine, own, groups, mine > stretch_limit(own), shape)
