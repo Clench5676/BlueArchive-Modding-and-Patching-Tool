@@ -1185,6 +1185,7 @@ class FaceRetarget:
         """
         _, pose, _ = prepared if prepared is not None else skeleton.clip_frames(tree, [self.head, *self.slots])
         ch = self.chains
+        rest_back = [_rotation(rel0).T for rel0 in self.rel0]  # the slot bones' rest turns against the head, undone
         out: list[dict[int, np.ndarray]] = []
         for f in frames:
             step()
@@ -1196,7 +1197,7 @@ class FaceRetarget:
                     placed.append(placed[ch.parents[k]] @ ch.local[k])
                     continue
                 rel = back @ world[m]
-                turn = _rotation(rel) @ _rotation(self.rel0[k]).T
+                turn = _rotation(rel) @ rest_back[k]
                 w = self.new0[k].copy()
                 w[:3, :3] = turn @ w[:3, :3]
                 w[:3, 3] = self.new0[k][:3, 3] + rel[:3, 3] - self.rel0[k][:3, 3]

@@ -33,6 +33,7 @@ Pure numpy; the chibi plumbing is in ``chibi_adapt``.
 
 from __future__ import annotations
 
+import functools
 import math
 import zlib
 from dataclasses import dataclass, field
@@ -180,14 +181,18 @@ class Frame:
     up: np.ndarray
     front: np.ndarray
 
+    @functools.cached_property
+    def side(self) -> np.ndarray:
+        """The direction a quarter turn from ``front`` about ``up``: the axis angles' sine is measured along."""
+        return np.cross(self.up, self.front)
+
     def cylinder(self, points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Return each 3D point's height, angle in radians, radial distance, and outward unit direction."""
         d = points - self.centre
         height = d @ self.up
         radial = d - np.outer(height, self.up)
         distance = np.linalg.norm(radial, axis=1)
-        side = np.cross(self.up, self.front)
-        angle = np.arctan2(radial @ side, radial @ self.front)
+        angle = np.arctan2(radial @ self.side, radial @ self.front)
         direction = np.where(distance[:, None] > 1e-9, radial / np.maximum(distance, 1e-9)[:, None], self.front)
         return height, angle, distance, direction
 
@@ -566,6 +571,26 @@ class Solver:
         for j in ch.subtree[root][1:]:  # the chain follows its first bone as it hangs at rest
             world[j] = world[ch.parents[j]] @ ch.local[j]
 
+    def _edge_rows(self, arm: np.ndarray, edges: np.ndarray, unit: np.ndarray) -> np.ndarray:
+        """Per edge and root, the turn's row ``(arm_b - arm_a) x unit`` and the shift's ``unit (share_b - share_a)``.
+
+        Written straight into the (edges, roots, 6) layout the normal equations take, from the products and
+        differences ``np.cross`` computes, in its order: the same numbers, worked on one coordinate at a time in
+        contiguous (edges, roots) planes rather than through broadcast and strided temporaries.
+        """
+        count = arm.shape[0]
+        planar = np.ascontiguousarray(arm.transpose(2, 1, 0))  # (3, vertices, roots)
+        d = np.take(planar, edges[:, 1], axis=1) - np.take(planar, edges[:, 0], axis=1)  # (3, edges, roots)
+        u = np.repeat(unit.T[:, :, None], count, axis=2)  # (3, edges, roots)
+        share = self.edge_share[:, :, 0].T  # (edges, roots)
+        rows = np.empty((len(edges), count, 6))
+        for k, (a, b) in enumerate(((1, 2), (2, 0), (0, 1))):
+            turn = d[a] * u[b]
+            turn -= d[b] * u[a]
+            rows[..., k] = turn
+            np.multiply(share, u[k], out=rows[..., 3 + k])
+        return rows
+
     def _joint(self, world: np.ndarray, base: np.ndarray, fixed: np.ndarray, grid: np.ndarray, frame: Frame) -> None:
         """Solve all chains together with Gauss-Newton steps.
 
@@ -585,12 +610,14 @@ class Solver:
             if len(fixed):
                 matrices = np.concatenate([matrices, fixed])
             # each influence's place, the vertices, and each root's share of them
-            places = np.einsum("vkij,vj->vki", matrices[c.joints], homogeneous, optimize=True)[..., :3]
+            # the two products are the single contraction ``optimize=True`` plans for them (no BLAS: ``v`` is a batch
+            # index), written out with its operand order: the same arithmetic without planning it every iteration
+            places = np.einsum("vj,vkij->vki", homogeneous, matrices[c.joints], optimize=False)[..., :3]
             points = (c.weights[..., None] * places).sum(axis=1)
             target, moved = self.push(points, everything, grid, frame)
             if not moved.any():
                 break
-            partial = np.einsum("vkr,vki->rvi", self.parts, places, optimize=True)
+            partial = np.einsum("vki,vkr->rvi", places, self.parts, optimize=False)
             heads = world[self.root_indices, :3, 3]
             arm = partial - self.part_share.T[:, :, None] * heads[:, None, :]  # (roots, vertices, 3)
             # a vertex moves by sum_r (omega_r x arm_r + share_r shift_r) = sum_r (-[arm_r]x omega_r + share_r shift_r)
@@ -609,9 +636,7 @@ class Solver:
                 unit = d / np.maximum(length, 1e-12)[:, None]
                 # an edge grows by unit . (move_b - move_a)
                 #   = sum_r omega_r . ((arm_rb - arm_ra) x unit) + shift_r . unit (share_rb - share_ra)
-                turn = np.cross(arm[:, edges[:, 1]] - arm[:, edges[:, 0]], unit[None])
-                shift = self.edge_share * unit[None]
-                rows = np.concatenate([turn, shift], axis=2).transpose(1, 0, 2).reshape(len(edges), width)
+                rows = self._edge_rows(arm, edges, unit).reshape(len(edges), width)
                 stretch = np.minimum(0.0, self.lengths - length)  # pull grown edges back, keep the others
                 a += LENGTH_WEIGHT * rows.T @ rows
                 b += LENGTH_WEIGHT * rows.T @ stretch
