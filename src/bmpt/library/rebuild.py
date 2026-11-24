@@ -33,8 +33,15 @@ from bmpt.engine import (
     t,
 )
 from ..core.errors import ServiceError
+from ..unity.bundle_guard import refuse_unsupported
 from . import pointers
 from . import toggle_timing
+
+
+def _load(path: Path, log: LogFunc) -> Bundle | None:
+    """Load a bundle, refusing one of a newer archive format by name rather than as unreadable."""
+    refuse_unsupported(path)
+    return Bundle.load(path, log)
 
 
 class UpdateScope:
@@ -227,7 +234,7 @@ def rebuild(
         skel_conflicts: list[SkelVersionConflict] = []
         targets = []
         for path in target_paths:
-            target = Bundle.load(path, log)
+            target = _load(path, log)
             if target is None:
                 return _failed(t("message.load_failed"), log)
             targets.append(target)
@@ -235,7 +242,7 @@ def rebuild(
         transfer_clips = bool({"ALL", "AnimationClip"} & asset_types_to_replace)
 
         for src in source_paths:
-            src_bundle = Bundle.load(src, log)
+            src_bundle = _load(src, log)
             if not src_bundle:
                 return _failed(t("message.load_failed"), log)
             if scope is not None and stale_pointers and transfer_clips:

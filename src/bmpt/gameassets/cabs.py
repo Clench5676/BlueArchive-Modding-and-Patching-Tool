@@ -14,6 +14,7 @@ from typing import Callable, Iterable
 from bmpt.engine import PRELOAD_PREFIX, parse_filename
 from .cache import PreviewCache
 from .discovery import cab_names
+from ..unity.unityfs import UnsupportedArchive
 
 logger = logging.getLogger(__name__)
 _SCHEMA = "cab-discovery-v1"
@@ -74,6 +75,7 @@ class CabIndex:
         self._depth = 0
         self._validated: set[Path] = set()
         self._complete = False
+        self._unsupported: set[int] = set()  # archive versions already reported
 
     def _permitted(self, path: Path) -> bool:
         return path.parent in self._safe_roots and (not path.is_symlink() or path.resolve().parent in self._safe_roots)
@@ -235,6 +237,12 @@ class CabIndex:
             self._drop(path)
             try:
                 names = self.reader(path)
+            except UnsupportedArchive as refusal:
+                # A whole install in a newer format would otherwise fail every dependency lookup without a word.
+                if refusal.version not in self._unsupported:
+                    self._unsupported.add(refusal.version)
+                    logger.warning("Skipping bundles of a newer format: %s", refusal)
+                names = ()
             except (OSError, ValueError):
                 logger.debug("Cannot read CAB directory %s", path, exc_info=True)
                 names = ()

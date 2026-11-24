@@ -11,6 +11,7 @@ from ..core import devmode
 from bmpt.engine import REPLACEABLE_ASSET_TYPES, AssetKey, AssetType, Bundle, get_skel_version
 from ..core.errors import ServiceError
 from .rebuild import UpdateScope
+from ..unity.bundle_guard import refuse_unsupported
 from ..gameassets.spine import atlas_pages
 from ..gameassets.discovery import cab_names
 
@@ -130,12 +131,14 @@ class Inspection:
             cache: Whether to retain a newly loaded bundle; an existing cached bundle is reused either way.
 
         Raises:
-            ServiceError: The bundle cannot be loaded (bundle_invalid) or the input changed.
+            ServiceError: The bundle's format is newer than the App reads (bundle_unsupported), it cannot be loaded
+                (bundle_invalid) or the input changed.
         """
         self.check(path)
         bundle = self._bundles.get(path)
         if bundle is None:
             devmode.check_read(path)
+            refuse_unsupported(path)
             bundle = Bundle.load(path)
             if bundle is None:
                 raise ServiceError("bundle_invalid", file=path.name)

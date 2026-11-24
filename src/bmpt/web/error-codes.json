@@ -115,6 +115,10 @@
     "code": "E3001",
     "level": "failed"
   },
+  "bundle_unsupported": {
+    "code": "E3030",
+    "level": "failed"
+  },
   "busy": {
     "code": "E1002",
     "level": "notice"
