@@ -3,11 +3,13 @@
 Built on the engine's primitives (``Bundle.load``, ``extract_patch``, ``apply_patch``, ``save``); upstream's
 ``process_mod_update`` stays as upstream ships it, for the classic UI and the CLI. On top of upstream's flow this
 one keeps assets whose counterparts are unchanged (``UpdateScope``), validates every target before it saves any,
-fails the whole mod on a load, match or save failure, and reports what moved over and what did not.
+fails the whole mod on a load, match or save failure, and reports what moved over and what did not. It also keeps
+whole serialized objects from crossing Unity releases (``_cross_release_unchanged``).
 """
 
 from __future__ import annotations
 
+import re
 import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -33,8 +35,145 @@ from bmpt.engine import (
     t,
 )
 from ..core.errors import ServiceError
+from ..unity.bundle_guard import refuse_unsupported
 from . import pointers
 from . import toggle_timing
+
+#: The types the engine moves through their type trees: their fields are written into the target's own object, so
+#: they survive a change of the serialized layout between Unity releases. Every other replaceable type is copied as
+#: whole serialized bytes, which are only valid in the layout they were written in.
+TREE_COPIED_TYPES = frozenset({"Texture2D", "TextAsset", "Font"})
+
+
+def unity_release(version: str) -> str | None:
+    """Return the major.minor of a Unity version ("2021.3.56f2" gives "2021.3"), or None when it has none."""
+    match = re.match(r"^(\d+\.\d+)(?:\.|$)", version or "")
+    return match[1] if match else None
+
+
+def unity_releases(bundle: Bundle) -> set[str]:
+    """Return the Unity releases (major.minor) of the serialized files a loaded bundle holds."""
+    found: set[str] = set()
+
+    def walk(file) -> None:
+        if hasattr(file, "target_platform"):  # a serialized file, as integrity.metadata finds them
+            found.add(unity_release(file.unity_version) or file.unity_version)
+            return
+        for child in getattr(file, "files", {}).values():
+            walk(child)
+
+    walk(bundle.env)
+    return found
+
+
+def _shared_fields_equal(mine, theirs) -> bool:
+    """Compare two type trees on the fields both have; a field only one release has is left out."""
+    if isinstance(mine, dict) and isinstance(theirs, dict):
+        return all(_shared_fields_equal(mine[key], theirs[key]) for key in mine.keys() & theirs.keys())
+    if isinstance(mine, list) and isinstance(theirs, list):
+        return len(mine) == len(theirs) and all(map(_shared_fields_equal, mine, theirs))
+    return mine == theirs
+
+
+def _cross_release_unchanged(
+    source: Bundle, patch: Patch, targets: list[Bundle], strategy: MatchStrategy
+) -> dict[AssetKey, object]:
+    """Keep whole serialized objects from crossing Unity releases.
+
+    A raw-copied object (``TREE_COPIED_TYPES`` aside) whose counterpart sits in a target of another Unity release
+    would carry its own release's layout into the other one: a broken mesh or clip that loads without an error. One
+    that equals every such counterpart on the fields both releases share is a part the mod left as it was: the
+    target keeps its own object. Any other is refused.
+
+    Args:
+        source: The loaded mod bundle the patch was extracted from.
+        patch: That bundle's extracted entries.
+        targets: The loaded official bundles the patch goes to.
+        strategy: The engine key strategy pairing source and target objects.
+
+    Returns:
+        The source objects to leave out of the patch by key, their targets keeping their own objects.
+
+    Raises:
+        ServiceError: ``mod_unity_asset_mismatch`` for an object that differs from its counterpart.
+    """
+    releases = unity_releases(source)
+    foreign = [target for target in targets if unity_releases(target) != releases]
+    if not foreign:
+        return {}
+    key_of = Bundle._get_key_func(strategy)
+    raw = {}
+    for obj in source.env.objects:
+        if obj.type.name not in TREE_COPIED_TYPES:
+            key = key_of(obj)
+            if key is not None and key in patch:
+                raw[key] = obj
+    if not raw:
+        return {}
+    counterparts: dict[AssetKey, list] = {}
+    for target in foreign:
+        for obj in target.env.objects:
+            key = key_of(obj)
+            if key in raw:
+                counterparts.setdefault(key, []).append(obj)
+    kept = {}
+    for key, obj in raw.items():
+        theirs = counterparts.get(key)
+        if not theirs:
+            continue  # it goes to targets of its own release only
+        try:
+            mine = obj.read_typetree()
+            same = all(_shared_fields_equal(mine, counterpart.read_typetree()) for counterpart in theirs)
+        except Exception:
+            same = False  # unreadable is unproven
+        if not same:
+            raise ServiceError(
+                "mod_unity_asset_mismatch",
+                file=source.path.name,
+                type=obj.type.name,
+                name=obj.peek_name() or str(key),
+                version=", ".join(sorted(releases)),
+                expected=", ".join(sorted(set().union(*map(unity_releases, foreign)))),
+            )
+        kept[key] = obj
+    return kept
+
+
+def _read_back(path: Path, official: Bundle, asset_types: set[ReplaceAssetType]) -> None:
+    """Load a saved part once more and read every object of the replaced types through its type tree.
+
+    Raises:
+        ServiceError: The part does not load (``bundle_invalid``), changed its Unity release
+            (``mod_unity_version_mismatch``) or holds an object that does not read back
+            (``required_asset_apply_failed``).
+    """
+    saved = _load(path, no_log)
+    if saved is None:
+        raise ServiceError("bundle_invalid", file=path.name)
+    releases, expected = unity_releases(saved), unity_releases(official)
+    if releases != expected:
+        raise ServiceError(
+            "mod_unity_version_mismatch",
+            file=path.name,
+            version=", ".join(sorted(releases)),
+            expected=", ".join(sorted(expected)),
+        )
+    types = None if "ALL" in asset_types else set(asset_types)
+    for obj in saved.env.objects:
+        if obj.type in REPLACEABLE_ASSET_TYPES and (types is None or obj.type.name in types):
+            try:
+                obj.read_typetree()
+            except Exception as error:
+                name = obj.peek_name() or str(obj.path_id)
+                raise ServiceError(
+                    "required_asset_apply_failed", file=path.name, name=name, error=str(error)
+                ) from error
+
+
+def _load(path: Path, log: LogFunc) -> Bundle | None:
+    """Load a bundle, refusing one of a newer archive format by name rather than as unreadable."""
+    refuse_unsupported(path)
+    return Bundle.load(path, log)
 
 
 class UpdateScope:
@@ -194,6 +333,7 @@ def rebuild(
     prepared_patch: Patch | None = None,
     on_step: Callable[[str], None] | None = None,
     stale_pointers: Mapping[Path, set[pointers.Pointer]] | None = None,
+    read_back: bool = False,
 ) -> RebuildResult:
     """Transfer source assets into current target parts and save changed parts under their names.
 
@@ -215,6 +355,8 @@ def rebuild(
             patch, each target must accept every resulting entry.
         on_step: Receives extract, replace, save, and crc phase names; None disables reporting.
         stale_pointers: Known dangling references by source file. Clips carrying them keep their official counterparts.
+        read_back: Whether every saved part is loaded again and its replaced objects read (``_read_back``), so a
+            write the App cannot read back fails the rebuild.
 
     Returns:
         Output pairs and transfer details, or success=False with a message and any named ServiceError.
@@ -227,15 +369,16 @@ def rebuild(
         skel_conflicts: list[SkelVersionConflict] = []
         targets = []
         for path in target_paths:
-            target = Bundle.load(path, log)
+            target = _load(path, log)
             if target is None:
                 return _failed(t("message.load_failed"), log)
             targets.append(target)
         scope = UpdateScope(targets, match_strategy, asset_types_to_replace) if prepared_patch is None else None
         transfer_clips = bool({"ALL", "AnimationClip"} & asset_types_to_replace)
+        kept_official: set[AssetKey] = set()  # raw objects of another Unity release the mod left as they were
 
         for src in source_paths:
-            src_bundle = Bundle.load(src, log)
+            src_bundle = _load(src, log)
             if not src_bundle:
                 return _failed(t("message.load_failed"), log)
             if scope is not None and stale_pointers and transfer_clips:
@@ -243,6 +386,11 @@ def rebuild(
             patch, conflicts = src_bundle.extract_patch(
                 asset_types_to_replace, match_strategy, spine_options, **({"scope": scope} if scope is not None else {})
             )
+            for key, obj in _cross_release_unchanged(src_bundle, patch, targets, match_strategy).items():
+                del patch[key]
+                kept_official.add(key)
+                name = obj.peek_name() or str(key)
+                log(f"  ⏭️ {t('log.replace_skipped_same_content', type=obj.type.name, name=name)}")
             patches.update(patch)
             skel_conflicts.extend(conflicts)
 
@@ -252,7 +400,9 @@ def rebuild(
             return RebuildResult(False, msg)
 
         required_keys = set(patches) - {"__mode__"}
-        unchanged_keys = scope.unchanged if scope is not None else set()
+        if scope is not None:
+            scope.unchanged |= kept_official
+        unchanged_keys = (scope.unchanged if scope is not None else set()) | kept_official
         not_transferred = _names(scope.not_transferred) if scope is not None else []
         target_only = _names(scope.target_only) if scope is not None else []
         if not required_keys and not unchanged_keys:
@@ -275,9 +425,11 @@ def rebuild(
         pending_saves = []
 
         for tgt, tgt_bundle in zip(target_paths, targets):
-            retained = {
-                key for key in unchanged_keys if any(target is tgt_bundle for target, _ in scope.counterparts[key])
-            }
+            retained = (
+                {key for key in unchanged_keys if any(target is tgt_bundle for target, _ in scope.counterparts[key])}
+                if scope is not None
+                else set()
+            )
 
             if on_step:
                 on_step("replace")
@@ -321,6 +473,8 @@ def rebuild(
                 if on_step
                 else tgt_bundle.save(output_path, save_options)
             )
+            if save_ok and read_back:
+                _read_back(output_path, tgt_bundle, asset_types_to_replace)
             if save_ok:
                 file_pairs.append(FilePair(output_path, tgt))
                 log(f"  ✅ {t('log.mod_update.target_processed', name=tgt.name, applied=result.applied_count)}")

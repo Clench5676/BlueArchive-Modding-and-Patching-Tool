@@ -52,6 +52,9 @@ from .base import _item_fraction, _mod_writer, _serialized
 
 logger = logging.getLogger(__package__)
 
+#: Rebuild refusals that name their own cause: shown as they are, not as a plain update failure.
+_NAMED_REFUSALS = frozenset({"mod_unity_asset_mismatch", "mod_unity_version_mismatch", "bundle_unsupported"})
+
 
 class UpdatingMixin:
     """Updating mods for a new game version, extracting and comparing assets."""
@@ -117,6 +120,7 @@ class UpdatingMixin:
                     anim_check=self.settings.anim_check_options(),
                     log=log,
                     on_step=step,
+                    read_back=True,
                 )
                 if result.no_match:
                     # A part that takes nothing from the mod (one of materials only, or one the mod carries none
@@ -125,6 +129,8 @@ class UpdatingMixin:
                     no_match = no_match or result
                     continue
                 if not result.success:
+                    if result.error is not None and result.error.code in _NAMED_REFUSALS:
+                        raise result.error
                     raise ServiceError("mod_update_failed", id=mod_id, reason=result.message)
                 matched = True
                 if not result.all_unchanged:

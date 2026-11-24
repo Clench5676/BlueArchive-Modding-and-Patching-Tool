@@ -115,6 +115,10 @@
     "code": "E3001",
     "level": "failed"
   },
+  "bundle_unsupported": {
+    "code": "E3030",
+    "level": "failed"
+  },
   "busy": {
     "code": "E1002",
     "level": "notice"
@@ -369,6 +373,10 @@
   },
   "mod_target_unknown": {
     "code": "E3012",
+    "level": "failed"
+  },
+  "mod_unity_asset_mismatch": {
+    "code": "E3031",
     "level": "failed"
   },
   "mod_unity_version_mismatch": {

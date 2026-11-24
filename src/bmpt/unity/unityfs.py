@@ -10,8 +10,51 @@ from pathlib import Path
 from UnityPy.enums.BundleFile import ArchiveFlags, ArchiveFlagsOld
 from UnityPy.helpers.CompressionHelper import DECOMPRESSION_MAP
 
+from ..core.errors import ServiceError
+
 # This bounds metadata allocation, not the size of the bundle or its asset data.
 _MAX_BLOCK_INFO = 64 * 1024 * 1024
+#: The newest UnityFS archive version this parser reads. Later versions lay out the block table differently, so
+#: reading them with the 10-byte block entries of versions 6 to 8 would give wrong sizes and names.
+NEWEST_ARCHIVE_VERSION = 8
+
+
+class UnsupportedArchive(ServiceError, ValueError):
+    """A UnityFS archive of a version newer than ``NEWEST_ARCHIVE_VERSION``.
+
+    It is the ``bundle_unsupported`` service error, with ``file`` and ``version``, and a ValueError, so callers that
+    skip unreadable bundles skip it too.
+    """
+
+    def __init__(self, path: Path, version: int):
+        """Create the refusal.
+
+        Args:
+            path: The bundle file.
+            version: The archive version its header declares.
+        """
+        super().__init__("bundle_unsupported", file=Path(path).name, version=version)
+        self.version = version
+
+    def __str__(self) -> str:
+        """Name the file, its archive version and the newest version read."""
+        return (
+            f"UnityFS archive version {self.version} is not supported "
+            f"(newest supported: {NEWEST_ARCHIVE_VERSION}): {self.params['file']}"
+        )
+
+
+def archive_version(path: Path) -> int | None:
+    """Return the archive version a UnityFS header declares, or None for a file that is not UnityFS.
+
+    Raises:
+        OSError: The file could not be read.
+    """
+    with open(path, "rb") as stream:
+        head = stream.read(12)
+    if len(head) < 12 or head[:8] != b"UnityFS\0":
+        return None
+    return struct.unpack(">I", head[8:])[0]
 
 
 def _cstring(stream) -> bytes:
@@ -43,12 +86,15 @@ def _read_directory(path: Path, max_directory: int) -> tuple[bytes, int] | None:
     """The decompressed block and node directory and the physical file size, or None for a non-UnityFS file.
 
     ``max_directory`` bounds both the compressed and the declared uncompressed size of the directory before anything
-    is read or decompressed. Raises ValueError for a corrupt, encrypted or unsupported directory.
+    is read or decompressed. Raises UnsupportedArchive for an archive version above ``NEWEST_ARCHIVE_VERSION``,
+    ValueError for a corrupt, encrypted or otherwise unsupported directory.
     """
     with open(path, "rb") as stream:
         if stream.read(8) != b"UnityFS\0":
             return None
         version = struct.unpack(">I", stream.read(4))[0]
+        if version > NEWEST_ARCHIVE_VERSION:
+            raise UnsupportedArchive(path, version)
         _cstring(stream)
         engine = _engine_version(_cstring(stream))
         length, compressed, uncompressed, flags = struct.unpack(">qIII", stream.read(20))
@@ -118,6 +164,7 @@ def read_cab_names(path: Path) -> list[str] | None:
         The names in directory order, or None for a file that is not UnityFS.
 
     Raises:
+        UnsupportedArchive: The archive version is newer than this parser reads.
         ValueError: The directory is corrupt, encrypted or unsupported.
         OSError: The file could not be read.
     """
@@ -138,7 +185,7 @@ def read_cab_names(path: Path) -> list[str] | None:
             names.append(data[pos:end].decode("utf-8", "replace"))
             pos = end + 1
         return names
-    except OSError:
+    except (OSError, UnsupportedArchive):
         raise
     except Exception as exc:
         raise ValueError(f"Not a readable UnityFS directory: {path}") from exc
@@ -168,6 +215,7 @@ def read_layout(path: Path, max_directory: int = _MAX_BLOCK_INFO) -> Layout | No
         The layout, or None for a file that is not UnityFS.
 
     Raises:
+        UnsupportedArchive: The archive version is newer than this parser reads.
         ValueError: The directory is corrupt, encrypted, unsupported or above ``max_directory``.
         OSError: The file could not be read.
     """
@@ -182,7 +230,7 @@ def read_layout(path: Path, max_directory: int = _MAX_BLOCK_INFO) -> Layout | No
             total += uncompressed
             largest = max(largest, uncompressed)
         return Layout(physical, len(data), count, largest, total)
-    except OSError:
+    except (OSError, UnsupportedArchive):
         raise
     except Exception as exc:
         raise ValueError(f"Not a readable UnityFS directory: {path}") from exc

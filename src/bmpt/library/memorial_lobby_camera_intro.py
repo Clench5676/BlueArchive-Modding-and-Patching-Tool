@@ -233,8 +233,7 @@ class Writer:
         """
         index = self._type_index(source_obj)
         template = next(iter(self.sf.objects.values()))
-        new = object.__new__(type(template))
-        new.__dict__.update(template.__dict__)
+        new = copy.copy(template)  # a reader with slots has no __dict__ to copy
         new.type_id, new.serialized_type, new.class_id, new.type = (
             index,
             self.sf.types[index],

@@ -74,6 +74,7 @@ $Common = @(
     "--include-package-data=bmpt",
     "--include-package-data=ba_modding_toolkit",
     "--include-package-data=UnityPy",
+    "--include-package-data=fmod_toolkit",
     "--include-package-data=archspec",
     "--company-name=Agent-0808",
     "--copyright=$Copyright",

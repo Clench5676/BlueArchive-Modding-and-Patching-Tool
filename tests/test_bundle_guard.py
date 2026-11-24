@@ -21,14 +21,16 @@ from test_atlas_remap import write_bundle
 GAME_DIR = Path(os.environ.get("BAMT_TEST_GAME_DIR") or "/nonexistent/bamt-real-game")
 
 
-def unity_fs(path, blocks=((100, 50, 2),), *, count=None, directory_size=None, nodes=("CAB-test",), padding=0):
+def unity_fs(
+    path, blocks=((100, 50, 2),), *, count=None, directory_size=None, nodes=("CAB-test",), padding=0, version=7
+):
     """A UnityFS file with a compressed block table; the data blocks it declares are not written."""
     table = bytes(16) + struct.pack(">i", len(blocks) if count is None else count)
     table += b"".join(struct.pack(">IIH", *block) for block in blocks)
     table += struct.pack(">i", len(nodes))
     table += b"".join(struct.pack(">qqI", 0, 0, 4) + name.encode() + b"\0" for name in nodes)
     packed = compress_lz4(table)
-    prefix = b"UnityFS\0" + struct.pack(">I", 7) + b"5.x.x\0" + b"2022.3.55f1\0"
+    prefix = b"UnityFS\0" + struct.pack(">I", version) + b"5.x.x\0" + b"2022.3.55f1\0"
     head_size = (len(prefix) + 20 + 15) & ~15
     length = head_size + len(packed) + padding
     head = prefix + struct.pack(
@@ -151,6 +153,72 @@ def test_files_that_are_not_unityfs_go_on_as_before(tmp_path, content):
     assert Bundle.load(path) is None  # unreadable as before, not through the size bounds
     with pytest.raises(FileNotFoundError):
         check_bundle(tmp_path / "missing.bundle")
+
+
+def test_a_newer_archive_version_is_refused_by_name(tmp_path, monkeypatch):
+    # A later archive version lays out its block table otherwise: the 10-byte entries would be read as garbage.
+    path = unity_fs(tmp_path / "next.bundle", version=9)
+    for read in (unityfs.read_layout, unityfs.read_cab_names):
+        with pytest.raises(unityfs.UnsupportedArchive) as refused:
+            read(path)
+        assert isinstance(refused.value, ValueError)  # callers that skip unreadable bundles skip it too
+        assert refused.value.code == "bundle_unsupported"
+        assert refused.value.params == {"file": "next.bundle", "version": 9}
+        assert "version 9" in str(refused.value)
+    with pytest.raises(ServiceError) as guarded:
+        check_bundle(path, file="shown.bundle")
+    assert (guarded.value.code, guarded.value.params) == ("bundle_unsupported", {"file": "shown.bundle", "version": 9})
+    with pytest.raises(ServiceError) as early:
+        bundle_guard.refuse_unsupported(path)
+    assert early.value.code == "bundle_unsupported"
+    assert unityfs.archive_version(path) == 9
+    logged = []
+    assert Bundle.load(path, logged.append) is None and logged
+    assert bundle_module.get_cab_names(path) is None
+
+
+def test_archive_versions_up_to_8_are_read(tmp_path):
+    for version in (6, 7, 8):
+        path = unity_fs(tmp_path / f"v{version}.bundle", version=version)
+        assert unityfs.read_cab_names(path) == ["CAB-test"]
+        bundle_guard.refuse_unsupported(path)
+    plain = tmp_path / "plain.bundle"
+    plain.write_bytes(b"plain text")
+    assert unityfs.archive_version(plain) is None
+    bundle_guard.refuse_unsupported(plain)
+    bundle_guard.refuse_unsupported(tmp_path / "missing.bundle")  # left to the loader
+
+
+def test_the_cab_index_skips_newer_archives_with_one_warning(tmp_path, caplog):
+    from bmpt.gameassets.cabs import CabIndex
+
+    for name in ("a.bundle", "b.bundle"):
+        unity_fs(tmp_path / name, nodes=(f"CAB-{name[0]}",), version=9)
+    unity_fs(tmp_path / "c.bundle", nodes=("CAB-c",))
+    with caplog.at_level("WARNING", logger="bmpt.gameassets.cabs"):
+        found = CabIndex([tmp_path]).resolve({"cab-a", "cab-c"})
+    assert found == {"cab-c": str(tmp_path.resolve() / "c.bundle")}
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1 and "version 9" in warnings[0].getMessage()
+
+
+def test_an_inspection_names_the_newer_format(tmp_path):
+    from bmpt.library.integrity import Inspection
+
+    path = unity_fs(tmp_path / "next.bundle", version=9)
+    with pytest.raises(ServiceError) as refused:
+        Inspection().bundle(path)
+    assert refused.value.code == "bundle_unsupported"
+
+
+def test_a_rebuild_onto_a_newer_archive_names_the_format(tmp_path):
+    from bmpt.library.rebuild import rebuild
+    from ba_modding_toolkit.models import SaveOptions
+
+    target = unity_fs(tmp_path / "next.bundle", version=9)
+    result = rebuild([], [target], tmp_path, {"TextAsset"}, SaveOptions())
+    assert not result.success
+    assert (result.error.code, result.error.params) == ("bundle_unsupported", {"file": "next.bundle", "version": 9})
 
 
 def test_valid_bundles_still_load(tmp_path):

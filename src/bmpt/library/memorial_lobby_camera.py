@@ -424,8 +424,7 @@ def _fresh(sf: Any, seed: str) -> Callable[[], int]:
 def _add_like(sf: Any, resource_type: str, tree: dict, pid: int) -> None:
     """A new object of a class the file already holds (GameObject, Transform, Animator), at ``pid``."""
     template = next(obj for obj in sf.objects.values() if obj.type.name == resource_type)
-    new = object.__new__(type(template))
-    new.__dict__.update(template.__dict__)
+    new = copy.copy(template)  # a reader with slots has no __dict__ to copy
     new.path_id = pid
     new.data = b""
     new.save_typetree(tree)

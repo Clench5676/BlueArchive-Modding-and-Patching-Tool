@@ -63,6 +63,8 @@ export const REASONS = new Set([
   "game_file_conflict",
   "mod_platform_mismatch",
   "mod_unity_version_mismatch",
+  "mod_unity_asset_mismatch",
+  "bundle_unsupported",
   "mod_release_mismatch",
   "required_asset_extract_failed",
   "required_asset_apply_failed",
