@@ -526,23 +526,25 @@ def enclosed_points(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
     if not len(triangles):
         return out
     low, high = triangles.min(axis=1), triangles.max(axis=1)
+    # what depends on the triangles alone, once for all of them: a triangle's numbers are those of any subset of the
+    # triangles (each its own sum of three products), and the triangles beyond a point's reach are masked out below
+    a = triangles[:, 0]
+    e1, e2 = triangles[:, 1] - a, triangles[:, 2] - a
+    p = np.cross(_DIRECTIONS[:, None, :], e2[None])  # (directions, triangles, 3)
+    det = np.einsum("tj,dtj->dt", e1, p)
+    ok = np.abs(det) > 1e-12
+    inverse = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
     for k, origin in enumerate(points):
         near = ((high >= origin - RAY) & (low <= origin + RAY)).all(axis=1)
         if not near.any():
             continue
-        a = triangles[near, 0]
-        e1, e2 = triangles[near, 1] - a, triangles[near, 2] - a
-        p = np.cross(_DIRECTIONS[:, None, :], e2[None])  # (directions, triangles, 3)
-        det = np.einsum("tj,dtj->dt", e1, p)
-        ok = np.abs(det) > 1e-12
-        inverse = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
         s = origin[None] - a
         u = np.einsum("tj,dtj->dt", s, p) * inverse
         q = np.cross(s, e1)
         v = np.einsum("dj,tj->dt", _DIRECTIONS, q) * inverse
         t = np.einsum("tj,tj->t", e2, q)[None] * inverse
         hit = (
-            ok & (u >= -EDGE) & (v >= -EDGE) & (u + v <= 1 + EDGE) & (t > 1e-4) & (t < RAY)
+            near[None] & ok & (u >= -EDGE) & (v >= -EDGE) & (u + v <= 1 + EDGE) & (t > 1e-4) & (t < RAY)
         )  # an edge meets both sides
         out[k] = bool(hit.any(axis=1).all())
     return out
