@@ -375,6 +375,10 @@
     "code": "E3012",
     "level": "failed"
   },
+  "mod_unity_asset_mismatch": {
+    "code": "E3031",
+    "level": "failed"
+  },
   "mod_unity_version_mismatch": {
     "code": "E3013",
     "level": "failed"

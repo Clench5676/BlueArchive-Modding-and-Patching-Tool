@@ -1587,16 +1587,31 @@ def test_failed_rebuild_names_its_reason(setup_library, monkeypatch):
     assert expect_error("mod_update_failed", lambda: env.library.update(entry.id)).params["reason"] == "load failed"
 
 
-def test_an_update_shows_a_refusal_that_names_its_cause(setup_library, monkeypatch):
+@pytest.mark.parametrize("code", ["mod_unity_asset_mismatch", "bundle_unsupported"])
+def test_an_update_shows_a_refusal_that_names_its_cause(setup_library, monkeypatch, code):
     env = setup_library
     entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
     mod_bytes = entry.file.read_bytes()
-    refusal = ServiceError("bundle_unsupported", file="next.bundle", version=9)
+    refusal = ServiceError(code, file="mod.bundle")
     patch_everywhere(
         monkeypatch, [service], "rebuild", lambda *args, **kwargs: RebuildResult(False, "refused", error=refusal)
     )
-    assert expect_error("bundle_unsupported", lambda: env.library.update(entry.id)) is refusal
+    assert expect_error(code, lambda: env.library.update(entry.id)) is refusal
     assert entry.file.read_bytes() == mod_bytes
+
+
+def test_an_update_reads_its_parts_back(setup_library, monkeypatch):
+    env = setup_library
+    entry = env.library.add([make_mod(env.original, env.tmp / "input")])[0]
+    calls = []
+    patch_everywhere(
+        monkeypatch,
+        [service],
+        "rebuild",
+        lambda *args, **kwargs: calls.append(kwargs) or RebuildResult(False, "failed", []),
+    )
+    expect_error("mod_update_failed", lambda: env.library.update(entry.id))
+    assert calls and all(call.get("read_back") for call in calls)
 
 
 @pytest.mark.parametrize("no_match", [True, False])

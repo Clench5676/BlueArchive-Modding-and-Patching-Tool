@@ -53,7 +53,7 @@ from .base import _item_fraction, _mod_writer, _serialized
 logger = logging.getLogger(__package__)
 
 #: Rebuild refusals that name their own cause: shown as they are, not as a plain update failure.
-_NAMED_REFUSALS = frozenset({"bundle_unsupported"})
+_NAMED_REFUSALS = frozenset({"mod_unity_asset_mismatch", "mod_unity_version_mismatch", "bundle_unsupported"})
 
 
 class UpdatingMixin:
@@ -120,6 +120,7 @@ class UpdatingMixin:
                     anim_check=self.settings.anim_check_options(),
                     log=log,
                     on_step=step,
+                    read_back=True,
                 )
                 if result.no_match:
                     # A part that takes nothing from the mod (one of materials only, or one the mod carries none

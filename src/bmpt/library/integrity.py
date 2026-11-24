@@ -10,7 +10,7 @@ from pathlib import Path
 from ..core import devmode
 from bmpt.engine import REPLACEABLE_ASSET_TYPES, AssetKey, AssetType, Bundle, get_skel_version
 from ..core.errors import ServiceError
-from .rebuild import UpdateScope
+from .rebuild import UpdateScope, unity_release
 from ..unity.bundle_guard import refuse_unsupported
 from ..gameassets.spine import atlas_pages
 from ..gameassets.discovery import cab_names
@@ -297,10 +297,10 @@ def metadata(path: Path, *, inspection: Inspection) -> Contents:
             result.externals[identity] = tuple(basename(ref.path) for ref in file.externals)
             platform = file.target_platform
             result.platforms.add(getattr(platform, "name", str(platform)))
-            version = re.match(r"^(\d+\.\d+)(?:\.|$)", file.unity_version)
+            version = unity_release(file.unity_version)
             if not version:
                 raise ServiceError("bundle_invalid", file=path.name)
-            result.versions.add(version[1])
+            result.versions.add(version)
             return
         for child_name, child in getattr(file, "files", {}).items():
             walk(child, child_name)
