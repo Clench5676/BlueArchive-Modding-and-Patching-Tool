@@ -119,6 +119,7 @@ rm -rf "$BUILD_DIR"/*.app
         --include-package-data=ba_modding_toolkit \
         --include-package-data=UnityPy \
         --include-package-data=fmod_toolkit \
+        --user-package-configuration-file="$ROOT/scripts/nuitka-package.config.yml" \
         --include-package-data=archspec \
         --include-data-dir=ba_modding_toolkit/assets=ba_modding_toolkit/assets \
         --include-data-dir=ba_modding_toolkit/locales=ba_modding_toolkit/locales \

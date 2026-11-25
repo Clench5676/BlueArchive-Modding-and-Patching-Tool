@@ -1,0 +1,15 @@
+# Nuitka package configuration for modules its own configuration does not cover.
+# fmod_toolkit loads its FMOD library with ctypes when UnityPy's exporters are imported, so a build without
+# it stops at start-up; --include-package-data never copies libraries.
+- module-name: 'fmod_toolkit'
+  dlls:
+    - from_filenames:
+        relative_path: 'libfmod/Darwin'
+        prefixes:
+          - 'libfmod'
+      when: 'macos'
+    - from_filenames:
+        relative_path: 'libfmod/Windows/x64'
+        prefixes:
+          - 'fmod'
+      when: 'win32'
