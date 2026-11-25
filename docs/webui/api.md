@@ -51,6 +51,7 @@ one changes are in the other files ([`README.md`](README.md)).
 | `thumbnails.*` | see [Student thumbnails](memorial-lobby-and-thumbnails.md#student-thumbnails) |
 | `preview.cacheGet {key, renderer}` / `preview.cachePut {...}` / `preview.chibiRevision {alt, source}` / `preview.assetRevision {paths}` | the preview cache and the revisions persisted stills are keyed by |
 | `jobs.get {id}` / `jobs.cancel {id}` | a job's state and its last log lines / cancel a job |
+| `jobs.list` | the queued and running jobs, the running one first: `[{id, kind, state, writes, progress, done}]`, `done` the job's last three finished items (the Tasks panel) |
 | `os.reveal {path}` | reveal in the file manager |
 | `debug.trace {events}` / `preview.failed {url, step, error}` | input tracing with `--debug` / bounded preview diagnostics in the session log |
 | `app.log` / `app.logFolder` / `app.report {context?, event?}` / `app.frontendError {event, context?}` | the session log and its folder / create a local error report / record a front-end error |
@@ -300,6 +301,7 @@ Events on `/api/events`:
 
 | Event | Data |
 |---|---|
+| `job.queued` | `{id, kind}` |
 | `job.started` | `{id, kind}` |
 | `job.log` | `{id, lines: [str]}` (batched) |
 | `job.progress` | `{id, sequence, current, total, label}` (throttled); batch jobs also report `done`, `completed`, `remaining`, `index`, `phase`, `step` |

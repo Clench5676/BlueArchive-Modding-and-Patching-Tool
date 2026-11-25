@@ -17,6 +17,7 @@ import * as StudentHall from "../student-hall/student-hall.js";
 import * as Settings from "../settings/settings.js";
 import * as Update from "./update.js";
 import * as Tours from "./tours.js";
+import * as Tasks from "./tasks.js";
 import { on, rpc, spinePrefix, waitJob } from "../core/api.js";
 import { setLibraryWaiting } from "../detail/preview-lifecycle.js";
 import { L, T, errorText, setStrings, languageRefresh } from "../core/i18n.js";
@@ -97,6 +98,7 @@ function relabelShell() {
   $("fs-exit").setAttribute("aria-label", T("memorialLobby.exit"));
   $("top-option").setAttribute("aria-label", T("settings.button"));
   $("top-home").setAttribute("aria-label", T("studentHall.home"));
+  Tasks.relabel();
   const back = document.querySelector(".topbar .back").onclick;
   setTitle(
     T(
@@ -886,6 +888,7 @@ async function start() {
   $("top-home").hidden = !info.gameFound;
   // subscribed before the no-game screen too, so choosing the game folder elsewhere reaches the page
   on("config.changed", () => refreshConfiguration().catch(console.error));
+  // a refused quit also opens the Tasks panel (tasks.js), which shows the job that holds it
   on("app.busy", () => notify(T("error.busy"), { kind: "error", error: { code: "busy" } }));
   await timed("fonts", () => document.fonts.ready);
   // the bottom bar: its greyed entries hand over to the classic UI (with or without a game folder), their prompt
@@ -900,6 +903,7 @@ async function start() {
   };
   await ui;
   renderNav(-1, navOptions);
+  Tasks.init({ nameOf: progressNames });
   // the Enable Mods switch in the top bar, and what the writer jobs switched
   await timed("mod-state", () => ModSwitch.init({ names: altNames, refreshPage: refreshAfterToggle }));
   let enabled = ModSwitch.current()?.enabled !== false;

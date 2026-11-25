@@ -115,6 +115,8 @@ const topBoxes = {
   home: [CORNER_MARGIN, 7, 50, 50],
   option: [CORNER_MARGIN + 114, 7, 50, 50],
   line: [CORNER_MARGIN + 76, 12, 3, 32],
+  tasks: [CORNER_MARGIN + 228, 7, 50, 50],
+  taskLine: [CORNER_MARGIN + 190, 12, 3, 32],
 };
 /**
  * Show the top bar for the Student Hall (Student Hall) or for the other screens.
@@ -161,6 +163,8 @@ export function reflowTopActions() {
     ["home", ".top-home"],
     ["option", ".top-option"],
     ["line", ".top-line"],
+    ["tasks", ".top-tasks"],
+    ["taskLine", ".top-tasks-line"],
   ]) {
     const host = document.querySelector(selector);
     if (!host) continue;
@@ -168,27 +172,45 @@ export function reflowTopActions() {
     Object.assign(host.style, { right: `${right}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
     if (key === "home") host.hidden = topStudentHall || !topAvailable;
     if (key === "line") host.hidden = topStudentHall;
+    if (key === "tasks" || key === "taskLine") host.hidden = !topAvailable;
   }
 }
 addEventListener("resize", reflowTopActions);
+// Common_Icon_Mission, the game's Mission icon, in Settings' place and colour: its 60 x 76 sprite fitted to the
+// 60 x 62 box Settings' widget takes.
+export const TASK_ICON = Object.freeze({ sprite: "Common_Icon_Mission", w: 49, h: 62 });
+/** Make a clone of the Settings control draw the Tasks icon. */
+export function taskIcon(tree) {
+  const widget = tree.widgets?.find((w) => "sprite" in w);
+  if (widget) Object.assign(widget, { sprite: TASK_ICON.sprite, w_: TASK_ICON.w, h_: TASK_ICON.h });
+  return tree;
+}
 function skinTop() {
   return (topReady ||= NGUI.layout("UICharacterCollection")
     .then(async (collection) => {
       const right = "NUITop_Scenes/Top/Right";
       const home = NGUI.find(collection, `${right}/Lobby`);
       const homeWidget = home?.widgets?.find((w) => "sprite" in w);
-      for (const [selector, path, w, h] of [
+      // Tasks has no control of its own in the prefab: Settings and its divider one slot further left (the
+      // prefab's Settings to Home pitch), Settings' widget drawing the game's Mission icon fitted to its box.
+      const option = NGUI.find(collection, `${right}/Option`);
+      const pitch = option && home ? option.pos[0] - home.pos[0] : 0;
+      for (const [selector, path, w, h, slots = 0] of [
         [".topbar .back", "SeletControl/Top/BG_W/Bg/Btn", 164, 172],
         [".top-option", `${right}/Option`, 60, 62],
         [".top-home", `${right}/Lobby`, 62, 59],
         [".top-line", `${right}/Line (1)`, 4, 49],
+        [".top-tasks", `${right}/Option`, 60, 62, 1],
+        [".top-tasks-line", `${right}/Line (1)`, 4, 49, 1],
       ]) {
         const host = document.querySelector(selector);
         if (!host) continue;
-        const original = NGUI.find(collection, path);
-        if (!original) continue;
+        const found = NGUI.find(collection, path);
+        if (!found) continue;
+        const original = slots ? { ...found, pos: [found.pos[0] + pitch * slots, found.pos[1]] } : found;
         const tree = clone(original);
         tree.pos = [0, 0];
+        if (selector === ".top-tasks") taskIcon(tree);
         const next = document.createElement("div");
         await NGUI.render(tree, next, { scale: S, origin: [(w * S) / 2, (h * S) / 2] });
         Object.assign(host.style, { width: `${w * S}px`, height: `${h * S}px` });
@@ -200,10 +222,17 @@ function skinTop() {
           });
         }
         if (path.startsWith(right)) {
-          const key = selector === ".top-home" ? "home" : selector === ".top-option" ? "option" : "line";
+          const key =
+            {
+              ".top-home": "home",
+              ".top-option": "option",
+              ".top-tasks": "tasks",
+              ".top-tasks-line": "taskLine",
+            }[selector] || "line";
           topBoxes[key] = ["right", "top", "width", "height"].map((field) => parseFloat(host.style[field]));
         }
-        host.replaceChildren(...next.childNodes);
+        // the Tasks button keeps its running mark (tasks.js) beside the drawn icon
+        host.replaceChildren(...next.childNodes, ...host.querySelectorAll(":scope > .top-tasks-ring"));
       }
       reflowTopActions();
     })

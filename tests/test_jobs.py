@@ -314,3 +314,44 @@ def test_a_cancelled_job_never_runs_when_queued_and_stops_at_its_next_step_when_
     finally:
         gate.set()
         jobs.shutdown()
+
+
+def test_pending_lists_the_running_job_first_with_its_last_finished_items():
+    events = EventBus()
+    seen = events.subscribe()
+    jobs = JobRunner(events)
+    gate, reached = threading.Event(), threading.Event()
+    try:
+
+        def run(log, progress):
+            for current in range(1, 6):
+                progress({"current": current, "total": 5, "alt": f"alt{current}", "resourceType": "portrait"})
+            reached.set()
+            gate.wait(5)
+
+        running = jobs.submit("mods.toggle", run, writes="game")
+        queued = jobs.submit(
+            "library.prune", lambda log, progress: None, writes="library", rank=jobs_module.MAINTENANCE
+        )
+        user = jobs.submit("extract", lambda log, progress: None)
+        assert reached.wait(5)
+        listed = jobs.pending()
+        assert [job["id"] for job in listed] == [running, user, queued]
+        first = listed[0]
+        assert first["state"] == "running" and first["writes"] == "game"
+        assert first["progress"]["current"] == 5 and first["progress"]["alt"] == "alt5"
+        # the last finished items, oldest first, without the snapshot's id and sequence
+        assert [item["alt"] for item in first["done"]] == ["alt2", "alt3", "alt4"]
+        assert all("sequence" not in item and "id" not in item for item in first["done"])
+        assert [job["state"] for job in listed[1:]] == ["queued", "queued"]
+        queued_events = []
+        while not seen.empty():
+            event, data = seen.get_nowait()
+            if event == "job.queued":
+                queued_events.append(data["id"])
+        assert queued_events == [running, queued, user]
+        gate.set()
+        assert wait_for(lambda: jobs.pending() == [])
+    finally:
+        gate.set()
+        jobs.shutdown()
