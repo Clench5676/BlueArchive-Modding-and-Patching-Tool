@@ -580,7 +580,7 @@ function bootHarness({ compiled = true, startupUpdate = true } = {}) {
       scan: async () => events.push("scan"),
     },
     Prompts: { start: async (name) => events.push(name), isBusy: () => promptBusy },
-    Impact: { check: async () => events.push("impact"), isBusy: () => false },
+    Impact: { ask: async () => events.push("impact"), isBusy: () => false },
     Update: {
       check: (_host, _info, options) => {
         events.push("update-check");

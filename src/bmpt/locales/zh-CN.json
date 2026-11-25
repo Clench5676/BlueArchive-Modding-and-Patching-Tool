@@ -343,6 +343,7 @@
 				"none": "无原版备份"
 			},
 			"overwritten": "已被覆盖",
+			"waitingReapply": "等待重新套用",
 			"damaged": "已损坏",
 			"overwrittenTitle": "缺少官方原版文件",
 			"overwrittenNone": "已无原版备份",
@@ -479,6 +480,7 @@
 			"modsProcess": "处理 Mod",
 			"modsApply": "应用 Mod",
 			"defaultThumbnails": "生成默认大头照",
+			"finishingStep": "完成当前步骤",
 			"defaultThumbnailsApply": "应用默认大头照",
 			"modsRestore": "还原 Mod",
 			"modsCheck": "检查 Mod",
@@ -508,6 +510,7 @@
 			"kind": {
 				"mods.toggle": "开关 Mod",
 				"mods.refreshCostumes": "启动时检查和重建 Mod",
+				"mods.prepareCatalogs": "准备目录文件",
 				"mods.catalogReapply": "游戏更新后重新套用 Mod",
 				"mods.catalogUpdate": "读取游戏更新",
 				"mods.impact": "检查受游戏更新影响的 Mod",

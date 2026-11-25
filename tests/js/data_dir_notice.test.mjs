@@ -80,7 +80,7 @@ function bootHarness(info, upgradedNotice = null) {
     document: { getElementById: () => null },
     Consent: { init() {}, show: async () => true, spine: async () => true, scan: async () => {} },
     Prompts: { start: async () => {}, isBusy: () => false },
-    Impact: { check: async () => null, isBusy: () => false },
+    Impact: { ask: async () => null, isBusy: () => false },
     Update: { check: async () => null, afterUpgrade: async () => {} },
     route: async () => {},
   };

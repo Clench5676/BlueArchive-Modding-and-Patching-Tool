@@ -61,8 +61,8 @@ function runStart(gameFound) {
     Prompts: { init() {} },
     Impact: {
       init() {},
-      gate: async () => {
-        log.push(["update-check"]);
+      prepare: async () => {
+        log.push(["catalogs"]);
       },
     },
     defaultThumbnails: async () => {
@@ -102,12 +102,12 @@ test("a start with a game asks for the student list's prefabs once its first scr
   await flush();
   assert.deepEqual(
     log,
-    [["update-check"], ["default-thumbnails"], ["route"]],
-    "the default thumbnails under the start cover, then the first screen's exports",
+    [["catalogs"], ["route"]],
+    "only the catalogs under the start cover, then the first screen's exports; the default thumbnails come later",
   );
   screen.resolve();
   await done;
-  assert.deepEqual(log, [["update-check"], ["default-thumbnails"], ["route"], ["preload"]]);
+  assert.deepEqual(log, [["catalogs"], ["route"], ["preload"]]);
 });
 
 test("a start without a game asks for no prefabs", async () => {

@@ -721,8 +721,8 @@ async function route() {
   }
 }
 
-// The generated default thumbnails after an upgrade (default-thumbnails.js), under the start cover before the first
-// screen: the cards' pictures rendered, then written, each with its progress line; the start watchdog holds meanwhile
+// The generated default thumbnails after an upgrade (default-thumbnails.js), once the first screen is up: the cards'
+// pictures rendered, then written by a start-up job shown in Tasks; nothing covers the screen
 async function defaultThumbnails() {
   const scope = thumbnailScope();
   try {
@@ -732,18 +732,25 @@ async function defaultThumbnails() {
       students: studentList,
       render: (p) => scope.thumb(p.base, "studentList", null, p.memorialLobby, p.framing, p.background),
       spine: spineAllowed,
-      task: async (run) => {
-        const release = globalThis.BAMTRecovery?.hold?.();
-        try {
-          return await Loading.task(run, { label: T("progress.defaultThumbnails") });
-        } finally {
-          release?.();
-        }
-      },
     });
   } finally {
     scope.cancel();
   }
+}
+
+// A quit while a start-up job runs: the job ends its step under way first (app.finishing), under the loading screen
+let finishing = null;
+function finishingStep(busy) {
+  if (!busy) {
+    finishing?.();
+    finishing = null;
+    return;
+  }
+  if (finishing) return;
+  const done = new Promise((resolve) => {
+    finishing = resolve;
+  });
+  Loading.task(() => done, { label: T("progress.finishingStep") }).catch(console.error);
 }
 
 // The first-run sequence: the cursor, the start popups, the update check and the feature tour. It needs a game
@@ -808,6 +815,9 @@ async function boot() {
   }
   if (globalThis.BAMTRecovery && !globalThis.BAMTRecovery.ready()) return;
   sessionReady = rpc("app.ready", { timings: { ...startup, ...Loading.timings() } }).catch(console.error);
+  // the first start after an upgrade: the generated default thumbnails, after the first screen, never awaited
+  if (info?.gameFound)
+    sessionReady.then(() => defaultThumbnails()).catch((err) => console.error("default thumbnails", err));
   if (!info?.gameFound) {
     // the no-game screen has no other start popup
     await upgradedNotice?.().catch(console.error);
@@ -856,7 +866,7 @@ function startPopups() {
       },
     ],
     ["scan", () => due("scan") && Consent.scan($("consent"))],
-    ["impact", () => info.gameFound && Impact.check()],
+    ["impact", () => info.gameFound && Impact.ask()],
     ["catalog", () => ModSwitch.tellCatalog()],
     ["drift", () => Prompts.start("drift", info)],
     ["untracked", () => Prompts.start("untracked", info)],
@@ -890,6 +900,7 @@ async function start() {
   on("config.changed", () => refreshConfiguration().catch(console.error));
   // a refused quit also opens the Tasks panel (tasks.js), which shows the job that holds it
   on("app.busy", () => notify(T("error.busy"), { kind: "error", error: { code: "busy" } }));
+  on("app.finishing", (data) => finishingStep(!!data?.busy));
   await timed("fonts", () => document.fonts.ready);
   // the bottom bar: its greyed entries hand over to the classic UI (with or without a game folder), their prompt
   // following the pref classicPrompt
@@ -969,11 +980,9 @@ async function start() {
     noGame();
     return;
   }
-  // a game update since the last start: asked, and checked under the loading screen, before the first screen
-  // (update-impact.js gate; the summary follows with the start popups)
-  await timed("update-check", () => Impact.gate()).catch((err) => console.error("update check", err));
-  // the first start after an upgrade: the generated default thumbnails, made and applied under the loading screen
-  await timed("default-thumbnails", defaultThumbnails).catch((err) => console.error("default thumbnails", err));
+  // only the game catalogs the first screen shows are prepared under the loading screen (update-impact.js prepare);
+  // the rebuilds follow app.ready in Tasks, and a game update's question comes with the start popups
+  await timed("catalogs", () => Impact.prepare()).catch((err) => console.error("catalog preparation", err));
   await timed("first-screen", route);
   // the student list's prefabs, the slowest to export after a game update: asked for once the first screen is up
   // (earlier they slow its own exports), never awaited, and taken up by StudentList.show()

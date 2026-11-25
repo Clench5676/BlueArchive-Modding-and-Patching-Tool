@@ -10,7 +10,15 @@ import { PANEL, panelTree, panelView } from "./task-panel-layout.js";
 // jobs.list at most this often while the panel is open; job progress arrives up to ten times a second
 const REFRESH_MS = 250;
 const RING_SCALE = 0.38; // the button's running mark: LoadingIcon (75 units) at about a third of the button
-const QUEUE_EVENTS = ["job.queued", "job.started", "job.done", "job.failed", "job.cancelled"];
+const QUEUE_EVENTS = [
+  "job.queued",
+  "job.started",
+  "job.done",
+  "job.failed",
+  "job.cancelled",
+  "job.stopped",
+  "job.dropped",
+];
 
 let options = { nameOf: undefined };
 let jobs = [];

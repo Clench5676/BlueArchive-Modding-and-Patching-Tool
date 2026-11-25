@@ -2943,33 +2943,27 @@ test("the start asks before the first screen, checks under the loading screen, a
   }
 });
 
-test("the start builds costume builds of an older costume rule again before anything else, without asking", async () => {
+test("before the first screen only the game catalogs are prepared; the rebuilds are left to the App", async () => {
   const saved = { ...answers };
   try {
-    answers["mods.refreshCostumes"] = "job-refresh-costumes";
-    jobs["job-refresh-costumes"] = {
-      state: "done",
-      result: { done: [{ id: "7", core: "hoshino_original", source: "mod:7" }], kept: [], left: [] },
-    };
-    // the same game version: built again, nothing asked or listed
-    answers["mods.updateDue"] = { due: false, outdated: true, install: GLOBAL, version: "v3", previous: "v3" };
-    const before = called("mods.refreshCostumes").length;
-    assert.equal(await Impact.gate(), false);
-    assert.equal(called("mods.refreshCostumes").length, before + 1);
+    answers["mods.prepareCatalogs"] = "job-prepare-catalogs";
+    jobs["job-prepare-catalogs"] = { state: "done", result: { notices: [] } };
+    answers["mods.updateDue"] = { due: false, catalog: true, rebuild: true, install: GLOBAL, version: "v3" };
+    const before = called("mods.prepareCatalogs").length;
+    const rebuilt = called("mods.refreshCostumes").length;
+    await Impact.prepare();
+    assert.equal(called("mods.prepareCatalogs").length, before + 1);
+    assert.equal(called("mods.refreshCostumes").length, rebuilt, "the App queues the rebuilds after app.ready");
     assert.equal(dialog.hidden, true, "silently");
-    assert.equal(await Impact.check(), null, "no list");
     // a refusal is never told: the start goes on
-    jobs["job-refresh-costumes"] = { state: "failed", error: { code: "game_running", params: {} } };
-    assert.equal(await Impact.gate(), false);
+    jobs["job-prepare-catalogs"] = { state: "failed", error: { code: "game_running", params: {} } };
+    await Impact.prepare();
     assert.equal(dialog.hidden, true, "silently");
-    // with a game update too: built again first, then the question
-    jobs["job-refresh-costumes"] = { state: "done", result: { done: [], kept: [], left: [] } };
-    answers["mods.updateDue"] = { due: true, outdated: true, install: GLOBAL, version: "v4", previous: "v3" };
-    const gated = Impact.gate();
-    await drawn(dialog, "later");
-    assert.equal(called("mods.refreshCostumes").length, before + 3);
-    action(dialog, "later").click();
-    assert.equal(await gated, false);
+    // nothing due: no job
+    answers["mods.updateDue"] = { due: false, catalog: false, rebuild: true, install: GLOBAL, version: "v3" };
+    await Impact.prepare();
+    assert.equal(called("mods.prepareCatalogs").length, before + 2);
+    assert.equal(await Impact.gate(), false, "no question without a game update");
   } finally {
     for (const key of Object.keys(answers)) delete answers[key];
     Object.assign(answers, saved);
@@ -2978,38 +2972,24 @@ test("the start builds costume builds of an older costume rule again before anyt
   }
 });
 
-test("the start writes entries whose last write failed again without asking, after the game update check", async () => {
+test("the retry of failed writes waits for the game update check, and Later writes nothing", async () => {
   const saved = { ...answers };
   try {
     answers["mods.retryFailed"] = "job-retry-failed";
-    jobs["job-retry-failed"] = {
-      state: "done",
-      result: { done: [{ install: GLOBAL, core: "mashiro_home" }], failed: [] },
-    };
-    answers["mods.updateDue"] = {
-      due: false,
-      outdated: false,
-      retry: true,
-      install: GLOBAL,
-      version: "v3",
-      previous: "v3",
-    };
-    const before = called("mods.retryFailed").length;
-    assert.equal(await Impact.gate(), false);
-    assert.equal(called("mods.retryFailed").length, before + 1);
-    assert.equal(dialog.hidden, true, "silently");
-    // a refusal is never told: the start goes on
-    jobs["job-retry-failed"] = { state: "failed", error: { code: "game_running", params: {} } };
-    assert.equal(await Impact.gate(), false);
-    assert.equal(dialog.hidden, true, "silently");
-    // with a game update: Later writes nothing
     jobs["job-retry-failed"] = { state: "done", result: { done: [], failed: [] } };
+    const before = called("mods.retryFailed").length;
+    // without a game update the App queues the retry itself after app.ready
+    answers["mods.updateDue"] = { due: false, retry: true, install: GLOBAL, version: "v3", previous: "v3" };
+    assert.equal(await Impact.gate(), false);
+    assert.equal(called("mods.retryFailed").length, before);
+    // with a game update: the question comes with the start popups; Later writes nothing
     answers["mods.updateDue"] = { due: true, retry: true, install: GLOBAL, version: "v4", previous: "v3" };
+    await Impact.prepare();
     const gated = Impact.gate();
     await drawn(dialog, "later");
     action(dialog, "later").click();
     assert.equal(await gated, false);
-    assert.equal(called("mods.retryFailed").length, before + 2);
+    assert.equal(called("mods.retryFailed").length, before);
   } finally {
     for (const key of Object.keys(answers)) delete answers[key];
     Object.assign(answers, saved);
@@ -3244,5 +3224,23 @@ test("Settings' View Mods to Update opens the last check without checking; Check
     await tick();
     dialog.hidden = true;
     prompt.hidden = true;
+  }
+});
+
+test("the waiting mark keeps its whole text on every kind's switch card, in every language", async () => {
+  const NGUI = await import("../../src/bmpt/web/js/ui/ngui.js");
+  const Pop = await import("../../src/bmpt/web/js/ui/popup.js");
+  const { switchGrid } = await import("../../src/bmpt/web/js/mods/switch-layout.js");
+  for (const lang of ["en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "th-TH"]) {
+    const ui = JSON.parse(readFileSync(new URL(`../../src/bmpt/locales/${lang}.json`, import.meta.url))).webui;
+    const text = ui.mods.waitingReapply;
+    for (const kind of ["portrait", "memorialLobby", "chibi"]) {
+      const card = switchGrid(kind, Pop.listCardBox(Pop.listLayout(false, kind)).w).card;
+      // a switch card has no tick box: the badge has the card's width less its margins (popup.js listCard)
+      const room = card.w - 46;
+      const fit = NGUI.fitText(text, 26, 20, room - 24, 1);
+      assert.equal(fit.text, text, `${lang} ${kind}: whole`);
+      assert.ok(NGUI.glyphWidth(fit.text, fit.fs) + 24 <= room, `${lang} ${kind}: inside the card`);
+    }
   }
 });

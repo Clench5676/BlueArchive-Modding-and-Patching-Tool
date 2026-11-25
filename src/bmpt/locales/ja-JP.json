@@ -343,6 +343,7 @@
 				"none": "オリジナルなし"
 			},
 			"overwritten": "上書き済み",
+			"waitingReapply": "再適用待ち",
 			"damaged": "破損",
 			"overwrittenTitle": "公式オリジナルファイルなし",
 			"overwrittenNone": "オリジナルの控えなし",
@@ -479,6 +480,7 @@
 			"modsProcess": "MOD処理",
 			"modsApply": "MOD適用",
 			"defaultThumbnails": "デフォルトサムネイル生成",
+			"finishingStep": "現在のステップを完了中",
 			"defaultThumbnailsApply": "デフォルトサムネイル適用",
 			"modsRestore": "MOD復元",
 			"modsCheck": "MODチェック",
@@ -508,6 +510,7 @@
 			"kind": {
 				"mods.toggle": "Mod の切り替え",
 				"mods.refreshCostumes": "起動時の Mod の確認と再構築",
+				"mods.prepareCatalogs": "カタログファイルの準備",
 				"mods.catalogReapply": "ゲーム更新後の Mod 再適用",
 				"mods.catalogUpdate": "ゲーム更新の読み込み",
 				"mods.impact": "ゲーム更新の影響を受ける Mod の確認",
