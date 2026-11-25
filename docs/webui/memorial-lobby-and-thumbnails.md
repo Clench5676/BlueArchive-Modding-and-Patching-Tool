@@ -119,8 +119,8 @@ use the thumbnail store's lock.
 Generated defaults after an upgrade (`webui/thumbnail_defaults.py`, `app/default-thumbnails.js`): on a profile's
 first start after an upgrade (fresh data only records the marker), each alt whose App thumbnail is still its default
 and whose Collection texture shows the official art gets the student list card's picture as its App thumbnail and in
-the game. It runs under the start cover before the first screen (`start()` in `main.js`, after the update impact
-gate), with the progress lines `progress.defaultThumbnails` and `progress.defaultThumbnailsApply`: the page renders
+the game. It runs once the first screen is up (`boot()` in `main.js`, after `app.ready`), with nothing covering the
+screen; its job shows in Tasks (`progress.defaultThumbnailsApply`): the page renders
 one card picture at a time and stores it (a picture that fails or takes over 20 s is skipped), then one class 3
 job (`thumbnails.applyDefaults`) writes each shared Collection bundle once, composing outside the library lock, and
 chooses the written defaults in the App. `thumbnails.defaults` decides first whether the run is due, from the

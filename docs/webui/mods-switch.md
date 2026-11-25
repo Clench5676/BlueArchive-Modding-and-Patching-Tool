@@ -89,7 +89,7 @@ setting.
   what built it (a fingerprint of the builder code and of the packages that shape the bytes,
   `catalog/data/builder_fingerprints.json`, written by `scripts/build_builder_fingerprints.py`; the costume rule
   for a costume). A toggle reuses an output while the first part holds. An output of another builder stays in use
-  and is built again by the start job behind the start cover (`refresh_builds`), never inside a toggle. That
+  and is built again by the start-up job after the first screen (`refresh_builds`), never inside a toggle. That
   refresh takes no kept copy another builder made: it builds the output and drops the copy.
   Apply and restore of one entry place (or reuse) its file, generate a catalog and swap. Official files are never
   overwritten. A core whose files the catalog does not name, or that lie outside `GameData/Windows`, is switched by
@@ -139,14 +139,18 @@ from the last scan, so the prompts exist only with the scan consent; the message
   every card ticked, each with its own install's picture, the alt's name, kind and install chips and "No Official
   Copy" where it holds. Add to Library (`mods.adopt`), with mods off also Add and Turn On Mods, Later, and Don't Ask
   Again (`mods.dismiss untracked`). Damaged entries are listed apart, dim and never ticked.
-- **Costume builds of an older rule** (`update-impact.js gate`, before the first screen): what the App built under an
-  older `COSTUME_RULE` is built again silently (`mods.refreshCostumes`).
-- **Failed writes after an App update** (`update-impact.js gate`, before the first screen): with mods on, the
+- **Costume builds of an older rule** (after the first screen, queued by the App, shown in Tasks): what the App built
+  under an older `COSTUME_RULE` is built again silently (`mods.refreshCostumes`).
+- **Failed writes after an App update** (after the first screen, queued by the App, shown in Tasks): with mods on, the
   configured entries whose last write failed (the error kept on the choice) are written again once under each new build
   of the App, silently (`mods.updateDue`'s `retry`, `mods.retryFailed`, an On's Retry of those entries alone): one
   written, or already holding its source, loses its error; one that fails keeps a fresh one. While the Game Updated
   question is due they wait for its Check; a refusal of the moment leaves them for the next start.
-- **Game Updated** (before the first screen; also after `config.changed`): once the resource version differs from the
+- **Waiting for the reapply** (`mods.state.installs[].waiting`): after a game update, until the reapply has built an
+  entry again, the game has its official files; its applied card in the switch popup carries `mods.waitingReapply`.
+  No apply, restore or toggle publishes such an entry's output of the older release meanwhile: only a fresh build of
+  it reaches the live catalog, and takes it off the list.
+- **Game Updated** (with the start popups; also after `config.changed`): once the resource version differs from the
   last seen and the library has mods (`mods.updateDue`), "Check your mods against this update?" with Later and Check.
   Check runs under the loading screen: `mods.impact` classifies the mods, a new scan finds entries the update
   overwrote, and those that need no repair are applied again (`mods.restoreDrift`).
