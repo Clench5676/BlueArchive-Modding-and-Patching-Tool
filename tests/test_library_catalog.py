@@ -1477,6 +1477,44 @@ def test_partial_catalog_reapply_retains_pending_entries_after_reopening(catalog
     assert set(record["redirects"]) == {env.files[core][0].name for core in sources}
 
 
+def test_apply_during_an_unfinished_reapply_publishes_no_waiting_output(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    for core in ("second", "held"):
+        source, _ = env.add(core)
+        lib.apply(core, source)
+    newer = _steam_update(env)
+    lib.prepare_catalogs()
+    monkeypatch.setattr(lib, "_scan_allowed", lambda: False)
+    version = lib.update_impact(pin)["version"]
+    assert set(lib._catalog_record(pin)["pending"]) == {"second_spr", "held_spr"}
+    source, upload = env.add("failed")
+    lib.apply("failed", source)
+    record = lib._catalog_record(pin)
+    assert set(record["pending"]) == {"second_spr", "held_spr"} and record["reapply"]
+    placed = lib._placed_path(pin, record["redirects"][upload.name])
+    assert env.live.read_bytes() == ccdb.redirect(newer, {upload.name: placed.name}, MODS_DIR)
+    lib._reapply_catalog_update(pin, version)
+    record = lib._catalog_record(pin)
+    assert record["pending"] == {} and not record["reapply"]
+    assert set(record["redirects"]) == {env.files[core][0].name for core in ("second", "held", "failed")}
+
+
+def test_a_fresh_apply_takes_its_entry_off_the_waiting_list(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    sources = {}
+    for core in ("second", "held"):
+        sources[core], _ = env.add(core)
+        lib.apply(core, sources[core])
+    _steam_update(env)
+    lib.prepare_catalogs()
+    monkeypatch.setattr(lib, "_scan_allowed", lambda: False)
+    lib.update_impact(pin)
+    lib.restore_drift([{"install": pin.key, "core": "second_spr", "state": "updated"}])
+    assert lib._catalog_record(pin)["pending"] == {"held_spr": sources["held"]}
+
+
 def test_app_info_without_a_game_does_not_wait_for_migration(tmp_path, monkeypatch):
     monkeypatch.setattr("bmpt.webui.api.register_students", lambda *_: None)
     services = SimpleNamespace(

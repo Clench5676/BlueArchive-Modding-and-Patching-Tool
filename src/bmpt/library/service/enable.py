@@ -766,8 +766,8 @@ class EnableMixin:
             if not isinstance(source, str) or not source.startswith(LIBRARY_SOURCES):
                 continue
             try:
-                if self._catalog_needs_mod_update(record, core, source):
-                    continue
+                if core in (record.get("pending") or {}) or self._catalog_needs_mod_update(record, core, source):
+                    continue  # waiting for the reapply: its recorded output belongs to the older release
                 targets = self._spine_parts(core, pin)
                 if not targets or not self._catalog_targets(pin, targets, record):
                     continue

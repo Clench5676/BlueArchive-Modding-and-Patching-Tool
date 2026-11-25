@@ -473,6 +473,9 @@ class ImpactMixin:
                             ):
                                 del pending[core]
                 current = self._catalog_record_for(pin)
+                # an entry another writer published afresh meanwhile is no longer waiting
+                left = current.get("pending") or {}
+                pending = {core: source for core, source in pending.items() if core in left}
                 self._save_catalog_record(pin, {**current, "pending": pending, "reapply": bool(pending)})
         except ServiceError as error:
             if error.code not in LATER:
