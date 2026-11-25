@@ -48,9 +48,9 @@
       "masked_import_lines_sha256": "4f6da7a56e76438613d0db8fef3b0f36185fbd24d447ed33349865444ca467b2"
     },
     "src/ba_modding_toolkit/bundle.py": {
-      "blob": "da31cb270a0b07a45b52d60053b9b8ddd4681750",
-      "non_import_ast_sha256": "89e988d2425446796eb5d5903f973a209b8e9d6756776a475f4af067965895ca",
-      "masked_import_lines_sha256": "f6b3131204a1142021950f6686fb060772a15fefa3065ffc78d7207e9c0c5b5b"
+      "blob": "6bf118521834b9a32e5de319290d6d79b83fd04f",
+      "non_import_ast_sha256": "81f52032035ecc2105fcae0370e72691d61c4b6475ef5144202f3ce04b27d113",
+      "masked_import_lines_sha256": "a2927098994d604e3db7505bae890db460cba58824e17166d1031dc92a9db09d"
     },
     "src/ba_modding_toolkit/cli/__main__.py": {
       "blob": "d24c3ec2f890ae7ae00da4d3641ad2a07789af81",
@@ -339,13 +339,19 @@
     },
     {
       "file": "src/ba_modding_toolkit/bundle.py",
-      "line": 17,
+      "line": 16,
+      "original": "",
+      "import": "from bmpt.unity.preload import keep_container_lookups_in_memory"
+    },
+    {
+      "file": "src/ba_modding_toolkit/bundle.py",
+      "line": 18,
       "original": "from .errors import ServiceError",
       "import": "from bmpt.core.errors import ServiceError"
     },
     {
       "file": "src/ba_modding_toolkit/bundle.py",
-      "line": 57,
+      "line": 61,
       "original": "from .unityfs import read_cab_names",
       "import": "from bmpt.unity.unityfs import read_cab_names"
     },

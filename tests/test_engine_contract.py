@@ -290,6 +290,19 @@ def test_match_keys_name_an_asset_by_container_name_and_type(official_samples):
         assert bundle.get_asset_keys("cont_name_type") == {cont_name_type(obj) for obj in bundle.env.objects}
 
 
+@needs_game
+def test_reading_the_container_never_searches_the_bundle_folder(official_samples):
+    # Pointers of the preload table into other bundles are not followed, so UnityPy lists no local files to find them.
+    external = 0
+    for path in official_samples:
+        bundle = Bundle.load(path)
+        tables = [obj.read().m_PreloadTable for obj in bundle.env.objects if obj.type.name == "AssetBundle"]
+        external += sum(1 for table in tables for pptr in table if pptr.m_FileID != 0)
+        assert bundle.env.container.keys()
+        assert bundle.env.local_files == []
+    assert external, "no official sample points into another bundle"
+
+
 # --- CRC fix ---
 
 

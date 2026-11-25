@@ -13,6 +13,7 @@ from UnityPy.environment import Environment as Env
 
 from .asset import ApplyContext, ExtractContext, apply_asset, extract_asset
 from bmpt.unity.bundle_guard import check_bundle
+from bmpt.unity.preload import keep_container_lookups_in_memory
 from .i18n import t
 from bmpt.core.errors import ServiceError
 from .utils import apply_crc_fix, compute_crc32, no_log, throttle_progress
@@ -26,6 +27,9 @@ from .models import (
     ProgressCallback, SkelVersionConflict,
     RawAssetBytes, REPLACEABLE_ASSET_TYPES
 )
+
+# Since UnityPy 1.25 the container index follows preload pointers into other bundles and searches the disk for them
+keep_container_lookups_in_memory()
 
 
 @dataclass
