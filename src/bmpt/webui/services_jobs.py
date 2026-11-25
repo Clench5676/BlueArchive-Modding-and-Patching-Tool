@@ -8,10 +8,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from ..core import preview_gate
 from ..core.errors import ServiceError
 from ..library import toggle_timing
 from bmpt.engine import parse_filename
-from .jobs import MAINTENANCE, START, USER
+from .jobs import MAINTENANCE, START, USER, Handover
 from .thumbnail_defaults import KIND as DEFAULTS_KIND
 
 
@@ -81,6 +82,28 @@ def _changed_of(result: Any) -> dict[str, list[str]]:
             **({"mods": True} if hasattr(result, "report") else {}),
         }
     return {"cores": [], "resource_types": []}
+
+
+class _Steps:
+    """The step boundary of a resumable start-up job: a yield to the shown page's previews, then whether to stop.
+
+    ``check`` is the ``cancel`` its library work asks between entries; ``end`` raises ``Handover`` once it said
+    stop, after that work returned.
+    """
+
+    def __init__(self, step_out: Callable[[], bool]):
+        self._step_out = step_out
+        self.asked = False
+
+    def check(self) -> bool:
+        preview_gate.step(self._step_out)
+        if self._step_out():
+            self.asked = True
+        return self.asked
+
+    def end(self) -> None:
+        if self.asked:
+            raise Handover
 
 
 def _touched(result: Any) -> tuple[set[tuple[str, str]], set[str]]:
@@ -210,6 +233,7 @@ class JobsMixin:
         writes: str | None = None,
         library: Any = None,
         rank: int = USER,
+        resumable: bool = False,
         **params: Any,
     ) -> str:
         """Submit a job to the runner.
@@ -223,6 +247,7 @@ class JobsMixin:
             writes: ``"game"`` or ``"library"`` for a writer job (what it writes); None for a read-only job.
             library: For a writer job, the library it works through, captured at submit; None takes the current one.
             rank: The job's class in the queue, ``jobs.USER`` unless it is maintenance.
+            resumable: A start-up writer that hands over at its steps and stops for a quit (``JobRunner.submit``).
             **params: The keyword arguments of ``fn``; ``cancellable=True`` makes a read-only job cancellable
                 (``JobRunner.submit``).
 
@@ -230,7 +255,7 @@ class JobsMixin:
             The job's id.
         """
         if writes is None:
-            return self.jobs.submit(kind, fn, rank=rank, **params)
+            return self.jobs.submit(kind, fn, rank=rank, resumable=resumable, **params)
 
         def run(log: Any, progress: Any, **p: Any) -> Any:
             result, failed = None, True
@@ -239,14 +264,20 @@ class JobsMixin:
                 failed = False
                 return result
             finally:
+                # a handover ends here too: what it switched so far is read again (failed)
                 self._after_writer(library, kind, result, failed)
 
-        return self.jobs.submit(kind, run, writes=writes, rank=rank, **params)
+        return self.jobs.submit(kind, run, writes=writes, rank=rank, resumable=resumable, **params)
 
     def _after_writer(self, library: Any, kind: str, result: Any, failed: bool) -> None:
         started = time.perf_counter()
         library = library if library is not None else self._library
-        startup = not self._startup_ready and kind in ("mods.refreshCostumes", "mods.catalogReapply", DEFAULTS_KIND)
+        startup = not self._startup_ready and kind in (
+            "mods.prepareCatalogs",
+            "mods.refreshCostumes",
+            "mods.catalogReapply",
+            DEFAULTS_KIND,
+        )
         if library is not None and kind != "library.judge" and not startup:
             try:
                 library.judge_unfinished()
@@ -429,32 +460,78 @@ class JobsMixin:
             self.check_classic()
             return self.submit("mods.restore", run, writes="game", library=library)
 
-    def submit_refresh_costumes(self) -> str:
-        """Submit the class 3 catalog and costume work behind the start cover.
+    def submit_prepare_catalogs(self) -> str:
+        """Submit the class 3 catalog work the first screen depends on, behind the start cover.
 
-        Catalog work covers every known install. Costume work covers the current one. Each library operation
-        yields between entries and releases the lock for catalog generation and swaps.
+        That is a journal's recovery, an updated official catalog accepted, the live catalog check and the one-off
+        move to the catalog, over every known install; it is not interrupted. The rebuilds wait for ``app.ready``
+        (``submit_start_jobs``).
 
         Returns:
-            The job's id.
+            The job's id; its result is ``{notices}``, the official catalogs put back.
+        """
+        library = self.library
+
+        def run(log: Any, progress: Any) -> Any:
+            return {"notices": library.prepare_catalogs(log=log, progress=progress)}
+
+        with self.classic.starting():
+            return self.submit("mods.prepareCatalogs", run, writes="game", library=library, rank=START)
+
+    def submit_refresh_costumes(self) -> str:
+        """Submit the class 3 rebuilds after the first screen, shown in Tasks.
+
+        Costume builds of an older rule, then outputs of another builder, of the current install; then each install's
+        reapply after a checked game update (``submit_catalog_reapply``). Resumable: between entries it yields to the
+        shown page's previews, hands over to a waiting class 2 job and stops for a quit; its records say what is left.
+
+        Returns:
+            The job's id; its result is ``{done, kept, left}`` of the costume builds.
         """
         library = self.library
         pin = library.current_pin()
 
-        def run(log: Any, progress: Any) -> Any:
-            notices = library.prepare_catalogs(log=log, progress=progress)
+        def run(log: Any, progress: Any, step_out: Callable[[], bool]) -> Any:
+            steps = _Steps(step_out)
             result = {"done": [], "kept": [], "left": []}
             if pin is not None:
                 self._check_pin(library, pin)
-                result = library.refresh_costumes(pin, log=log, progress=progress, write_game=not self.classic_open())
+                result = library.refresh_costumes(
+                    pin, log=log, progress=progress, write_game=not self.classic_open(), cancel=steps.check
+                )
+                steps.end()
                 if not self.classic_open():
-                    library.refresh_builds(pin, log=log, progress=progress)
+                    library.refresh_builds(pin, log=log, progress=progress, cancel=steps.check)
+                    steps.end()
             for known in library.installs():
                 self.submit_catalog_reapply(library, known, library.resource_version(known))
-            return {**result, "notices": notices}
+            return result
 
         with self.classic.starting():
-            return self.submit("mods.refreshCostumes", run, writes="game", library=library, rank=START)
+            return self.submit("mods.refreshCostumes", run, writes="game", library=library, rank=START, resumable=True)
+
+    def submit_start_jobs(self) -> list[str]:
+        """Queue the start-up writers once the first screen is up, before the maintenance (``ready``).
+
+        The rebuilds (``submit_refresh_costumes``, which queues the reapplies), then the retry of failed writes
+        when no game update check waits (after one, the page asks for it). Nothing is queued when nothing is due.
+
+        Returns:
+            The jobs' ids.
+        """
+        library = self.library
+        if library.current_pin() is None:
+            return []
+        due = library.update_due(library.current_pin())
+        jobs = []
+        if due.get("rebuild"):
+            jobs.append(self.submit_refresh_costumes())
+        if due.get("retry") and not due.get("due"):
+            try:
+                jobs.append(self.submit_retry_failed())
+            except ServiceError as error:
+                logger.info("failed writes left for the next start: %s", error.code)
+        return jobs
 
     def submit_update_impact(self, library: Any, pin: Any, force: bool) -> str:
         """Submit the impact reader at its usual rank, yielding between per-mod lock steps."""
@@ -472,20 +549,21 @@ class JobsMixin:
         if version is None or due is None or not due(pin, version):
             return None
 
-        def run(log: Any, progress: Any) -> None:
-            library._reapply_catalog_update(pin, version, progress)
+        def run(log: Any, progress: Any, step_out: Callable[[], bool]) -> None:
+            steps = _Steps(step_out)
+            library._reapply_catalog_update(pin, version, progress, cancel=steps.check)
+            steps.end()
             if self._startup_ready:
                 self._start_prune(library)
 
         with self.classic.starting():
-            return self.submit(
-                "mods.catalogReapply", run, writes="game", library=library, rank=USER if self._startup_ready else START
-            )
+            return self.submit("mods.catalogReapply", run, writes="game", library=library, rank=START, resumable=True)
 
     def submit_retry_failed(self) -> str:
         """Submit ``mods.retryFailed``: at the start, write again the entries whose last write failed.
 
-        The entries are those of the current install (``retry_failed``); each is tried once under this build.
+        The entries are those of the current install (``retry_failed``); each is tried once under this build. A
+        class 3 writer after the first screen, resumable like the rebuilds.
 
         Returns:
             The job's id.
@@ -496,14 +574,17 @@ class JobsMixin:
         library = self.library
         pin = self._current_pin(library)
 
-        def run(log: Any, progress: Any) -> Any:
+        def run(log: Any, progress: Any, step_out: Callable[[], bool]) -> Any:
+            steps = _Steps(step_out)
             self._check_pin(library, pin)
             self.check_classic()
-            return library.retry_failed(pin, log=log, progress=self._progress(progress))
+            result = library.retry_failed(pin, log=log, progress=self._progress(progress), cancel=steps.check)
+            steps.end()
+            return result
 
         with self.classic.starting():
             self.check_classic()
-            return self.submit("mods.retryFailed", run, writes="game", library=library)
+            return self.submit("mods.retryFailed", run, writes="game", library=library, rank=START, resumable=True)
 
     def submit_apply(self, alt: str, source: str, resource_type: str = "portrait") -> str:
         """Submit ``actions.apply``: one entry of the current install, pinned at submit.

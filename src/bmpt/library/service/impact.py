@@ -426,8 +426,18 @@ class ImpactMixin:
             and not self._catalog_check_pending(pin, version)
         )
 
-    def _reapply_catalog_update(self, pin: Pin, version: str, progress: ProgressCallback | None = None) -> None:
-        """Reconcile a checked update as a class 2 or 3 writer, yielding between entry lock steps."""
+    def _reapply_catalog_update(
+        self,
+        pin: Pin,
+        version: str,
+        progress: ProgressCallback | None = None,
+        cancel: Callable[[], bool] | None = None,
+    ) -> None:
+        """Reconcile a checked update as a class 3 writer, yielding between entry lock steps.
+
+        ``cancel``, asked between entries: True stops the walk; what was built is published and the rest stays in
+        ``pending`` for the next run.
+        """
         try:
             with (
                 _errors("reapply catalog update"),
@@ -460,7 +470,7 @@ class ImpactMixin:
                         ):
                             entries.append({"install": pin.key, "core": core, "state": "updated"})
                 if entries:
-                    result = self._run(None, None, [pin], no_log, progress, None, entries, catalog_reconcile=True)
+                    result = self._run(None, None, [pin], no_log, progress, cancel, entries, catalog_reconcile=True)
                     current = self._catalog_record_for(pin)
                     if self._catalog_live(pin, current) == "mods":
                         published = self._catalog_cores(pin, current)
@@ -678,6 +688,7 @@ class ImpactMixin:
         progress: ProgressCallback | None = None,
         *,
         write_game: bool = True,
+        cancel: Callable[[], bool] | None = None,
     ) -> dict[str, list]:
         """Refresh costume-derived builds against the current costume rule at startup.
 
@@ -692,6 +703,8 @@ class ImpactMixin:
             log: Receives user-facing operation messages.
             progress: Receives per-item build/write dictionaries; None disables reporting.
             write_game: Whether installed builds may be refreshed; False leaves them for the next startup.
+            cancel: Asked before each item after the first; True stops there, and the items left are listed again
+                (``_outdated_costumes``) by the next run. An item is built and written again in one step.
 
         Returns:
             done, kept, and left lists, each identifying mod ID, core, and source.
@@ -706,6 +719,8 @@ class ImpactMixin:
             return result
         line = mod_progress.ItemProgress(progress, len(items), "process")
         for i, item in enumerate(items, 1):
+            if i > 1 and cancel is not None and cancel():
+                break
             line.item(
                 i, **self._progress_identity(item["target"], "chibi", item["source"]), step=mod_progress.STEP_CHECK
             )
@@ -805,7 +820,11 @@ class ImpactMixin:
         return stale
 
     def refresh_builds(
-        self, pin: Pin | None = None, log: LogFunc = no_log, progress: ProgressCallback | None = None
+        self,
+        pin: Pin | None = None,
+        log: LogFunc = no_log,
+        progress: ProgressCallback | None = None,
+        cancel: Callable[[], bool] | None = None,
     ) -> list[str]:
         """Build again, at start, the placed outputs another builder made.
 
@@ -820,6 +839,8 @@ class ImpactMixin:
             pin: Game install and server the operation is fixed to; None uses the current install.
             log: Receives user-facing operation messages.
             progress: Receives per-entry build and write dictionaries; None disables reporting.
+            cancel: Asked between entries; True stops the walk, publishes what was built and leaves the rest for the
+                next run.
 
         Returns:
             The cores built again.
@@ -833,7 +854,7 @@ class ImpactMixin:
             entries = [{"install": pin.key, "core": core, "state": "updated"} for core in stale]
             self._fresh_builds_only = True
             try:
-                self._run(None, None, [pin], log, progress, None, entries, catalog_reconcile=True, staged_only=True)
+                self._run(None, None, [pin], log, progress, cancel, entries, catalog_reconcile=True, staged_only=True)
             finally:
                 self._fresh_builds_only = False
             with self._lock:
@@ -915,7 +936,11 @@ class ImpactMixin:
             ]
 
     def retry_failed(
-        self, pin: Pin | None = None, log: LogFunc = no_log, progress: ProgressCallback | None = None
+        self,
+        pin: Pin | None = None,
+        log: LogFunc = no_log,
+        progress: ProgressCallback | None = None,
+        cancel: Callable[[], bool] | None = None,
     ) -> ToggleResult | None:
         """Retry failed configured writes once per application build at startup.
 
@@ -929,13 +954,26 @@ class ImpactMixin:
             pin: Game install and server the operation is fixed to; None uses the current install.
             log: Receives user-facing operation messages.
             progress: Receives toggle progress; None disables reporting.
+            cancel: Asked between entries; True stops the walk, and the build is not marked as tried: the entries
+                left (and those written meanwhile, which hold their source then) are tried at the next run.
         """
         pin = self._current(pin)
         cores = self._failed_writes(pin, self.profiles.read() or {})
         if not cores:
             return None
         logger.info("Retrying %d entries whose last write failed", len(cores))
-        result = self._run(True, True, [pin], log, progress, None, drift=None, retry=cores)
+        stopped = []
+
+        def asked() -> bool:
+            if cancel is not None and cancel():
+                stopped.append(True)
+                return True
+            return False
+
+        result = self._run(True, True, [pin], log, progress, asked, drift=None, retry=cores)
+        if stopped:
+            logger.info("Entries whose last write failed: stopped after %d written", len(result.done))
+            return result
         version = _app_version()
 
         def change(data: dict) -> bool:
@@ -975,7 +1013,10 @@ class ImpactMixin:
         differs from the last one seen there and the library has mods. With no recorded version yet or no mod,
         the version is recorded as seen at once. An unreadable version asks nothing.
 
-        ``outdated``: catalog maintenance or outdated costume builds need the startup job before the question.
+        ``outdated``: start-up work is due (``rebuild`` covers ``catalog`` too). ``catalog``: the catalog
+        preparation the first screen depends on (``prepare_catalogs``: a journal to recover, an updated official
+        catalog to accept, a changed live catalog, the move to the catalog). ``rebuild``: the work after the first
+        screen (costume builds of an older rule, outputs of another builder, a reapply after a checked update).
         ``retry``: entries whose last write failed, not tried again under this build of the App (``_failed_writes``):
         the start writes them again (``retry_failed``), without asking; after the check while ``due``.
 
@@ -983,9 +1024,12 @@ class ImpactMixin:
             pin: Game install and server the operation is fixed to; None uses the current install if available.
         """
         pin = pin or self.current_pin()
+        catalog = self._catalog_start_due(reapply=False)
         out: dict[str, Any] = {
             "due": False,
-            "outdated": self._catalog_start_due(),
+            "outdated": catalog,
+            "catalog": catalog,
+            "rebuild": catalog or self._catalog_start_due(),
             "retry": False,
             "install": None,
             "version": None,
@@ -1006,13 +1050,14 @@ class ImpactMixin:
             previous = catalog["rv"]
         out.update(install=pin.key, version=version, previous=previous)
         try:
-            out["outdated"] |= bool(self._outdated_costumes(pin, config))
+            out["rebuild"] |= bool(self._outdated_costumes(pin, config))
         except (OSError, ServiceError) as error:
             log_failure(logger, logging.DEBUG, "Could not look for costume builds of an older rule", error)
         try:
-            out["outdated"] |= bool(self._stale_builds(pin, config))
+            out["rebuild"] |= bool(self._stale_builds(pin, config))
         except (OSError, ServiceError) as error:
             log_failure(logger, logging.DEBUG, "Could not look for outputs of another builder", error)
+        out["outdated"] = out["rebuild"]
         if version is None or version == previous:
             return out
         with self._lock:

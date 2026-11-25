@@ -533,8 +533,13 @@ class CatalogMixin:
         else:
             self._migration_outcomes[(pin.key, core)] = why
 
-    def _catalog_start_due(self) -> bool:
-        """Check the known installs' versions and live catalog stats before scheduling class 3 work."""
+    def _catalog_start_due(self, reapply: bool = True) -> bool:
+        """Check the known installs' versions and live catalog stats before scheduling class 3 work.
+
+        Args:
+            reapply: Count a reapply after a checked game update, which runs after the first screen; False asks
+                only for what the first screen depends on (``prepare_catalogs``).
+        """
         enabled = profiles.enabled(self.profiles.read())
         records = self._catalog_records_for_read()
         if any((self.root / CATALOG_JOURNALS).glob("*/journal.json")):
@@ -545,7 +550,8 @@ class CatalogMixin:
             if self._catalog_migration_due(pin, record, rv) or self._catalog_version_changed(record, rv):
                 return True
             if (
-                enabled
+                reapply
+                and enabled
                 and record["mode"] == MODE_CATALOG
                 and record.get("reapply")
                 and not self._catalog_check_pending(pin, rv)

@@ -71,7 +71,8 @@ class EnableMixin:
         (for the install label, "Global (BlueArchive)"), None when it is the only one of its server. ``method`` is
         how mods are switched there (``catalog`` or ``files``), ``methodReason`` why an install uses files (a
         refusal code of the catalog checks, or a layout reason), and ``methodVersion`` the resource version that
-        answer was recorded for; they come from the catalog store, read without the library lock.
+        answer was recorded for; they come from the catalog store, read without the library lock. ``waiting``: the
+        cores still waiting for the reapply after a game update, with mods on (their official files are in the game).
         """
         pins = self.installs()
         named = {pin.key for pin in self._named_pins()}
@@ -113,6 +114,12 @@ class EnableMixin:
                 file=error.params.get("file"),
             )
             config = None
+        enabled = out.get("enabled", True)
+        for item in out["installs"]:
+            # the entries still waiting for the reapply after a game update: the game has their official files
+            record = catalogs.get(item["key"]) or {}
+            waiting = (record.get("pending") or {}) if enabled and record.get("reapply") else {}
+            item["waiting"] = sorted(waiting) if record.get("mode") == MODE_CATALOG else []
         keys = {pin.key for pin in pins}
         out["configured"] = sum(
             len(folder.get("configured") or {})
@@ -631,7 +638,9 @@ class EnableMixin:
                             self._save_outcomes(outcomes)
                         outcomes, unsaved, saved_at = {}, 0, time.monotonic()
                     line.done()
-                if enabled and stop is None and not (cancel and cancel()):
+                # a stopped full toggle publishes nothing; the start's resumable writers publish what they built,
+                # their other entries keep their recorded outputs or wait for the next run
+                if enabled and stop is None and (catalog_reconcile or retry is not None or not (cancel and cancel())):
                     for key, pin in catalog_pins.items():
                         if key in unavailable and not (fallback and reached[key]):
                             continue

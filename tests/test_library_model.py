@@ -1357,6 +1357,8 @@ def test_costume_builds_of_an_older_rule_are_built_again_at_the_start(model_env,
     assert library.update_due() == {
         "due": False,
         "outdated": False,
+        "catalog": False,
+        "rebuild": False,
         "retry": False,
         "install": library.current_pin().key,
         "version": "v1",

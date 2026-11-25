@@ -7,7 +7,7 @@ import threading
 import webbrowser
 from concurrent.futures import Future, TimeoutError as FutureTimeout
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from ..host import updater
 from ..catalog.records import alt_resource_core
@@ -245,6 +245,11 @@ class WindowMixin:
     def _warm(self) -> None:
         try:
             library = self.library
+            # the start-up writers first: the maintenance below queues behind them (class 4)
+            try:
+                self.submit_start_jobs()
+            except ServiceError as error:
+                logger.info("start-up jobs not queued: %s", error.code)
             self._start_crc_repair(library)
             requested = False
             with self._lock:
@@ -259,6 +264,7 @@ class WindowMixin:
                 self.publish_state()
             # the official rigs of the portraits as this release has them, kept before an update replaces them
             #: after the prune, away from the job queue, a core at a time
+            self.jobs.wait_resumable()  # class 4 after the queued start-up writers (a quit ends them at a step)
             if self._prune_job is not None:
                 self.jobs.wait(self._prune_job, PRUNE_WAIT)
             archive = getattr(library, "archive_rigs", None)
@@ -372,11 +378,16 @@ class WindowMixin:
         Args:
             restart: Start the App again in safe mode after it quit.
 
+        Start-up writers do not hold it: they stop after their step under way (``finish_steps``), then the quit goes on.
+
         Raises:
-            ServiceError: ``busy`` while a writer job is queued or running; ``native_unavailable`` with ``--serve``.
+            ServiceError: ``busy`` while a writer job the user started is queued or running; ``native_unavailable``
+                with ``--serve``.
         """
-        if self.jobs.busy():
+        if self.jobs.busy(resumable=False):
             raise ServiceError("busy")
+        if self.finish_steps(lambda: self.quit(restart=restart)):
+            return
         if self.close_coordinator is not None:
 
             def close():
@@ -394,6 +405,37 @@ class WindowMixin:
             threading.Timer(0.3, self.quit_handle).start()
             return
         raise ServiceError("native_unavailable")
+
+    def finish_steps(self, then: Callable[[], Any]) -> bool:
+        """Stop the start-up writers for a quit; while one finishes its step, the quit waits for it.
+
+        The page is told (``app.finishing {busy}``) and shows that the step under way is finishing; ``then`` runs
+        once it ended, on another thread. Queued ones never run. They all take up the rest at the next start.
+
+        Args:
+            then: Makes the quit again once the step ended.
+
+        Returns:
+            Whether the quit waits (``then`` follows); False when none was running.
+        """
+        if not self.jobs.stop_resumable():
+            return False
+        self.events.publish("app.finishing", {"busy": True})
+
+        def wait() -> None:
+            self.jobs.wait_resumable()
+            self.events.publish("app.finishing", {"busy": False})
+            try:
+                then()
+            except ServiceError as error:
+                logger.info("quit after the start-up step refused: %s", error.code)
+                if error.code == "busy":
+                    self.events.publish("app.busy")
+            except Exception:
+                logger.exception("quit after the start-up step failed")
+
+        threading.Thread(target=wait, name="bamt-quit-steps", daemon=True).start()
+        return True
 
     def install_update(self, path: Path, md5: str) -> None:
         """Close the window and run the prepared installer, reserving writer and classic admission until then.
@@ -461,10 +503,12 @@ class WindowMixin:
             Whether the close may go on.
         """
         with self.classic.starting():
-            if self.jobs.busy():
+            if self.jobs.busy(resumable=False if self._pending_update is None else True):
                 if self._pending_update is not None:
                     self._cancel_update(ServiceError("busy"))
                 self.events.publish("app.busy")
+                return False
+            if self.close_coordinator is None and self.finish_steps(self._close_window):
                 return False
             if self._pending_update is not None and self.classic_open():
                 self._cancel_update(ServiceError("classic_open"))
@@ -472,6 +516,12 @@ class WindowMixin:
             if self.close_coordinator is not None:
                 return self.close_coordinator.native_closing()
             return True
+
+    def _close_window(self) -> None:
+        """Close the window again once the start-up writers stopped (``on_closing`` without a close coordinator)."""
+        window = self.window
+        if window is not None:
+            window.destroy()
 
     def on_closed(self) -> None:
         """Launch a prepared helper once the window is gone, including backends that skip closing on destroy()."""

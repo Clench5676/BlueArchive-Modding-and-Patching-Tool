@@ -220,8 +220,10 @@ class JobRunner:
                 # the App quits: it runs at the next start, from its records
                 job.state, job.finished = "dropped", True
                 return job.id
-            self._queue.put((rank, job.seq, job))
+        # told before the worker can take it: job.queued always comes before job.started
         self._publish("job.queued", {"id": job.id, "kind": job.kind})
+        with self._lock:
+            self._queue.put((rank, job.seq, job))
         return job.id
 
     def _step_out(self, job: Job) -> bool:
