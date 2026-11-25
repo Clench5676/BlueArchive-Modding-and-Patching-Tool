@@ -1250,6 +1250,22 @@ def test_startup_maintenance_waits_for_reveal_and_respects_the_preference(servic
     assert sorted(calls) == (["prune", "rigs", "scan"] if enabled else [])
 
 
+def test_a_prune_due_before_the_first_screen_waits_for_the_maintenance(services, monkeypatch):
+    pruned, due = [], [True]
+    monkeypatch.setattr(services, "start_watch", lambda: None)
+    monkeypatch.setattr(services.scanner, "request", lambda *args, **kwargs: None)
+    monkeypatch.setattr(services.library, "take_prune_due", lambda: due and due.pop(), raising=False)
+    monkeypatch.setattr(services.library, "archive_rigs", lambda cancel: 0, raising=False)
+    monkeypatch.setattr(services, "_start_prune", lambda library: pruned.append(library))
+    services.start()
+    job = services.submit("mods.prepareCatalogs", lambda log, progress: None, writes="game")
+    assert services.jobs.wait(job, 5)
+    assert pruned == [] and due == [True]
+    services._startup_ready = True
+    services._warm()
+    assert pruned == [services.library] and due == []
+
+
 @pytest.mark.parametrize("consent", [True, False])
 def test_startup_repairs_what_older_builds_left_without_the_crc_silently(services, monkeypatch, consent):
     # With or without the scan consent, once the first screen is revealed, as a game writer job; nothing asked

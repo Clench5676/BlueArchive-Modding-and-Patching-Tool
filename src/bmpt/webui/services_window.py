@@ -250,12 +250,16 @@ class WindowMixin:
                 self.submit_start_jobs()
             except ServiceError as error:
                 logger.info("start-up jobs not queued: %s", error.code)
+            except Exception:
+                logger.exception("start-up jobs not queued")  # the maintenance below still runs
             self._start_crc_repair(library)
             requested = False
             with self._lock:
                 allowed = self.scan_allowed()
                 catalogs = getattr(library, "_catalog_records_for_read", None)
-                if self._prune_job is None and (allowed or (catalogs and catalogs())):
+                # kept originals a job before the first screen left for the maintenance prune (_after_writer)
+                due = getattr(library, "take_prune_due", lambda: False)()
+                if self._prune_job is None and (allowed or due or (catalogs and catalogs())):
                     self._start_prune(library)
                     requested = allowed
             if requested:
