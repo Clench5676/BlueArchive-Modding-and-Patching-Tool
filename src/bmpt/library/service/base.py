@@ -39,7 +39,7 @@ from ..judge import (
     seconds,
 )
 from ..records import Pin
-from ..catalog_switch import MODE_CATALOG
+from ..catalog_switch import MODE_CATALOG, placed_crc
 from ..storage import (
     atomic_json,
     read_tail,
@@ -943,7 +943,7 @@ class _View:
                     match,
                     not match,
                     None,
-                    item.get("crc", "ok"),
+                    placed_crc(item.get("crc")),
                     None,
                     official_name=name,
                 )

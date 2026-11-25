@@ -60,6 +60,21 @@ def catalog_paths(pin: Pin, *, allow_missing: bool = False) -> CatalogPaths | No
     return paths
 
 
+def placed_crc(state: object) -> str:
+    """Read the CRC state of a placed bundle, which has no name CRC to match.
+
+    The catalog loads a placed bundle by its SHA-1 name and never checks its CRC, so a placement saved without the
+    fix needs none. Records written before this was known carry ``needs_fix``; they read as ``ok`` too.
+
+    Args:
+        state: The state recorded for the placed file, or None.
+
+    Returns:
+        ``fixed`` when the bytes carry a fixing suffix, else ``ok``.
+    """
+    return "fixed" if state == "fixed" else "ok"
+
+
 def placed_name(sha1: str) -> str:
     """Name a placed bundle after the SHA-1 of its contents.
 
