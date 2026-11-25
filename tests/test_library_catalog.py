@@ -487,6 +487,25 @@ def test_apply_and_restore_change_only_the_chosen_redirect(catalog_install, monk
     assert all(path.read_bytes() == data for path, data in env.originals.items())
 
 
+@pytest.mark.parametrize("recorded", [None, "needs_fix"])
+def test_placed_build_without_crc_fix_needs_none(catalog_install, monkeypatch, recorded):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    source, upload = env.add("test")
+    monkeypatch.setattr(lib.settings, "crc_needed", lambda path: True)
+    assert lib.apply("test", source).files
+    record = lib._catalog_record(pin)
+    item = record["redirects"][upload.name]
+    assert zlib.crc32(lib._placed_path(pin, item).read_bytes()) != int(parse_filename(upload.name).crc)
+    assert item["crc"] == "ok"
+    if recorded:
+        item["crc"] = recorded
+        lib._save_catalog_record(pin, record)
+    (entry,) = lib.scan(cores={"test_spr"}).entries
+    assert {part.crc for part in entry.files} == {"ok"}
+    assert lib.state("test").crc == "ok"
+
+
 def test_deferred_choice_changes_catalog_with_one_rename_on_next_on(catalog_install, monkeypatch):
     env = catalog_install
     lib = env.library
