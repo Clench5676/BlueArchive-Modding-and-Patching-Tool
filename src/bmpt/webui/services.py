@@ -330,7 +330,7 @@ class Services(JobsMixin, WindowMixin, AssetsMixin):
             None  # game_found: the listing stamps of the folders last found to hold a game
         )
         self._prune_job: str | None = None
-        self._startup_ready = True  # start() defers maintenance until the page reports its first reveal
+        self._startup_ready = True  # build() and start() hold maintenance until the page reports its first reveal
         self._profiles_signature: Any = None
         self._intent_seen: tuple = ()
         self._queue_ticket: int | None = None  # the scan after a classic window closed: the queue runs after it

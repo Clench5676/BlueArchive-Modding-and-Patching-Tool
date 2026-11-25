@@ -1161,7 +1161,9 @@ def test_current_mod_and_ui_routes_do_not_wait_for_library_preview(app, services
         assert pending.result(timeout=1)[0] == "404 Not Found"
 
 
-def test_a_new_library_prunes_its_kept_originals_once(tmp_path, monkeypatch):
+@pytest.mark.parametrize("held", [False, True])
+def test_a_new_library_prunes_its_kept_originals_once(tmp_path, monkeypatch, held):
+    # held: the App's start (build) holds the prune and the start scan until the first screen is revealed
     pruned = []
 
     class Library:
@@ -1188,13 +1190,21 @@ def test_a_new_library_prunes_its_kept_originals_once(tmp_path, monkeypatch):
         catalog=FakeCatalog(),
     )
     s.state.set_scan_consent(True)
+    scans = []
+    monkeypatch.setattr(s.scanner, "request", lambda *args, **kwargs: scans.append(args))
+    if held:
+        s.hold_maintenance()
     try:
         library = s.library
         assert s.library is library
+        if held:
+            time.sleep(0.2)
+            assert pruned == [] and s._prune_job is None and scans == []
+            return
         deadline = time.monotonic() + 5
         while (not pruned or s.jobs.busy()) and time.monotonic() < deadline:
             time.sleep(0.01)
-        assert pruned == [library]
+        assert pruned == [library] and scans
     finally:
         s.close()
 

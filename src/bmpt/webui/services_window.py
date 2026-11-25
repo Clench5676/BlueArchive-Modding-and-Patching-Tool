@@ -221,9 +221,13 @@ class WindowMixin:
 
     # --- the game watch, the window and quitting ---
 
+    def hold_maintenance(self) -> None:
+        """Hold library maintenance (the prune, the start scan) until the page reports its first screen (``ready``)."""
+        self._startup_ready = False
+
     def start(self) -> None:
         """Start the watch; library maintenance waits for the first screen to be revealed."""
-        self._startup_ready = False
+        self.hold_maintenance()
         if not self.safe_mode:
             self.start_watch()
 
