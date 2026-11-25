@@ -324,8 +324,42 @@ textarea {
 .top-home {
   right: var(--corner-margin, 43.978378px);
 }
-.top-home[hidden] {
+.top-home[hidden],
+.top-tasks[hidden],
+.top-tasks-line[hidden] {
   display: none;
+}
+/* the Tasks button (js/app/tasks.js): Settings' box one slot further left, the game's Mission icon until the
+   prefab draws it; the loading ring at its lower right while a job is queued or running */
+.top-tasks {
+  position: absolute;
+  top: 7px;
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  right: calc(var(--corner-margin, 43.978378px) + 228px);
+  overflow: visible;
+}
+.top-tasks > i {
+  width: 32px;
+  height: 40px;
+  background-color: #466399;
+  -webkit-mask: url("/asset/ui/sprite/Common/Common_Icon_Mission.png") center / contain no-repeat;
+  mask: url("/asset/ui/sprite/Common/Common_Icon_Mission.png") center / contain no-repeat;
+}
+.top-tasks-ring {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+}
+/* the Tasks panel (js/app/task-panel-layout.js), under the top bar */
+.task-panel {
+  position: absolute;
+  z-index: 1001;
 }
 .top-option i {
   width: 39px;
@@ -334,12 +368,16 @@ textarea {
   -webkit-mask: url("/asset/ui/sprite/Common/Common_Top_Option_Btn.png") center / contain no-repeat;
   mask: url("/asset/ui/sprite/Common/Common_Top_Option_Btn.png") center / contain no-repeat;
 }
-.top-line {
+.top-line,
+.top-tasks-line {
   position: absolute;
   right: calc(var(--corner-margin, 43.978378px) + 76px);
   top: 12px;
   width: 3px;
   height: 32px;
+}
+.top-tasks-line {
+  right: calc(var(--corner-margin, 43.978378px) + 190px);
 }
 
 /* the Enable Mods switch after Back (js/mods/mod-switch.js): two of the student list filter's segments
@@ -555,6 +593,7 @@ textarea {
 .hit:focus-visible,
 .card-hit:focus-visible,
 .nav-item:focus-visible,
+.top-tasks:focus-visible,
 .top-option:focus-visible,
 .top-home:focus-visible,
 .back:focus-visible,

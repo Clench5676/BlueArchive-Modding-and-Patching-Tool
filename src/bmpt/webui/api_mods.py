@@ -608,6 +608,11 @@ def register(rpc: RpcRegistry, s: Services) -> None:
         job = s.jobs.get(id)
         return {**job.to_json(), "log": job.log[-500:]}
 
+    @rpc.method("jobs.list")
+    def jobs_list() -> list[dict[str, Any]]:
+        """List the queued and running jobs for the Tasks panel, the running one first (``JobRunner.pending``)."""
+        return s.jobs.pending()
+
     @rpc.method("jobs.cancel")
     def jobs_cancel(id: str) -> str:
         """Stop a job the page has given up on, of the kinds that allow it (``CANCELLABLE``).

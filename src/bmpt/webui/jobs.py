@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 LOG_FLUSH_SECONDS = 0.1
 PROGRESS_SECONDS = 0.1
+DONE_ITEMS = 3  # how many of a job's finished items it keeps for the Tasks panel (``Job.summary``)
+_ITEM_FIELDS = ("action", "alt", "core", "resourceType", "kind", "name", "source", "label", "current", "total")
 WRITES = ("game", "library")  # a writer job writes the game folder (and the library), or the library only
 # The queue serves jobs by class, then in submission order; a running job is never interrupted. Jobs the user started
 # and watches go first, then start-up work behind the start cover, then background maintenance (the prune, the CRC
@@ -53,6 +55,37 @@ class Job:
     progress: dict[str, Any] | None = None
     cancellable: bool = False  # JobRunner.cancel may stop it: never run when queued, stopped between steps when running
     stop: threading.Event = field(default_factory=threading.Event)
+    done_items: list[dict[str, Any]] = field(default_factory=list)  # the last finished items, oldest first
+
+    def note_progress(self, progress: dict[str, Any]) -> None:
+        """Keep the item at hand as finished when the job's progress moves on to another item.
+
+        Args:
+            progress: The job's new progress snapshot, with its ``current`` item.
+        """
+        previous = self.progress
+        if not previous or previous.get("current") == progress.get("current"):
+            return
+        if not any(previous.get(key) for key in ("alt", "core", "label", "name")):
+            return
+        self.done_items = [
+            *self.done_items[-(DONE_ITEMS - 1) :],
+            {key: previous[key] for key in _ITEM_FIELDS if key in previous},
+        ]
+
+    def summary(self) -> dict[str, Any]:
+        """Return what the Tasks panel shows of a queued or running job.
+
+        That is its id, kind and state, whether it writes, its last progress and its last finished items.
+        """
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "state": self.state,
+            "writes": self.writes,
+            "progress": self.progress,
+            "done": list(self.done_items),
+        }
 
     def to_json(self) -> dict[str, Any]:
         """Return the job's id, kind, state, result, error and last progress, as the page sees it."""
@@ -156,6 +189,7 @@ class JobRunner:
                     break
                 self._jobs.pop(self._order.pop(drop), None)
             self._queue.put((rank, next(self._seq), job))
+        self._publish("job.queued", {"id": job.id, "kind": job.kind})
         return job.id
 
     def listen(self, fn: Callable[[Job], Any]) -> None:
@@ -243,6 +277,18 @@ class JobRunner:
         """Allow writer jobs again after a quit that did not happen."""
         with self._lock:
             self._quit_reserved = False
+
+    def pending(self) -> list[dict[str, Any]]:
+        """List the queued and running jobs as the Tasks panel shows them (``Job.summary``).
+
+        The running job comes first, then the queued ones in the order the worker takes them: by class, then in
+        submission order.
+        """
+        with self._lock:
+            jobs = [j for j in self._jobs.values() if j.pending]
+            order = {jid: i for i, jid in enumerate(self._order)}
+            jobs.sort(key=lambda j: (j.state != "running", j.rank, order.get(j.id, 0)))
+            return [j.summary() for j in jobs]
 
     def active(self, *kinds: str) -> bool:
         """Return whether a job of one of these kinds is queued or running.
@@ -365,9 +411,11 @@ class JobRunner:
             # A delayed HTTP response must never replace a newer event in the UI.
             with progress_lock:
                 if isinstance(current, dict):
+                    job.note_progress(current)
                     job.progress = {**current, "id": job.id, "sequence": next(progress_sequence)}
                 else:
                     label = label or t("webui.progress.process", name=t("webui.progress.mods"))
+                    job.note_progress({"current": current})
                     job.progress = {
                         "id": job.id,
                         "current": current,

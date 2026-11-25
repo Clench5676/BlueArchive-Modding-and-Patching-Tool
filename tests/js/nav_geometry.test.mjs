@@ -52,7 +52,10 @@ class El {
 const host = new El(),
   plate = new El();
 const top = Object.fromEntries(
-  [".topbar .back", ".top-option", ".top-home", ".top-line"].map((key) => [key, new El()]),
+  [".topbar .back", ".top-option", ".top-home", ".top-line", ".top-tasks", ".top-tasks-line"].map((key) => [
+    key,
+    new El(),
+  ]),
 );
 globalThis.document = {
   createElement: () => new El(),
@@ -216,6 +219,12 @@ test("Home, settings and divider retain the game's native sibling spacing", asyn
   assert.ok(Math.abs(option[0] - home[0] - 174 * S) < 0.001);
   assert.ok(Math.abs(option[1] - home[1] - 0.6 * S) < 0.001);
   assert.ok(Math.abs(line[0] - home[0] - 87.5 * S) < 0.001);
+  // Tasks and its divider: Settings and its divider one prefab pitch further left
+  const tasks = center(".top-tasks"),
+    taskLine = center(".top-tasks-line");
+  assert.ok(Math.abs(tasks[0] - option[0] - 174 * S) < 0.001);
+  assert.ok(Math.abs(tasks[1] - option[1]) < 0.001);
+  assert.ok(Math.abs(taskLine[0] - line[0] - 174 * S) < 0.001);
   assert.ok(top[".top-home"].children.some((el) => el.dataset.path === "Lobby"));
   assert.ok(
     !host.children.some((button) => button.attrs["aria-current"]),

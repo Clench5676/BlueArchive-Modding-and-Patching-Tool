@@ -56,6 +56,7 @@ function runStart(gameFound) {
     location: { hash: "#/" },
     history: { replaceState() {} },
     renderNav() {},
+    Tasks: { init() {} },
     ModSwitch: { init: async () => {}, current: () => null, onChange() {} },
     Prompts: { init() {} },
     Impact: {
