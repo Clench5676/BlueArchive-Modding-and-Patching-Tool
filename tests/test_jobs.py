@@ -355,3 +355,114 @@ def test_pending_lists_the_running_job_first_with_its_last_finished_items():
     finally:
         gate.set()
         jobs.shutdown()
+
+
+def _steps(done, gate, total=4):
+    """A resumable job of ``total`` steps that keeps what it finished in ``done``, its own record."""
+    from bmpt.webui.jobs import Handover
+
+    def run(log, progress, step_out):
+        while len(done) < total:
+            gate.wait(5)
+            done.append(len(done))
+            if len(done) < total and step_out():
+                raise Handover
+        return len(done)
+
+    return run
+
+
+def test_a_resumable_start_job_hands_over_to_a_user_job_and_takes_up_the_rest():
+    jobs = JobRunner(EventBus())
+    gate, done, ran = threading.Event(), [], []
+    try:
+        start = jobs.submit(
+            "mods.refreshCostumes", _steps(done, gate), writes="game", rank=jobs_module.START, resumable=True
+        )
+        later = jobs.submit(
+            "mods.catalogReapply", lambda log, progress: ran.append("reapply"), writes="game", rank=jobs_module.START
+        )
+        assert wait_for(lambda: jobs.get(start).state == "running")
+        user = jobs.submit("apply", lambda log, progress: ran.append(("apply", len(done))), writes="game")
+        gate.set()
+        assert jobs.wait(start, 5) and jobs.wait(later, 5)
+        assert jobs.get(user).state == "done" and jobs.get(start).state == "done"
+        assert jobs.get(start).result == 4
+        # the apply ran at the first step boundary; the start job kept its place ahead of the later one
+        assert ran == [("apply", 1), "reapply"]
+    finally:
+        gate.set()
+        jobs.shutdown()
+
+
+def test_a_quit_stops_resumable_jobs_at_a_step_and_drops_the_queued_ones():
+    events = EventBus()
+    seen = events.subscribe()
+    jobs = JobRunner(events)
+    gate, done = threading.Event(), []
+    try:
+        start = jobs.submit(
+            "mods.refreshCostumes", _steps(done, gate), writes="game", rank=jobs_module.START, resumable=True
+        )
+        queued = jobs.submit(
+            "mods.retryFailed",
+            lambda log, progress, step_out: pytest.fail("ran"),
+            writes="game",
+            rank=jobs_module.START,
+            resumable=True,
+        )
+        assert wait_for(lambda: jobs.get(start).state == "running")
+        assert jobs.busy() and not jobs.busy(resumable=False)
+        assert jobs.stop_resumable()
+        assert jobs.get(queued).state == "dropped"
+        late = jobs.submit("mods.catalogReapply", lambda log, progress, step_out: None, writes="game", resumable=True)
+        assert jobs.get(late).state == "dropped"
+        assert not jobs.wait_resumable(0.05)
+        gate.set()
+        assert jobs.wait_resumable(5)
+        assert jobs.get(start).state == "stopped" and done == [0]
+        assert not jobs.busy()
+        kinds = []
+        while not seen.empty():
+            kinds.append(seen.get_nowait()[0])
+        assert "job.stopped" in kinds and "job.dropped" in kinds
+        jobs.resume()
+        again = jobs.submit("mods.retryFailed", lambda log, progress, step_out: 1, writes="game", resumable=True)
+        assert jobs.wait(again, 5) and jobs.get(again).state == "done"
+    finally:
+        gate.set()
+        jobs.shutdown()
+
+
+def test_a_non_resumable_writer_still_holds_a_quit():
+    jobs = JobRunner(EventBus())
+    gate = threading.Event()
+    try:
+        jid = jobs.submit("apply", lambda log, progress: gate.wait(5), writes="game")
+        assert wait_for(lambda: jobs.get(jid).state == "running")
+        assert jobs.busy(resumable=False)
+        assert not jobs.stop_resumable()
+        assert jobs.get(jid).state == "running"
+    finally:
+        gate.set()
+        jobs.shutdown()
+
+
+def test_shutdown_stops_a_resumable_job_at_its_step_and_does_not_run_queued_ones():
+    jobs = JobRunner(EventBus())
+    gate, done = threading.Event(), []
+    start = jobs.submit(
+        "mods.refreshCostumes", _steps(done, gate), writes="game", rank=jobs_module.START, resumable=True
+    )
+    queued = jobs.submit(
+        "mods.retryFailed",
+        lambda log, progress, step_out: pytest.fail("ran"),
+        writes="game",
+        rank=jobs_module.START,
+        resumable=True,
+    )
+    assert wait_for(lambda: jobs.get(start).state == "running")
+    threading.Timer(0.1, gate.set).start()
+    jobs.shutdown(wait=5)
+    assert jobs.get(start).state == "stopped" and done == [0]
+    assert wait_for(lambda: jobs.get(queued).state == "dropped")
