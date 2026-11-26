@@ -18,6 +18,7 @@ from bmpt.spine import atlas_remap as remap
 from bmpt.core import devmode
 from bmpt.engine import Bundle, SaveOptions, core
 from bmpt.core.openfiles import temporary_directory
+from ..library.bundle_crc import target_save_options
 from ..unity.texture_guard import texture_image
 
 
@@ -378,7 +379,9 @@ def assemble_mod(
         raise ValueError("Texture name cannot be represented by a named PNG")
     before = _object_bytes(bundle)
     edited = assembly.image.size != official.size or assembly.image.tobytes() != official.tobytes()
-    options = SaveOptions(perform_crc=True, extra_bytes=b"\x08\x08\x08\x08", compression="lz4")
+    options = target_save_options(
+        SaveOptions(perform_crc=True, extra_bytes=b"\x08\x08\x08\x08", compression="lz4"), target.name, source
+    )
     with temporary_directory(prefix="bamt-refine-") as temporary:
         scratch = Path(temporary)
         base = source
@@ -388,7 +391,7 @@ def assemble_mod(
             texture.set_image(official, target_format=4, mipmap_count=max(1, texture.m_MipCount or 1))
             texture.save()
             base = scratch / source.name
-            ok, message = bundle.save(base, SaveOptions(compression="lz4"))
+            ok, message = bundle.save(base, SaveOptions(compression="lz4", target_crc=options.target_crc))
             if not ok:
                 raise ValueError(f"Cannot stage lossless page: {message}")
         png = scratch / f"{name}.png"
@@ -399,7 +402,7 @@ def assemble_mod(
             raise ValueError(f"Cannot pack assembled page: {message}")
     try:
         checked = Bundle.load(target)
-        if checked is None or not Bundle.check_crc_match(target):
+        if checked is None or not Bundle.check_crc_match(target, target_crc=options.target_crc):
             raise ValueError("Assembled bundle failed reload or CRC verification")
         after = _object_bytes(checked)
         changed_key = (obj.assets_file.name, obj.path_id)

@@ -1,6 +1,7 @@
 """Generated inputs and real UnityFS fixtures; optional read-only official-view checks."""
 
 import os
+import zlib
 from pathlib import Path
 
 import pytest
@@ -170,12 +171,14 @@ NAME = "assets-_mx-spinecharacters-test_spr-_mxdependency-2026-01-01_003_assets_
 
 @pytest.mark.parametrize("texture_format", [4, 25])
 @pytest.mark.parametrize("identity,scale", [(True, 1), (False, 1), (False, 2)])
+@pytest.mark.parametrize("hashed", [False, True])
 def test_bundle_roundtrip_crc_lossless_pixels_unrelated_objects_and_official_metadata(
-    tmp_path, texture_format, identity, scale
+    tmp_path, texture_format, identity, scale, hashed
 ):
     text = atlas_text([("page.png", (20, 18), [("body", -1, (4, 3), (6, 4), (6, 4), (0, 0), 0)])])
+    name = NAME.replace("123456.bundle", f"{'a' * 32}.bundle") if hashed else NAME
     source = write_bundle(
-        tmp_path / "official" / NAME,
+        tmp_path / "official" / name,
         {"hero.atlas": text},
         {"page": page(), "other": pattern((8, 8), 31)},
         texture_format=texture_format,
@@ -188,9 +191,9 @@ def test_bundle_roundtrip_crc_lossless_pixels_unrelated_objects_and_official_met
     report = assemble_mod(
         [source], generated, tmp_path / "mod", atlas_name="hero.atlas", page_name="page.png", scale=scale
     )
-    built = tmp_path / "mod" / NAME
+    built = tmp_path / "mod" / source.name
     actual = remap.read_inputs([built])
-    assert built.name == source.name and Bundle.check_crc_match(built)
+    assert Bundle.check_crc_match(built, target_crc=zlib.crc32(before) if hashed else None)
     assert actual.textures["page"].tobytes() == expected.image.tobytes()
     assert actual.textures["other"].tobytes() == inputs.textures["other"].tobytes()
     assert actual.atlases == inputs.atlases and actual.skeletons == inputs.skeletons

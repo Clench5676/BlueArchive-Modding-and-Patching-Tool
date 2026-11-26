@@ -68,8 +68,7 @@ class Field:
 def install_needs_crc(file_source: object) -> bool:
     """Whether an install of this file source needs the CRC fix.
 
-    The Windows clients check every bundle's CRC against its file name, Android ones do not. Fails closed: any source
-    not known to be Android (``adb_*``) needs it.
+    The Windows clients verify every bundle's CRC. Only sources with the ``adb_*`` prefix skip the fix.
     """
     return not str(file_source).startswith("adb_")
 

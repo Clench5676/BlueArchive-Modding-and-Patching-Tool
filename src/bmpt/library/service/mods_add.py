@@ -25,6 +25,7 @@ from bmpt.engine import (
 )
 from ...core.errors import ServiceError
 from .. import fingerprint, integrity
+from ..bundle_crc import name_suffix
 from ..judge import (
     core_of,
     date_of,
@@ -306,7 +307,7 @@ class AddMixin:
             resource_type = resource_type_of_file(name)
             if not name.endswith(".bundle"):
                 raise ServiceError("mod_unsupported", file=source)
-            if not parsed.prefix or not parsed.crc or resource_type is None:
+            if not parsed.prefix or not name_suffix(name) or resource_type is None:
                 fingerprint = self._hashes.get(source).sha1
                 matches = [
                     path.name

@@ -357,15 +357,17 @@ class Bundle:
         return bundle.need_crc()
 
     @classmethod
-    def check_crc_match(cls, bundle_path: Path) -> bool:
+    def check_crc_match(cls, bundle_path: Path, *, target_crc: int | None = None) -> bool:
         """
         检查 bundle 实际 CRC 是否已与文件名中的 CRC 一致（一致则无需修正重存）。
         仅需文件名解析与整文件 CRC 计算，无需加载 bundle。
         """
-        crc_str = parse_filename(bundle_path.name).crc
-        if not crc_str or not crc_str.isdigit():
-            return False
-        return compute_crc32(bundle_path) == int(crc_str)
+        if target_crc is None:
+            crc_str = parse_filename(bundle_path.name).crc
+            if not crc_str or not crc_str.isdigit():
+                return False
+            target_crc = int(crc_str)
+        return compute_crc32(bundle_path) == target_crc
 
     @classmethod
     def list_asset_names(
@@ -456,10 +458,12 @@ class Bundle:
             if save_options.perform_crc:
                 if on_step:
                     on_step("crc")
-                crc_str = parse_filename(output_path.name).crc
-                if not crc_str or not crc_str.isdigit():
-                    return False, t("message.crc.correction_failed_file_not_generated", name=output_path.name)
-                target_crc = int(crc_str)
+                target_crc = save_options.target_crc
+                if target_crc is None:
+                    crc_str = parse_filename(output_path.name).crc
+                    if not crc_str or not crc_str.isdigit():
+                        return False, t("message.crc.correction_failed_file_not_generated", name=output_path.name)
+                    target_crc = int(crc_str)
 
                 if save_options.extra_bytes:
                     compressed_data += save_options.extra_bytes

@@ -21,6 +21,7 @@ from bmpt.engine import (
 from ...core.errors import ServiceError
 from ...core.openfiles import remove_tree
 from .. import profiles as profiles_mod
+from ..bundle_crc import name_suffix
 from ..judge import (
     core_of,
     date_of,
@@ -164,7 +165,6 @@ class ModsMixin:
         from ..memorial_lobby_camera import meta_of
 
         paths = self._paths(record)
-        parsed = parse_filename(paths[0].name)
         # a memorial lobby camera is one of its alt's memorial lobby choices (memorial_lobby_camera)
         camera = meta_of(record)
         # The parts of one mod can carry different dates: the mod is dated by its newest part, not by the first one.
@@ -178,7 +178,7 @@ class ModsMixin:
             not record["seen"],
             sum(p.stat().st_size for p in paths),
             max(date_of(path.name) for path in paths),
-            parsed.crc,
+            name_suffix(paths[0].name) or "",
             camera["core"] if camera else core_of(paths[0].name),
             repair_source_id=record.get("repair_source_id", ""),
             repaired_copy_id=self._repaired_id(record),

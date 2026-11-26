@@ -40,6 +40,7 @@ from ..core.errors import ServiceError
 from ..core.logging_utils import log_failure
 from ..core.openfiles import temporary_directory
 from . import profiles
+from .bundle_crc import name_hash, target_save_options
 from .judge import core_of, other_target, packed_cab
 
 if TYPE_CHECKING:
@@ -461,18 +462,20 @@ def patch_prefab(
     timeline: Path | None = None,
     compression: str = "lz4",
     crc: bool = True,
+    official: Path | None = None,
 ) -> bool:
     """Write a camera prefab and verify that only its intended objects changed or were added.
 
     Args:
         base: Prefab bundle supplying untouched objects and streams.
-        output: Saved bundle path whose filename supplies the CRC to fix to.
+        output: Destination bundle path.
         root: Memorial Lobby root GameObject name to frame.
         scale: Similarity-transform multiplier for the prefab's camera framing.
         offset: Horizontal and vertical translation in NGUI units.
         timeline: Art bundle holding the intro timeline; None leaves the intro in camera framing.
         compression: Engine bundle compression mode for the output.
-        crc: Whether to fix the saved bytes to the output filename's CRC.
+        crc: Whether to fix the saved bytes to the target's required CRC.
+        official: Verified official prefab used to resolve the CRC for a hash name.
 
     Returns:
         Whether an added intro track preserves official framing until the rest pose.
@@ -507,7 +510,8 @@ def patch_prefab(
     sf.objects.update(ordered)
     preload = _preload(sf.objects, added) if added else None
     expected = {pid: t for pid, t in edit.trees.items()}
-    success, _ = bundle.save(output, SaveOptions(perform_crc=crc, compression=compression))
+    options = target_save_options(SaveOptions(perform_crc=crc, compression=compression), output.name, official)
+    success, _ = bundle.save(output, options)
     if not success:
         raise ServiceError("memorial_lobby_camera_failed")
     checked = Bundle.load(output)
@@ -734,7 +738,11 @@ def save(
         (work / "camera").mkdir()
         output = work / "camera" / live.name
         timeline = timeline_file(library, alt, source, base, pin)
-        held = patch_prefab(base, output, root, k, (ox, oy), timeline=timeline, crc=library.settings.crc_needed(live))
+        crc = library.settings.crc_needed(live)
+        official = base if base_source == "official" else None
+        if official is None and crc and name_hash(live.name):
+            official = library._official_for(live, pin)
+        held = patch_prefab(base, output, root, k, (ox, oy), timeline=timeline, crc=crc, official=official)
         number = 1 + max((meta_of(r).get("number", 0) for r in cameras(library, alt)), default=0)
         meta = {
             "alt": alt,
@@ -870,6 +878,7 @@ def refresh(library: ModLibrary, pins: list[Pin], log, only: set[str] | None = N
                         tuple(meta["offset"]),
                         timeline=timeline,
                         crc=library.settings.crc_needed(live),
+                        official=base,
                     )
                     old = library._paths(record)[0]
                     target = old.parent / live.name

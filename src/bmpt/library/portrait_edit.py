@@ -20,6 +20,7 @@ from ..core.logging_utils import log_failure
 from ..core.openfiles import temporary_directory
 from ..unity.texture_guard import texture_image
 from . import profiles
+from .bundle_crc import target_save_options
 from .judge import core_of, date_of, other_target
 from .records import ThumbnailApplyResult, stored_target
 
@@ -67,7 +68,7 @@ def patch_portraits(
         output: Destination bundle to save and reload for verification.
         edits: Texture names mapped to PNG bytes, or None to restore that texture's official payload.
         compression: Engine bundle compression mode for the saved composite.
-        crc: Whether to fix the output's CRC to its filename.
+        crc: Whether to fix the output to the target's required CRC.
 
     Raises:
         ServiceError: A bundle or texture is unavailable, saving fails, or verification detects unintended changes.
@@ -112,7 +113,8 @@ def patch_portraits(
             data.set_image(fitted, target_format=4, mipmap_count=max(1, source_data.m_MipCount or 1))
             data.save()
             expected[name] = (width, height, 4, None, fitted.tobytes())
-    success, _ = bundle.save(output, SaveOptions(perform_crc=crc, compression=compression))
+    options = target_save_options(SaveOptions(perform_crc=crc, compression=compression), output.name, official)
+    success, _ = bundle.save(output, options)
     if not success:
         raise ServiceError("thumbnail_apply_failed")
     checked = Bundle.load(output)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -11,6 +10,7 @@ from ..core import devmode
 from bmpt.engine import REPLACEABLE_ASSET_TYPES, AssetKey, AssetType, Bundle, get_skel_version
 from ..core.errors import ServiceError
 from .rebuild import UpdateScope, unity_release
+from .bundle_crc import BUNDLE_SUFFIX
 from ..unity.bundle_guard import refuse_unsupported
 from ..gameassets.spine import atlas_pages
 from ..gameassets.discovery import cab_names
@@ -270,8 +270,8 @@ class Inspection:
 
 
 def replacement_key(name: str) -> str:
-    """Keep the complete release and part identity, ignoring only the final numeric CRC."""
-    return re.sub(r"_[0-9]+\.bundle$", ".bundle", name.removesuffix(".backup"))
+    """Keep the complete release and part identity, ignoring the final CRC or catalog hash."""
+    return BUNDLE_SUFFIX.sub(".bundle", name.removesuffix(".backup"))
 
 
 def metadata(path: Path, *, inspection: Inspection) -> Contents:

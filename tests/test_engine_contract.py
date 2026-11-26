@@ -13,6 +13,7 @@ import importlib
 import os
 import zlib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -325,6 +326,18 @@ def test_official_bundles_carry_their_crc_in_their_name():
 
 
 # --- load and save ---
+
+
+def test_bundle_save_crc_override_keeps_the_filename_default(tmp_path):
+    bundle = SimpleNamespace(compress=lambda compression: b"bundle payload", log=lambda message: None)
+    decimal = tmp_path / "test_123.bundle"
+    hashed = tmp_path / "test_908885688f7bc516086bcb402c289abe.bundle"
+    assert SaveOptions().target_crc is None
+    assert Bundle.save(bundle, decimal, SaveOptions())[0]
+    assert Bundle.check_crc_match(decimal)
+    assert not Bundle.save(bundle, hashed, SaveOptions())[0]
+    assert Bundle.save(bundle, hashed, SaveOptions(target_crc=0))[0]
+    assert Bundle.check_crc_match(hashed, target_crc=0)
 
 
 @needs_game

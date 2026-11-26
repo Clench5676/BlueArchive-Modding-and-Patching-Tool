@@ -23,6 +23,7 @@ from bmpt.engine import (
 from ..core.errors import ServiceError
 from ..gameassets.spine import PREVIEW_TYPES, Composition, spine_revision
 from ..library import integrity, staging
+from ..library.bundle_crc import target_crc
 from ..library.rebuild import rebuild
 from ..library.judge import core_of
 from ..library.storage import Fingerprints, atomic_clone, verify_file
@@ -857,18 +858,20 @@ class BatchImport(JudgeMixin):
                 for target, source in candidate.direct.items():
                     path = output / target.name
                     data = source.read_bytes()
-                    expected = int(parse_filename(target.name).crc)
-                    fix = (
-                        settings.crc_needed(baselines.get(target.name, target))
-                        and CRCUtils.compute_crc32(data) != expected
-                    )
-                    if not fix and source.name.removesuffix(".backup") == target.name:
+                    official = baselines.get(target.name)
+                    corrected = False
+                    if settings.crc_needed(official or target):
+                        expected = target_crc(target.name, official, hashes=self._hashes)
+                        if expected is None:
+                            raise ServiceError("crc_fix_failed", file=target.name)
+                        if CRCUtils.compute_crc32(data) != expected:
+                            data = CRCUtils.apply_crc_fix(data + extra, expected)
+                            if data is None:
+                                raise ServiceError("crc_fix_failed", file=source.name)
+                            corrected = True
+                    if not corrected and source.name.removesuffix(".backup") == target.name:
                         paths.append(source)
                         continue
-                    if fix:
-                        data = CRCUtils.apply_crc_fix(data + extra, expected)
-                        if data is None:
-                            raise ServiceError("crc_fix_failed", file=source.name)
                     path.write_bytes(data)
                     paths.append(path)
                 return paths, False, candidate

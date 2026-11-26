@@ -1,17 +1,17 @@
 """How each kept original was verified: by Steam's file list (size and SHA-1) or by the CRC rule alone.
 
-Without Steam's list (no scan consent, an install Steam does not keep a list of) an official file is judged by the
-CRC32 of its whole content against the CRC in its name, with no trailing bytes. A mod can match a CRC, never Steam's
-SHA-1, so a copy kept by the CRC rule alone is named as such, and one that a Steam list later rejects stays rejected
-after the list is gone again: it is never used as an official copy, never written back as official.
+Without Steam's list, a readable bundle with no trailing bytes passes if its CRC matches the decimal name or the
+name carries a catalog hash and there is no conflicting kept original. A copy kept by this rule is named as such.
+One that a Steam list later rejects stays rejected after the list is gone again.
 
 ``originals.json`` in the library folder, beside ``originals/``:
 
     {"version": 2, "officials": {"<bundle name>": {"by": "steam" | "crc" | "failed", "sha1": "...", "size": 1,
                                                    "mtime": 1}}}
 
-A record speaks for the bytes it names (``sha1``). Managed originals also carry a recorded SHA-256 baseline. The
-screen verdict checks its recorded size and modification time and verifies the baseline when managed.
+A record speaks for the bytes it names (``sha1``). Hash-named originals also record their whole-file CRC.
+Managed originals carry a SHA-256 baseline. The screen verdict checks its recorded size and modification time
+and verifies the baseline when managed.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from typing import Literal
 
 from ..host.store_formats import read_runtime, runtime_store
 from . import toggle_timing
+from .bundle_crc import name_hash
 from .storage import Fingerprint, Fingerprints, atomic_json, file_revision
 
 logger = logging.getLogger(__name__)
@@ -164,7 +165,7 @@ class OriginalChecks:
         Args:
             original: Kept bundle whose filename and mtime are recorded.
             by: Verification result: steam, crc, or failed.
-            fingerprint: Verified bytes' SHA-1 and size.
+            fingerprint: Verified bytes' SHA-1, size and whole-file CRC.
             keep: Filenames whose records remain; None skips pruning. The saved record is always kept.
         """
         try:
@@ -178,6 +179,8 @@ class OriginalChecks:
         except (OSError, ValueError):
             return
         entry = {"by": by, "sha1": fingerprint.sha1, "size": fingerprint.size, "mtime": mtime}
+        if name_hash(original.name):
+            entry["crc"] = fingerprint.crc
         with self._lock:
             records = self._read()
             extra = self._extra

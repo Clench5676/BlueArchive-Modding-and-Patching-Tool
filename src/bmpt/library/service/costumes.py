@@ -27,6 +27,7 @@ from ...core.openfiles import remove_tree, temporary_directory
 from .. import toggle_timing
 from ..rebuild import rebuild
 from ..bundle_saves import save_bundles
+from ..bundle_crc import name_hash, target_save_options
 from ..judge import (
     core_of,
     now,
@@ -62,7 +63,13 @@ class CostumesMixin:
         self, sources: list[Path], targets: list[Path], directory: Path, log: LogFunc, pin: Pin, *, placed: bool = False
     ) -> dict[Path, Path]:
         """Stage one adaptation in class 2, holding the library lock until the caller's next entry."""
-        staged = self._stage_official(targets, directory / "targets", pin, current_fallback=True)
+        needs_crc = not placed and self.settings.crc_needed(targets[0])
+        staged = self._stage_official(
+            targets,
+            directory / "targets",
+            pin,
+            current_fallback=not (needs_crc and any(name_hash(p.name) for p in targets)),
+        )
         output = directory / "output"
         output.mkdir(parents=True)
         with toggle_timing.stage("build_crc"):
@@ -74,7 +81,7 @@ class CostumesMixin:
             list(staged.values()),
             output,
             self.settings.asset_types(),
-            self.settings.save_options(not placed and self.settings.crc_needed(targets[0])),
+            self.settings.save_options(needs_crc),
             self.settings.spine_options(),
             skip_unchanged=True,
             match_strategy="name_type",
@@ -275,7 +282,9 @@ class CostumesMixin:
                 output / path.name,
                 SaveOptions(perform_crc=False, compression="none")
                 if preview
-                else self.settings.save_options(not placed and self.settings.crc_needed(reverse[path])),
+                else target_save_options(
+                    self.settings.save_options(not placed and self.settings.crc_needed(reverse[path])), path.name, path
+                ),
             )
             for path, bundle in result.changed.items()
         ]
