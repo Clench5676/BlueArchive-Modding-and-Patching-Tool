@@ -26,6 +26,7 @@ BLOCKS = (
         "bad_params busy classic_failed classic_open data_dir_readonly dev_path_outside failed folder_changed "
         "internal job_not_found lines_unavailable native_only native_unavailable not_enough_space path_not_found "
         "mod_configuration_unreadable reveal_failed safe_restart_unavailable scan_off state_changed unknown_method "
+        "queued "
     ).split(),
     (
         "catalog_data_invalid catalog_student_not_found catalog_alt_not_found game_directory_missing game_file_locked "
