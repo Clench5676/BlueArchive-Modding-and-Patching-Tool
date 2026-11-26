@@ -20,6 +20,9 @@ TEXT_SUFFIXES = {".py", ".js", ".mjs", ".css", ".html", ".json", ".md"}
 # Third-party code kept as published, like the engine package outside src/bmpt.
 SKIPPED = ("src/bmpt/web/vendor/",)
 LOCALES = "src/bmpt/locales/*.json"
+# Release notes of a version that has a release tag are published text and stay as shipped; the notes of
+# an unreleased version are checked like any other file.
+RELEASE_NOTES = re.compile(r"src/bmpt/assets/release-notes/(?P<version>[^/]+)\.md")
 
 # retired name -> the current one
 RETIRED = {
@@ -129,7 +132,9 @@ _FIXED_LINES = (
                 '"MatchStrategy": ("models", "MatchStrategy"),',
                 '"Obj": ("models", "Obj"),',
                 '"Patch": ("models", "Patch"),',
+                '"PatchResult": ("models", "PatchResult"),',
                 '"ProgressCallback": ("models", "ProgressCallback"),',
+                '"RawAssetBytes": ("models", "RawAssetBytes"),',
                 '"REPLACEABLE_ASSET_TYPES": ("models", "REPLACEABLE_ASSET_TYPES"),',
                 '"ReplaceAssetType": ("models", "ReplaceAssetType"),',
                 '"SaveOptions": ("models", "SaveOptions"),',
@@ -390,14 +395,30 @@ ALLOWED += (
 )
 
 
+def _release_tags() -> set[str]:
+    out = subprocess.run(["git", "tag", "--list"], cwd=ROOT, check=True, capture_output=True, text=True).stdout
+    return set(out.split())
+
+
+def _published(path: str, tags: set[str]) -> bool:
+    """Tell whether a path is the release notes of a version that was already released."""
+    match = RELEASE_NOTES.fullmatch(path)
+    return bool(match) and match["version"] in tags
+
+
 def _tracked() -> list[str]:
     out = subprocess.run(
         ["git", "ls-files", "-z", "--", *SCANNED], cwd=ROOT, check=True, capture_output=True, text=True
     ).stdout
+    tags = _release_tags()
     return [
         path
         for path in out.split("\0")
-        if path and Path(path).suffix in TEXT_SUFFIXES and not path.startswith(SKIPPED) and (ROOT / path).is_file()
+        if path
+        and Path(path).suffix in TEXT_SUFFIXES
+        and not path.startswith(SKIPPED)
+        and not _published(path, tags)
+        and (ROOT / path).is_file()
     ]
 
 
@@ -456,6 +477,14 @@ def test_allowlist_covers_only_the_matched_span():
     assert _allowed("src/bmpt/x.py", '"ch0001_spr"', 8, 11)
     assert not _allowed("src/bmpt/x.py", "sprKind", 0, 3)
     assert _allowed("src/bmpt/web/css/app.css", "  font-family: x;", 7, 13)
+
+
+def test_only_released_notes_are_skipped():
+    tags = {"0.7.0"}
+    assert _published("src/bmpt/assets/release-notes/0.7.0.md", tags)
+    assert not _published("src/bmpt/assets/release-notes/0.8.0.md", tags)
+    assert not _published("src/bmpt/assets/release-notes/0.7.0-rc.1.md", tags)
+    assert not _published("docs/0.7.0.md", tags)
 
 
 def test_no_retired_names_in_src_and_docs():
