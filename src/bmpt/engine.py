@@ -30,6 +30,7 @@ _EXPORTS: dict[str, tuple[str, str | None]] = {
     # Bundle I/O
     "Bundle": ("bundle", "Bundle"),
     "collect_stream_companions": ("asset", "collect_stream_companions"),
+    "install_raw_content": ("asset", "install_raw_content"),
     # Data types and options
     "AnimCheckOptions": ("models", "AnimCheckOptions"),
     "AnimDiffMap": ("models", "AnimDiffMap"),
@@ -41,7 +42,9 @@ _EXPORTS: dict[str, tuple[str, str | None]] = {
     "MatchStrategy": ("models", "MatchStrategy"),
     "Obj": ("models", "Obj"),
     "Patch": ("models", "Patch"),
+    "PatchResult": ("models", "PatchResult"),
     "ProgressCallback": ("models", "ProgressCallback"),
+    "RawAssetBytes": ("models", "RawAssetBytes"),
     "REPLACEABLE_ASSET_TYPES": ("models", "REPLACEABLE_ASSET_TYPES"),
     "ReplaceAssetType": ("models", "ReplaceAssetType"),
     "SaveOptions": ("models", "SaveOptions"),
@@ -85,7 +88,7 @@ __all__ = ["ENGINE_PACKAGE", *_EXPORTS]
 
 if TYPE_CHECKING:
     from ba_modding_toolkit import core, utils
-    from ba_modding_toolkit.asset import collect_stream_companions
+    from ba_modding_toolkit.asset import collect_stream_companions, install_raw_content
     from ba_modding_toolkit.bundle import Bundle
     from ba_modding_toolkit.core.mod_update import _format_skel_conflicts as format_skel_conflicts
     from ba_modding_toolkit.gui.main import main as classic_main
@@ -109,7 +112,9 @@ if TYPE_CHECKING:
         MatchStrategy,
         Obj,
         Patch,
+        PatchResult,
         ProgressCallback,
+        RawAssetBytes,
         ReplaceAssetType,
         SaveOptions,
         SkelConvertOptions,

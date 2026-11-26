@@ -3,8 +3,8 @@
 Built on the engine's primitives (``Bundle.load``, ``extract_patch``, ``apply_patch``, ``save``); upstream's
 ``process_mod_update`` stays as upstream ships it, for the classic UI and the CLI. On top of upstream's flow this
 one keeps assets whose counterparts are unchanged (``UpdateScope``), validates every target before it saves any,
-fails the whole mod on a load, match or save failure, and reports what moved over and what did not. It also keeps
-whole serialized objects from crossing Unity releases (``_cross_release_unchanged``).
+fails the whole mod on a load, match or save failure, and reports what moved over and what did not. Raw transfers
+across Unity releases keep equal official objects or use an explicit typetree upgrade.
 """
 
 from __future__ import annotations
@@ -24,7 +24,9 @@ from bmpt.engine import (
     FilePair,
     LogFunc,
     MatchStrategy,
+    Obj,
     Patch,
+    PatchResult,
     ReplaceAssetType,
     SaveOptions,
     SkelConvertOptions,
@@ -38,6 +40,7 @@ from ..core.errors import ServiceError
 from ..unity.bundle_guard import refuse_unsupported
 from . import pointers
 from . import toggle_timing
+from . import tree_upgrade
 from .bundle_crc import name_hash, target_save_options
 
 #: The types the engine moves through their type trees: their fields are written into the target's own object, so
@@ -76,68 +79,97 @@ def _shared_fields_equal(mine, theirs) -> bool:
     return mine == theirs
 
 
-def _cross_release_unchanged(
-    source: Bundle, patch: Patch, targets: list[Bundle], strategy: MatchStrategy
-) -> dict[AssetKey, object]:
-    """Keep whole serialized objects from crossing Unity releases.
+def _object_release(obj: Obj, bundle: Bundle) -> str | None:
+    version = getattr(getattr(obj, "assets_file", None), "unity_version", "")
+    if isinstance(version, str) and version:
+        return unity_release(version) or version
+    releases = unity_releases(bundle)
+    return next(iter(releases)) if len(releases) == 1 else None
 
-    A raw-copied object (``TREE_COPIED_TYPES`` aside) whose counterpart sits in a target of another Unity release
-    would carry its own release's layout into the other one: a broken mesh or clip that loads without an error. One
-    that equals every such counterpart on the fields both releases share is a part the mod left as it was: the
-    target keeps its own object. Any other is refused.
 
-    Args:
-        source: The loaded mod bundle the patch was extracted from.
-        patch: That bundle's extracted entries.
-        targets: The loaded official bundles the patch goes to.
-        strategy: The engine key strategy pairing source and target objects.
+def _can_upgrade(kind: str, source: str | None, target: str | None) -> bool:
+    return (
+        kind in tree_upgrade.UPGRADE_TYPES
+        and source == "2021.3"
+        and bool(target and re.fullmatch(r"6000\.\d+", target))
+    )
 
-    Returns:
-        The source objects to leave out of the patch by key, their targets keeping their own objects.
 
-    Raises:
-        ServiceError: ``mod_unity_asset_mismatch`` for an object that differs from its counterpart.
-    """
-    releases = unity_releases(source)
-    foreign = [target for target in targets if unity_releases(target) != releases]
-    if not foreign:
-        return {}
+def _release_mismatch(source: Bundle, obj: Obj, name: str, version: str | None, target: str | None) -> ServiceError:
+    return ServiceError(
+        "mod_unity_asset_mismatch",
+        file=source.path.name,
+        type=obj.type.name,
+        name=name,
+        version=version or "",
+        expected=target or "",
+    )
+
+
+def _apply_target_patch(
+    target: Bundle,
+    patches: Patch,
+    raw_sources: dict[AssetKey, tuple[Bundle, Obj]],
+    strategy: MatchStrategy,
+    anim_check: AnimCheckOptions | None,
+    log: LogFunc,
+) -> PatchResult:
+    """Apply the engine's patch and handle cross-release raw matches through their typetrees."""
+    if not raw_sources:
+        return target.apply_patch(patches, strategy, anim_check)
     key_of = Bundle._get_key_func(strategy)
-    raw = {}
-    for obj in source.env.objects:
-        if obj.type.name not in TREE_COPIED_TYPES:
-            key = key_of(obj)
-            if key is not None and key in patch:
-                raw[key] = obj
-    if not raw:
-        return {}
-    counterparts: dict[AssetKey, list] = {}
-    for target in foreign:
-        for obj in target.env.objects:
-            key = key_of(obj)
-            if key in raw:
-                counterparts.setdefault(key, []).append(obj)
-    kept = {}
-    for key, obj in raw.items():
-        theirs = counterparts.get(key)
-        if not theirs:
-            continue  # it goes to targets of its own release only
+    remaining = set(raw_sources)
+    patch = patches.copy()
+    foreign = []
+    for counterpart in target.env.objects:
+        if not remaining:
+            break
+        if counterpart.type not in REPLACEABLE_ASSET_TYPES or (key := key_of(counterpart)) not in remaining:
+            continue
+        remaining.remove(key)
+        source, obj = raw_sources[key]
+        version = _object_release(obj, source)
+        expected = _object_release(counterpart, target)
+        if version != expected:
+            foreign.append((key, counterpart, version, expected, patch.pop(key)))
+
+    # The converted resources must have distinct names from companions installed by the raw patch too.
+    result = target.apply_patch(patch, strategy, anim_check)
+    if not foreign:
+        return result
+    upgraded, retained, applied_logs = [], [], []
+    for key, counterpart, version, expected, content in foreign:
+        source, obj = raw_sources[key]
+        kind = obj.type.name
+        name = obj.peek_name() or str(key)
         try:
+            if obj.type != counterpart.type:
+                raise tree_upgrade.TreeUpgradeError("The counterpart has a different asset type")
+            if not isinstance(content, bytes):
+                raise tree_upgrade.TreeUpgradeError("The source patch has no serialized object bytes")
             mine = obj.read_typetree()
-            same = all(_shared_fields_equal(mine, counterpart.read_typetree()) for counterpart in theirs)
-        except Exception:
-            same = False  # unreadable is unproven
-        if not same:
-            raise ServiceError(
-                "mod_unity_asset_mismatch",
-                file=source.path.name,
-                type=obj.type.name,
-                name=obj.peek_name() or str(key),
-                version=", ".join(sorted(releases)),
-                expected=", ".join(sorted(set().union(*map(unity_releases, foreign)))),
-            )
-        kept[key] = obj
-    return kept
+            theirs = counterpart.read_typetree()
+            if _shared_fields_equal(mine, theirs) and (
+                kind != "Mesh" or tree_upgrade.same_mesh_stream(mine, content, theirs, target)
+            ):
+                retained.append(key)
+                log(f"  ⏭️ {t('log.replace_skipped_same_content', type=kind, name=name)}")
+            elif _can_upgrade(kind, version, expected):
+                tree_upgrade.write_upgrade(mine, content, counterpart, target, log)
+                upgraded.append(key)
+                applied_logs.append(f"[{kind}] {name} (key: {key})")
+                log(f"  ✅ {t('log.replace_applied', type=kind, name=name)}")
+            else:
+                raise tree_upgrade.TreeUpgradeError("The Unity release pair does not support typetree upgrades")
+        except Exception as error:
+            raise _release_mismatch(source, obj, name, version, expected) from error
+    return result._replace(
+        applied_count=result.applied_count + len(upgraded),
+        skipped_count=result.skipped_count + len(retained),
+        applied_logs=[*result.applied_logs, *applied_logs],
+        matched_keys=[*result.matched_keys, *upgraded, *retained],
+        skipped_keys=[*(result.skipped_keys or ()), *retained],
+    )
 
 
 def _read_back(path: Path, official: Bundle, asset_types: set[ReplaceAssetType]) -> None:
@@ -175,6 +207,10 @@ def _load(path: Path, log: LogFunc) -> Bundle | None:
     """Load a bundle, refusing one of a newer archive format by name rather than as unreadable."""
     refuse_unsupported(path)
     return Bundle.load(path, log)
+
+
+class _MissingAssetStream(ValueError):
+    """A required stream is missing or its requested byte range is invalid."""
 
 
 class UpdateScope:
@@ -236,7 +272,7 @@ class UpdateScope:
         raw = obj.get_raw_data()
         companions = collect_stream_companions(raw, bundle.env.file)
         if companions is None:
-            raise ValueError(t("webui.error.required_asset_stream_missing"))
+            raise _MissingAssetStream(t("webui.error.required_asset_stream_missing"))
         # Compare the object's own stream range when metadata can be read without decoding it.
         try:
             data = obj.read()
@@ -253,7 +289,7 @@ class UpdateScope:
             name = path.replace("\\", "/").rsplit("/", 1)[-1]
             payload = companions.get(name)
             if payload is None or offset < 0 or size < 0 or offset + size > len(payload):
-                raise ValueError(t("webui.error.required_asset_stream_missing"))
+                raise _MissingAssetStream(t("webui.error.required_asset_stream_missing"))
             companions[name] = payload[offset : offset + size]
         return raw, companions
 
@@ -270,6 +306,17 @@ class UpdateScope:
         """
         try:
             content = self.serialized(source, obj)
+        except _MissingAssetStream as error:
+            if obj.type.name == "Mesh":
+                version = _object_release(obj, source)
+                for target, counterpart in self.counterparts[key]:
+                    expected = _object_release(counterpart, target)
+                    if counterpart.type == obj.type and _can_upgrade(obj.type.name, version, expected):
+                        raise _release_mismatch(source, obj, obj.peek_name() or str(key), version, expected) from error
+            return False
+        except Exception:
+            return False
+        try:
             if all(content == self.serialized(target, counterpart) for target, counterpart in self.counterparts[key]):
                 self.unchanged.add(key)
                 return True
@@ -368,6 +415,8 @@ def rebuild(
         if on_step:
             on_step("extract")
         patches: Patch = dict(prepared_patch or {})
+        raw_sources: dict[AssetKey, tuple[Bundle, Obj]] = {}
+        key_of = Bundle._get_key_func(match_strategy)
         skel_conflicts: list[SkelVersionConflict] = []
         targets = []
         for path in target_paths:
@@ -377,7 +426,6 @@ def rebuild(
             targets.append(target)
         scope = UpdateScope(targets, match_strategy, asset_types_to_replace) if prepared_patch is None else None
         transfer_clips = bool({"ALL", "AnimationClip"} & asset_types_to_replace)
-        kept_official: set[AssetKey] = set()  # raw objects of another Unity release the mod left as they were
 
         for src in source_paths:
             src_bundle = _load(src, log)
@@ -388,11 +436,16 @@ def rebuild(
             patch, conflicts = src_bundle.extract_patch(
                 asset_types_to_replace, match_strategy, spine_options, **({"scope": scope} if scope is not None else {})
             )
-            for key, obj in _cross_release_unchanged(src_bundle, patch, targets, match_strategy).items():
-                del patch[key]
-                kept_official.add(key)
-                name = obj.peek_name() or str(key)
-                log(f"  ⏭️ {t('log.replace_skipped_same_content', type=obj.type.name, name=name)}")
+            for key in patch:
+                raw_sources.pop(key, None)
+            for obj in src_bundle.env.objects:
+                if (
+                    obj.type in REPLACEABLE_ASSET_TYPES
+                    and obj.type.name not in TREE_COPIED_TYPES
+                    and ("ALL" in asset_types_to_replace or obj.type.name in asset_types_to_replace)
+                    and (key := key_of(obj)) in patch
+                ):
+                    raw_sources[key] = (src_bundle, obj)
             patches.update(patch)
             skel_conflicts.extend(conflicts)
 
@@ -402,9 +455,7 @@ def rebuild(
             return RebuildResult(False, msg)
 
         required_keys = set(patches) - {"__mode__"}
-        if scope is not None:
-            scope.unchanged |= kept_official
-        unchanged_keys = (scope.unchanged if scope is not None else set()) | kept_official
+        unchanged_keys = scope.unchanged if scope is not None else set()
         not_transferred = _names(scope.not_transferred) if scope is not None else []
         target_only = _names(scope.target_only) if scope is not None else []
         if not required_keys and not unchanged_keys:
@@ -418,7 +469,6 @@ def rebuild(
 
         log(f"\n--- {t('log.section.applying_to_targets')} ---")
         file_pairs: list[FilePair] = []
-        total_matched = len(unchanged_keys)
         anim_diffs: dict[str, set[str]] = {}
         failed_targets = False
         matched_keys: set[AssetKey] = set()
@@ -435,7 +485,7 @@ def rebuild(
 
             if on_step:
                 on_step("replace")
-            result = tgt_bundle.apply_patch(patches, match_strategy, anim_check)
+            result = _apply_target_patch(tgt_bundle, patches, raw_sources, match_strategy, anim_check, log)
             if prepared_patch is not None and result.matched_count != len(patches):
                 return _failed(
                     t(
@@ -446,7 +496,6 @@ def rebuild(
                     ),
                     log,
                 )
-            total_matched += result.matched_count
             matched_keys.update(result.matched_keys)
             skipped = set(result.skipped_keys or ())
             skipped_keys |= skipped
@@ -497,7 +546,7 @@ def rebuild(
             "target_only": target_only,
         }
         if not file_pairs:
-            if total_matched > 0 and skip_unchanged:
+            if (matched_keys or unchanged_keys) and skip_unchanged:
                 return RebuildResult(True, "", anim_diffs=final_anim_diffs, all_unchanged=True, **report)
             return _failed(t("message.mod_update.no_targets_processed"), log, anim_diffs=final_anim_diffs)
 
