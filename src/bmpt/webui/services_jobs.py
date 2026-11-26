@@ -106,6 +106,52 @@ class _Steps:
             raise Handover
 
 
+class _Count:
+    """One count over a start-up job's phases and its runs after a handover, as Tasks shows it.
+
+    Each phase reports its items from 1 of its own total; a job run again after a handover counts what is left
+    from 1. Wrapped, the job counts on from the items already shown, and its total is those items plus the phase's
+    own and an estimate of the phases still to come, so the count never jumps back. ``phase`` starts the next
+    phase, or the first of a run again; the wrapper is made once per job, outside its run.
+    """
+
+    def __init__(self, progress: Callable[..., Any] | None = None):
+        self.progress = progress
+        self.base = 0  # the items of the phases (and runs) before this one
+        self.shown = 0  # the last item shown
+        self.later = 0  # the estimate of the items of the phases after this one
+
+    def phase(self, progress: Callable[..., Any], later: int = 0) -> Callable[..., Any]:
+        """Start a phase: its items count on after those already shown.
+
+        Args:
+            progress: The job's progress callback of this run.
+            later: How many items the phases after this one are expected to have.
+
+        Returns:
+            The progress callback the phase reports to.
+        """
+        self.progress, self.base, self.later = progress, self.shown, max(0, int(later))
+        return self.report
+
+    def report(self, current: int | dict[str, Any], total: int | None = None, label: str = "") -> None:
+        """Pass a phase's report on, its item and total counted over the whole job."""
+        if self.progress is None:
+            return
+        if isinstance(current, dict):
+            if not isinstance(current.get("current"), int):
+                self.progress(current, total, label)
+                return
+            at = self.base + current["current"]
+            self.shown = max(self.shown, at)
+            whole = self.base + int(current.get("total") or 0) + self.later
+            self.progress({**current, "current": at, "total": max(whole, at)}, total, label)
+            return
+        at = self.base + int(current)
+        self.shown = max(self.shown, at)
+        self.progress(at, max(at, self.base + int(total or 0) + self.later), label)
+
+
 def _touched(result: Any) -> tuple[set[tuple[str, str]], set[str]]:
     """Collect the entries a job's result names as switched, adopted or dropped.
 
@@ -491,18 +537,25 @@ class JobsMixin:
         """
         library = self.library
         pin = library.current_pin()
+        count = _Count()
 
         def run(log: Any, progress: Any, step_out: Callable[[], bool]) -> Any:
             steps = _Steps(step_out)
             result = {"done": [], "kept": [], "left": []}
             if pin is not None:
                 self._check_pin(library, pin)
+                # the second phase's entries counted from the start, so the job shows one total throughout
+                later = 0 if self.classic_open() else library.stale_build_count(pin)
                 result = library.refresh_costumes(
-                    pin, log=log, progress=progress, write_game=not self.classic_open(), cancel=steps.check
+                    pin,
+                    log=log,
+                    progress=count.phase(progress, later),
+                    write_game=not self.classic_open(),
+                    cancel=steps.check,
                 )
                 steps.end()
                 if not self.classic_open():
-                    library.refresh_builds(pin, log=log, progress=progress, cancel=steps.check)
+                    library.refresh_builds(pin, log=log, progress=count.phase(progress), cancel=steps.check)
                     steps.end()
             for known in library.installs():
                 self.submit_catalog_reapply(library, known, library.resource_version(known))
@@ -550,9 +603,11 @@ class JobsMixin:
         if version is None or due is None or not due(pin, version):
             return None
 
+        count = _Count()
+
         def run(log: Any, progress: Any, step_out: Callable[[], bool]) -> None:
             steps = _Steps(step_out)
-            library._reapply_catalog_update(pin, version, progress, cancel=steps.check)
+            library._reapply_catalog_update(pin, version, count.phase(progress), cancel=steps.check)
             steps.end()
             if self._startup_ready:
                 self._start_prune(library)
@@ -574,12 +629,15 @@ class JobsMixin:
         """
         library = self.library
         pin = self._current_pin(library)
+        count = _Count()
 
         def run(log: Any, progress: Any, step_out: Callable[[], bool]) -> Any:
             steps = _Steps(step_out)
             self._check_pin(library, pin)
             self.check_classic()
-            result = library.retry_failed(pin, log=log, progress=self._progress(progress), cancel=steps.check)
+            result = library.retry_failed(
+                pin, log=log, progress=self._progress(count.phase(progress)), cancel=steps.check
+            )
             steps.end()
             return result
 
