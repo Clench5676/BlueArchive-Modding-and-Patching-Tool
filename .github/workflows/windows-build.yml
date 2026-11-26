@@ -1,13 +1,14 @@
 name: Windows Pre-release Build
 
-# Builds the Windows GUI for a pre-release and attaches the EXE and MD5 to that pre-release's draft release.
-# Manual only. No workflow artifacts: draft releases and their assets are visible only to users with push access.
+# Builds the Windows GUI for a draft release (a pre-release, or a stable release before it is published) and attaches
+# the EXE and MD5 to that draft. Manual only. No workflow artifacts: draft releases and their assets are visible only
+# to users with push access.
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Pre-release tag with a draft release, e.g. 0.7.0-alpha.28
+        description: Tag with a draft release, e.g. 0.7.0-alpha.28 or 0.7.0
         required: true
         type: string
 
@@ -28,18 +29,20 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      - name: Validate Draft Pre-release
+      - name: Validate Draft Release
         run: |
           $ErrorActionPreference = "Stop"
-          $Pattern = '\A(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*\z'
+          $Pattern = '\A(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\z'
           if ($env:RELEASE_TAG -cnotmatch $Pattern) {
-            throw "Only a MAJOR.MINOR.PATCH-PRERELEASE tag may build a Windows pre-release."
+            throw "Only a MAJOR.MINOR.PATCH[-PRERELEASE] tag may build a Windows draft."
           }
           $ReleaseJson = gh release view "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease
           if ($LASTEXITCODE -ne 0) { throw "No release found for $env:RELEASE_TAG; create its draft with scripts/release.sh first." }
           $Release = $ReleaseJson | ConvertFrom-Json
-          if ($Release.tagName -cne $env:RELEASE_TAG -or $Release.isDraft -ne $true -or $Release.isPrerelease -ne $true) {
-            throw "The release for $env:RELEASE_TAG is not a draft pre-release."
+          # A pre-release tag (with "-") needs a pre-release draft, a stable tag a stable draft.
+          $Prerelease = $env:RELEASE_TAG.Contains("-")
+          if ($Release.tagName -cne $env:RELEASE_TAG -or $Release.isDraft -ne $true -or $Release.isPrerelease -ne $Prerelease) {
+            throw "The release for $env:RELEASE_TAG is not a matching draft release."
           }
 
       - name: Checkout Release Tag
@@ -79,8 +82,9 @@ jobs:
           $ReleaseJson = gh release view "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $Release = $ReleaseJson | ConvertFrom-Json
-          if ($Release.tagName -cne $env:RELEASE_TAG -or $Release.isDraft -ne $true -or $Release.isPrerelease -ne $true) {
-            throw "The release is no longer a draft pre-release."
+          $Prerelease = $env:RELEASE_TAG.Contains("-")
+          if ($Release.tagName -cne $env:RELEASE_TAG -or $Release.isDraft -ne $true -or $Release.isPrerelease -ne $Prerelease) {
+            throw "The release is no longer a matching draft release."
           }
           $Name = "Blue-Archive-Modding-and-Patching-Tool-$env:RELEASE_TAG-windows-x64.exe"
           $Executable = Get-Item -LiteralPath (Join-Path "dist" $Name)

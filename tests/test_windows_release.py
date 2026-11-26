@@ -190,13 +190,55 @@ def test_only_windows_gui_workflows_remain():
     assert "ref: refs/tags/${{ github.event.release.tag_name }}" in workflow
     assert workflow.index("python scripts/check_release_tag.py") < workflow.index("-Target Gui")
     assert "-Target Cli" not in workflow and "upload-artifact" not in workflow
+    # A Windows build already attached to the draft is kept: no rebuild, no upload.
+    for step in ("Setup uv", "Build Windows GUI", "Upload EXE and MD5 to Release"):
+        assert f"      - name: {step}\n        if: steps.existing.outputs.built != 'true'\n" in workflow
+
+
+WINDOWS_EXE = "Blue-Archive-Modding-and-Patching-Tool-0.4.1-windows-x64.exe"
+
+
+@pytest.mark.skipif(PWSH is None, reason="PowerShell is not installed")
+@pytest.mark.parametrize(
+    "assets,built",
+    [
+        ([], "false"),
+        (["mac.dmg", "mac.dmg.md5"], "false"),
+        ([WINDOWS_EXE], "false"),
+        ([WINDOWS_EXE, WINDOWS_EXE + ".md5"], "true"),
+    ],
+)
+def test_published_release_keeps_an_attached_windows_build(tmp_path, assets, built):
+    workflow = (ROOT / ".github/workflows/build.yml").read_text()
+    step = workflow[workflow.index("      - name: Check Existing Windows Build\n") :]
+    step = step.split("        run: |\n", 1)[1]
+    step = textwrap.dedent(step[: step.index("\n\n      - name: ") + 1])
+    harness = """
+function gh {
+    $global:LASTEXITCODE = 0
+    if ($args[1] -eq "view") { $env:TEST_ASSETS -split ";" | Where-Object { $_ }; return }
+    throw "Unexpected GitHub command"
+}
+"""
+    output = tmp_path / "output.txt"
+    result = subprocess.run(
+        [PWSH, "-NoProfile", "-NonInteractive", "-Command", harness + step],
+        cwd=tmp_path,
+        env={**os.environ, "RELEASE_TAG": "0.4.1", "TEST_ASSETS": ";".join(assets), "GITHUB_OUTPUT": str(output)},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert output.read_text(encoding="utf-8-sig").strip() == f"built={built}"
 
 
 @pytest.mark.skipif(PWSH is None, reason="PowerShell is not installed")
 @pytest.mark.parametrize("failure", [None, "prerelease", "draft", "tag", "checksum"])
 def test_release_upload_uses_exact_gui_pair_and_rechecks_release(tmp_path, failure):
     workflow = (ROOT / ".github/workflows/build.yml").read_text()
-    upload = textwrap.dedent(workflow.split("        run: |\n", 1)[1])
+    upload = workflow[workflow.index("      - name: Upload EXE and MD5 to Release\n") :]
+    upload = textwrap.dedent(upload.split("        run: |\n", 1)[1])
     name = "Blue-Archive-Modding-and-Patching-Tool-0.4.1-windows-x64.exe"
     dist = tmp_path / "dist"
     dist.mkdir()
@@ -348,12 +390,12 @@ def test_prerelease_workflow_is_manual_and_uploads_only_to_releases():
     assert "ref: refs/tags/${{ inputs.tag }}" in workflow
     assert "persist-credentials: false" in workflow
     # Inputs reach scripts only through the environment.
-    for step in ("Validate Draft Pre-release", "Validate Checkout", "Upload EXE and MD5 to Draft Release"):
+    for step in ("Validate Draft Release", "Validate Checkout", "Upload EXE and MD5 to Draft Release"):
         assert "${{" not in workflow_step(step)
     order = [
         workflow.index(marker)
         for marker in (
-            "name: Validate Draft Pre-release",
+            "name: Validate Draft Release",
             "name: Checkout Release Tag",
             "name: Validate Checkout",
             "-Target Gui",
@@ -369,7 +411,10 @@ def test_prerelease_workflow_is_manual_and_uploads_only_to_releases():
     [
         ("0.7.0-alpha.28", draft(), True),
         ("1.0.0-rc.1", draft("1.0.0-rc.1"), True),
+        ("0.7.0", draft("0.7.0", isPrerelease=False), True),
         ("0.7.0", draft("0.7.0"), False),
+        ("0.7.0-rc.1", draft("0.7.0-rc.1", isPrerelease=False), False),
+        ("0.7.0", draft("0.7.0", isDraft=False, isPrerelease=False), False),
         ("v0.7.0-alpha.28", draft("v0.7.0-alpha.28"), False),
         ("0.7.0-alpha.28\n", draft("0.7.0-alpha.28\n"), False),
         ("0.7.0-alpha.28;x", draft("0.7.0-alpha.28;x"), False),
@@ -381,10 +426,15 @@ def test_prerelease_workflow_is_manual_and_uploads_only_to_releases():
         ("0.7.0-alpha.28", draft("0.7.0-alpha.27"), False),
     ],
 )
-def test_prerelease_build_requires_a_draft_prerelease(tmp_path, tag, release, ok):
-    result = run_step(tmp_path, "Validate Draft Pre-release", tag, release)
+def test_windows_draft_build_requires_a_matching_draft(tmp_path, tag, release, ok):
+    result = run_step(tmp_path, "Validate Draft Release", tag, release)
     assert (result.returncode == 0) == ok, result.stdout + result.stderr
-    if not ok and release and json.loads(release)["tagName"] == tag and tag != "0.7.0-alpha.28":
+    if (
+        not ok
+        and release
+        and json.loads(release)["tagName"] == tag
+        and tag not in ("0.7.0-alpha.28", "0.7.0", "0.7.0-rc.1")
+    ):
         assert not (tmp_path / "gh-calls.txt").exists()
 
 
@@ -424,3 +474,18 @@ def test_prerelease_upload_uses_exact_gui_pair_and_rechecks_draft(tmp_path, fail
             str(executable),
             str(dist / (name + ".md5")),
         ]
+
+
+@pytest.mark.skipif(PWSH is None, reason="PowerShell is not installed")
+@pytest.mark.parametrize("prerelease,ok", [(False, True), (True, False)])
+def test_stable_draft_upload_needs_a_stable_draft(tmp_path, prerelease, ok):
+    tag = "0.7.0"
+    name = f"Blue-Archive-Modding-and-Patching-Tool-{tag}-windows-x64.exe"
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    executable = dist / name
+    executable.write_bytes(b"GUI executable")
+    (dist / (name + ".md5")).write_text(f"{hashlib.md5(executable.read_bytes()).hexdigest()}  {name}\n")
+    result = run_step(tmp_path, "Upload EXE and MD5 to Draft Release", tag, draft(tag, isPrerelease=prerelease))
+    assert (result.returncode == 0) == ok, result.stdout + result.stderr
+    assert (tmp_path / "uploaded.json").exists() == ok
