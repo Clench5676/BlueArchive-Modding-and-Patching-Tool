@@ -8,6 +8,29 @@ When publishing a stable release, add its final changes with the actual version/
 release/compare links, and retain compatibility or migration notes. Release notes and feature tours are separate,
 human-reviewed presentation materials.
 
+## [0.8.0] - 2026-11-27
+
+### Added
+
+- Mods that change Mesh or AnimationClip objects are carried from Unity 2021.3 onto the Japan server's Unity 6
+  (6000.x) bundles through the target's type tree; unknown fields and other release pairs are still refused.
+- The update popup shows the App's short notes from the release's `release-notes.md` asset, and falls back to the
+  release body without it.
+- A quit while tasks are only queued offers to cancel them, and Tasks names a running task that holds the quit.
+
+### Changed
+
+- Upstream BA Modding Toolkit is synchronized through v2.13.0, with the temporary source folder option in the classic
+  tool dialogs.
+- Switched chibi builds give new path IDs in a stable order, so the same switch builds the same bytes on every run.
+
+### Fixed
+
+- Japan bundles named with a catalog hash instead of a CRC32 get their target CRC from the verified official copy, so
+  previews find the official file and CRC-fixed writes are no longer refused.
+- The Tasks panel's loading rings turn, start-up jobs keep one count over their phases, long names end in an ellipsis
+  and queued jobs fold to their title.
+
 ## [0.7.0] - 2026-11-26
 
 ### Added
@@ -271,6 +294,7 @@ for the classic toolkit's earlier v2 releases.
 | 0.1.0-alpha.2 | [alpha.1...alpha.2](https://github.com/Clench5676/BlueArchive-Modding-and-Patching-Tool/compare/0.1.0-alpha.1...0.1.0-alpha.2) |
 | 0.1.0-alpha.1 | [alpha...alpha.1](https://github.com/Clench5676/BlueArchive-Modding-and-Patching-Tool/compare/0.1.0-alpha...0.1.0-alpha.1) |
 
+[0.8.0]: https://github.com/Clench5676/BlueArchive-Modding-and-Patching-Tool/releases/tag/0.8.0
 [0.7.0]: https://github.com/Clench5676/BlueArchive-Modding-and-Patching-Tool/releases/tag/0.7.0
 [0.6.0]: https://github.com/Clench5676/BlueArchive-Modding-and-Patching-Tool/releases/tag/0.6.0
 [0.5.0]: https://github.com/Clench5676/BlueArchive-Modding-and-Patching-Tool/releases/tag/0.5.0
