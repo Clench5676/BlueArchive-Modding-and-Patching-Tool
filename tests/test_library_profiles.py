@@ -480,7 +480,7 @@ def test_a_failed_build_still_shows_its_error_on_the_new_choice(world, monkeypat
     def broken(*args, **kwargs):
         raise ServiceError("mod_apply_failed", file=world.portrait)
 
-    monkeypatch.setattr(service.ModLibrary, "_needs_crc_fix", lambda self, source, target: True)
+    monkeypatch.setattr(service.ModLibrary, "_needs_crc_fix", lambda self, source, target, pin=None: True)
     patch_everywhere(monkeypatch, [service], "install_staged", broken)
     expect_error("mod_apply_failed", lambda: world.library.apply("test", f"mod:{second.id}"))
     choice = world.folder()["configured"]["test_spr"]
@@ -745,10 +745,10 @@ def rebuilding_installer(monkeypatch, payload=b"rebuilt!", only=None):
     real = service.install_staged
     needs_fix = service.ModLibrary._needs_crc_fix
 
-    def rebuilding(self, source, target):
+    def rebuilding(self, source, target, pin=None):
         # These synthetic fixtures must exercise a build, even when their bytes
         # otherwise qualify for the exact-source copy path.
-        return (only is None or source.name == only) or needs_fix(self, source, target)
+        return (only is None or source.name == only) or needs_fix(self, source, target, pin)
 
     def install(groups, output, *args, **kwargs):
         if only is not None and groups[0].files[0].mod_path.name != only:

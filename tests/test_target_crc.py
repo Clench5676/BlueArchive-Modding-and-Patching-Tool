@@ -11,9 +11,9 @@ import pytest
 from ba_modding_toolkit.bundle import Bundle
 from ba_modding_toolkit.naming import parse_filename
 from ba_modding_toolkit.utils import CRCUtils
+from bmpt.engine import SaveOptions
 from bmpt.library import ModLibrary
 from bmpt.library.install import Action, PlannedFile, PlannedGroup, install_staged
-from bmpt.engine import SaveOptions
 
 from test_library import game_bundle, make_mod, reload_library, setup_library  # noqa: F401
 
@@ -28,7 +28,7 @@ def matches_name(path):
 
 @pytest.fixture
 def resave(monkeypatch):
-    """Bundle.load of a synthetic bundle: its save puts the CRC of the output's name on the bytes."""
+    """Bundle.load of a synthetic bundle: saving applies the engine's target CRC rule."""
     saved = []
 
     def load(path, *args, **kwargs):
@@ -36,7 +36,8 @@ def resave(monkeypatch):
             saved.append((path.name, output.name, options.perform_crc))
             data = path.read_bytes()
             if options.perform_crc:
-                data = CRCUtils.apply_crc_fix(data, crc_of_name(output))
+                expected = options.target_crc
+                data = CRCUtils.apply_crc_fix(data, crc_of_name(output) if expected is None else expected)
             output.write_bytes(data)
             return True, "saved"
 
@@ -184,7 +185,7 @@ def test_repair_writes_again_a_game_file_left_without_its_crc(updated, monkeypat
     env = updated
     with monkeypatch.context() as old:  # a write without the target-CRC rule
         old.setattr(install, "matches_target_crc", lambda source, target: Bundle.check_crc_match(source))
-        old.setattr(env.library, "_check_target_crc", lambda changed: None)  # nor the last CRC check of a write
+        old.setattr(env.library, "_check_target_crc", lambda changed, pin: None)  # nor the last CRC check of a write
         env.library.apply("test", f"mod:{env.mod.id}")
     assert not matches_name(env.part) and env.library.state("test").crc == "needs_fix"
     found = env.library.crc_repair_due()
@@ -205,7 +206,7 @@ def test_repair_leaves_game_files_for_a_later_start_while_the_game_runs(updated,
     env = updated
     with monkeypatch.context() as old:
         old.setattr(install, "matches_target_crc", lambda source, target: Bundle.check_crc_match(source))
-        old.setattr(env.library, "_check_target_crc", lambda changed: None)  # nor the last CRC check of a write
+        old.setattr(env.library, "_check_target_crc", lambda changed, pin: None)  # nor the last CRC check of a write
         env.library.apply("test", f"mod:{env.mod.id}")
 
     def running():

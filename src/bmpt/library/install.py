@@ -23,14 +23,15 @@ from bmpt.engine import (
     SaveOptions,
     SkelConvertOptions,
     no_log,
-    parse_filename,
     t,
 )
 from ..core import devmode
 from ..core.openfiles import temporary_directory
 from .pointers import Pointer
 from . import toggle_timing
+from .bundle_crc import name_hash, target_crc, target_save_options
 from .rebuild import rebuild
+from .storage import trailing_bytes
 
 
 class Action(StrEnum):
@@ -90,8 +91,8 @@ def _replace(source: Path, target: Path, log: LogFunc) -> bool:
         return False
 
 
-def matches_target_crc(source: Path, target: Path) -> bool:
-    """Check whether a file's bytes have the CRC encoded in the target's name.
+def matches_target_crc(source: Path, target: Path, *, official: Path | None = None) -> bool:
+    """Check whether a file's bytes have the CRC required by the target.
 
     The library also writes a mod file whole
     over a part whose name differs from the mod file's (its CRC changed in a game update, or it matched by CAB), so
@@ -99,10 +100,14 @@ def matches_target_crc(source: Path, target: Path) -> bool:
 
     Args:
         source: File whose complete contents are hashed with CRC32.
-        target: Bundle filename supplying the required decimal CRC.
+        target: Bundle with a decimal CRC or catalog hash in its filename.
+        official: Verified copy of a hash-named target. Without one, a target with
+            a readable header and no trailing bytes supplies its CRC.
     """
-    crc = parse_filename(target.name).crc
-    return bool(crc) and crc.isdigit() and CRCUtils.compute_crc32(source) == int(crc)
+    if official is None and name_hash(target.name) is not None and target.is_file() and trailing_bytes(target) == 0:
+        official = target
+    crc = target_crc(target.name, official)
+    return crc is not None and CRCUtils.compute_crc32(source) == crc
 
 
 def _direct(file: PlannedFile, save_options: SaveOptions, log: LogFunc) -> bool:
@@ -115,7 +120,8 @@ def _direct(file: PlannedFile, save_options: SaveOptions, log: LogFunc) -> bool:
         if bundle is None:
             log(f"❌ {t('message.load_failed')}: {file.mod_path.name}")
             return False
-        ok, message = bundle.save(resaved, replace(save_options, perform_crc=True))
+        options = target_save_options(replace(save_options, perform_crc=True), resaved.name, file.existing_path)
+        ok, message = bundle.save(resaved, options)
         if not ok:
             log(f"❌ {t('log.file.save_failed', path=resaved, error=message)}")
             return False

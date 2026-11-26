@@ -1,6 +1,6 @@
 # models.py
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Literal, NamedTuple
 from enum import StrEnum
 from PIL import Image
@@ -90,6 +90,7 @@ class SaveOptions:
     perform_crc: bool = True
     extra_bytes: bytes | None = None
     compression: CompressionType = "lzma"
+    target_crc: int | None = field(default=None, repr=False)
 
 
 @dataclass

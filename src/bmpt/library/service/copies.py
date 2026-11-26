@@ -167,7 +167,7 @@ class CopiesMixin:
                         fingerprint = self._hashes.get(kept)
                         if fingerprint.sha1 != part["sha1"]:
                             raise ValueError("Changed built copy")
-                        if not placed and not self._kept_crc_fits(fingerprint, target):
+                        if not placed and not self._kept_crc_fits(fingerprint, target, pin):
                             raise ValueError("Built copy without the part's CRC")
                         replacements[target] = kept
                     if self._stale_build(replacements, pin):
@@ -235,7 +235,7 @@ class CopiesMixin:
                 try:
                     fingerprint = self._hashes.get(kept)
                     if fingerprint.sha1 != part.get("sha1") or (
-                        not placed and not self._kept_crc_fits(fingerprint, target)
+                        not placed and not self._kept_crc_fits(fingerprint, target, pin)
                     ):
                         raise ValueError(kept)
                 except (OSError, ValueError):
@@ -261,15 +261,15 @@ class CopiesMixin:
         self._drop_built(pin, [core])
         return None
 
-    def _kept_crc_fits(self, fingerprint: Fingerprint, target: Path) -> bool:
+    def _kept_crc_fits(self, fingerprint: Fingerprint, target: Path, pin: Pin) -> bool:
         """Tell whether a built copy's part may go over ``target`` as it is.
 
-        It may when its bytes carry the CRC of the target's name, or the target needs no CRC. An older build kept the
-        bytes of a mod file written whole over a part whose name carries another CRC; such a copy is built again.
+        It may when its bytes match the required CRC, or the target needs no CRC.
         """
-        if crc_state(fingerprint.crc, fingerprint.trailing, target.name) != "needs_fix":
+        if not self.settings.crc_needed(target):
             return True
-        return not self.settings.crc_needed(target)
+        expected = self._target_crc(target, pin)
+        return crc_state(fingerprint.crc, fingerprint.trailing, target.name, expected_crc=expected) != "needs_fix"
 
     @_serialized
     def crc_repair_due(self) -> dict[str, Any]:

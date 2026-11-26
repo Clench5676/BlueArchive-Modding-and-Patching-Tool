@@ -25,6 +25,7 @@ from ...gameassets.cabs import CabIndex
 from ...core.logging_utils import log_failure
 from .. import profiles as profiles_mod
 from .. import integrity, mod_progress
+from ..bundle_crc import name_suffix
 from ..judge import (
     CRC_STATES,
     LIBRARY_SOURCES,
@@ -467,11 +468,11 @@ class _Entry:
 def _rebuilt(index: dict[str, list[Path]], path: Path) -> Path | None:
     """Find the file that a game update rebuilt ``path`` as.
 
-    It is the one other file of its group (its name less the CRC) in its folder. An update rebuilds a changed group in
-    place, keeping its name and date and changing only the CRC. None when no other file or several have that name
+    It is the one other file of its group (its name less the CRC or catalog hash) in its folder. An update rebuilds a
+    changed group in place, keeping its name and date. None when no other file or several have that name
     (groups packed one asset per bundle share it).
     """
-    if not parse_filename(path.name).crc:
+    if name_suffix(path.name) is None:
         return None
     key = integrity.replacement_key(path.name)
     rebuilt = [

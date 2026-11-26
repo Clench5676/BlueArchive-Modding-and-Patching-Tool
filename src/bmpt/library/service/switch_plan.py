@@ -29,6 +29,7 @@ from ...core.errors import ServiceError
 from ...core.filelock import file_lock
 from ...core.logging_utils import log_failure
 from .. import integrity, pointers, safety, toggle_timing
+from ..bundle_crc import name_hash
 from ..install import Action, PlannedFile, PlannedGroup, backup_file
 from ..judge import (
     core_of,
@@ -165,11 +166,18 @@ class SwitchPlanMixin:
 
     @toggle_timing.stage("stage")
     def _stage_direct(
-        self, targets: list[Path], sources: dict[str, Path], directory: Path, pin: Pin, updating: set[Path]
+        self,
+        targets: list[Path],
+        sources: dict[str, Path],
+        directory: Path,
+        pin: Pin,
+        updating: set[Path],
+        *,
+        placed: bool,
     ) -> dict[Path, Path]:
         """Stage whole-file replacements and omitted parts without requiring an official base.
 
-        Asset transfers still require verified official targets, including generic updates.
+        Asset transfers and CRC correction for hash-named targets require verified official targets.
         """
         directory.mkdir(parents=True, exist_ok=True)
         staged = {}
@@ -180,7 +188,8 @@ class SwitchPlanMixin:
             try:
                 source = self._official_for(path, pin)
             except ServiceError as error:
-                if error.code != "official_unavailable" or path in updating:
+                needs_official_crc = not placed and name_hash(path.name) and self.settings.crc_needed(path)
+                if error.code != "official_unavailable" or path in updating or needs_official_crc:
                     raise
                 source = sources.get(path.name) or path
             if self._managed and self._is_kept(source):
@@ -891,19 +900,20 @@ class SwitchPlanMixin:
             raise ServiceError("mod_release_mismatch", file=changed[target].name)
 
     @toggle_timing.stage("crc_check")
-    def _check_target_crc(self, changed: dict[Path, Path]) -> None:
+    def _check_target_crc(self, changed: dict[Path, Path], pin: Pin) -> None:
         """Check official-named replacements in the writer's class, under the library lock for one entry.
 
-        Bytes whose CRC is not the one in the target's name never reach an install that needs the CRC fix, whatever step
+        Bytes whose CRC differs from the official CRC never reach an install that needs the CRC fix, whatever step
         before missed it (crc_fix_failed, naming the file). Catalog placements bypass this check. The caller yields
         at the next entry boundary.
         """
         for target, prepared in changed.items():
+            if not self.settings.crc_needed(target):
+                continue
             fingerprint = self._hashes.get(prepared)
-            if crc_state(
-                fingerprint.crc, fingerprint.trailing, target.name
-            ) == "needs_fix" and self.settings.crc_needed(target):
-                logger.warning("Refused a write whose CRC does not match the target name: %s", target.name)
+            expected = self._target_crc(target, pin)
+            if crc_state(fingerprint.crc, fingerprint.trailing, target.name, expected_crc=expected) == "needs_fix":
+                logger.warning("Refused a write whose CRC does not match the target: %s", target.name)
                 raise ServiceError("crc_fix_failed", file=target)
 
     def _write(
@@ -969,7 +979,7 @@ class SwitchPlanMixin:
             if self._hashes.get(target).sha1 != self._hashes.get(prepared).sha1
         }
         if untested and source != "official":  # restores and rollbacks put back what was there
-            self._check_target_crc(changed)
+            self._check_target_crc(changed, pin)
             self._check_references(changed, pin)
         if changed and untested and source != "official":
             # the last check: every write path asked before it built (apply, a toggle's plan); one that did not, asks
@@ -990,6 +1000,7 @@ class SwitchPlanMixin:
             for target in replacements:
                 fingerprint = fingerprints[target]
                 stat = target.stat()
+                expected_crc = self._target_crc(target, pin) if name_hash(target.name) else None
                 record = {
                     "source": source,
                     "sha1": fingerprint.sha1,
@@ -998,7 +1009,7 @@ class SwitchPlanMixin:
                     "official": self._official_sha1(target, pin) == fingerprint.sha1,
                     "at": stamp,
                     "tail": tails[target],
-                    "crc": crc_state(fingerprint.crc, fingerprint.trailing, target.name),
+                    "crc": crc_state(fingerprint.crc, fingerprint.trailing, target.name, expected_crc=expected_crc),
                 }
                 if build_keys and target in build_keys:
                     record["build"] = build_keys[target]

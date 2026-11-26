@@ -178,12 +178,18 @@ def test_direct_replacement_stages_in_a_short_folder(batch_model_env, monkeypatc
         ("auto", True, "0x0A0B"),
     ],
 )
+@pytest.mark.parametrize("hashed", [False, True])
 def test_direct_replacement_honours_the_crc_and_extra_bytes_options(
-    batch_model_env, monkeypatch, crc, install_needs, extra
+    batch_model_env, monkeypatch, crc, install_needs, extra, hashed
 ):
     env = batch_model_env
     restore_metadata(monkeypatch)
     target = rename_crc(unity_bundle(env.parts[1], name="Hoshino_Body"))
+    expected = CRCUtils.compute_crc32(target)
+    if hashed:
+        renamed = target.with_name(target.name.replace(f"_{expected}.bundle", f"_{'a' * 32}.bundle"))
+        target.rename(renamed)
+        target = renamed
     env.parts[1] = target
     source = rename_crc(
         unity_bundle(env.tmp / "input" / target.name, name="Unknown_CutIn_Body", payload=b"modified model")
@@ -201,7 +207,7 @@ def test_direct_replacement_honours_the_crc_and_extra_bytes_options(
     appended = bytes.fromhex(extra[2:]) if extra else b""
     assert installed[: len(original_source)] == original_source
     assert installed[len(original_source) : -4] == appended
-    assert CRCUtils.compute_crc32(installed) == int(parse_filename(target.name).crc)
+    assert CRCUtils.compute_crc32(installed) == expected
 
 
 def test_current_name_rejects_invalid_bundle(env, monkeypatch):

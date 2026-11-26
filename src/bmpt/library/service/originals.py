@@ -21,6 +21,7 @@ from ...core.errors import ServiceError
 from ...core.logging_utils import log_failure
 from ...core.openfiles import remove_tree
 from .. import fingerprint, integrity, rig_archive, toggle_timing
+from ..bundle_crc import name_crc, name_hash, target_crc
 from ..catalog_switch import MODE_CATALOG
 from ..original_checks import Verdict
 from ..judge import (
@@ -93,10 +94,8 @@ class OriginalsMixin:
     def _is_official_as(self, path: Path, name: str) -> bool:
         """Tell whether the file at ``path`` holds the official bytes of ``name``.
 
-        It does with the size and SHA-1 that Steam's file list gives ``name`` (``_steam_official``), else with the CRC32
-        of the whole content matching the CRC in ``name``, and no trailing bytes. A mod can match a CRC, not a SHA-1. A
-        kept original also records which rule it passed, and one a Steam list rejected stays rejected without the list
-        (``_judge_original``).
+        Steam's size and SHA-1 take priority. Otherwise the bundle must pass ``_crc_official``; for a hash name, a
+        kept original's recorded CRC also applies. Bytes rejected by Steam stay rejected without the list.
         """
         kept = self._is_kept(path) and path.name == name
         if kept and not self._original_checks.matches_digest(path):
@@ -107,13 +106,36 @@ class OriginalsMixin:
             return self._judge_original(path, fingerprint, steam) in ("steam", "crc")
         if steam is not None:
             return fingerprint.size == steam.size and fingerprint.sha1 == steam.sha1
-        # the very bytes a Steam list rejected as the kept original of this name stay a mod's without the list
-        return self._original_checks.of_bytes(name, fingerprint) != "failed" and self._crc_official(fingerprint, name)
+        if self._original_checks.of_bytes(name, fingerprint) == "failed" or not self._crc_official(fingerprint, name):
+            return False
+        if name_hash(name):
+            record = self._original_checks.record(name) or {}
+            if record.get("by") in ("steam", "crc") and isinstance(record.get("crc"), int):
+                return fingerprint.crc == record["crc"]
+        return True
 
     @staticmethod
     def _crc_official(fingerprint: Fingerprint, name: str) -> bool:
-        parsed = parse_filename(name)
-        return fingerprint.trailing == 0 and bool(parsed.crc) and fingerprint.crc == int(parsed.crc)
+        """Apply the fallback rule for names absent from Steam's file list.
+
+        Hash names supply no expected CRC. A readable bundle with no trailing bytes
+        qualifies, so a CRC-fixed mod with no detectable tail can pass this check.
+        """
+        crc = name_crc(name)
+        return fingerprint.trailing == 0 and (
+            fingerprint.crc == crc if crc is not None else name_hash(name) is not None
+        )
+
+    def _target_crc(self, target: Path, pin: Pin | None = None) -> int | None:
+        """Resolve a write's CRC, using the verified kept original first for hash names."""
+        official = None
+        if name_hash(target.name):
+            try:
+                official = self._official_for(target, self._current(pin))
+            except ServiceError as error:
+                if error.code not in ("official_invalid", "official_unavailable"):
+                    raise
+        return target_crc(target.name, official, hashes=self._hashes)
 
     def _is_kept(self, path: Path) -> bool:
         """Whether a path is a kept original (a file of originals/)."""
@@ -136,13 +158,19 @@ class OriginalsMixin:
             self._original_checks.save(original, verdict, fingerprint, self._originals())
             return verdict
         recorded = self._original_checks.of_bytes(original.name, fingerprint)
-        if recorded in ("failed", "steam"):
+        if recorded == "failed":
             return recorded
-        if not self._crc_official(fingerprint, original.name):
-            return None
+        hashed = name_hash(original.name)
+        previous = self._original_checks.record(original.name) if hashed else None
         if recorded is None:
-            self._original_checks.save(original, "crc", fingerprint, self._originals())
-        return "crc"
+            if previous is not None and previous["by"] in ("crc", "steam"):
+                return None
+        if recorded != "steam" and not self._crc_official(fingerprint, original.name):
+            return None
+        verdict = recorded or "crc"
+        if recorded is None or (previous is not None and "crc" not in previous):
+            self._original_checks.save(original, verdict, fingerprint, self._originals())
+        return verdict
 
     def original_check(self, name: str, copy: str | None, roots: Sequence[Path] | None = None) -> str | None:
         """Describe an official copy's verification strength without reading its content.
@@ -245,10 +273,11 @@ class OriginalsMixin:
         ``game_first``; an invalid kept original must still block writes.
         """
         check_resource_path(game_file, list(pin.dirs))
+        hashed = name_hash(game_file.name) is not None
 
         def official(path: Path) -> bool:
             try:
-                if full:
+                if full or (hashed and self._steam_official(game_file.name, path) is not None):
                     return self._is_official_as(path, game_file.name)
                 stat_size = path.stat().st_size
                 expected = self._official_size(game_file.name)
@@ -262,14 +291,15 @@ class OriginalsMixin:
         if original.exists():
             if not self._original_checks.matches_digest(original):
                 raise ServiceError("official_invalid", file=original)
-            if full:
-                verdict = self._judge_original(
-                    original, self._hashes.get(original), self._steam_official(original.name, original)
-                )
+            steam = self._steam_official(original.name, original) if full or hashed else None
+            if full or steam is not None:
+                verdict = self._judge_original(original, self._hashes.get(original), steam)
                 if verdict is None:
                     raise ServiceError("official_invalid", file=original)
             else:
                 verdict = self._original_checks.of_file(original, verified=True)
+                if hashed and verdict is None and not official(original):
+                    raise ServiceError("official_invalid", file=original)
             # A kept file rejected by Steam can be bypassed in favor of an independently verified copy.
             if verdict != "failed":
                 return original

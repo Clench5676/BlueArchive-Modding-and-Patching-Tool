@@ -38,6 +38,7 @@ from ..core.errors import ServiceError
 from ..unity.bundle_guard import refuse_unsupported
 from . import pointers
 from . import toggle_timing
+from .bundle_crc import name_hash, target_save_options
 
 #: The types the engine moves through their type trees: their fields are written into the target's own object, so
 #: they survive a change of the serialized layout between Unity releases. Every other replaceable type is copied as
@@ -342,6 +343,7 @@ def rebuild(
     Args:
         source_paths: Mod bundles supplying assets for extraction.
         target_paths: Current-release bundles whose structure and untouched assets are retained.
+            For CRC-corrected hash names, these must be verified official copies.
         output_dir: Existing directory receiving changed target bundles under their original names.
         asset_types_to_replace: Unity asset classes eligible for transfer.
         save_options: Compression and CRC settings for saved bundles.
@@ -467,11 +469,11 @@ def rebuild(
             raise ServiceError("required_assets_unmatched", names=", ".join(_names(missing)))
         # Validate every target first to avoid publishing an incomplete mod.
         for tgt, tgt_bundle, result in pending_saves:
-            output_path = output_dir / tgt.name
+            output_name = tgt.name.removesuffix(".backup") if name_hash(tgt.name) else tgt.name
+            output_path = output_dir / output_name
+            options = target_save_options(save_options, output_path.name, tgt)
             save_ok, save_message = (
-                tgt_bundle.save(output_path, save_options, on_step)
-                if on_step
-                else tgt_bundle.save(output_path, save_options)
+                tgt_bundle.save(output_path, options, on_step) if on_step else tgt_bundle.save(output_path, options)
             )
             if save_ok and read_back:
                 _read_back(output_path, tgt_bundle, asset_types_to_replace)

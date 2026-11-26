@@ -1,4 +1,4 @@
-"""Repair managed built copies and game files whose bytes lack their target filename's CRC.
+"""Repair managed built copies and game files whose bytes lack their target CRC.
 
 A whole-file mod replacement can target a name carrying another CRC, so its bytes need the target's CRC fix.
 An Off can retain those bytes as a built copy for the next On. The reuse check (``_kept_crc_fits``) rejects a
@@ -25,6 +25,7 @@ from bmpt.engine import LogFunc, ProgressCallback, no_log, t
 from ..core.errors import ServiceError
 from ..core.logging_utils import log_failure
 from . import safety
+from .bundle_crc import name_hash, target_crc
 from .judge import LIBRARY_SOURCES, core_of, crc_state, now, says_official, sorted_resource_types
 from .catalog_switch import MODE_CATALOG, MODS_DIR
 from .records import JsonResult
@@ -77,14 +78,23 @@ def _kept(library: ModLibrary, source: str, part: dict) -> Path:
 
 
 def _lacks_crc(library: ModLibrary, path: Path, name: str, sha1: str | None = None) -> bool:
-    """Whether ``path`` holds bytes (``sha1``, when given) without the CRC of ``name`` that the part needs."""
+    """Whether the recorded bytes differ from the part's required CRC."""
     try:
         fingerprint = library._hashes.get(path)
     except OSError:
         return False
     if sha1 is not None and fingerprint.sha1 != sha1:
         return False  # not the recorded bytes: the reuse refuses the copy anyway
-    if crc_state(fingerprint.crc, fingerprint.trailing, name) != "needs_fix":
+    expected = None
+    if name_hash(name):
+        official = library._original_path(Path(name))
+        try:
+            if not library._is_official(official):
+                return False
+            expected = target_crc(name, official, hashes=library._hashes)
+        except OSError:
+            return False
+    if crc_state(fingerprint.crc, fingerprint.trailing, name, expected_crc=expected) != "needs_fix":
         return False
     return bool(library.settings and library.settings.crc_needed(path))
 

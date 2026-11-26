@@ -62,7 +62,7 @@ class SwitchingMixin:
         stale = {}
 
         def needs_crc(source: Path, target: Path) -> bool:
-            return not placed and self._needs_crc_fix(source, target)
+            return not placed and self._needs_crc_fix(source, target, pin)
 
         if (
             len(sources) == len(record["files"])
@@ -96,7 +96,9 @@ class SwitchingMixin:
                         if path not in current.values() and path not in stale:
                             updates.setdefault(path, []).append(target)
             stale.update(self._stale_updates(updates, current, pin, targets=targets))
-            staged = self._stage_direct(targets, sources, work / "targets", pin, set(targets) - current.keys())
+            staged = self._stage_direct(
+                targets, sources, work / "targets", pin, set(targets) - current.keys(), placed=placed
+            )
             output = work / "output"
             output.mkdir(parents=True, exist_ok=True)
             sources = self._paths(record)
@@ -161,7 +163,7 @@ class SwitchingMixin:
             for path in group.target_paths
             if any(file.action == Action.UPDATE for file in group.files)
         }
-        staged = self._stage_direct(targets, sources, work / "targets", pin, updating)
+        staged = self._stage_direct(targets, sources, work / "targets", pin, updating, placed=placed)
         logger.info("Mod apply plan and stage: %.3f s", time.perf_counter() - started)
         started = time.perf_counter()
         # Build only into temporary copies: a part is copied whole or rebuilt; all real game writes go through
@@ -198,13 +200,13 @@ class SwitchingMixin:
             raise ServiceError("mod_apply_failed", id=record["id"], reason=_reasons(failures))
         return staged
 
-    def _needs_crc_fix(self, source: Path, target: Path) -> bool:
+    def _needs_crc_fix(self, source: Path, target: Path, pin: Pin | None = None) -> bool:
         if not self.settings.crc_needed(target):
             return False
-        expected = parse_filename(target.name).crc
+        expected = self._target_crc(target, pin)
         fingerprint = self._hashes.get(source)
         # Already fixed mods can be copied without loading and recompressing their textures with UnityPy.
-        return fingerprint.trailing is None or not expected or fingerprint.crc != int(expected)
+        return fingerprint.trailing is None or expected is None or fingerprint.crc != expected
 
     @_serialized
     def apply(

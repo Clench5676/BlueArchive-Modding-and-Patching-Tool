@@ -18,6 +18,7 @@ from typing import Any, Hashable, Iterable, Sequence
 from bmpt.engine import SEARCH_DIR_SUFFIXES, parse_filename
 
 from ..gameassets.spine import spine_resource_type
+from .bundle_crc import name_crc, name_hash, name_suffix
 
 LIBRARY_SOURCES = ("mod:", "alt:")
 CRC_STATES = ("ok", "fixed", "needs_fix")
@@ -83,7 +84,7 @@ def resource_type_of_file(name: str) -> str | None:
     """Classify a bundle filename by category and core, using other for generic bundles."""
     parsed = parse_filename(name)
     return resource_type_of(parsed.core, parsed.category) or (
-        "other" if name.endswith(".bundle") and parsed.prefix and parsed.crc else None
+        "other" if name.endswith(".bundle") and parsed.prefix and name_suffix(name) else None
     )
 
 
@@ -240,19 +241,20 @@ def says_official(record: dict | None) -> bool:
     return flag if isinstance(flag, bool) else record.get("source") == "official"
 
 
-def crc_state(crc: int, trailing: int | None, name: str) -> str:
-    """Judge file bytes against the CRC encoded in a target filename.
+def crc_state(crc: int, trailing: int | None, name: str, *, expected_crc: int | None = None) -> str:
+    """Judge file bytes against the target's required CRC.
 
     Args:
         crc: CRC32 of the entire file, including any fixing suffix.
         trailing: Bytes beyond the bundle's declared size, or None when the header is unreadable.
-        name: Target filename containing the expected CRC.
+        name: Target filename with a decimal CRC or catalog hash.
+        expected_crc: Verified official CRC for a hash-named target.
 
     Returns:
         ok for a match without trailing bytes, fixed for a match with a suffix, else needs_fix.
     """
-    parsed = parse_filename(name)
-    matches = bool(parsed.crc) and crc == int(parsed.crc)
+    expected = expected_crc if name_hash(name) else name_crc(name)
+    matches = expected is not None and crc == expected
     if matches and trailing == 0:
         return "ok"
     return "fixed" if matches and trailing else "needs_fix"
