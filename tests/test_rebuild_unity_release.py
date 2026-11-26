@@ -1,7 +1,7 @@
-"""Whole serialized objects never cross Unity releases on an update; type-tree copies still do.
+"""Raw object bytes stay within a Unity release on update.
 
 Official bundles of the verified view stand in for both sides: the "mod" is an official part with one asset changed,
-and the official part's serialized files are given another Unity release in memory. Needs BAMT_TEST_GAME_DIR.
+and one side's serialized files are given another Unity release in memory. Needs BAMT_TEST_GAME_DIR.
 """
 
 import os
@@ -75,7 +75,7 @@ def make_mod(path: Path, out: Path, kind: str, edit) -> Path:
 
 @pytest.fixture
 def next_release(monkeypatch):
-    """Give the official parts (the paths in the returned set) another Unity release as they are loaded."""
+    """Give the parts in the returned set another Unity release as they are loaded."""
     renamed: set[Path] = set()
     load = Bundle.load.__func__
 
@@ -117,17 +117,17 @@ def test_unity_release_takes_major_and_minor():
 
 
 @pytest.mark.parametrize("kind", ["AnimationClip", "Mesh"])
-def test_a_changed_raw_object_is_refused_across_releases(tmp_path, next_release, kind):
+def test_a_changed_raw_object_is_refused_when_updating_back_to_the_old_release(tmp_path, next_release, kind):
     pattern, edit = CASES[kind]
     target = official(pattern, kind)
     mod = make_mod(target, tmp_path / "mod.bundle", kind, edit)
-    next_release.add(target)
+    next_release.add(mod)
     result = run(mod, target, tmp_path / "out", {"Texture2D", "TextAsset", "Mesh", "AnimationClip"})
     assert not result.success and not result.file_pairs
     assert result.error.code == "mod_unity_asset_mismatch"
     assert result.error.params["type"] == kind
     assert result.error.params["name"]
-    assert (result.error.params["version"], result.error.params["expected"]) == ("2021.3", "6000.0")
+    assert (result.error.params["version"], result.error.params["expected"]) == ("6000.0", "2021.3")
     assert not list((tmp_path / "out").iterdir())
 
 
