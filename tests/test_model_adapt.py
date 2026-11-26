@@ -2243,3 +2243,54 @@ def test_official_costume_apply_restore_and_preview_on_clones(tmp_path, monkeypa
     assert "OL_NP0009_Body" in {m["name"] for m in doc["meshes"]}
     library.restore("hina", resource_type="chibi")
     assert {path.name: hashlib.sha1(path.read_bytes()).hexdigest() for path in slot} == official_bytes
+
+
+_BUILD_PAIR = """
+import hashlib, re, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from test_model_adapt import GAME_DIR, _index, _slot
+from ba_modding_toolkit.bundle import Bundle
+from ba_modding_toolkit.models import SaveOptions
+from bmpt.gameassets import chibi_adapt as ma
+target, source, out = sys.argv[2], sys.argv[3], Path(sys.argv[4])
+files = list(GAME_DIR.rglob("*.bundle"))
+result = ma.adapt(
+    index=_index(files),
+    resolver=None,
+    target_files=_slot(files, target),
+    target_dev=target,
+    source_files=[p for p in files if re.match(rf"character-{source}-_mxload", p.name)],
+    source_dev=source,
+    open_writable=Bundle.load,
+)
+for path, bundle in sorted(result.changed.items()):
+    ok, message = bundle.save(out / path.name, SaveOptions(perform_crc=True, compression="lz4"))
+    assert ok, message
+    print(path.name, hashlib.sha256((out / path.name).read_bytes()).hexdigest())
+"""
+
+
+@official
+def test_official_a_costume_build_does_not_depend_on_the_hash_seed(tmp_path):
+    """Nodoka <- ch0280: a slot of two prefab files, which once took their new path IDs in set order.
+
+    Hash seeds 1 and 3 ordered those files differently.
+    """
+    import subprocess
+    import sys
+
+    builds = []
+    for seed in ("1", "3"):
+        out = tmp_path / seed
+        out.mkdir()
+        run = subprocess.run(
+            [sys.executable, "-c", _BUILD_PAIR, str(Path(__file__).parent), "nodoka_original", "ch0280", str(out)],
+            env={**os.environ, "PYTHONHASHSEED": seed},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert run.returncode == 0, run.stderr[-2000:]
+        builds.append(run.stdout)
+    assert builds[0] and builds[0] == builds[1]

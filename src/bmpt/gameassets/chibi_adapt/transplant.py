@@ -400,7 +400,8 @@ def _adapt(
         if texture_cab:
             break
     slot = {cab: path for cab, path in index.items() if Path(path) in set(target_files)}
-    prefab_files = {Path(graph.locations[p.deref().assets_file.name.lower()]) for p in own.values()}
+    # sorted: the prefab files take their new path IDs in this order, so a build never depends on the hash seed
+    prefab_files = sorted({Path(graph.locations[p.deref().assets_file.name.lower()]) for p in own.values()})
     loaded = loaded_with(graph, prefab_files, slot)
     # A target whose primary lives in another core's files (Izumi (Swimsuit) on Izumi's, ch0263 on the NPC en0002's)
     # never gets objects written there: the new objects go to a slot file loaded with the prefab that holds that type.
@@ -439,7 +440,7 @@ def _adapt(
     )
     opened: dict[Path, Any] = {}
     files: dict[str, Any] = {}
-    for cab in needed:
+    for cab in sorted(needed):
         path = Path(slot[cab])
         bundle = opened.get(path) or open_writable(path)
         opened[path] = bundle
