@@ -507,6 +507,7 @@
 			"done": "完成",
 			"empty": "没有任务",
 			"other": "后台任务",
+			"quitsAnytime": "可随时退出",
 			"kind": {
 				"mods.toggle": "开关 Mod",
 				"mods.refreshCostumes": "启动时检查和重建 Mod",

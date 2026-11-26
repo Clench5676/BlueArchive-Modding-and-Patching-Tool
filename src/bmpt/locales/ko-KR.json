@@ -507,6 +507,7 @@
 			"done": "완료",
 			"empty": "작업 없음",
 			"other": "백그라운드 작업",
+			"quitsAnytime": "언제든 종료 가능",
 			"kind": {
 				"mods.toggle": "Mod 켜기/끄기",
 				"mods.refreshCostumes": "시작 시 Mod 확인 및 재구성",

@@ -2,9 +2,10 @@
 // its NGUI tree. The frame is the game's popup background (UIRatioNoticePopup Center/Popup/Base/BG: Common_Popup_Bg
 // with the shard patterns Popup_Img_Deco_2 at the top left and Popup_Img_Deco_1 at the bottom right) under the
 // popup's title; each job is a row of the Mission screen (UIMission's NUIMissionContent: its tag, title, Count and
-// Gauge) on a plain card, the running one with the game's loading ring (UIRatioNoticePopup LoadingIcon) where the
-// row has its Receive button; under the running job its items are small cards: the last finished ones, the one at
-// hand with its step and share, and how many are left.
+// Gauge) on a plain card, the running one with the game's loading ring (UIRatioNoticePopup LoadingIcon, turned by
+// its TweenRotation) at the row's right edge; under the running job its items are small cards: the last finished
+// ones, the one at hand with its step and share, and how many are left. A queued job with nothing to show yet is
+// folded to its tag and title. Everything on the right (the ring, a step, Done) ends at one right edge, RIGHT.
 import { T } from "../core/i18n.js";
 import { node, sprite, label } from "../ui/ngui.js";
 
@@ -18,9 +19,14 @@ export const PANEL = Object.freeze({
   PAD: 64,
   TOP: 190, // the title's band: UIRatioNoticePopup's title sits 70 under the frame's top
   ITEM_H: 110,
+  ITEM_RUN_H: 150, // the item at hand: its name above its gauge
+  FOLDED_H: 120, // a queued job without a count: its tag and title only
   ITEM_INDENT: 90,
   BOTTOM: 104, // room for the bottom right shard pattern below the last card
-  RING: [1440, -40], // the running ring, from the row's left middle (Btn_Receive's place)
+  RIGHT: 40, // the right column's inset from the cards' right edge
+  RING: 98, // the running job's ring (LoadingIcon, 75 units, at 1.3)
+  RING_Y: -40, // its height on the row, from the row's middle (Btn_Receive's line)
+  ITEM_RING: 41, // an item's ring (LoadingIcon at 0.55)
   GAUGE_W: 732, // the row's Gauge/Fore width when full
   TITLE_Y: 78,
   // the frame's shard patterns, inset from its corners as on UIRatioNoticePopup's 2664 x 1266 frame
@@ -95,8 +101,8 @@ export function itemName(p = {}, nameOf = (e) => e?.alt || e?.core || "") {
  * What the panel shows: one entry per job, the running one first (jobs.list's order).
  * @param {object[]} jobs jobs.list's answer.
  * @param {(entry: object) => string} [nameOf] Names an alt.
- * @returns {object[]} {id, name, running, current, total, done (0..1), count, items: [{state, name, step,
- *     fraction}]}; items only for the running job.
+ * @returns {object[]} {id, name, running, current, total, done (0..1), count, quits, items: [{state, name, step,
+ *     fraction}]}; items only for the running job. quits: a quit does not wait for the job.
  */
 export function panelView(jobs = [], nameOf) {
   return jobs.map((job) => {
@@ -114,6 +120,8 @@ export function panelView(jobs = [], nameOf) {
       total,
       done,
       count: total > 0 ? `${running ? current : 0}/${total}` : "",
+      // a start-up job does not hold a quit: it ends at its step under way and goes on at the next start
+      quits: !!job.resumable,
       items: [],
     };
     if (!running) return view;
@@ -131,6 +139,16 @@ export function panelView(jobs = [], nameOf) {
   });
 }
 
+/** A queued job with no count yet has nothing under its title: its row folds to the title line. */
+export const isFolded = (job) => !job.running && !job.count;
+
+/** Label_System's left edge from the row's left (BG pivot top right, BG/Normal inside it). */
+function titleLeft(r, titleNode) {
+  const bg = find(r, "BG"),
+    normal = find(r, "BG/Normal");
+  return (bg?.pos[0] ?? 0) + (normal?.pos[0] ?? 0) + titleNode.pos[0];
+}
+
 const setText = (tree, path, text) => {
   const found = find(tree, path);
   const widget = found?.widgets?.find((w) => "text" in w);
@@ -146,14 +164,33 @@ function find(tree, path) {
   return at;
 }
 
+/**
+ * The game's loading ring at a size: a loadingRing widget, which NGUI.render draws with the LoadingIcon prefab
+ * turning as its TweenRotation turns it.
+ */
+function ringNode(ring, pos, size) {
+  const colour = ring?.widgets?.find((w) => "sprite" in w)?.color;
+  return node("LoadingIcon", pos, [
+    { loadingRing: true, w_: size, h_: size, pivot: 4, depth: 30, ...(colour ? { color: colour } : {}) },
+  ]);
+}
+
+/** An item card's height: the one at hand with a gauge is taller, so its name stays clear of the gauge. */
+export const itemHeight = (item) => (item.state === "run" && item.fraction > 0 ? PANEL.ITEM_RUN_H : PANEL.ITEM_H);
+
 /** The item cards under the running job, from (x, y) down: [nodes, height]. */
 function itemNodes(items, ring, x, y) {
-  const { ROW_W, ITEM_H, ITEM_INDENT } = PANEL;
-  const w = ROW_W - ITEM_INDENT,
-    h = ITEM_H - 14;
+  const { ROW_W, ITEM_INDENT, RIGHT } = PANEL;
+  const w = ROW_W - ITEM_INDENT;
   const nodes = [];
+  let top = y;
   items.forEach((item, i) => {
     const waiting = item.state === "wait";
+    const H = itemHeight(item),
+      h = H - 14;
+    const gauge = item.state === "run" && item.fraction > 0;
+    // with a gauge, the name's line sits above the card's middle and the gauge near its bottom
+    const line = gauge ? 16 : 0;
     const children = [
       node(
         "Card",
@@ -163,32 +200,41 @@ function itemNodes(items, ring, x, y) {
     ];
     if (item.state === "done")
       children.push(node("Mark", [52, 0], [sprite("Common_Icon_Check_B", 46, 46, { depth: 30, type: 0 })]));
-    else if (item.state === "run" && ring)
-      children.push({ ...structuredClone(ring), pos: [52, 0], scale: [0.55, 0.55] });
+    else if (item.state === "run" && ring) children.push(ringNode(ring, [52, line], PANEL.ITEM_RING));
     else
       children.push(node("Mark", [52, 0], [sprite("Common_Bg_Raius10px", 20, 20, { depth: 30, color: COLOURS.dot })]));
     children.push(
       node(
         "Name",
-        [110, 0],
-        [label(item.name, 46, waiting ? COLOURS.muted : COLOURS.text, w - 560, 58, { pivot: 3, depth: 30 })],
+        [110, line],
+        [
+          label(item.name, 46, waiting ? COLOURS.muted : COLOURS.text, w - 560, 58, {
+            pivot: 3,
+            depth: 30,
+            ellipsis: true,
+          }),
+        ],
       ),
     );
     if (item.step)
       children.push(
-        node("Step", [w - 40, 0], [label(item.step, 42, COLOURS.step, 380, 54, { pivot: 5, depth: 30, align: 2 })]),
+        node(
+          "Step",
+          [w - RIGHT, line],
+          [label(item.step, 42, COLOURS.step, 380, 54, { pivot: 5, depth: 30, align: 3 })],
+        ),
       );
-    if (item.state === "run" && item.fraction > 0) {
-      const bar = w - 150;
+    if (gauge) {
+      const bar = w - 110 - RIGHT;
       children.push(
         node(
           "GaugeBack",
-          [110, -h / 2 + 14],
+          [110, -h / 2 + 22],
           [sprite("Common_Bg_Raius5px", bar, 10, { pivot: 3, depth: 8, color: COLOURS.gaugeBack })],
         ),
         node(
           "GaugeFore",
-          [110, -h / 2 + 14],
+          [110, -h / 2 + 22],
           [
             sprite("Common_Bg_Raius5px", Math.max(10, Math.round(bar * item.fraction)), 10, {
               pivot: 3,
@@ -199,9 +245,10 @@ function itemNodes(items, ring, x, y) {
         ),
       );
     }
-    nodes.push(node(`Item${i}`, [x, y - i * ITEM_H - ITEM_H / 2], [], children));
+    nodes.push(node(`Item${i}`, [x, top - H / 2], [], children));
+    top -= H;
   });
-  return [nodes, items.length * ITEM_H];
+  return [nodes, y - top];
 }
 
 /**
@@ -212,7 +259,7 @@ function itemNodes(items, ring, x, y) {
  * @returns {{tree: object, width: number, height: number}} In NGUI units.
  */
 export function panelTree(view, { row, frame, title, ring }, measure = estimateWidth) {
-  const { ROW_W, ROW_H, ROW_GAP, JOB_GAP, PAD, TOP, ITEM_INDENT, BOTTOM, GAUGE_W } = PANEL;
+  const { ROW_W, ROW_H, ROW_GAP, JOB_GAP, PAD, TOP, ITEM_INDENT, BOTTOM, GAUGE_W, RIGHT, FOLDED_H } = PANEL;
   const W = ROW_W + 2 * PAD;
   const kids = [];
   let y = -TOP;
@@ -224,7 +271,9 @@ export function panelTree(view, { row, frame, title, ring }, measure = estimateW
   }
   for (const job of view) {
     const r = structuredClone(row);
-    const centre = y - ROW_H / 2;
+    const folded = isFolded(job);
+    const H = folded ? FOLDED_H : ROW_H;
+    const centre = y - H / 2;
     r.pos = [PAD, centre];
     for (const path of [
       "Parcel",
@@ -237,8 +286,15 @@ export function panelTree(view, { row, frame, title, ring }, measure = estimateW
       if (hidden) hidden.active = false;
     }
     // a plain card: the row's own card sprite (Campaign_List_Normal) draws a shadow under it
-    const card = find(r, "BG")?.widgets?.find((w) => "sprite" in w);
-    if (card) Object.assign(card, { sprite: "Common_Bg_Raius10px", h_: ROW_H - 4 });
+    const bgNode = find(r, "BG"),
+      card = bgNode?.widgets?.find((w) => "sprite" in w);
+    if (card) Object.assign(card, { sprite: "Common_Bg_Raius10px", h_: H - 4 });
+    if (folded && bgNode) {
+      // the card (pivot top right) spans the folded height; the tag and title line on its middle
+      bgNode.pos = [bgNode.pos[0], H / 2 - 2];
+      const normal = find(r, "BG/Normal");
+      if (normal) normal.pos = [normal.pos[0], -(H - 4) / 2];
+    }
     const tagText = T(job.running ? "tasks.running" : "tasks.queued");
     // The tag fits its text as the prefab's anchors make it: Label_Tag resizes freely (overflow 2), the Tag sprite
     // spans it with TAG_PAD on each side, and the title starts TAG_GAP after the label and keeps its right edge.
@@ -274,9 +330,28 @@ export function panelTree(view, { row, frame, title, ring }, measure = estimateW
       fore.active = job.done > 0;
     }
     kids.push(r);
-    if (job.running && ring)
-      kids.push({ ...structuredClone(ring), pos: [PAD + PANEL.RING[0], centre + PANEL.RING[1]], scale: [1.3, 1.3] });
-    y -= ROW_H + ROW_GAP;
+    // the right column: the running ring, then the quit note left of it (on a folded row at the right edge)
+    let right = PAD + ROW_W - RIGHT;
+    const line = folded ? centre : centre + PANEL.RING_Y;
+    if (job.running && ring) {
+      kids.push(ringNode(ring, [right - PANEL.RING / 2, line], PANEL.RING));
+      right -= PANEL.RING + 30;
+    }
+    if (job.quits) {
+      const quitText = T("tasks.quitsAnytime");
+      const width = Math.ceil(measure(quitText, 42));
+      kids.push(
+        node(
+          "Quits",
+          [right, line],
+          [label(quitText, 42, COLOURS.muted, width, 54, { pivot: 5, depth: 30, align: 3 })],
+        ),
+      );
+      // the title keeps clear of a note on its own line
+      if (folded && titleNode && titleWidget)
+        titleWidget.w_ = Math.max(0, Math.min(titleWidget.w_, right - width - 40 - PAD - titleLeft(r, titleNode)));
+    }
+    y -= H + ROW_GAP;
     const [items, height] = itemNodes(job.items, ring, PAD + ITEM_INDENT, y);
     kids.push(...items);
     y -= height + JOB_GAP;

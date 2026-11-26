@@ -361,6 +361,10 @@ textarea {
   position: absolute;
   z-index: 1001;
 }
+/* the panel redraws with its progress: its rings start at the shared clock (--turn-delay, tasks.js), not over */
+.task-panel .ngui-loading {
+  animation: ngui-turn var(--turn-time, 3s) linear var(--turn-delay, 0s) infinite var(--turn-loop, normal);
+}
 .top-option i {
   width: 39px;
   height: 40px;
