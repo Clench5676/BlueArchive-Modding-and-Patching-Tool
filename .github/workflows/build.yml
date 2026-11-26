@@ -43,15 +43,32 @@ jobs:
         id: release
         run: python scripts/check_release_tag.py
 
+      - name: Check Existing Windows Build
+        id: existing
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          # A stable release whose draft already got its Windows build (windows-build.yml) keeps it.
+          $Names = (gh release view "$env:RELEASE_TAG" --json assets --jq '.assets[].name')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $Name = "Blue-Archive-Modding-and-Patching-Tool-$env:RELEASE_TAG-windows-x64.exe"
+          $Built = (@($Names) -ccontains $Name) -and (@($Names) -ccontains "$Name.md5")
+          "built=$($Built.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
       - name: Setup uv
+        if: steps.existing.outputs.built != 'true'
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
           version: "0.13.1"
 
       - name: Build Windows GUI
+        if: steps.existing.outputs.built != 'true'
         run: ./scripts/build_windows.ps1 -Target Gui -Python "$env:PYTHON_VERSION"
 
       - name: Upload EXE and MD5 to Release
+        if: steps.existing.outputs.built != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
