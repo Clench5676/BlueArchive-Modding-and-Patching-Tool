@@ -507,7 +507,7 @@
 			"done": "Done",
 			"empty": "No tasks",
 			"other": "Background Task",
-			"quitsAnytime": "Safe to Quit",
+			"noQuit": "{name} (Do Not Quit)",
 			"kind": {
 				"mods.toggle": "Switch Mods",
 				"mods.refreshCostumes": "Check and Rebuild Mods at Start",
@@ -571,6 +571,7 @@
 			"update_restart_failed": "Could not restart for the update",
 			"lines_unavailable": "Lines are not available right now",
 			"busy": "Wait for the current task to finish",
+			"queued": "Queued tasks will be cancelled",
 			"library_target_not_empty": "The folder already holds mod library files: {path}",
 			"library_io_error": "Could not write to the mod library: {file}",
 			"data_dir_readonly": "Data folder not writable: {path}",
@@ -721,7 +722,8 @@
 		},
 		"quit": {
 			"title": "Notice",
-			"ask": "Quit?"
+			"ask": "Quit?",
+			"queued": "Queued tasks will be cancelled"
 		},
 		"tray": {
 			"working": "Working {done}/{total}",

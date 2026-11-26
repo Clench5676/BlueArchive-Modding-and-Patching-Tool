@@ -1084,9 +1084,22 @@ def test_app_quit(env):
     s.jobs.submit("extract", lambda log, progress: gate.wait(5))  # read-only: never holds up quitting
     s.window = SimpleNamespace(destroy=lambda: destroyed.append(True))
     assert "error" not in rpc(app, "app.quit") and destroyed == [True]
-    s.submit("slow", lambda log, progress: gate.wait(5), writes="library")
-    assert rpc(app, "app.quit")["error"]["code"] == "busy"
+    # a writer queued behind the reader: the user may quit and cancel it
+    queued = s.submit("slow", lambda log, progress: gate.wait(5), writes="library")
+    assert rpc(app, "app.quit")["error"]["code"] == "queued"
+    assert rpc(app, "app.quit", cancelQueued="yes")["error"]["code"] == "bad_params"
+    destroyed.clear()
+    assert "error" not in rpc(app, "app.quit", cancelQueued=True) and destroyed == [True]
+    assert s.jobs.get(queued).state == "cancelled"
     gate.set()
+    assert wait_for(lambda: not s.jobs.busy())
+    # a running writer holds the quit, cancelQueued or not
+    hold = threading.Event()
+    running = s.submit("slow", lambda log, progress: hold.wait(5), writes="library")
+    assert wait_for(lambda: s.jobs.get(running).state == "running")
+    assert rpc(app, "app.quit")["error"]["code"] == "busy"
+    assert rpc(app, "app.quit", cancelQueued=True)["error"]["code"] == "busy"
+    hold.set()
     assert wait_for(lambda: not s.jobs.busy())
     # browser mode: the answer goes out first, then the server stops
     stopped = threading.Event()

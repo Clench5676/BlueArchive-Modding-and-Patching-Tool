@@ -24,7 +24,7 @@ import { L, T, errorText, setStrings, languageRefresh } from "../core/i18n.js";
 import { neighbour, visit } from "../student-list/student-list-order.js";
 import { hasAsset, primaryKind, tabOfKind } from "../mods/switch-sources.js";
 import { renderNav, setTitle, setTopActions } from "./nav.js";
-import { confirmQuit, quitKey } from "./quit.js";
+import { confirmCancelQueued, confirmQuit, quitKey } from "./quit.js";
 import { forget, thumbnailScope } from "../detail/thumbs.js";
 import { applyDefaultThumbnails } from "./default-thumbnails.js";
 import { setSpineConsent, spineAllowed } from "../spine/spine-runtime.js";
@@ -362,8 +362,8 @@ function message(title, hint, actions = []) {
 
 // the quit prompt (quit.js): the student list's back button and Escape on the list. In the app's window the quit
 // closes it; in browser mode the server stops once it has answered, and the page says so
-function askQuit() {
-  return confirmQuit({
+function quitParts() {
+  return {
     message: Popup.message,
     rpc,
     T,
@@ -373,7 +373,10 @@ function askQuit() {
       $("stage").classList.add("closed");
       message(T("app.closed"));
     },
-  });
+  };
+}
+function askQuit() {
+  return confirmQuit(quitParts());
 }
 addEventListener("keydown", (ev) => {
   if (!quitKey(ev, { byId: (id) => document.getElementById(id), covering: Loading.covering() })) return;
@@ -901,6 +904,8 @@ async function start() {
   // a refused quit also opens the Tasks panel (tasks.js), which shows the job that holds it
   on("app.busy", () => notify(T("error.busy"), { kind: "error", error: { code: "busy" } }));
   on("app.finishing", (data) => finishingStep(!!data?.busy));
+  // a quit while writer jobs only wait in the queue: they are cancelled on Confirm
+  on("app.quitQueued", () => confirmCancelQueued(quitParts()));
   await timed("fonts", () => document.fonts.ready);
   // the bottom bar: its greyed entries hand over to the classic UI (with or without a game folder), their prompt
   // following the pref classicPrompt

@@ -238,7 +238,7 @@ const box = (node, w, [x, y] = [0, 0]) => {
 };
 
 for (const locale of LOCALES)
-  test(`the ring, the steps, Done and the quit note end at one right edge, in ${locale}`, () => {
+  test(`the ring, the steps and Done end at one right edge, in ${locale}`, () => {
     use(locale);
     const view = panelView(JOBS);
     const { tree } = panelTree(view, PREFABS);
@@ -253,10 +253,6 @@ for (const locale of LOCALES)
       assert.equal(w.align, 3, "right-aligned text");
       assert.ok(Math.abs(box(step, w, item.pos)[2] - edge) < 1e-6, `${w.text} at the right edge`);
     }
-    const note = tree.children.find((c) => c.name === "Quits");
-    assert.equal(text(note).text, T("tasks.quitsAnytime"));
-    assert.equal(text(note).align, 3);
-    assert.ok(box(note, text(note))[2] < box(ring, ring.widgets[0])[0], "the quit note left of the ring");
   });
 
 for (const locale of LOCALES)
@@ -283,7 +279,7 @@ for (const locale of LOCALES)
     use(locale);
     const jobs = [
       { id: "a", kind: "library.prune", state: "queued", progress: null, done: [] },
-      { id: "b", kind: "mods.retryFailed", state: "queued", resumable: true, progress: null, done: [] },
+      { id: "b", kind: "mods.retryFailed", state: "queued", writes: "game", progress: null, done: [] },
       { id: "c", kind: "mods.toggle", state: "queued", progress: { current: 0, total: 4 }, done: [] },
     ];
     const view = panelView(jobs);
@@ -299,13 +295,29 @@ for (const locale of LOCALES)
     assert.ok(Math.abs(card[1] + card[3]) < 1e-6, "card centred on the row");
     const normal = find(a, "BG/Normal");
     assert.ok(Math.abs(bg.pos[1] + normal.pos[1]) < 1e-6, "title line on the middle");
-    // the quit note on a folded row shares the title's line, and the title stops before it
-    const note = tree.children.find((n) => n.name === "Quits");
-    assert.ok(Math.abs(note.pos[1] - b.pos[1]) < 1e-6);
-    const title = find(b, "BG/Normal/Label_System");
-    const titleRight = PANEL.PAD + bg.pos[0] + normal.pos[0] + title.pos[0] + text(title).w_;
-    assert.ok(titleRight < box(note, text(note))[0], "the title ends before the note");
-    assert.equal(tree.children.filter((n) => n.name === "Quits").length, 1, "only the resumable job");
+    assert.equal(text(find(b, "BG/Normal/Label_System")).text, T("tasks.kind.mods.retryFailed"), "queued: no note");
+  });
+
+for (const locale of LOCALES)
+  test(`a running writer the user started says not to quit, its title still fitting, in ${locale}`, () => {
+    use(locale);
+    const english = flat(load("en-US").webui.tasks);
+    for (const kind of Object.keys(english)
+      .filter((key) => key.startsWith("kind."))
+      .map((key) => key.slice(5))) {
+      const [held, startUp, reader] = panelView([
+        { id: "a", kind, state: "running", writes: "library", progress: null, done: [] },
+        { id: "b", kind, state: "running", writes: "game", resumable: true, progress: null, done: [] },
+        { id: "c", kind, state: "running", writes: null, progress: null, done: [] },
+      ]);
+      assert.equal(held.name, T("tasks.noQuit", { name: T(`tasks.kind.${kind}`) }));
+      assert.ok(held.name.includes(T(`tasks.kind.${kind}`)) && held.name !== T(`tasks.kind.${kind}`));
+      assert.equal(startUp.name, T(`tasks.kind.${kind}`), "a start-up job ends at its step on a quit");
+      assert.equal(reader.name, T(`tasks.kind.${kind}`), "a reader does not hold a quit");
+      const { tree } = panelTree([held], PREFABS);
+      const title = text(find(tree.children[2], "BG/Normal/Label_System"));
+      assert.ok(estimateWidth(title.text, title.fontSize) <= title.w_, `${title.text} fits`);
+    }
   });
 
 test("with no jobs the panel says so, its bottom pattern scaled to the short frame", () => {

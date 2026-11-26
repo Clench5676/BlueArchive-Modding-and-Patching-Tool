@@ -507,7 +507,7 @@
 			"done": "完了",
 			"empty": "タスクなし",
 			"other": "バックグラウンド処理",
-			"quitsAnytime": "いつでも終了可",
+			"noQuit": "{name}（終了しないでください）",
 			"kind": {
 				"mods.toggle": "Mod の切り替え",
 				"mods.refreshCostumes": "起動時の Mod の確認と再構築",
@@ -571,6 +571,7 @@
 			"update_restart_failed": "更新のための再起動に失敗",
 			"lines_unavailable": "現在セリフを読み込めません",
 			"busy": "現在のタスクの完了をお待ちください",
+			"queued": "待機中のタスクはキャンセルされます",
 			"library_target_not_empty": "このフォルダーにはすでにMODライブラリのファイルがあります：{path}",
 			"library_io_error": "MODライブラリに書き込めません：{file}",
 			"data_dir_readonly": "データフォルダーに書き込めません：{path}",
@@ -721,7 +722,8 @@
 		},
 		"quit": {
 			"title": "アラート",
-			"ask": "終了しますか？"
+			"ask": "終了しますか？",
+			"queued": "待機中のタスクはキャンセルされます"
 		},
 		"tray": {
 			"working": "処理中 {done}/{total}",

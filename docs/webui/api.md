@@ -10,7 +10,7 @@ one changes are in the other files ([`README.md`](README.md)).
 |---|---|
 | `app.info` | version, language, platform, game found, resource version, consents (`consent`, `spineConsent`), `uiCached`, paths, `dataDirWritable`, `debug` |
 | `app.consent {granted}` / `app.spineConsent {granted?}` | the asset consent (`false` closes the app) / the Spine licence acknowledgement |
-| `app.quit` | closes the window; `busy` while a writer job runs; in browser mode stops the server; `native_unavailable` with `--serve` |
+| `app.quit` | closes the window; `busy` while a writer job runs; `queued` while writer jobs only wait, unless `cancelQueued: true` cancels them; in browser mode stops the server; `native_unavailable` with `--serve` |
 | `app.openClassic {tab}` / `app.classic` / `classic.front` | start or raise the classic window / its status / Bring to Front |
 | `classic.queue {method, params}` / `classic.clearQueue` | queue a refused write for when the classic window closes / empty the queue |
 | `i18n.strings {lang}` | `{key: text}` for `webui.*` |
@@ -315,5 +315,5 @@ Events on `/api/events`:
 | `classic.opened` / `classic.ready` / `classic.closed` | `{pid}` / `{pid, tab}` / `{code}` (see [Classic window](desktop.md#classic-window)) |
 | `classic.queueDone` | `{submitted, dropped}` once the writes queued for the classic window ran |
 | `tray.toggle` / `tray.open` | the tray submitted a toggle, or brought the window up on a view (see [Tray](desktop.md#tray)) |
-| `config.changed`, `app.busy`, `server.closing` | `{}` |
+| `config.changed`, `app.busy`, `app.quitQueued`, `server.closing` | `{}` |
 | `app.finishing` | `{busy}`: a quit waits for a start-up job's step under way (true), then goes on (false) |

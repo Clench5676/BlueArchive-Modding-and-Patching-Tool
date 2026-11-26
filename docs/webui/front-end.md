@@ -35,7 +35,8 @@ bar's round back button and Escape on the list open the game's quit prompt (Canc
 while the prompt holds the focus, per the PC client's key mapping). Escape is left alone when another handler took the
 key, while an input method composes, for a held key's repeat, with a modifier, while any popup is open, behind the
 loading screen, and on any screen but the list. Confirm calls `app.quit` (refused with `busy` while a writer job
-runs); in browser mode the page shows Closed after the server stops.
+runs; with `queued` while writer jobs only wait, when the page asks again and quits with `cancelQueued`); in browser
+mode the page shows Closed after the server stops.
 
 ## Bottom navigation
 
