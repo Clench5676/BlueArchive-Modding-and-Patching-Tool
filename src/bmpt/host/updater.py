@@ -1,8 +1,9 @@
 """Update check and in-app update from the project's GitHub releases.
 
 Releases are tagged with the bare version (e.g. ``0.1.0-alpha``) and carry the platform builds plus one ``.md5`` file
-per build (``<hash>  <file name>``). An update downloads the build for this platform, checks its MD5, and swaps it in
-after the app quits: a small script waits for the process to end, replaces the program and starts it again.
+per build (``<hash>  <file name>``), and the App's short release notes as ``release-notes.md``. An update downloads the
+build for this platform, checks its MD5, and swaps it in after the app quits: a small script waits for the process to
+end, replaces the program and starts it again.
 """
 
 from __future__ import annotations
@@ -34,6 +35,10 @@ REPO = "Clench5676/BlueArchive-Modding-and-Patching-Tool"
 API = f"https://api.github.com/repos/{REPO}/releases?per_page=30"
 USER_AGENT = "Blue-Archive-Modding-and-Patching-Tool-updater"
 CHUNK = 1 << 16
+# The short notes the update popup shows; the release body, which may be longer, is the fallback.
+NOTES_ASSET = "release-notes.md"
+NOTES_LIMIT = 256 * 1024  # bytes; a larger notes asset is ignored
+NOTES_TIMEOUT = 5.0  # seconds
 
 _SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 
@@ -105,7 +110,8 @@ class UpdateInfo:
     """A newer release: its version (without ``v``), this build's version, its release page and notes.
 
     ``asset`` and ``checksum`` are this platform's build and its ``.md5`` file, None when the release has none;
-    ``installable`` says whether this build can download and swap it in by itself.
+    ``installable`` says whether this build can download and swap it in by itself. ``notes`` starts as the release
+    body; ``notes_asset`` is the release's short notes file, which ``check`` reads in its place.
     """
 
     version: str
@@ -116,6 +122,7 @@ class UpdateInfo:
     prerelease: bool = False
     installable: bool = field(default=False)
     notes: str = ""
+    notes_asset: Asset | None = None
 
     def to_json(self) -> dict:
         """Return the update for the front end; of the downloads, only the build's name and size."""
@@ -162,6 +169,36 @@ def pick_assets(assets: list[dict], suffix: str | None, version: str) -> tuple[A
         return None, None
     build = sorted(builds, key=lambda a: a.name)[0]
     return build, by_name.get(build.name + ".md5")
+
+
+def notes_asset(assets: list[dict]) -> Asset | None:
+    """Return a release's short notes file (``NOTES_ASSET``), or None when it has none."""
+    for a in assets:
+        if a.get("name") == NOTES_ASSET and a.get("browser_download_url"):
+            return Asset(a["name"], a["browser_download_url"], int(a.get("size") or 0))
+    return None
+
+
+def read_notes(info: UpdateInfo, timeout: float = NOTES_TIMEOUT) -> None:
+    """Replace an update's notes with its short notes file, keeping the release body when that cannot be read.
+
+    Releases before the notes file, a file that is empty, too large, not UTF-8 or out of reach keep the body.
+
+    Args:
+        info: The update; its ``notes`` change in place.
+        timeout: Seconds for the request.
+    """
+    asset = info.notes_asset
+    if asset is None or asset.size > NOTES_LIMIT:
+        return
+    try:
+        data = _get(asset.url, timeout)
+        text = data.decode("utf-8") if len(data) <= NOTES_LIMIT else ""
+    except Exception as e:  # network errors, HTTP errors, bad encoding
+        logger.info("release notes file unavailable, using the release body: %s", e)
+        return
+    if text.strip():
+        info.notes = text
 
 
 def _get(url: str, timeout: float) -> bytes:
@@ -212,6 +249,7 @@ def latest(releases: list[dict], current: str, suffix: str | None) -> UpdateInfo
         checksum=checksum,
         prerelease=bool(rel.get("prerelease")),
         notes=rel.get("body") if isinstance(rel.get("body"), str) else "",
+        notes_asset=notes_asset(rel.get("assets", [])),
         installable=bool(asset and checksum and is_compiled() and install_target() is not None),
     )
 
@@ -232,7 +270,10 @@ def check(timeout: float = 10.0) -> UpdateInfo | None:
         releases = json.loads(_get(API, timeout))
     except Exception as e:  # network errors, HTTP errors, bad JSON
         raise ServiceError("update_check_failed", error=str(e)) from e
-    return latest(releases, current_version(), platform_suffix())
+    info = latest(releases, current_version(), platform_suffix())
+    if info is not None:
+        read_notes(info, min(timeout, NOTES_TIMEOUT))
+    return info
 
 
 def parse_md5(text: str, name: str) -> str | None:

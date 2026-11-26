@@ -8,6 +8,8 @@
 # Usage: scripts/release.sh dist/<build> [dist/<build> ...]
 #   e.g. scripts/release.sh dist/*-0.1.0-alpha-*.dmg dist/*-0.1.0-alpha-*.exe
 # .md5 files ("<hash>  <file name>") are written when missing and checked when present.
+# The App's short notes, src/bmpt/assets/release-notes/<X.Y.Z>.md, are uploaded as release-notes.md: the in-app
+# update popup shows them, so the release body may carry longer notes.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -39,6 +41,16 @@ for f in "$@"; do
     FILES+=("$f" "$f.md5")
 done
 if [[ ${#FILES[@]} -eq 0 ]]; then echo "no build files supplied" >&2; exit 1; fi
+
+NOTES="src/bmpt/assets/release-notes/${VERSION%%-*}.md"
+if [[ -s $NOTES ]]; then
+    STAGE=$(mktemp -d)
+    trap 'rm -rf -- "$STAGE"' EXIT
+    cp "$NOTES" "$STAGE/release-notes.md"
+    FILES+=("$STAGE/release-notes.md")
+else
+    echo "warning: no $NOTES; the update popup will show the release body" >&2
+fi
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
     echo "commit or stash your changes first" >&2

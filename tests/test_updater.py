@@ -130,6 +130,55 @@ def test_latest_release_notes_follow_the_chosen_release():
     assert info.to_json()["notes"] == "Stable notes" and info.page.endswith("/releases/tag/0.6.0")
 
 
+def test_latest_finds_the_short_notes_file_but_keeps_the_body_until_it_is_read():
+    rel = {**release("0.6.0", "BAMPT-0.6.0" + WIN, "release-notes.md"), "body": "Long notes"}
+    info = updater.latest([rel], "0.5.0", WIN)
+    assert info.notes == "Long notes" and info.notes_asset.url.endswith("/release-notes.md")
+    assert "notes_asset" not in info.to_json()
+    assert updater.latest([built("0.6.0")], "0.5.0", WIN).notes_asset is None
+
+
+def notes_release(size=10):
+    rel = {**release("0.6.0", "release-notes.md"), "body": "Long notes"}
+    rel["assets"][0]["size"] = size
+    return rel
+
+
+def test_check_shows_the_short_notes_file_in_place_of_the_body(monkeypatch):
+    pages = {
+        updater.API: json.dumps([notes_release()]).encode(),
+        "https://example.invalid/release-notes.md": "短版".encode(),
+    }
+    monkeypatch.setattr(updater, "_get", lambda url, timeout: pages[url])
+    monkeypatch.setattr(updater, "current_version", lambda: "0.5.0")
+    info = updater.check()
+    assert info.to_json()["notes"] == "短版"
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [OSError("offline"), b"", b"  \n", b"\xff\xfe bad", b"x" * (updater.NOTES_LIMIT + 1)],
+    ids=["unreachable", "empty", "blank", "not-utf8", "too-large"],
+)
+def test_the_body_stays_when_the_short_notes_cannot_be_used(monkeypatch, answer):
+    def get(url, timeout):
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    monkeypatch.setattr(updater, "_get", get)
+    info = updater.latest([notes_release()], "0.5.0", WIN)
+    updater.read_notes(info)
+    assert info.notes == "Long notes"
+
+
+def test_a_notes_file_listed_as_too_large_is_not_downloaded(monkeypatch):
+    monkeypatch.setattr(updater, "_get", lambda url, timeout: pytest.fail("must not download"))
+    info = updater.latest([notes_release(updater.NOTES_LIMIT + 1)], "0.5.0", WIN)
+    updater.read_notes(info)
+    assert info.notes == "Long notes"
+
+
 def test_pick_assets_skips_the_cli_build():
     win = "-windows-x64.exe"
     assets = release("0.1.0", f"BAMPT-cli-0.1.0{win}", f"BAMPT-0.1.0{win}", f"BAMPT-0.1.0{win}.md5")["assets"]
@@ -706,3 +755,32 @@ def test_prerelease_preview_gate_uses_running_version(version, expected):
 )
 def test_button_size_tags_skip_packaged_release_candidates(version, expected):
     assert updater.button_size_tags(version) is expected
+
+
+@pytest.mark.parametrize("version", ["0.1.0", "0.1.0-rc.2"])
+def test_release_uploads_the_apps_short_notes_as_release_notes_md(release_workspace, version: str) -> None:
+    repo, env = release_workspace
+    notes = repo / "src" / "bmpt" / "assets" / "release-notes" / "0.1.0.md"
+    notes.parent.mkdir(parents=True)
+    notes.write_text("Short notes\n")
+    (repo / "pyproject.toml").write_text(f'[project]\nversion = "{version}"\n')
+    git = [env["BAMT_REAL_GIT"], "-c", "commit.gpgsign=false"]
+    subprocess.run([*git, "add", "."], cwd=repo, env=env, check=True, capture_output=True)
+    subprocess.run([*git, "commit", "-qm", "notes"], cwd=repo, env=env, check=True, capture_output=True)
+    gh_stub = Path(env["PATH"].split(os.pathsep)[0]) / "gh"
+    # Record the uploaded notes' text too: the staged copy is gone once the script ends.
+    gh_stub.write_text(
+        gh_stub.read_text()
+        + """for arg in sys.argv[1:]:
+    if arg.endswith("/release-notes.md"):
+        with open(os.environ["BAMT_RELEASE_LOG"] + ".notes", "w") as out:
+            out.write(open(arg).read())
+"""
+    )
+    name = f"Blue-Archive-Modding-and-Patching-Tool-{version}-windows-x64.exe"
+    result = run_release(repo, env, name)
+    assert result.returncode == 0, result.stderr
+    create = [json.loads(line) for line in Path(env["BAMT_RELEASE_LOG"]).read_text().splitlines()][-1]
+    assert create[:3] == ["gh", "release", "create"] and create[-3:-1] == [name, name + ".md5"]
+    assert Path(create[-1]).name == "release-notes.md" and not Path(create[-1]).exists()
+    assert Path(env["BAMT_RELEASE_LOG"] + ".notes").read_text() == "Short notes\n"
