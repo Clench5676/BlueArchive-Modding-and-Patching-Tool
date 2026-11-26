@@ -427,6 +427,10 @@
     "code": "E3017",
     "level": "failed"
   },
+  "queued": {
+    "code": "E1022",
+    "level": "notice"
+  },
   "recorded_rig_animations": {
     "code": "E5016",
     "level": "failed"
