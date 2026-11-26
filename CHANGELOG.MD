@@ -8,48 +8,73 @@ When publishing a stable release, add its final changes with the actual version/
 release/compare links, and retain compatibility or migration notes. Release notes and feature tours are separate,
 human-reviewed presentation materials.
 
-## [0.7.0] - 2026-11-04
+## [0.7.0] - 2026-11-26
 
 ### Added
 
-- Student Hall portraits are selected by their visible outline; each portrait has its own toolbar (above the head, under
-  the feet where the head has no room), its own size and a skin swap.
-- The top bar and the bottom menu come in on UILobby's own `UIAni_Lobby` curves once the first screen shows. Immersive
-  scenes (detail and Hall fullscreen, the camera) keep them away until the pointer reaches the window's top or bottom
-  edge; the macOS window buttons travel with the top bar.
-- Memorial lobby dialogue on the game's `ChatDialog` Talk balloon, in the normal view and in fullscreen.
-- Design tokens taken from the game's prefabs (`ui-tokens.js`): the popup footer and backdrop, the small button, chips,
-  the light stats box and the status colours, used across popups, Settings, Batch Import and the Student Hall.
-- Release notes in update detection draw their Markdown and show the section in the UI language. A build ships its own
-  notes (`assets/release-notes/<version>.md`), which Settings' prerelease update preview shows.
-- Session-log lines for the macOS pointer and for bursts of toolbar layouts.
+- Switch Chibi dresses a student's 3D chibi in any of the student's own outfits or another student's, all listed at once
+  and searchable.
+- Switched outfits are fitted to the slot's skeleton and bring along the face, mouth, eye rings, halo, worn items and
+  props the outfit needs.
+- Optimize Physics writes a tagged copy of a switched chibi with steadier skirts, hair and ribbons.
+- The 3D tab's action bar groups the student's battle animations, retreat and knockdown included, and loads each clip
+  when it is first played.
+- Mods are checked against a game update before the first screen, and the Mods to Update list can be reopened and
+  rechecked from Settings.
+- Portrait Mods whose official rig a game update changed are remapped onto the new rig, with a before-and-after repair
+  review.
+- Lobby and background Mods gain the animations a game update added to the official skeleton.
+- Memorial lobby camera frames a lobby, saves the framing as a choice of its own with an album, and keeps the official
+  intro before moving to it.
+- Student Hall portraits are selected by their visible outline and each has its own toolbar, size and quick alt or Mod
+  swap.
+- Mods can be imported from ZIP archives, and exports carry a `ba-mod.json` manifest.
+- The Tasks panel lists queued and running jobs.
+- Every refusal and failure shows a permanent error code, which local error reports keep.
+- The new version's release notes open once after an upgrade.
+- Steam installs are judged against Steam's own file list after a one-time consent.
+- The Japan game folder can be set to the PC client's install root.
 
 ### Changed
 
-- Student Hall portraits stay fixed to the scene while panning; the portrait and background pickers draw the shared popup
-  footer; Hall buttons take the game's small button.
-- Batch Import's list, grouped rows, name plates, filter popup and gold Import button follow the game's popups.
-- Upstream BA Modding Toolkit synchronized to v2.12.0, with the Spine2Dump rendering backend for the classic UI and CLI.
-- The App's code and data moved into its own package, `bmpt`; upstream's package `ba_modding_toolkit` holds the engine,
-  with the fork's changes limited to the imports of its own modules and a hook through which the App registers its strings.
-- The update offer centres its version box while no download is shown.
+- On the Global Steam client, Mods are turned on and off by swapping the game's catalog file instead of replacing each
+  resource file.
+- Stored App and library data move to a new format at the first start, with the old files left untouched.
+- The App reaches the first screen before its start-up rebuilds, which then run in the background.
+- Turning Mods on or off, building switched chibis and opening previews are faster.
+- Progress lines name the Mod, its step and its percentage.
+- Popups, buttons, chips and lists follow the game's own prefabs, and the top bar and bottom menu enter like the game's
+  lobby.
+- Memorial lobby dialogue is drawn in the game's Talk balloon.
+- The photo gallery scrolls as one list and opens as a list popup in the pickers.
+- English calls the 3D characters chibis.
+- Upstream BA Modding Toolkit is synchronized through v2.12.1 and later changes, with the Spine2Dump renderer for the
+  classic UI and CLI.
+- The App's code lives in its own package, `bmpt`, and upstream's `ba_modding_toolkit` holds the engine.
 
 ### Fixed
 
-- Files from a mod always stay inside their output folder.
-- Mod library state and recovery: reads survive a damaged or missing state file and a pending journal, configuration
-  changes are refused while the state is blocked, a failed library move can be retried, a mod updates as a whole, an
-  updated mod is offered to the game without its old build written back, and no `.backup` is written beside game files.
-- Bundle and texture sizes are bounded before loading; the UI asset disk cache keeps three resource versions.
-- macOS: the top bar keeps moving the window after popups, fullscreen and missed layouts; the window controls stay on
-  wide windows and second displays; the game pointer no longer flickers to the system pointer.
-- Photography: blank space in the Expressions list no longer pans the camera.
-- Error texts, keyboard focus kept inside popups, accessible names, and text fit across the App.
+- Files from a Mod and extracted files always stay inside their output folder.
+- A damaged state, settings or configuration file no longer loses the Mod library, and a failed library move can be
+  retried.
+- Each Mod updates as a whole, an updated Mod is never written back in its old build, and no `.backup` is written beside
+  game files.
+- Bundle and texture sizes are checked before loading, and the UI asset cache keeps three resource versions.
+- Mods written whole onto parts a game update rebuilt get the CRC fix, and a game write whose CRC does not match its
+  target is refused.
+- Mods of NPC and story 3D models can be applied to their own bundles.
+- Windows no longer reports a game file as in use now and then while a Mod is applied.
+- macOS keeps the top bar dragging the window and the window buttons in place after popups, fullscreen and on wide or
+  second displays.
+- Now Loading blocks every control beneath it, the native toolbar included.
+- Escape and keyboard focus stay within the topmost popup.
+- Text fit, alignment and layout details are fixed across the App.
 
 ### Compatibility
 
-- No data migration. Earlier releases' notes still show: an unmarked bilingual body is split at its rule and read by
-  script.
+- The first start converts stored data to a new format and leaves the old files in place, and when an earlier version
+  later changes the old data, the App offers to keep the current data or import the old.
+- Game bundles in a UnityFS format newer than version 8 are refused with a clear reason.
 
 ## [0.6.0] - 2026-10-30
 

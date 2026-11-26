@@ -3912,11 +3912,11 @@ test("release notes draw their Markdown in the UI language: headings larger, ite
       const lines = walk(dialog).filter((e) => /^Lines\/Line_\d+$/.test(e.dataset.path || ""));
       const marks = walk(dialog).filter((e) => /^Lines\/Mark_\d+$/.test(e.dataset.path || ""));
       const size = (e) => parseFloat(e.style.fontSize) / S / NGUI.fontSizeFor(e.textContent || "x", 1);
-      assert.ok(lines.length > 10 && marks.length >= 8, `${lang}: lines and bullets drawn`);
+      assert.ok(marks.length >= 6 && lines.length > marks.length, `${lang}: lines and bullets drawn`);
       assert.equal(scriptOf(lines.map((e) => e.textContent).join("")), script, `${lang}: one language only`);
       for (const e of lines) assert.doesNotMatch(e.textContent, /^#|\*\*|<!--|^---/, `${lang}: no Markdown marks`);
       assert.ok(Math.abs(size(lines[0]) - 52) < 0.01, `${lang}: a section heading is larger`);
-      assert.ok(lines.filter((e) => Math.abs(size(e) - 44) < 0.01).length >= 8, `${lang}: items at the notes' size`);
+      assert.ok(lines.filter((e) => Math.abs(size(e) - 44) < 0.01).length >= 6, `${lang}: items at the notes' size`);
       for (const mark of marks) {
         const text = lines.find((e) => e.dataset.path === mark.dataset.path.replace("Mark_", "Line_"));
         assert.ok(

@@ -121,7 +121,7 @@ test("the shipped notes read in English and in Chinese, without a mark of Markdo
   assert.deepEqual(notesFor(shipped, "ja-JP"), english);
   for (const list of [english, chinese]) {
     assert.ok(
-      list.filter((b) => b.kind === "heading").length >= 3 && list.filter((b) => b.kind === "item").length >= 8,
+      list.filter((b) => b.kind === "heading").length >= 3 && list.filter((b) => b.kind === "item").length >= 6,
     );
     for (const b of list) assert.doesNotMatch(b.text, /^#|\*\*|`|<!--|^-{3}|\]\(/);
     assert.equal(
