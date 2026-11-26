@@ -26,17 +26,8 @@ from ...host.format_manifest import fence_catalog_stores
 from ...host.store_formats import CATALOG_JOURNALS, Document, InvalidStore, json_bytes, parse_json, read_runtime
 from ...host.upgrade_files import digest
 from ...unity import ccdb
-from .. import mod_progress, profiles, toggle_timing
-from ..catalog_switch import (
-    MODE_CATALOG,
-    MODE_FILES,
-    MODS_DIR,
-    CatalogPaths,
-    catalog_paths,
-    mode_of,
-    placed_crc,
-    placed_name,
-)
+from .. import catalog_switch, mod_progress, profiles, toggle_timing
+from ..catalog_switch import MODE_CATALOG, MODE_FILES, MODS_DIR, CatalogPaths, catalog_paths, mode_of, placed_name
 from ..judge import LIBRARY_SOURCES, core_of, crc_state, now
 from ..records import Pin
 from ..safety import check_resource_path
@@ -749,7 +740,7 @@ class CatalogMixin:
                 **redirect,
                 "size": stat.st_size,
                 "mtime": stat.st_mtime_ns,
-                "crc": placed_crc(crc_state(fingerprint.crc, fingerprint.trailing, name)),
+                "crc": catalog_switch.placed_crc(crc_state(fingerprint.crc, fingerprint.trailing, name)),
             }
 
     def _catalog_live(self, pin: Pin, record: Document) -> CatalogKind | None:
