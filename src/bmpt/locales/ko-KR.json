@@ -343,6 +343,7 @@
 				"none": "원본 없음"
 			},
 			"overwritten": "덮어씀",
+			"waitingReapply": "재적용 대기",
 			"damaged": "손상됨",
 			"overwrittenTitle": "공식 원본 파일 없음",
 			"overwrittenNone": "원본 사본 없음",
@@ -479,6 +480,7 @@
 			"modsProcess": "모드 처리",
 			"modsApply": "모드 적용",
 			"defaultThumbnails": "기본 썸네일 생성",
+			"finishingStep": "현재 단계 마무리 중",
 			"defaultThumbnailsApply": "기본 썸네일 적용",
 			"modsRestore": "모드 복원",
 			"modsCheck": "모드 검사",
@@ -508,6 +510,7 @@
 			"kind": {
 				"mods.toggle": "Mod 켜기/끄기",
 				"mods.refreshCostumes": "시작 시 Mod 확인 및 재구성",
+				"mods.prepareCatalogs": "카탈로그 파일 준비",
 				"mods.catalogReapply": "게임 업데이트 후 Mod 재적용",
 				"mods.catalogUpdate": "게임 업데이트 읽기",
 				"mods.impact": "게임 업데이트 영향 Mod 확인",

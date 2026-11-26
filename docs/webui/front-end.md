@@ -104,6 +104,16 @@ modules split from it on a stand-in DOM) reads its prefabs once and provides:
   prefab (no game folder) the same message draws plain and answers the same way. **`listPopup({...})`**: details on
   the left, cards in a framed list on the right, single or multi selection, optional student list tools.
 
+**Before the first screen** only the game catalogs the first screen shows are prepared, under the loading screen
+(`update-impact.js prepare`, `mods.prepareCatalogs` when `mods.updateDue`'s `catalog` says so: a journal's
+recovery, an updated official catalog accepted, the live catalog check, the one-off move to the catalog). The
+rebuilds (costume builds of an older rule, outputs of another builder, the reapply after a checked game update, the
+retry of failed writes) are queued by the App after `app.ready`, ahead of the maintenance, and show in Tasks; the
+generated default thumbnails follow the first screen too. Those start-up jobs never cover the screen: between
+entries they yield to the shown page's previews and hand over to a job the user starts. A quit while one runs waits
+for its step under way (`app.finishing`, the loading screen with `progress.finishingStep`) and drops the rest; the
+next start takes it up from its records.
+
 **Start sequence** (`main.js`, `Popup.sequence`), run once per session when a game folder is known: the start popups
 come one at a time after the first screen is revealed, each only when due — the one-time notice of the first start
 after a data upgrade ([api](api.md#data-upgrade-notice)), the read-only data folder notice, the

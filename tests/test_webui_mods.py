@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -252,6 +253,7 @@ def test_mods_state_has_its_shape_and_answers_while_the_library_lock_is_held(env
             "method": "files",
             "methodReason": state["installs"][0]["methodReason"],
             "methodNotice": False,
+            "waiting": [],
         }
     ]
     assert (state["current"], state["enabled"], state["available"], state["reason"]) == (env.key(), True, True, None)
@@ -1093,6 +1095,56 @@ def test_app_quit(env):
     assert stopped.wait(5)
 
 
+def test_app_quit_lets_a_start_up_writer_finish_its_step_then_quits(env):
+    from bmpt.webui.jobs import START, Handover
+
+    s, app = env.s, env.app
+    seen = s.events.subscribe()
+    gate, steps = threading.Event(), []
+
+    def run(log, progress, step_out):
+        while len(steps) < 3:
+            gate.wait(5)
+            steps.append(True)
+            if step_out():
+                raise Handover
+
+    job = s.submit("mods.refreshCostumes", run, writes="game", rank=START, resumable=True)
+    queued = s.submit("mods.retryFailed", run, writes="game", rank=START, resumable=True)
+    assert wait_for(lambda: s.jobs.get(job).state == "running")
+    stopped = threading.Event()
+    s.window, s.quit_handle = None, stopped.set
+    assert "error" not in rpc(app, "app.quit")
+    assert s.jobs.get(queued).state == "dropped" and not stopped.is_set()
+    gate.set()
+    assert stopped.wait(5)
+    assert s.jobs.get(job).state == "stopped" and steps == [True]
+    finishing = []
+    while not seen.empty():
+        event, data = seen.get_nowait()
+        if event == "app.finishing":
+            finishing.append(data["busy"])
+    assert finishing == [True, False]
+
+
+def test_submit_start_jobs_queues_the_rebuilds_then_the_retry_unless_a_check_waits(env, monkeypatch):
+    s = env.s
+    library = s.library
+    submitted = []
+    monkeypatch.setattr(s, "submit_refresh_costumes", lambda: submitted.append("rebuild") or "j1")
+    monkeypatch.setattr(s, "submit_retry_failed", lambda: submitted.append("retry") or "j2")
+    monkeypatch.setattr(library, "current_pin", lambda: object(), raising=False)
+    for due, expected in (
+        ({"rebuild": True, "retry": True, "due": False}, ["rebuild", "retry"]),
+        ({"rebuild": False, "retry": True, "due": True}, []),
+        ({"rebuild": False, "retry": False, "due": False}, []),
+    ):
+        submitted.clear()
+        monkeypatch.setattr(library, "update_due", lambda pin=None, due=due: due, raising=False)
+        s.submit_start_jobs()
+        assert submitted == expected
+
+
 def test_one_instance_per_data_directory(tmp_path):
     first = InstanceLock(tmp_path)
     assert first.acquire()
@@ -1623,3 +1675,31 @@ def test_a_scan_waits_for_the_writer_job_running_and_follows_it(env, monkeypatch
     assert env.s.jobs.wait(job, 5)
     assert env.s.scanner.wait_idle(5)
     assert scans and all(scans)
+
+
+def test_a_start_up_step_waits_for_a_shown_preview_then_asks_to_step_out():
+    from bmpt.core import preview_gate
+    from bmpt.webui.jobs import Handover
+    from bmpt.webui.services_jobs import _Steps
+
+    entered, release = threading.Event(), threading.Event()
+
+    def preview():
+        with preview_gate.foreground():
+            entered.set()
+            release.wait(5)
+
+    thread = threading.Thread(target=preview)
+    thread.start()
+    assert entered.wait(5)
+    threading.Timer(0.3, release.set).start()
+    steps = _Steps(lambda: False)
+    started = time.monotonic()
+    assert steps.check() is False
+    assert time.monotonic() - started >= 0.25
+    steps.end()
+    thread.join(5)
+    out = _Steps(lambda: True)
+    assert out.check() is True
+    with pytest.raises(Handover):
+        out.end()

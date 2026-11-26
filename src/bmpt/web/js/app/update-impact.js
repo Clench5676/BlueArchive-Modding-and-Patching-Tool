@@ -1,12 +1,12 @@
-// What a game update did under the library's mods (docs/webui/library.md, "Game update impact"). At the start, before
-// the first screen (gate): once the install's resource version differs from the last one seen and the library has mods
-// (mods.updateDue), the page asks whether to check them. Check runs under the loading screen (run): the library
-// classifies every mod from the official parts it was built against (mods.impact), and with mods on and the file check
-// allowed, applied entries the update overwrote with official files that need no repair are applied again
-// (mods.restoreDrift). Once the first screen is in, the summary lists the held mods to update, only when there are any
-// (check). Closing it records the version as seen (mods.impactSeen); Settings can reopen the list from the last check
-// (view, mods.impactLast) or run the check again. Before the question, outdated costume builds are rebuilt (refresh) and
-// entries whose last write failed are retried once per App build.
+// What a game update did under the library's mods (docs/webui/library.md, "Game update impact"). Before the first
+// screen only the game catalogs are prepared, under the loading screen (prepare, mods.prepareCatalogs); the rebuilds
+// and the retry of failed writes are queued by the App after app.ready and show in Tasks. With the start popups (ask):
+// once the install's resource version differs from the last one seen and the library has mods (mods.updateDue), the
+// page asks whether to check them. Check runs under the loading screen (run): the library classifies every mod from the
+// official parts it was built against (mods.impact), and with mods on and the file check allowed, applied entries the
+// update overwrote with official files that need no repair are applied again (mods.restoreDrift). Then the summary
+// lists the held mods to update, only when there are any (check). Closing it records the version as seen
+// (mods.impactSeen); Settings can reopen the list from the last check (view, mods.impactLast) or run the check again.
 import * as Compatibility from "../mods/mod-compatibility.js";
 import * as Loading from "./loading.js";
 import { modJob } from "../core/job-progress.js";
@@ -132,7 +132,8 @@ export function heldKeys(entries, impacts) {
 let names = async () => (e) => e?.alt || e?.core || "";
 let goTo = async () => {}; // main.js: a mod's student page with its switch open on the mod
 let busy = false;
-let pending = null; // a check's outcome waiting for the first screen: {result, reapplied, failed}
+let pending = null; // a check's outcome waiting for its summary: {result, reapplied, failed}
+let started = null; // mods.updateDue as the start read it (prepare), for the question with the start popups
 /** Whether a check or a repair is running. */
 export const isBusy = () => busy;
 
@@ -144,7 +145,8 @@ export function init(options = {}) {
   on("config.changed", () => {
     Popup.whenIdle()
       .then(async () => {
-        if (await gate()) await check();
+        await prepare();
+        await ask();
       })
       .catch((err) => console.error("impact", err));
   });
@@ -214,46 +216,53 @@ async function run({ force = false, scan = true } = {}) {
   );
 }
 
-// refresh(): the game catalogs prepared and the costume builds of an older costume rule built again under the loading
-// screen, with the plain progress of a writer task and nothing to answer: what cannot be built again is kept or left
-// for the next start, never told; an official catalog put back is told with the start popups (mod-switch.js)
-async function refresh() {
-  await names().catch(() => undefined); // the student list in, for the names on the progress line
-  const result = await Loading.task(async (update) => waitJob(await rpc("mods.refreshCostumes"), update), {
-    label: T("progress.modsProcess"),
-  });
-  ModSwitch.noteRestored(result?.notices);
+/**
+ * Before the first screen (and after a game update while the program runs): the game catalogs prepared under the
+ * loading screen, with the plain progress of a writer task and nothing to answer (a one-off move to the catalog
+ * can take a while; the boot watchdog holds meanwhile). An official catalog put back is told with the start popups
+ * (mod-switch.js). Nothing else runs here: the rebuilds come after the first screen.
+ * @returns {Promise<object|null>} mods.updateDue's answer; null when it could not be read.
+ */
+export async function prepare() {
+  const due = await rpc("mods.updateDue").catch(() => null);
+  started = due;
+  if (!due?.catalog) return due;
+  const release = globalThis.BAMTRecovery?.hold?.();
+  try {
+    await names().catch(() => undefined); // the student list in, for the names on the progress line
+    const result = await Loading.task(async (update) => waitJob(await rpc("mods.prepareCatalogs"), update), {
+      label: T("progress.modsProcess"),
+    });
+    ModSwitch.noteRestored(result?.notices);
+  } catch (err) {
+    console.error("catalog preparation", err);
+  } finally {
+    release?.();
+  }
+  return due;
 }
 
-// retry(): the entries whose last write failed written again under the loading screen, nothing to answer: one that
-// fails again keeps its fresh error on its row; a refusal of the moment leaves them for the next start
-async function retry() {
-  await names().catch(() => undefined); // the student list in, for the names on the progress line
-  await Loading.task(async (update) => waitJob(await rpc("mods.retryFailed"), update), {
-    label: T("progress.modsApply"),
-  });
+// retry(): after the check, the entries whose last write failed written again by a start-up job (Tasks), nothing to
+// answer: one that fails again keeps its fresh error on its row; a refusal of the moment leaves them for the next start
+const retry = () => rpc("mods.retryFailed");
+
+/** With the start popups: the question, the check and its summary (gate, then check). */
+export async function ask() {
+  if (await gate()) await check();
 }
 
 /**
- * At the start before the first screen (and after a game update while the program runs): the costume builds of
- * an older costume rule built again (refresh), the failed writes tried again (retry), then the question and the
- * check. Later asks again at the next start.
+ * The game update question and the check, with the start popups (and after a game update while the program runs).
+ * Later asks again at the next start.
  * @returns {Promise<boolean>} True when a summary waits (check shows it).
  */
 export async function gate() {
   if (busy) return false;
-  const due = await rpc("mods.updateDue").catch(() => null);
-  if (!due?.due && !due?.outdated && !due?.retry) return false;
+  const due = started || (await rpc("mods.updateDue").catch(() => null));
+  started = null;
+  if (!due?.due) return false;
   busy = true;
-  // At the start, the boot watchdog holds from here: the answer is the user's, and the check, a job over every library
-  // mod, shows its own progress (a first check after an upgrade fingerprints each mod and can take minutes; a costume
-  // rebuild takes up to half a minute each)
-  const release = globalThis.BAMTRecovery?.hold?.();
   try {
-    if (due.outdated) await refresh().catch((err) => console.error("costume refresh", err));
-    // Later at the game update question writes nothing (the check applies mods again): a retry waits for the check
-    if (due.retry && !due.due) await retry().catch((err) => console.warn("failed writes retry", err));
-    if (!due.due) return false;
     const answer = await Popup.message({
       title: T("mods.impact.gateTitle"),
       lines: [T("mods.impact.gateAsk")],
@@ -265,6 +274,7 @@ export async function gate() {
     });
     if (answer.button !== "check") return false;
     const outcome = await run();
+    // the App leaves the retry of failed writes to the check (the check applies mods again): asked for now
     if (due.retry) await retry().catch((err) => console.warn("failed writes retry", err));
     // nothing to update: done without a list (the version recorded as seen), only a failure told
     if (!heldOf(outcome.result).length) {
@@ -279,7 +289,6 @@ export async function gate() {
     return false;
   } finally {
     busy = false;
-    release?.();
   }
 }
 

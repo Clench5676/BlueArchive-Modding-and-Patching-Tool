@@ -6,7 +6,9 @@ The coordinator holds `<data dir>/instance.lock` for the open session. The Web p
 `.bmpt-upgrade/runtime/instance.json` with `{pid, port, raise_token}`. A second start can post
 `/api/instance/raise` with the `X-BAMT-Raise` token and exit. The first
 instance shows and raises its window. With `--serve` a second start refuses with a message. `app.quit` is refused
-with `busy` while a writer job is queued or running, the same rule as the window's close button.
+with `busy` while a writer job the user started is queued or running, the same rule as the window's close button. A
+start-up job (resumable) does not hold it: the quit waits for its step under way (`app.finishing`), drops the queued
+ones and goes on; the next start takes them up.
 
 ## Classic window
 

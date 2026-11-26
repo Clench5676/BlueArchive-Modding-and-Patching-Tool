@@ -33,7 +33,7 @@ one changes are in the other files ([`README.md`](README.md)).
 | `mods.consent {granted}` / `mods.explained` / `mods.scan {dismissed}` / `mods.entries` | scan consent / first-toggle explanation shown / request a scan / the last scan's entries |
 | `mods.adopt {entries}` / `mods.restoreDrift {entries}` / `mods.dismiss {kind, entries}` | Add to Library / Apply Mod Configuration / Keep as Is, Don't Ask Again |
 | `mods.impact {ids?, force?}` / `mods.impactLast` / `mods.impactSeen {install, version}` | game update impact (job; a row whose target the update renamed or removed carries `targetRetired`) / the last check without checking / mark seen |
-| `mods.updateDue` / `mods.refreshCostumes` / `mods.retryFailed` / `mods.confirmUntested {confirm}` | whether the start asks to check mods / prepare the game catalogs and rebuild outdated costume builds (writer job; its result's `notices` list `catalog_restored` by `install`) / write failed entries again once per App build (writer job) / confirm an `untested_build` refusal |
+| `mods.updateDue` / `mods.prepareCatalogs` / `mods.refreshCostumes` / `mods.retryFailed` / `mods.confirmUntested {confirm}` | whether the start asks to check mods (`due`), prepares catalogs before the first screen (`catalog`), has rebuilds after it (`rebuild`, `outdated` either) and failed writes to retry (`retry`) / prepare the game catalogs (writer job behind the start cover; its result's `notices` list `catalog_restored` by `install`) / rebuild outdated costume builds and outputs of another builder (resumable start-up job, queued by the App after `app.ready`) / write failed entries again once per App build (resumable start-up job) / confirm an `untested_build` refusal |
 | `mods.clearBuilt` / `mods.forget {install}` | Clear Mod Cache / Remove from List (jobs) |
 | `mods.troubleshootState` / `mods.applyOfficial` / `mods.restoreConfig` | Troubleshoot Mods (pre-release builds only) |
 | `actions.apply {alt, source, resourceType}` / `actions.restore {alt, resourceType}` | switch what the current install shows (writer job, `deferred` while Mods are off) |
@@ -51,7 +51,7 @@ one changes are in the other files ([`README.md`](README.md)).
 | `thumbnails.*` | see [Student thumbnails](memorial-lobby-and-thumbnails.md#student-thumbnails) |
 | `preview.cacheGet {key, renderer}` / `preview.cachePut {...}` / `preview.chibiRevision {alt, source}` / `preview.assetRevision {paths}` | the preview cache and the revisions persisted stills are keyed by |
 | `jobs.get {id}` / `jobs.cancel {id}` | a job's state and its last log lines / cancel a job |
-| `jobs.list` | the queued and running jobs, the running one first: `[{id, kind, state, writes, progress, done}]`, `done` the job's last three finished items (the Tasks panel) |
+| `jobs.list` | the queued and running jobs, the running one first: `[{id, kind, state, writes, rank, resumable, progress, done}]`, `done` the job's last three finished items (the Tasks panel); a resumable start-up job hands over at its next step to a job the user starts and is queued again in its place (`job.queued`); a quit ends it `stopped` after its step and drops the queued ones (`job.dropped`) |
 | `os.reveal {path}` | reveal in the file manager |
 | `debug.trace {events}` / `preview.failed {url, step, error}` | input tracing with `--debug` / bounded preview diagnostics in the session log |
 | `app.log` / `app.logFolder` / `app.report {context?, event?}` / `app.frontendError {event, context?}` | the session log and its folder / create a local error report / record a front-end error |
@@ -316,3 +316,4 @@ Events on `/api/events`:
 | `classic.queueDone` | `{submitted, dropped}` once the writes queued for the classic window ran |
 | `tray.toggle` / `tray.open` | the tray submitted a toggle, or brought the window up on a view (see [Tray](desktop.md#tray)) |
 | `config.changed`, `app.busy`, `server.closing` | `{}` |
+| `app.finishing` | `{busy}`: a quit waits for a start-up job's step under way (true), then goes on (false) |

@@ -533,8 +533,13 @@ class CatalogMixin:
         else:
             self._migration_outcomes[(pin.key, core)] = why
 
-    def _catalog_start_due(self) -> bool:
-        """Check the known installs' versions and live catalog stats before scheduling class 3 work."""
+    def _catalog_start_due(self, reapply: bool = True) -> bool:
+        """Check the known installs' versions and live catalog stats before scheduling class 3 work.
+
+        Args:
+            reapply: Count a reapply after a checked game update, which runs after the first screen; False asks
+                only for what the first screen depends on (``prepare_catalogs``).
+        """
         enabled = profiles.enabled(self.profiles.read())
         records = self._catalog_records_for_read()
         if any((self.root / CATALOG_JOURNALS).glob("*/journal.json")):
@@ -545,7 +550,8 @@ class CatalogMixin:
             if self._catalog_migration_due(pin, record, rv) or self._catalog_version_changed(record, rv):
                 return True
             if (
-                enabled
+                reapply
+                and enabled
                 and record["mode"] == MODE_CATALOG
                 and record.get("reapply")
                 and not self._catalog_check_pending(pin, rv)
@@ -904,10 +910,15 @@ class CatalogMixin:
                 folder = ((self.profiles.read() or {}).get("folders") or {}).get(pin.key) or {}
                 configured = folder.get("configured") or {}
                 candidates = {} if replace_all else dict(record["redirects"])
+                # an entry still waiting for the reapply after a game update keeps its output of the older release
+                # unpublished: only a fresh build of it (staged) reaches the live catalog
+                waiting = set(record.get("pending") or {})
                 for name in tuple(candidates):
-                    if drop and cores.slot(core_of(name)) in drop:
+                    slot = cores.slot(core_of(name))
+                    if (drop and slot in drop) or slot in waiting:
                         del candidates[name]
                 candidates.update(staged)
+                fresh = {cores.slot(core_of(name)) for name in staged} & waiting
                 by_core: dict[str, dict[str, Document]] = {}
                 for name, item in candidates.items():
                     by_core.setdefault(cores.slot(core_of(name)), {})[name] = item
@@ -956,9 +967,21 @@ class CatalogMixin:
                 elif redirects != record["redirects"]:
                     self._save_catalog_record(pin, {**record, "redirects": redirects})
                 if keep_official and current == "official":
+                    self._settle_pending(pin, fresh)
                     return False
                 self._timed_swap(pin, "mods")
+                self._settle_pending(pin, fresh)
                 return changed or current == "official"
+
+    def _settle_pending(self, pin: Pin, cores: set[str]) -> None:
+        """Take entries a publication just built afresh off the list still waiting for the reapply."""
+        if not cores:
+            return
+        with self._lock:
+            record = self._catalog_record_for(pin)
+            pending = {core: source for core, source in (record.get("pending") or {}).items() if core not in cores}
+            if pending != (record.get("pending") or {}):
+                self._save_catalog_record(pin, {**record, "pending": pending, "reapply": bool(pending)})
 
     def _timed_swap(self, pin: Pin, want: CatalogKind, *, before_replace: Callable[[], None] | None = None) -> None:
         """Run a class 2 or 3 swap outside the library lock, apart from its store save."""

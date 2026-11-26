@@ -1073,7 +1073,7 @@ def test_start_cover_job_forwards_catalog_progress(switch_install):
     lib = env.library
     source, _ = env.add("second")
     lib.apply("second", source)
-    assert lib.update_due()["outdated"]
+    assert lib.update_due()["catalog"]
     submitted = []
     services = SimpleNamespace(
         library=lib,
@@ -1083,12 +1083,13 @@ def test_start_cover_job_forwards_catalog_progress(switch_install):
         submit_catalog_reapply=lambda *_: None,
         submit=lambda kind, run, **options: submitted.append((kind, run, options)),
     )
-    JobsMixin.submit_refresh_costumes(services)
+    JobsMixin.submit_prepare_catalogs(services)
     ((kind, run, options),) = submitted
-    assert kind == "mods.refreshCostumes"
+    assert kind == "mods.prepareCatalogs"
     assert options == {"writes": "game", "library": lib, "rank": START}
     progress = []
-    run(lambda _: None, progress.append)
+    assert run(lambda _: None, progress.append) == {"notices": []}
+    assert not lib.update_due()["catalog"]
     assert len(progress) >= 2 and progress[-1]["fraction"] == 1
     assert lib._catalog_record(env.pin)["migrated"]
 
@@ -1477,6 +1478,106 @@ def test_partial_catalog_reapply_retains_pending_entries_after_reopening(catalog
     assert set(record["redirects"]) == {env.files[core][0].name for core in sources}
 
 
+def test_apply_during_an_unfinished_reapply_publishes_no_waiting_output(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    for core in ("second", "held"):
+        source, _ = env.add(core)
+        lib.apply(core, source)
+    newer = _steam_update(env)
+    lib.prepare_catalogs()
+    monkeypatch.setattr(lib, "_scan_allowed", lambda: False)
+    version = lib.update_impact(pin)["version"]
+    assert set(lib._catalog_record(pin)["pending"]) == {"second_spr", "held_spr"}
+    source, upload = env.add("failed")
+    lib.apply("failed", source)
+    record = lib._catalog_record(pin)
+    assert set(record["pending"]) == {"second_spr", "held_spr"} and record["reapply"]
+    placed = lib._placed_path(pin, record["redirects"][upload.name])
+    assert env.live.read_bytes() == ccdb.redirect(newer, {upload.name: placed.name}, MODS_DIR)
+    lib._reapply_catalog_update(pin, version)
+    record = lib._catalog_record(pin)
+    assert record["pending"] == {} and not record["reapply"]
+    assert set(record["redirects"]) == {env.files[core][0].name for core in ("second", "held", "failed")}
+
+
+def test_a_fresh_apply_takes_its_entry_off_the_waiting_list(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    sources = {}
+    for core in ("second", "held"):
+        sources[core], _ = env.add(core)
+        lib.apply(core, sources[core])
+    _steam_update(env)
+    lib.prepare_catalogs()
+    monkeypatch.setattr(lib, "_scan_allowed", lambda: False)
+    lib.update_impact(pin)
+    lib.restore_drift([{"install": pin.key, "core": "second_spr", "state": "updated"}])
+    assert lib._catalog_record(pin)["pending"] == {"held_spr": sources["held"]}
+
+
+def test_a_stopped_reapply_publishes_what_it_built_and_leaves_the_rest_waiting(catalog_install, monkeypatch):
+    env = catalog_install
+    lib, pin = env.library, env.pin
+    for core in ("second", "held"):
+        source, _ = env.add(core)
+        lib.apply(core, source)
+    newer = _steam_update(env)
+    lib.prepare_catalogs()
+    monkeypatch.setattr(lib, "_scan_allowed", lambda: False)
+    version = lib.update_impact(pin)["version"]
+    asked = []
+
+    def cancel():
+        asked.append(True)
+        return len(asked) > 1  # the first entry goes, the walk stops before the second
+
+    lib._reapply_catalog_update(pin, version, cancel=cancel)
+    record = lib._catalog_record(pin)
+    assert len(record["pending"]) == 1 and record["reapply"]
+    ((name, item),) = record["redirects"].items()
+    assert env.live.read_bytes() == ccdb.redirect(newer, {name: item["placed"]}, MODS_DIR)
+    assert lib._catalog_reapply_due(pin, version)
+    assert lib.status()["installs"][0]["waiting"] == sorted(record["pending"])
+    lib._reapply_catalog_update(pin, version)
+    record = lib._catalog_record(pin)
+    assert record["pending"] == {} and len(record["redirects"]) == 2
+    assert lib.status()["installs"][0]["waiting"] == []
+
+
+def test_a_stopped_costume_refresh_leaves_its_other_items_for_the_next_run(catalog_install, monkeypatch):
+    lib = catalog_install.library
+    items = [
+        {
+            "id": "",
+            "target": core,
+            "resource_type": "chibi",
+            "core": f"{core}_spr",
+            "source": f"alt:{core}",
+            "installed": False,
+        }
+        for core in ("second", "held")
+    ]
+    monkeypatch.setattr(lib, "_outdated_costumes", lambda pin, config: list(items))
+    asked = []
+    result = lib.refresh_costumes(cancel=lambda: asked.append(True) or True)
+    assert [item["core"] for item in result["done"]] == ["second_spr"] and asked == [True]
+    assert [item["core"] for item in lib.refresh_costumes()["done"]] == ["second_spr", "held_spr"]
+
+
+def test_a_stopped_retry_of_failed_writes_is_tried_again_at_the_next_run(catalog_install, monkeypatch):
+    lib, pin = catalog_install.library, catalog_install.pin
+    source, _ = catalog_install.add("second")
+    lib.apply("second", source)
+    monkeypatch.setattr(lib, "_failed_writes", lambda pin, config: ["second_spr"])
+    walked = SimpleNamespace(done=[], failed=[])
+    monkeypatch.setattr(lib, "_run", lambda *args, **kwargs: args[5]() and walked or walked)
+    lib.retry_failed(pin, cancel=lambda: True)
+    assert lib.profiles.read()["folders"].get(pin.key, {}).get("retried") is None
+    lib.retry_failed(pin, cancel=lambda: False)
+    assert lib.profiles.read()["folders"][pin.key]["retried"]
+
+
 def test_app_info_without_a_game_does_not_wait_for_migration(tmp_path, monkeypatch):
     monkeypatch.setattr("bmpt.webui.api.register_students", lambda *_: None)
     services = SimpleNamespace(
@@ -1516,8 +1617,9 @@ def test_impact_queues_a_separate_per_install_game_writer(catalog_install):
     assert jobs[0][0] == "mods.impact" and jobs[0][2] == {}
     jobs[0][1](lambda _: None, None)
     assert env.live.read_bytes() == newer
-    assert jobs[1][0] == "mods.catalogReapply" and jobs[1][2] == {"writes": "game", "rank": START, "library": lib}
-    jobs[1][1](lambda _: None, None)
+    assert jobs[1][0] == "mods.catalogReapply"
+    assert jobs[1][2] == {"writes": "game", "rank": START, "library": lib, "resumable": True}
+    jobs[1][1](lambda _: None, None, lambda: False)
     assert lib._catalog_record(pin)["live"] == "mods"
 
 

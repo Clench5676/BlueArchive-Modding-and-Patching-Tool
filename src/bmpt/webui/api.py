@@ -149,6 +149,7 @@ def build_api(s: Services) -> RpcRegistry:
             "fonts",
             "ui-indexes",
             "mod-state",
+            "catalogs",
             "first-screen",
             "fallback-loading",
             "sprite-loading",

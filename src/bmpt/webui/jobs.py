@@ -23,11 +23,19 @@ PROGRESS_SECONDS = 0.1
 DONE_ITEMS = 3  # how many of a job's finished items it keeps for the Tasks panel (``Job.summary``)
 _ITEM_FIELDS = ("action", "alt", "core", "resourceType", "kind", "name", "source", "label", "current", "total")
 WRITES = ("game", "library")  # a writer job writes the game folder (and the library), or the library only
-# The queue serves jobs by class, then in submission order; a running job is never interrupted. Jobs the user started
-# and watches go first, then start-up work behind the start cover, then background maintenance (the prune, the CRC
-# repair at start): a user's switch never waits for maintenance queued before it.
+# The queue serves jobs by class, then in submission order. Jobs the user started and watches go first, then start-up
+# work, then background maintenance (the prune, the CRC repair at start): a user's switch never waits for maintenance
+# queued before it. A running job is not interrupted, except a resumable one, which hands over at its next step.
 USER, START, MAINTENANCE = 2, 3, 4
 _STOP = 99  # the shutdown marker, after every queued job: queued writers still run
+
+
+class Handover(Exception):
+    """Raised by a resumable job at a step boundary once ``step_out`` said so, with work left.
+
+    The runner queues the job again, behind the job that waits, or ends it "stopped" while the App quits; the job
+    then takes up the rest from its own records when it runs again, in this start or the next.
+    """
 
 
 class Cancelled(Exception):
@@ -47,13 +55,15 @@ class Job:
     fn: Callable[..., Any]
     writes: str | None = None  # "game", "library" or None (read-only)
     rank: int = USER  # its class in the queue: USER, START or MAINTENANCE
-    state: str = "queued"  # queued, running, done, failed, dropped, cancelled
+    state: str = "queued"  # queued, running, done, failed, dropped, cancelled, stopped (left for the next start)
     result: Any = None
     error: dict[str, Any] | None = None
     log: list[str] = field(default_factory=list)
     finished: bool = False  # it ran and its end's listeners ran too
     progress: dict[str, Any] | None = None
     cancellable: bool = False  # JobRunner.cancel may stop it: never run when queued, stopped between steps when running
+    resumable: bool = False  # hands over at its next step to a higher class or a quit, and runs again later
+    seq: int = 0  # its place in its class, kept when it is queued again after a handover
     stop: threading.Event = field(default_factory=threading.Event)
     done_items: list[dict[str, Any]] = field(default_factory=list)  # the last finished items, oldest first
 
@@ -83,6 +93,8 @@ class Job:
             "kind": self.kind,
             "state": self.state,
             "writes": self.writes,
+            "rank": self.rank,
+            "resumable": self.resumable,
             "progress": self.progress,
             "done": list(self.done_items),
         }
@@ -131,6 +143,7 @@ class JobRunner:
         self._lock = threading.Lock()
         self._closing = False
         self._quit_reserved = False
+        self._stopping = False  # a quit stops the resumable jobs: new ones end at once ("dropped")
         self._idle = threading.Condition(self._lock)
         self._listeners: list[Callable[[Job], Any]] = []
         self._thread = threading.Thread(target=self._run, name="bamt-jobs", daemon=True)
@@ -144,6 +157,7 @@ class JobRunner:
         writes: str | None = None,
         rank: int = USER,
         cancellable: bool = False,
+        resumable: bool = False,
         **params: Any,
     ) -> str:
         """Queue a job for the worker.
@@ -157,6 +171,10 @@ class JobRunner:
             rank: The job's class in the queue: ``USER``, ``START`` or ``MAINTENANCE``.
             cancellable: ``cancel`` may stop the job; read-only jobs only. ``fn`` then also gets ``cancelled``, a
                 callable that says whether it was; the job checks it between its steps and raises ``Cancelled``.
+            resumable: The job keeps its progress in its own records and may stop between steps: ``fn`` also gets
+                ``step_out``, a callable that says whether a job of a higher class waits or the App quits; the job
+                checks it between its steps and raises ``Handover`` when it stopped with work left. A quit does not
+                wait for it beyond its step under way.
             **params: The keyword arguments of ``fn``.
 
         Returns:
@@ -173,13 +191,23 @@ class JobRunner:
         if cancellable and writes is not None:
             raise ValueError("a writer job cannot be cancelled")
         job = Job(
-            id=f"j{next(self._ids)}", kind=kind, params=params, fn=fn, writes=writes, rank=rank, cancellable=cancellable
+            id=f"j{next(self._ids)}",
+            kind=kind,
+            params=params,
+            fn=fn,
+            writes=writes,
+            rank=rank,
+            cancellable=cancellable,
+            resumable=resumable,
         )
         if cancellable:
             job.params = {**params, "cancelled": job.stop.is_set}
+        if resumable:
+            job.params = {**job.params, "step_out": lambda: self._step_out(job)}
         with self._lock:
             if writes and self._quit_reserved:
                 raise ServiceError("busy")
+            job.seq = next(self._seq)
             self._jobs[job.id] = job
             self._order.append(job.id)
             while len(self._order) > self._keep:
@@ -188,9 +216,22 @@ class JobRunner:
                 if drop is None:
                     break
                 self._jobs.pop(self._order.pop(drop), None)
-            self._queue.put((rank, next(self._seq), job))
+            if resumable and (self._stopping or self._closing):
+                # the App quits: it runs at the next start, from its records
+                job.state, job.finished = "dropped", True
+                return job.id
+        # told before the worker can take it: job.queued always comes before job.started
         self._publish("job.queued", {"id": job.id, "kind": job.kind})
+        with self._lock:
+            self._queue.put((rank, job.seq, job))
         return job.id
+
+    def _step_out(self, job: Job) -> bool:
+        """Whether a resumable job should stop at this step: the App quits, or a job of a higher class waits."""
+        with self._lock:
+            if job.stop.is_set() or self._closing or self._stopping:
+                return True
+            return any(j.state == "queued" and j.rank < job.rank for j in self._jobs.values())
 
     def listen(self, fn: Callable[[Job], Any]) -> None:
         """Call a function on the worker after each job that ran, once its state is final.
@@ -253,14 +294,57 @@ class JobRunner:
         except Exception:
             logger.exception("job event %s failed", event)
 
-    def busy(self, writes: str | None = None) -> bool:
+    def busy(self, writes: str | None = None, *, resumable: bool = True) -> bool:
         """Return whether a writer job is queued or running.
 
         Args:
             writes: ``"game"`` or ``"library"`` to look only at jobs writing that; None for any writer job.
+            resumable: Count the resumable writer jobs too; False for a quit, which stops them (``stop_resumable``).
         """
         with self._lock:
-            return any(j.writes and (writes is None or j.writes == writes) and j.pending for j in self._jobs.values())
+            return any(
+                j.writes and (writes is None or j.writes == writes) and j.pending and (resumable or not j.resumable)
+                for j in self._jobs.values()
+            )
+
+    def stop_resumable(self) -> bool:
+        """Stop the resumable jobs for a quit: the queued ones never run, the running one stops at its next step.
+
+        Until ``resume`` new resumable jobs end at once. They all run again at the next start.
+
+        Returns:
+            Whether a resumable job still runs its step: the quit waits for it (``wait_resumable``).
+        """
+        dropped = []
+        with self._idle:
+            self._stopping = True
+            running = False
+            for job in self._jobs.values():
+                if not job.resumable or not job.pending:
+                    continue
+                job.stop.set()
+                if job.state == "queued":
+                    job.state, job.finished = "dropped", True
+                    dropped.append(job)
+                else:
+                    running = True
+            self._idle.notify_all()
+        for job in dropped:
+            logger.info("job %s (%s) left for the next start", job.id, job.kind)
+            self._publish("job.dropped", {"id": job.id, "kind": job.kind})
+        return running
+
+    def resume(self) -> None:
+        """Admit resumable jobs again after a quit that did not happen."""
+        with self._lock:
+            self._stopping = False
+
+    def wait_resumable(self, timeout: float | None = None) -> bool:
+        """Wait until no resumable job runs or waits; True when none is left in time."""
+        with self._idle:
+            return self._idle.wait_for(
+                lambda: not any(j.resumable and (j.pending or not j.finished) for j in self._jobs.values()), timeout
+            )
 
     def reserve_quit(self) -> None:
         """Refuse new writer jobs, in one step with checking that none is pending.
@@ -347,12 +431,15 @@ class JobRunner:
         """
         with self._lock:
             self._closing = True
+            for job in self._jobs.values():
+                if job.resumable and job.pending:
+                    job.stop.set()  # the running one stops at its next step, the queued ones are dropped (_run)
             self._queue.put((_STOP, next(self._seq), None))
         if wait is not None and self._thread.is_alive() and self.busy():
             deadline = time.monotonic() + wait
             with self._idle:
                 self._idle.wait_for(
-                    lambda: not any(j.writes and j.pending for j in self._jobs.values()),
+                    lambda: not any(j.writes and j.pending for j in self._jobs.values()),  # a stopped one too
                     max(0.0, deadline - time.monotonic()),
                 )
 
@@ -362,9 +449,9 @@ class JobRunner:
             if job is None:
                 return
             with self._lock:
-                if job.state == "cancelled":
-                    continue  # cancelled while queued: it ended then (cancel)
-                drop = self._closing and not job.writes
+                if job.state in ("cancelled", "dropped"):
+                    continue  # cancelled while queued, or left for the next start: it ended then
+                drop = self._closing and (not job.writes or job.resumable)
                 if drop:
                     job.state, job.finished = "dropped", True
                     self._idle.notify_all()
@@ -375,6 +462,12 @@ class JobRunner:
                 continue
             try:
                 self._execute(job)
+                if job.state == "handover":
+                    with self._lock:
+                        job.state = "queued"  # behind the job it stepped out for, ahead of later ones of its class
+                        self._queue.put((job.rank, job.seq, job))
+                    self._publish("job.queued", {"id": job.id, "kind": job.kind})
+                    continue
                 for fn in list(self._listeners):
                     try:
                         fn(job)
@@ -382,7 +475,7 @@ class JobRunner:
                         logger.exception("job listener failed")
             finally:
                 with self._idle:
-                    job.finished = True
+                    job.finished = job.state != "queued"
                     self._idle.notify_all()
 
     def _execute(self, job: Job) -> None:
@@ -437,6 +530,16 @@ class JobRunner:
             job.state = "done"
             flush()
             publish("job.done", {"id": job.id, "kind": job.kind, "result": job.result})
+        except Handover:
+            flush()
+            with self._lock:
+                stopped = job.stop.is_set() or self._closing or self._stopping
+                job.state = "stopped" if stopped else "handover"
+            if stopped:
+                logger.info("job %s (%s) stopped at a step, left for the next start", job.id, job.kind)
+                publish("job.stopped", {"id": job.id, "kind": job.kind})
+            else:
+                logger.info("job %s (%s) handed over at a step", job.id, job.kind)
         except Cancelled:
             logger.info("job %s (%s) cancelled", job.id, job.kind)
             job.state = "cancelled"

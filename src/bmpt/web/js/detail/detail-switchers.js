@@ -101,6 +101,15 @@ export let popupSeg = 0,
   switchPopupPage = null;
 export let switchThumbnails = null;
 export const modsOn = () => modsState()?.enabled !== false;
+/**
+ * Whether an entry of the current install still waits for the reapply after a game update (mods.state's install
+ * ``waiting``): the game has its official files until the reapply has run, so its card says so.
+ * @param {string} core The entry's core.
+ */
+export function waitingReapply(core, state = modsState()) {
+  const install = (state?.installs || []).find((item) => item.key === state?.current);
+  return !!core && (install?.waiting || []).includes(String(core).toLowerCase());
+}
 const GREYED_BADGE = () => ({ text: T("mods.overwritten"), color: COLOUR.greyed, ink: "#ffffff" });
 export function renderPopup(scroll = 0) {
   return drawPopup(scroll).catch(renderFailed);
@@ -170,7 +179,9 @@ async function drawPopup(scroll = 0) {
           }
         : c.mod?.incomplete
           ? { text: T("mods.incomplete"), color: COLOUR.warning, ink: "#ffffff" }
-          : null,
+          : coreOf(v, kind) && c.key === applied && waitingReapply(coreOf(v, kind))
+            ? { text: T("mods.waitingReapply"), color: COLOUR.warning, ink: "#ffffff" }
+            : null,
       tag: c.mod?.repairSourceId
         ? { text: T("remap.repaired"), color: "#d7eaf4", ink: "#2d4664" }
         : c.mod?.optimized_from

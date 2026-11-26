@@ -1,5 +1,5 @@
 // One full-quality WebGL target. Repeated sources share textures and SkeletonData, while every entry owns its pose.
-import { loadSpineAssets, spineBase } from "../core/api.js";
+import { loadSpineAssets, spineAssetBase, spineBase } from "../core/api.js";
 import { loadPlayer } from "../spine/spine-load.js";
 import { ensureSpine } from "../spine/spine-runtime.js";
 import { idleAnimation } from "../detail/thumbs.js";
@@ -39,6 +39,25 @@ function startIdle(player) {
  * @param {{x: number, y: number, flipHorizontal?: boolean}} entry
  * @param {object} skeleton The spine skeleton; its position and scale are set.
  */
+/**
+ * Have the server extract a portrait's Spine files ahead of its turn: one small file of its revision is asked for and
+ * dropped, which fills the server's memory cache with all of them. Never awaited; a failure is left to the load.
+ * @param {string} base The source's Spine base.
+ * @param {AbortSignal} [signal] Ends the warm-up with the scene.
+ */
+export function warmSource(base, signal, { fetcher = (...args) => fetch(...args), resolve = spineAssetBase } = {}) {
+  if (signal?.aborted) return Promise.resolve(false);
+  return Promise.resolve(resolve(base))
+    .then((resolved) => {
+      if (!resolved || signal?.aborted) return false;
+      return fetcher(`${resolved}.atlas`, { cache: "no-store", ...(signal ? { signal } : {}) }).then(async (res) => {
+        await res.arrayBuffer?.();
+        return !!res.ok;
+      });
+    })
+    .catch(() => false);
+}
+
 export function pose(entry, skeleton, globalScale = 1) {
   skeleton.x = entry.x;
   skeleton.y = 1080 - entry.y;
@@ -318,10 +337,15 @@ export async function createPortraits(
       .catch(() => {})
       .then(async () => {
         try {
+          // the sources still to load, in order; while one is built into its player, the server extracts the next
+          const bases = [...new Set(next.map(baseOf).filter((base) => base && !sources.has(base)))];
           for (const entry of next) {
             if (disposed || signal?.aborted || version !== revision) return false;
             const base = baseOf(entry);
-            if (base) await sourceFor(base, entry);
+            if (!base) continue;
+            const ahead = bases[bases.indexOf(base) + 1];
+            if (ahead && !sources.has(ahead)) warmSource(ahead, signal);
+            await sourceFor(base, entry);
           }
           if (disposed || signal?.aborted || version !== revision) return false;
           commit(next, value, retain);

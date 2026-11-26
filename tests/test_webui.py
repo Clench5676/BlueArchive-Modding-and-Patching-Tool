@@ -1161,7 +1161,9 @@ def test_current_mod_and_ui_routes_do_not_wait_for_library_preview(app, services
         assert pending.result(timeout=1)[0] == "404 Not Found"
 
 
-def test_a_new_library_prunes_its_kept_originals_once(tmp_path, monkeypatch):
+@pytest.mark.parametrize("held", [False, True])
+def test_a_new_library_prunes_its_kept_originals_once(tmp_path, monkeypatch, held):
+    # held: the App's start (build) holds the prune and the start scan until the first screen is revealed
     pruned = []
 
     class Library:
@@ -1188,13 +1190,21 @@ def test_a_new_library_prunes_its_kept_originals_once(tmp_path, monkeypatch):
         catalog=FakeCatalog(),
     )
     s.state.set_scan_consent(True)
+    scans = []
+    monkeypatch.setattr(s.scanner, "request", lambda *args, **kwargs: scans.append(args))
+    if held:
+        s.hold_maintenance()
     try:
         library = s.library
         assert s.library is library
+        if held:
+            time.sleep(0.2)
+            assert pruned == [] and s._prune_job is None and scans == []
+            return
         deadline = time.monotonic() + 5
         while (not pruned or s.jobs.busy()) and time.monotonic() < deadline:
             time.sleep(0.01)
-        assert pruned == [library]
+        assert pruned == [library] and scans
     finally:
         s.close()
 
@@ -1238,6 +1248,22 @@ def test_startup_maintenance_waits_for_reveal_and_respects_the_preference(servic
         assert services.request_scan(dismissed=True) is None
     services.ready()
     assert sorted(calls) == (["prune", "rigs", "scan"] if enabled else [])
+
+
+def test_a_prune_due_before_the_first_screen_waits_for_the_maintenance(services, monkeypatch):
+    pruned, due = [], [True]
+    monkeypatch.setattr(services, "start_watch", lambda: None)
+    monkeypatch.setattr(services.scanner, "request", lambda *args, **kwargs: None)
+    monkeypatch.setattr(services.library, "take_prune_due", lambda: due and due.pop(), raising=False)
+    monkeypatch.setattr(services.library, "archive_rigs", lambda cancel: 0, raising=False)
+    monkeypatch.setattr(services, "_start_prune", lambda library: pruned.append(library))
+    services.start()
+    job = services.submit("mods.prepareCatalogs", lambda log, progress: None, writes="game")
+    assert services.jobs.wait(job, 5)
+    assert pruned == [] and due == [True]
+    services._startup_ready = True
+    services._warm()
+    assert pruned == [services.library] and due == []
 
 
 @pytest.mark.parametrize("consent", [True, False])
@@ -1414,7 +1440,7 @@ def test_job_runs_and_reports_events(services):
         except Exception:
             pass
     kinds = [e[0] for e in events]
-    assert kinds[0] == "job.started" and kinds[-1] == "job.done"
+    assert kinds[:2] == ["job.queued", "job.started"] and kinds[-1] == "job.done"
     assert {"id": job_id, "lines": ["applying"]} in [e[1] for e in events if e[0] == "job.log"]
     assert services.jobs.get(job_id).result == {"applied": "mod:m1"}
 
@@ -2329,6 +2355,33 @@ def test_exit_routes_share_hall_preflight_and_writer_admission(app, services, na
     assert services.restart_requested is (origin == "safe-restart")
     with pytest.raises(ServiceError, match="busy"):
         services.jobs.submit("writer", lambda log, progress: None, writes="game")
+
+
+@pytest.mark.parametrize("origin", ["app", "native"])
+def test_exit_routes_let_a_start_up_writer_finish_its_step_first(app, services, native_exit, origin):
+    from bmpt.webui.jobs import START, Handover
+
+    gate = threading.Event()
+
+    def run(log, progress, step_out):
+        gate.wait(5)
+        if step_out():
+            raise Handover
+
+    job = services.submit("mods.catalogReapply", run, writes="game", rank=START, resumable=True)
+    deadline = time.monotonic() + 5
+    while services.jobs.get(job).state != "running" and time.monotonic() < deadline:
+        time.sleep(0.01)
+    if origin == "native":
+        assert services.on_closing() is False
+    else:
+        assert rpc(app, "app.quit") == {"result": None}
+    assert not native_exit.waiting.wait(0.2)  # the page is asked only once the step ended
+    gate.set()
+    assert native_exit.waiting.wait(2)
+    assert services.jobs.get(job).state == "stopped"
+    native_exit.callbacks[0](True)
+    assert native_exit.destroyed.wait(1)
 
 
 def test_update_draft_preflight_precedes_native_timeout_and_reservation(app, services, update_env, monkeypatch):

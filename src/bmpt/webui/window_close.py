@@ -59,16 +59,36 @@ class CloseCoordinator:
         with self._lock:
             if self._pending is not None:
                 return self._pending
-            if self.services.jobs.busy():
+            if self.services.jobs.busy(resumable=False):
                 self.services.events.publish("app.busy")
                 future = Future()
                 future.set_exception(ServiceError("busy"))
                 return future
             future = self._pending = Future()
+        # start-up writers stop after their step under way; the close is asked again then
+        finish = getattr(self.services, "finish_steps", None)
+        if reserve and finish is not None and finish(lambda: self._again(future, final, reserve, cancelled)):
+            return future
         threading.Thread(
             target=self._run, args=(future, final or self.close, reserve, cancelled), name="window-close", daemon=True
         ).start()
         return future
+
+    def _again(self, future, final, reserve, cancelled):
+        with self._lock:
+            if self._pending is future:
+                self._pending = None
+        inner = self.request(final, reserve=reserve, cancelled=cancelled)
+
+        def settle(done):
+            if future.done():
+                return
+            if done.exception() is not None:
+                future.set_exception(done.exception())
+            else:
+                future.set_result(done.result())
+
+        inner.add_done_callback(settle)
 
     def _page_call(self, expression):
         answered = threading.Event()
@@ -122,6 +142,9 @@ class CloseCoordinator:
                     self.permitted = False
                 if owned:
                     self.services.jobs.cancel_quit()
+                resume = getattr(self.services.jobs, "resume", None)
+                if resume is not None:
+                    resume()  # start-up writers stopped for this close may be queued again
                 cancelled()
 
                 # A blocked renderer cannot block releasing writer admission or a new request.

@@ -343,6 +343,7 @@
 				"none": "ไม่มีสำเนาต้นฉบับ"
 			},
 			"overwritten": "ถูกเขียนทับ",
+			"waitingReapply": "รอนำไปใช้ใหม่",
 			"damaged": "เสียหาย",
 			"overwrittenTitle": "ไม่มีไฟล์ต้นฉบับทางการ",
 			"overwrittenNone": "ไม่เหลือสำเนาต้นฉบับ",
@@ -479,6 +480,7 @@
 			"modsProcess": "กำลังประมวลผล Mod",
 			"modsApply": "กำลังใช้ Mod",
 			"defaultThumbnails": "กำลังสร้างภาพย่อเริ่มต้น",
+			"finishingStep": "กำลังจบขั้นตอนปัจจุบัน",
 			"defaultThumbnailsApply": "กำลังใช้ภาพย่อเริ่มต้น",
 			"modsRestore": "กำลังคืนค่า Mod",
 			"modsCheck": "กำลังตรวจสอบ Mod",
@@ -508,6 +510,7 @@
 			"kind": {
 				"mods.toggle": "เปิด/ปิด Mod",
 				"mods.refreshCostumes": "ตรวจและสร้าง Mod ใหม่ตอนเริ่ม",
+				"mods.prepareCatalogs": "เตรียมไฟล์แคตตาล็อก",
 				"mods.catalogReapply": "ใช้ Mod ใหม่หลังอัปเดตเกม",
 				"mods.catalogUpdate": "อ่านอัปเดตเกม",
 				"mods.impact": "ตรวจ Mod ที่ได้รับผลจากอัปเดตเกม",

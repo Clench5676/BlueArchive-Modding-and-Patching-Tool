@@ -6,7 +6,7 @@ import { portraitScale } from "../../src/bmpt/web/js/student-hall/student-hall-f
 const file = new URL("../../src/bmpt/web/js/student-hall/student-hall-portraits.js", import.meta.url);
 let source = await readFile(file, "utf8");
 source = source.replace(/^import [^;]*;$/gm, "");
-source = `import { APPLIED_SELECTION_GOLD } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";\nimport { pickPortrait, preparePickPages, visibleSlot, VISIBLE_ALPHA } from "${new URL("../../src/bmpt/web/js/student-hall/student-hall-framing.js", import.meta.url).href}";\nconst {loadSpineAssets, spineBase, loadPlayer, ensureSpine, idleAnimation, Stage, portraitScale} = globalThis.studentHallHarness;\n${source}`;
+source = `import { APPLIED_SELECTION_GOLD } from "${new URL("../../src/bmpt/web/js/ui/ui-tokens.js", import.meta.url).href}";\nimport { pickPortrait, preparePickPages, visibleSlot, VISIBLE_ALPHA } from "${new URL("../../src/bmpt/web/js/student-hall/student-hall-framing.js", import.meta.url).href}";\nconst {loadSpineAssets, spineAssetBase, spineBase, loadPlayer, ensureSpine, idleAnimation, Stage, portraitScale} = globalThis.studentHallHarness;\n${source}`;
 let calls, disposed, shared, hooks, delay, drawn, players;
 class Skeleton {
   constructor(data) {
@@ -80,8 +80,13 @@ globalThis.document = {
     },
   }),
 };
+let warmed = [];
 globalThis.studentHallHarness = {
   portraitScale,
+  spineAssetBase: async (base) => {
+    warmed.push(base);
+    return null; // nothing fetched in these tests
+  },
   spineBase: (kind, key) => `${kind}/${key}`,
   loadSpineAssets: async (base, fn, { signal }) => {
     calls.push(base);
@@ -512,4 +517,46 @@ test("swapping one portrait loads only its new art; Cancel restores its cached s
   assert.equal(calls.length, count + 1);
   assert.equal(disposed.length, 1);
   result.dispose();
+});
+
+test("while one portrait source loads, the next one is warmed on the server", async () => {
+  const host = setup(),
+    controller = new AbortController();
+  warmed = [];
+  const result = await StudentHall.createPortraits(host, entries(3), (e) => ({ source: `mod:${e.id}` }), {
+    signal: controller.signal,
+  });
+  assert.equal(calls.length, 3);
+  assert.equal(warmed.length, 2, "every source after the first, one ahead");
+  assert.ok(!warmed.includes(calls[0]), "the first loads at once");
+  assert.deepEqual(warmed, calls.slice(1));
+  result.dispose();
+});
+
+test("a warm-up asks one small file of the resolved revision and never throws", async () => {
+  const asked = [];
+  const fetcher = async (url, options) => {
+    asked.push([url, options.cache]);
+    return { ok: true, arrayBuffer: async () => new ArrayBuffer(0) };
+  };
+  assert.equal(
+    await StudentHall.warmSource("/asset/spine/mod/7/skeleton", undefined, {
+      fetcher,
+      resolve: async () => "/asset/spine/mod/7/abc/skeleton",
+    }),
+    true,
+  );
+  assert.deepEqual(asked, [["/asset/spine/mod/7/abc/skeleton.atlas", "no-store"]]);
+  const aborted = AbortSignal.abort();
+  assert.equal(await StudentHall.warmSource("x", aborted, { fetcher }), false);
+  assert.equal(
+    await StudentHall.warmSource("x", undefined, {
+      fetcher,
+      resolve: async () => {
+        throw new Error("gone");
+      },
+    }),
+    false,
+  );
+  assert.equal(asked.length, 1);
 });

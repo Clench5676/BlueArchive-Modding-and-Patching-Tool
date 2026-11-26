@@ -60,6 +60,8 @@ def build(
         The services and the server.
     """
     s = services or Services(safe_mode=safe_mode, upgrade=upgrade)
+    # the library may open now (below, or a page call before start()): its prune and start scan wait for app.ready
+    s.hold_maintenance()
     if reports is not None:
         _bind_reports(s, reports)
     with s.timings.measure("server.build"):

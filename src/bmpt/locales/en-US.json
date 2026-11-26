@@ -343,6 +343,7 @@
 				"none": "No Official Copy"
 			},
 			"overwritten": "Overwritten",
+			"waitingReapply": "Reapply Pending",
 			"damaged": "Damaged",
 			"overwrittenTitle": "Official File Missing",
 			"overwrittenNone": "No official copy left",
@@ -479,6 +480,7 @@
 			"modsProcess": "Processing Mods",
 			"modsApply": "Applying Mods",
 			"defaultThumbnails": "Create Default Thumbnails",
+			"finishingStep": "Finishing Current Step",
 			"defaultThumbnailsApply": "Apply Default Thumbnails",
 			"modsRestore": "Restoring Mods",
 			"modsCheck": "Checking Mods",
@@ -508,6 +510,7 @@
 			"kind": {
 				"mods.toggle": "Switch Mods",
 				"mods.refreshCostumes": "Check and Rebuild Mods at Start",
+				"mods.prepareCatalogs": "Prepare Game Catalog",
 				"mods.catalogReapply": "Reapply Mods After Game Update",
 				"mods.catalogUpdate": "Read Game Update",
 				"mods.impact": "Check Mods Affected by Game Update",

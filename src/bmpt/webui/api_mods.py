@@ -320,18 +320,28 @@ def register(rpc: RpcRegistry, s: Services) -> None:
     def mods_update_due() -> dict[str, Any]:
         """Tell whether the start asks to check the mods against a game update (``update_due``).
 
-        The answer is ``{due, outdated, retry, install, version, previous}``. ``outdated`` schedules catalog and
-        costume maintenance first (``mods.refreshCostumes``). ``retry`` schedules entries whose last write failed
-        (``mods.retryFailed``).
+        The answer is ``{due, outdated, catalog, rebuild, retry, install, version, previous}``. ``catalog``: the
+        catalog preparation the first screen waits for (``mods.prepareCatalogs``). ``rebuild``: the rebuilds the
+        App queues itself after ``app.ready``. ``retry``: entries whose last write failed; the App queues their
+        retry after ``app.ready`` unless ``due``, when the page asks for it after the check (``mods.retryFailed``).
         """
         library = s.library
         return library.update_due(library.current_pin())  # no game folder: nothing is asked
 
+    @rpc.method("mods.prepareCatalogs")
+    def mods_prepare_catalogs() -> str:
+        """Prepare the game catalogs behind the start cover, before the first screen (``prepare_catalogs``).
+
+        The result is ``{notices}``, the official catalogs put back at the start.
+        """
+        return s.submit_prepare_catalogs()
+
     @rpc.method("mods.refreshCostumes")
     def mods_refresh_costumes() -> str:
-        """Build again, at the start and without asking, what the App built from a costume under an older rule.
+        """Build again, without asking, what the App built from a costume under an older rule or another builder.
 
-        See ``refresh_costumes``; the result is ``{done, kept, left}``.
+        A resumable class 3 job shown in Tasks; the App queues it after ``app.ready``. See ``refresh_costumes``;
+        the result is ``{done, kept, left}``.
         """
         return s.submit_refresh_costumes()
 
