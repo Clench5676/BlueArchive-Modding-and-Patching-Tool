@@ -495,7 +495,6 @@
 			"plan_start": "모드 파일 {count}개 분석 중...",
 			"group_info": "그룹 [{core}](파일 {count}개)",
 			"same_name_found": "같은 이름의 파일 발견: {filename}, 바로 교체합니다",
-			"filter_latest_date": "날짜별 버전이 여러 개여서 최신 버전 사용: {date}",
 			"update_targets": "업데이트 필요, 대상 파일 {count}개 일치: {names}",
 			"target_conflict": "대상 파일 충돌: {filename}",
 			"plan_done": "분석 완료: 파일 {total}개 / 그룹 {groups}개(바로 교체 {direct}, 업데이트 {update}, 찾지 못함 {not_found}, 오류 {error})",
@@ -608,8 +607,7 @@
 			},
 			"batch_preview": {
 				"title": "미리보기 일괄 렌더링",
-				"info": "지정한 게임 리소스 폴더의 모든 Spine 에셋(캐릭터 일러스트, 메모리얼 로비, Spine 배경) 미리보기를 렌더링합니다. 모드 파일에 한정되지 않으며, 출력 폴더의 batch_preview 하위 폴더에 저장합니다.",
-				"game_dir": "게임 리소스 폴더"
+				"info": "지정한 게임 리소스 폴더의 모든 Spine 에셋(캐릭터 일러스트, 메모리얼 로비, Spine 배경) 미리보기를 렌더링합니다. 모드 파일에 한정되지 않으며, 출력 폴더의 batch_preview 하위 폴더에 저장합니다."
 			}
 		},
 		"settings": {

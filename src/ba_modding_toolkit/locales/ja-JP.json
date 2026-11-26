@@ -495,7 +495,6 @@
 			"plan_start": "{count}個のMODファイルを解析中...",
 			"group_info": "グループ[{core}]（{count}個のファイル）",
 			"same_name_found": "同名のファイルが見つかりました：{filename}。そのまま置き換えます",
-			"filter_latest_date": "日付の異なる複数のバージョンがあるため、最新を使用します：{date}",
 			"update_targets": "更新が必要です。{count}個の対象ファイルに一致：{names}",
 			"target_conflict": "対象ファイルの競合：{filename}",
 			"plan_done": "解析完了：{total}個のファイル / {groups}グループ（直接置き換え{direct}、更新{update}、未検出{not_found}、エラー{error}）",
@@ -608,8 +607,7 @@
 			},
 			"batch_preview": {
 				"title": "プレビューを一括レンダリング",
-				"info": "指定したゲームリソースフォルダー内のすべてのSpineアセット（立ち絵、メモリアルロビー、Spine背景）のプレビュー画像をレンダリングします。MODファイルに限りません。出力フォルダーのbatch_previewサブフォルダーに出力します。",
-				"game_dir": "ゲームリソースフォルダー"
+				"info": "指定したゲームリソースフォルダー内のすべてのSpineアセット（立ち絵、メモリアルロビー、Spine背景）のプレビュー画像をレンダリングします。MODファイルに限りません。出力フォルダーのbatch_previewサブフォルダーに出力します。"
 			}
 		},
 		"settings": {

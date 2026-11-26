@@ -495,7 +495,6 @@
 			"plan_start": "正在分析 {count} 個 Mod 檔案……",
 			"group_info": "組 [{core}]（{count} 個檔案）",
 			"same_name_found": "找到同名檔案：{filename}，將直接替換",
-			"filter_latest_date": "有多個日期版本，使用最新的：{date}",
 			"update_targets": "需要更新，比對到 {count} 個目標檔案：{names}",
 			"target_conflict": "目標檔案衝突：{filename}",
 			"plan_done": "分析完成：共 {total} 個檔案 / {groups} 組（直接替換 {direct}，需更新 {update}，未找到 {not_found}，錯誤 {error}）",
@@ -608,8 +607,7 @@
 			},
 			"batch_preview": {
 				"title": "批次渲染預覽圖",
-				"info": "渲染指定遊戲資源資料夾中所有 Spine 資源（角色立繪、紀念大廳、Spine 背景）的預覽圖，不限 Mod 檔案。輸出到輸出資料夾的 batch_preview 子資料夾。",
-				"game_dir": "遊戲資源資料夾"
+				"info": "渲染指定遊戲資源資料夾中所有 Spine 資源（角色立繪、紀念大廳、Spine 背景）的預覽圖，不限 Mod 檔案。輸出到輸出資料夾的 batch_preview 子資料夾。"
 			}
 		},
 		"settings": {

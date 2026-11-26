@@ -18,34 +18,30 @@ TRANSLATIONS = sorted(p.stem for p in LOCALES.glob("*.json") if p.stem != REFERE
 # {path}, which the caller passes (extra arguments are ignored), and asks for {count}, which the caller passes too.
 KNOWN_PLACEHOLDER_DIFFERENCES: set[tuple[str, str]] = set()
 
-# Classic UI strings upstream ships in en-US and zh-CN only (its render backend settings). The classic UI is
-# kept as upstream has it, so the other languages fall back to English for these keys.
+# Classic UI strings upstream ships in en-US and zh-CN only (its render backend settings, the bleed threshold, the
+# install dialog's texture similarity and the tool dialogs' source folder). The classic UI is kept as upstream has it,
+# so the other languages fall back to English for these keys, and their text keeps upstream's own separators.
 CLASSIC_ONLY_KEYS = {
     "file_type.spine2dump",
     "log.spine.spine2dump_set",
     "message.3rd_party.spine2dump_required",
+    "option.bleed_alpha_threshold",
+    "option.bleed_alpha_threshold_info",
     "option.render_backend",
     "option.render_backend_info",
     "option.render_backend_spine2dump",
     "option.render_backend_spine_viewer",
     "option.spine2dump_path",
     "option.spine2dump_path_info",
-    "ui.settings.group_render_backend",
-}
-
-# Classic UI strings upstream ships in zh-CN only (the bleed threshold and the install dialog's texture similarity), and
-# the classic string upstream dropped from zh-CN only, which its planner leaves unused (it does not filter by date).
-# Kept as upstream has them; their zh-CN text uses upstream's own separators.
-CLASSIC_ZH_CN_ONLY_KEYS = {
-    "option.bleed_alpha_threshold",
-    "option.bleed_alpha_threshold_info",
+    "ui.label.game_dir",
+    "ui.label.game_dir_info",
     "ui.mod_install.diff_similarity",
     "ui.mod_install.preview_one_side",
     "ui.mod_install.preview_similarity",
     "ui.mod_install.preview_similarity_scaled",
     "ui.mod_install.preview_size_mismatch",
+    "ui.settings.group_render_backend",
 }
-CLASSIC_DROPPED_FROM_ZH_CN = {"log.mod_install.filter_latest_date"}
 
 
 def load(code: str) -> dict:
@@ -93,10 +89,9 @@ def test_past_limit_costume_hint(code):
 @pytest.mark.parametrize("code", TRANSLATIONS)
 def test_same_keys_as_en_us(code):
     reference, translation = flatten(load(REFERENCE)), flatten(load(code))
-    optional = CLASSIC_DROPPED_FROM_ZH_CN if code == "zh-CN" else CLASSIC_ONLY_KEYS
-    extra = CLASSIC_ZH_CN_ONLY_KEYS if code == "zh-CN" else set()
+    optional = set() if code == "zh-CN" else CLASSIC_ONLY_KEYS
     assert sorted(set(reference) - set(translation) - optional) == [], "missing"
-    assert sorted(set(translation) - set(reference) - extra) == [], "not in en-US"
+    assert sorted(set(translation) - set(reference)) == [], "not in en-US"
 
 
 def test_classic_only_keys_are_classic_strings():
@@ -144,7 +139,7 @@ def test_no_middle_dot_separators(code):
     assert [
         key
         for key, text in flatten(load(code)).items()
-        if ("·" in text or "・" in text) and key not in CLASSIC_ZH_CN_ONLY_KEYS
+        if ("·" in text or "・" in text) and key not in CLASSIC_ONLY_KEYS
     ] == []
 
 
