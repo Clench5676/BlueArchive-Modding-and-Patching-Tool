@@ -452,14 +452,17 @@ class Tray:
             ).start()
 
     def _quit(self) -> None:
-        """``app.quit``'s rules; while a writer job runs, the window comes to the front with the busy toast."""
+        """``app.quit``'s rules; while a writer job holds it, the window comes to the front with the page's answer.
+
+        That is the busy toast while one runs, the question whether to cancel the queued ones while they only wait
+        """
         try:
             self.s.quit()
         except ServiceError as error:
-            if error.code != "busy":
+            if error.code not in ("busy", "queued"):
                 raise
             self.s.raise_window()
-            self.s.events.publish("app.busy")
+            self.s.events.publish("app.busy" if error.code == "busy" else "app.quitQueued")
 
 
 def make_backend(tray: Tray, window: Any) -> Backend:

@@ -819,6 +819,16 @@ class ImpactMixin:
                 stale.append(core)
         return stale
 
+    def stale_build_count(self, pin: Pin | None = None) -> int:
+        """Count the entries ``refresh_builds`` would build again now (``_stale_builds``); 0 when unknown."""
+        try:
+            pin = self._current(pin)
+            with self._lock:
+                return len(self._stale_builds(pin, self.profiles.read() or {}))
+        except (OSError, ServiceError) as error:
+            log_failure(logger, logging.DEBUG, "Could not count outputs of another builder", error)
+            return 0
+
     def refresh_builds(
         self,
         pin: Pin | None = None,

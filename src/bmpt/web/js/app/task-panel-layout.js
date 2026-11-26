@@ -101,8 +101,8 @@ export function itemName(p = {}, nameOf = (e) => e?.alt || e?.core || "") {
  * What the panel shows: one entry per job, the running one first (jobs.list's order).
  * @param {object[]} jobs jobs.list's answer.
  * @param {(entry: object) => string} [nameOf] Names an alt.
- * @returns {object[]} {id, name, running, current, total, done (0..1), count, quits, items: [{state, name, step,
- *     fraction}]}; items only for the running job. quits: a quit does not wait for the job.
+ * @returns {object[]} {id, name, running, current, total, done (0..1), count, items: [{state, name, step,
+ *     fraction}]}; items only for the running job. A running writer the user started is named "(Do Not Quit)".
  */
 export function panelView(jobs = [], nameOf) {
   return jobs.map((job) => {
@@ -112,26 +112,26 @@ export function panelView(jobs = [], nameOf) {
     const running = job.state === "running";
     const fraction = share(p.fraction);
     const done = total > 0 && running ? Math.min(1, (Math.max(0, current - 1) + fraction) / total) : 0;
+    const name = jobName(job);
     const view = {
       id: job.id,
-      name: jobName(job),
+      // a writer the user started holds a quit while it runs (a start-up job ends at its step and goes on later)
+      name: running && job.writes && !job.resumable ? T("tasks.noQuit", { name }) : name,
       running,
       current,
       total,
       done,
       count: total > 0 ? `${running ? current : 0}/${total}` : "",
-      // a start-up job does not hold a quit: it ends at its step under way and goes on at the next start
-      quits: !!job.resumable,
       items: [],
     };
     if (!running) return view;
     for (const item of job.done || [])
       view.items.push({ state: "done", name: itemName(item, nameOf), step: T("tasks.done"), fraction: 0 });
-    const name = itemName(p, nameOf);
-    if (name) {
+    const item = itemName(p, nameOf);
+    if (item) {
       const step = p.step && has(p.step) ? T(p.step) : "";
       const percent = fraction ? T("progress.percent", { percent: Math.floor(fraction * 100) }) : "";
-      view.items.push({ state: "run", name, step: [step, percent].filter(Boolean).join(" "), fraction });
+      view.items.push({ state: "run", name: item, step: [step, percent].filter(Boolean).join(" "), fraction });
     }
     if (total > current && current > 0)
       view.items.push({ state: "wait", name: T("tasks.more", { count: total - current }), step: "", fraction: 0 });
@@ -141,13 +141,6 @@ export function panelView(jobs = [], nameOf) {
 
 /** A queued job with no count yet has nothing under its title: its row folds to the title line. */
 export const isFolded = (job) => !job.running && !job.count;
-
-/** Label_System's left edge from the row's left (BG pivot top right, BG/Normal inside it). */
-function titleLeft(r, titleNode) {
-  const bg = find(r, "BG"),
-    normal = find(r, "BG/Normal");
-  return (bg?.pos[0] ?? 0) + (normal?.pos[0] ?? 0) + titleNode.pos[0];
-}
 
 const setText = (tree, path, text) => {
   const found = find(tree, path);
@@ -316,6 +309,9 @@ export function panelTree(view, { row, frame, title, ring }, measure = estimateW
         const right = titleNode.pos[0] + titleWidget.w_;
         titleNode.pos = [tagLabelNode.pos[0] + width + TAG_GAP, titleNode.pos[1]];
         titleWidget.w_ = right - titleNode.pos[0];
+        // a title longer than its line shrinks to fit, as NGUI's ShrinkContent does
+        const wide = measure(job.name, titleWidget.fontSize);
+        if (wide > titleWidget.w_) titleWidget.fontSize = Math.floor((titleWidget.fontSize * titleWidget.w_) / wide);
       }
     }
     const count = setText(r, "Label_Locale_Count", T("tasks.progress"));
@@ -330,27 +326,9 @@ export function panelTree(view, { row, frame, title, ring }, measure = estimateW
       fore.active = job.done > 0;
     }
     kids.push(r);
-    // the right column: the running ring, then the quit note left of it (on a folded row at the right edge)
-    let right = PAD + ROW_W - RIGHT;
-    const line = folded ? centre : centre + PANEL.RING_Y;
-    if (job.running && ring) {
-      kids.push(ringNode(ring, [right - PANEL.RING / 2, line], PANEL.RING));
-      right -= PANEL.RING + 30;
-    }
-    if (job.quits) {
-      const quitText = T("tasks.quitsAnytime");
-      const width = Math.ceil(measure(quitText, 42));
-      kids.push(
-        node(
-          "Quits",
-          [right, line],
-          [label(quitText, 42, COLOURS.muted, width, 54, { pivot: 5, depth: 30, align: 3 })],
-        ),
-      );
-      // the title keeps clear of a note on its own line
-      if (folded && titleNode && titleWidget)
-        titleWidget.w_ = Math.max(0, Math.min(titleWidget.w_, right - width - 40 - PAD - titleLeft(r, titleNode)));
-    }
+    // the running ring at the right column's edge
+    if (job.running && ring)
+      kids.push(ringNode(ring, [PAD + ROW_W - RIGHT - PANEL.RING / 2, centre + PANEL.RING_Y], PANEL.RING));
     y -= H + ROW_GAP;
     const [items, height] = itemNodes(job.items, ring, PAD + ITEM_INDENT, y);
     kids.push(...items);

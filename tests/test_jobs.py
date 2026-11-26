@@ -448,6 +448,52 @@ def test_a_non_resumable_writer_still_holds_a_quit():
         jobs.shutdown()
 
 
+def test_queued_writers_hold_a_quit_only_until_the_user_cancels_them():
+    events = EventBus()
+    seen = events.subscribe()
+    jobs = JobRunner(events)
+    gate = threading.Event()
+    ran = []
+    try:
+        reader = jobs.submit("scan", lambda log, progress: gate.wait(5))
+        assert wait_for(lambda: jobs.get(reader).state == "running")
+        assert jobs.quit_hold() is None, "a reader never holds a quit"
+        queued = jobs.submit("library.prune", lambda log, progress: ran.append(1), writes="library")
+        start = jobs.submit("mods.retryFailed", lambda log, progress, step_out: None, writes="game", resumable=True)
+        assert jobs.quit_hold() == "queued"
+        assert jobs.cancel_queued()
+        assert jobs.get(queued).state == "cancelled"
+        assert jobs.get(start).state == "queued", "the start-up job is the quit's own to stop (stop_resumable)"
+        assert jobs.quit_hold() is None
+        gate.set()
+        assert jobs.wait(start, 5)
+        assert ran == []
+        names = []
+        while not seen.empty():
+            event, data = seen.get_nowait()
+            if event == "job.cancelled":
+                names.append(data["id"])
+        assert names == [queued]
+    finally:
+        gate.set()
+        jobs.shutdown()
+
+
+def test_a_running_writer_is_not_cancelled_for_a_quit():
+    jobs = JobRunner(EventBus())
+    gate = threading.Event()
+    try:
+        running = jobs.submit("apply", lambda log, progress: gate.wait(5), writes="game")
+        assert wait_for(lambda: jobs.get(running).state == "running")
+        queued = jobs.submit("library.prune", lambda log, progress: None, writes="library")
+        assert jobs.quit_hold() == "running"
+        assert not jobs.cancel_queued()
+        assert jobs.get(queued).state == "queued", "nothing is cancelled while the quit stays refused"
+    finally:
+        gate.set()
+        jobs.shutdown()
+
+
 def test_shutdown_stops_a_resumable_job_at_its_step_and_does_not_run_queued_ones():
     jobs = JobRunner(EventBus())
     gate, done = threading.Event(), []

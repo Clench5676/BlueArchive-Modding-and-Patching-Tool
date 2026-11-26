@@ -255,8 +255,10 @@ def build_api(s: Services) -> RpcRegistry:
         return s.state.spine_consent
 
     @rpc.method("app.quit")
-    def app_quit() -> None:
-        s.quit()
+    def app_quit(cancel_queued: Any = False) -> None:
+        if not isinstance(cancel_queued, bool):
+            raise ServiceError("bad_params", key="cancelQueued")
+        s.quit(cancel_queued=cancel_queued)
 
     # --- the classic window (the bottom bar's entries without a web screen, Settings' More Settings) ---
 

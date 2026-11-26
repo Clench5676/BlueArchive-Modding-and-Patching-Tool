@@ -507,7 +507,7 @@
 			"done": "เสร็จ",
 			"empty": "ไม่มีงาน",
 			"other": "งานเบื้องหลัง",
-			"quitsAnytime": "ออกได้ทุกเมื่อ",
+			"noQuit": "{name} (ห้ามออก)",
 			"kind": {
 				"mods.toggle": "เปิด/ปิด Mod",
 				"mods.refreshCostumes": "ตรวจและสร้าง Mod ใหม่ตอนเริ่ม",
@@ -571,6 +571,7 @@
 			"update_restart_failed": "เริ่มใหม่เพื่ออัปเดตไม่ได้",
 			"lines_unavailable": "อ่านบทพูดไม่ได้ในขณะนี้",
 			"busy": "รองานปัจจุบันเสร็จก่อน",
+			"queued": "งานที่รอคิวอยู่จะถูกยกเลิก",
 			"library_target_not_empty": "โฟลเดอร์มีไฟล์คลัง Mod อยู่แล้ว: {path}",
 			"library_io_error": "เขียนลงคลัง Mod ไม่ได้: {file}",
 			"data_dir_readonly": "เขียนลงโฟลเดอร์ข้อมูลไม่ได้: {path}",
@@ -721,7 +722,8 @@
 		},
 		"quit": {
 			"title": "แจ้งเตือน",
-			"ask": "ออกหรือไม่?"
+			"ask": "ออกหรือไม่?",
+			"queued": "งานที่รอคิวอยู่จะถูกยกเลิก"
 		},
 		"tray": {
 			"working": "กำลังประมวลผล {done}/{total}",

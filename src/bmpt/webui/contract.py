@@ -44,7 +44,7 @@ def _keyword_fields(value: Any) -> Any:
 
 def rpc_params(method: str, params: dict) -> dict:
     """Spell wire parameter names as the handler's Python keywords."""
-    fields = {"resourceType": "resource_type", "memorialLobby": "memorial_lobby"}
+    fields = {"resourceType": "resource_type", "memorialLobby": "memorial_lobby", "cancelQueued": "cancel_queued"}
     for key in params:
         if key in fields.values():
             raise TypeError(f"got an unexpected keyword argument {key!r}")

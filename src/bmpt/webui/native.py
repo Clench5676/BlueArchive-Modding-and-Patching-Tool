@@ -485,6 +485,8 @@ def install_window_commands(services, chrome):
         except ServiceError as error:
             if error.code == "busy":
                 services.events.publish("app.busy")
+            elif error.code == "queued":
+                services.events.publish("app.quitQueued")
             else:
                 logger.warning("Native close refused: %s", error.code)
 

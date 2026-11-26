@@ -30,6 +30,12 @@ USER, START, MAINTENANCE = 2, 3, 4
 _STOP = 99  # the shutdown marker, after every queued job: queued writers still run
 
 
+# what tells the page that a quit waits (JobRunner.quit_hold): a running writer refuses it with the busy toast;
+# queued ones only are the user's to cancel (app.quit cancelQueued)
+QUIT_EVENTS = {"running": "app.busy", "queued": "app.quitQueued"}
+QUIT_ERRORS = {"running": "busy", "queued": "queued"}
+
+
 class Handover(Exception):
     """Raised by a resumable job at a step boundary once ``step_out`` said so, with work left.
 
@@ -306,6 +312,40 @@ class JobRunner:
                 j.writes and (writes is None or j.writes == writes) and j.pending and (resumable or not j.resumable)
                 for j in self._jobs.values()
             )
+
+    def quit_hold(self) -> str | None:
+        """Say what holds a quit among the writer jobs the user started (the resumable ones never hold it).
+
+        Returns:
+            ``"running"`` while one runs; ``"queued"`` while only queued ones wait, which a quit may cancel
+            (``cancel_queued``); None when none is pending.
+        """
+        with self._lock:
+            held = [j for j in self._jobs.values() if j.writes and j.pending and not j.resumable]
+            if any(j.state != "queued" for j in held):
+                return "running"
+            return "queued" if held else None
+
+    def cancel_queued(self) -> bool:
+        """Cancel the queued writer jobs the user started, for a quit the user confirmed; they never run.
+
+        Returns:
+            False when one of them runs already: the quit stays refused.
+        """
+        cancelled = []
+        with self._idle:
+            held = [j for j in self._jobs.values() if j.writes and j.pending and not j.resumable]
+            if any(j.state != "queued" for j in held):
+                return False
+            for job in held:
+                job.stop.set()
+                job.state, job.finished = "cancelled", True
+                cancelled.append(job)
+            self._idle.notify_all()
+        for job in cancelled:
+            logger.info("job %s (%s) cancelled for a quit", job.id, job.kind)
+            self._publish("job.cancelled", {"id": job.id, "kind": job.kind})
+        return True
 
     def stop_resumable(self) -> bool:
         """Stop the resumable jobs for a quit: the queued ones never run, the running one stops at its next step.

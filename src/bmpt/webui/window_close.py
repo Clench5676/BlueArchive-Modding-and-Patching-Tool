@@ -8,6 +8,7 @@ import uuid
 from concurrent.futures import Future
 
 from ..core.errors import ServiceError
+from .jobs import QUIT_ERRORS, QUIT_EVENTS
 
 logger = logging.getLogger(__name__)
 
@@ -53,16 +54,17 @@ class CloseCoordinator:
 
         Returns:
             The pending preflight, shared with a request already running. Its result is True when the window
-            closed and False when the close was cancelled; ``ServiceError`` ``busy`` when a writer job runs
-            (``app.busy`` is published).
+            closed and False when the close was cancelled; ``ServiceError`` ``busy`` when a writer job runs, or
+            ``queued`` when such jobs only wait (``app.busy`` or ``app.quitQueued`` is published).
         """
         with self._lock:
             if self._pending is not None:
                 return self._pending
-            if self.services.jobs.busy(resumable=False):
-                self.services.events.publish("app.busy")
+            hold = self.services.jobs.quit_hold()
+            if hold is not None:
+                self.services.events.publish(QUIT_EVENTS[hold])
                 future = Future()
-                future.set_exception(ServiceError("busy"))
+                future.set_exception(ServiceError(QUIT_ERRORS[hold]))
                 return future
             future = self._pending = Future()
         # start-up writers stop after their step under way; the close is asked again then

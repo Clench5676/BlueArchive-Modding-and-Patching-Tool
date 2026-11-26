@@ -40,8 +40,9 @@ export const CONFIRM_KEYS = Object.freeze(["Enter", " "]);
 //   rpc, T, notify  the page's
 //   native         the app runs in its own window (app.quit closes it)
 //   closed()       shows that the app has quit (browser mode: the server stops after answering)
-// Resolves with "cancel", "quit" or the refusal's error code (busy while a writer job runs, native_unavailable with
-// --serve).
+// Resolves with "cancel", "quit" or the refusal's error code (busy while a writer job runs, queued while writer jobs
+// only wait and the user kept them, native_unavailable with --serve). A queued refusal asks whether to cancel them
+// (confirmCancelQueued), as the server's app.quitQueued does for a quit from the window or the tray.
 let asking = false;
 /**
  * Ask whether to quit and quit.
@@ -52,8 +53,8 @@ let asking = false;
  * @param {Function} options.notify The page's error notice.
  * @param {boolean} [options.native] The app runs in its own window (app.quit closes it).
  * @param {() => void} options.closed Shows that the app has quit.
- * @returns {Promise<string>} "cancel", "quit" or the refusal's error code (busy while a writer job runs,
- *     native_unavailable with --serve).
+ * @returns {Promise<string>} "cancel", "quit" or the refusal's error code (busy while a writer job runs, queued
+ *     while writer jobs only wait, native_unavailable with --serve).
  */
 export async function confirmQuit({ message, rpc, T, notify, native = false, closed }) {
   if (asking) return "cancel";
@@ -67,15 +68,45 @@ export async function confirmQuit({ message, rpc, T, notify, native = false, clo
       confirmKeys: CONFIRM_KEYS,
     });
     if (button !== "ok") return "cancel";
-    try {
-      await rpc("app.quit");
-    } catch (err) {
-      notify(errorText(err, T), { kind: "error", error: err });
-      return err.code || "internal";
-    }
-    if (!native) closed?.();
-    return "quit";
+    const result = await quit({ rpc, T, notify, native, closed });
+    return result === "queued" ? await confirmCancelQueued({ message, rpc, T, notify, native, closed }) : result;
   } finally {
     asking = false;
+  }
+}
+
+async function quit({ rpc, T, notify, native, closed }, params) {
+  try {
+    await (params ? rpc("app.quit", params) : rpc("app.quit"));
+  } catch (err) {
+    if (err?.code !== "queued") notify(errorText(err, T), { kind: "error", error: err });
+    return err?.code || "internal";
+  }
+  if (!native) closed?.();
+  return "quit";
+}
+
+let askingQueued = false;
+/**
+ * A quit with writer jobs only waiting in the queue (app.quitQueued): say they will be cancelled, and quit
+ * cancelling them on Confirm. A running one refuses the quit again (busy).
+ * @param {object} options As confirmQuit's.
+ * @returns {Promise<string>} "queued" when the user keeps them, "quit" or the refusal's error code.
+ */
+export async function confirmCancelQueued({ message, rpc, T, notify, native = false, closed }) {
+  if (askingQueued) return "cancel";
+  askingQueued = true;
+  try {
+    const { button } = await message({
+      title: T("quit.title"),
+      lines: [T("quit.queued")],
+      ok: T("picker.ok"),
+      cancel: T("popup.cancel"),
+      confirmKeys: CONFIRM_KEYS,
+    });
+    if (button !== "ok") return "queued";
+    return await quit({ rpc, T, notify, native, closed }, { cancelQueued: true });
+  } finally {
+    askingQueued = false;
   }
 }

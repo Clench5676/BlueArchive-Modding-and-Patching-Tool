@@ -13,7 +13,7 @@ from ..host import updater
 from ..catalog.records import alt_resource_core
 from ..core.errors import ServiceError
 from .classic.queued import QUEUE_METHODS, QueuedCall, stat_files
-from .jobs import MAINTENANCE, USER
+from .jobs import MAINTENANCE, QUIT_ERRORS, QUIT_EVENTS, USER
 from .services_jobs import PRUNE_WAIT
 
 if TYPE_CHECKING:
@@ -376,20 +376,25 @@ class WindowMixin:
         if self.browser_url:
             webbrowser.open(self.browser_url)
 
-    def quit(self, *, restart: bool = False) -> None:
+    def quit(self, *, restart: bool = False, cancel_queued: bool = False) -> None:
         """Quit the App (``app.quit``): close the window, or in browser mode stop the server once the answer went out.
 
         Args:
             restart: Start the App again in safe mode after it quit.
+            cancel_queued: The user confirmed that the queued writer jobs are cancelled for the quit.
 
         Start-up writers do not hold it: they stop after their step under way (``finish_steps``), then the quit goes on.
 
         Raises:
-            ServiceError: ``busy`` while a writer job the user started is queued or running; ``native_unavailable``
-                with ``--serve``.
+            ServiceError: ``busy`` while a writer job the user started runs; ``queued`` while such jobs only wait
+                in the queue and ``cancel_queued`` is not set (the page asks whether to cancel them);
+                ``native_unavailable`` with ``--serve``.
         """
-        if self.jobs.busy(resumable=False):
-            raise ServiceError("busy")
+        if cancel_queued:
+            self.jobs.cancel_queued()
+        hold = self.jobs.quit_hold()
+        if hold is not None:
+            raise ServiceError(QUIT_ERRORS[hold])
         if self.finish_steps(lambda: self.quit(restart=restart)):
             return
         if self.close_coordinator is not None:
@@ -507,10 +512,13 @@ class WindowMixin:
             Whether the close may go on.
         """
         with self.classic.starting():
-            if self.jobs.busy(resumable=False if self._pending_update is None else True):
-                if self._pending_update is not None:
-                    self._cancel_update(ServiceError("busy"))
+            if self._pending_update is not None and self.jobs.busy():
+                self._cancel_update(ServiceError("busy"))
                 self.events.publish("app.busy")
+                return False
+            hold = None if self._pending_update is not None else self.jobs.quit_hold()
+            if hold is not None:
+                self.events.publish(QUIT_EVENTS[hold])
                 return False
             if self.close_coordinator is None and self.finish_steps(self._close_window):
                 return False

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CONFIRM_KEYS, HOSTS, confirmQuit, quitKey } from "../../src/bmpt/web/js/app/quit.js";
+import { CONFIRM_KEYS, HOSTS, confirmCancelQueued, confirmQuit, quitKey } from "../../src/bmpt/web/js/app/quit.js";
 
 // the page: the student list shown, every popup host hidden, unless said otherwise
 function page({ studentList = true, open = [] } = {}) {
@@ -58,8 +58,8 @@ function deps({ button = "ok", refuse = null, native = false } = {}) {
       log.push(["message", opts]);
       return { button, checked: null };
     },
-    rpc: async (method) => {
-      log.push(["rpc", method]);
+    rpc: async (method, params) => {
+      log.push(params ? ["rpc", method, params] : ["rpc", method]);
       if (refuse) {
         const err = new Error(refuse);
         err.code = refuse;
@@ -138,4 +138,34 @@ test("one quit prompt at a time", async () => {
   };
   await confirmQuit(d);
   assert.equal(d.log.filter(([k]) => k === "message").length, 2);
+});
+
+test("queued writers: the quit asks whether to cancel them, and quits cancelling them on Confirm", async () => {
+  const refused = deps({ refuse: "queued", native: true });
+  assert.equal(await confirmQuit(refused), "queued", "refused again: the stand-in refuses every call");
+  assert.deepEqual(
+    refused.log.filter(([k]) => k !== "message"),
+    [
+      ["rpc", "app.quit"],
+      ["rpc", "app.quit", { cancelQueued: true }],
+    ],
+  );
+  assert.deepEqual(refused.log[2][1].lines, ["<quit.queued>"], "the second question");
+  assert.equal(
+    refused.log.some(([k]) => k === "notify"),
+    false,
+  );
+
+  const cancel = deps({ button: "cancel" });
+  assert.equal(await confirmCancelQueued(cancel), "queued");
+  assert.deepEqual(cancel.log[0][1].lines, ["<quit.queued>"]);
+  assert.equal(cancel.log.length, 1);
+
+  const ok = deps();
+  assert.equal(await confirmCancelQueued(ok), "quit");
+  assert.deepEqual(ok.log.slice(1), [["rpc", "app.quit", { cancelQueued: true }], ["closed"]]);
+
+  const busy = deps({ refuse: "busy", native: true });
+  assert.equal(await confirmCancelQueued(busy), "busy", "one started meanwhile");
+  assert.deepEqual(busy.log.at(-1), ["notify", "<error.busy>", "error"]);
 });
