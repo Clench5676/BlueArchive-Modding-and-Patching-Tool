@@ -91,10 +91,12 @@ and `.2`; failed rotation falls back to a temporary log, then stderr.
 
 Release Notes uses the `UIPopup_Sort` notice frame with a scrolling body and an explicit release-page action.
 `release-notes.js` reads the body's Markdown in the UI language: language sections are separated by a rule and marked
-`<!-- lang: ... -->`; an unmarked section is told by its script. Emphasis and link marks go and their text stays;
-HTML is dropped, never interpreted. A build ships its own notes as `assets/release-notes/<X.Y.Z>.md` (the text its
-GitHub release carries), read by `app.releaseNotes`. After an upgrade, pre-releases included, `Update.afterUpgrade`
-shows the running version's notes once (`app.upgradeNotes`), when no popup is open, before the feature tour.
+`<!-- lang: ... -->`; an unmarked section is told by its script. Emphasis and link marks go and their text stays; HTML
+is dropped, never interpreted. A build ships its own notes as `assets/release-notes/<X.Y.Z>.md` (the text its GitHub
+release carries as `release-notes.md`), read by `app.releaseNotes`. The update popup shows a newer release's
+`release-notes.md` (uploaded by `scripts/release.sh`), else its body, so the body may carry longer notes. After an
+upgrade, pre-releases included, `Update.afterUpgrade` shows the running version's notes once (`app.upgradeNotes`),
+when no popup is open, before the feature tour.
 
 `tours.js` and `webui/tours.py` present new-version feature tours; the registry (`PUBLISHED_TOURS`) ships the
 published tours, text-first pages whose optional bundled PNGs illustrate only the App's own UI, without game assets.

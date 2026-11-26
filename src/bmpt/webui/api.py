@@ -38,8 +38,8 @@ RELEASE_NOTES_DIR = Path(__file__).resolve().parent.parent / "assets" / "release
 def release_notes(version: str, folder: Path = RELEASE_NOTES_DIR) -> dict[str, str]:
     """Read a build's own release notes, for Settings' update preview.
 
-    The notes are ``<X.Y.Z>.md``, the text its GitHub release carries; a pre-release reads the file of its own
-    ``X.Y.Z``.
+    The notes are ``<X.Y.Z>.md``, which its GitHub release carries as ``release-notes.md``; a pre-release reads the
+    file of its own ``X.Y.Z``.
 
     Args:
         version: The build's version; its ``X.Y.Z`` part names the file.
