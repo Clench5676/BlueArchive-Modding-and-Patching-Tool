@@ -49,8 +49,8 @@
     },
     "src/ba_modding_toolkit/bundle.py": {
       "blob": "6bf118521834b9a32e5de319290d6d79b83fd04f",
-      "non_import_ast_sha256": "81f52032035ecc2105fcae0370e72691d61c4b6475ef5144202f3ce04b27d113",
-      "masked_import_lines_sha256": "a2927098994d604e3db7505bae890db460cba58824e17166d1031dc92a9db09d"
+      "non_import_ast_sha256": "63cc77e762e58ad5f0ac92d2eac318dcc47e6546672ce8eb985bd2b1f8f4c2b4",
+      "masked_import_lines_sha256": "065c5d5b09dc778d7554be40763bc3a9eac1de5c8dba2101cb28020df3347696"
     },
     "src/ba_modding_toolkit/cli/__main__.py": {
       "blob": "d24c3ec2f890ae7ae00da4d3641ad2a07789af81",
@@ -253,8 +253,8 @@
     },
     "src/ba_modding_toolkit/models.py": {
       "blob": "003371fa01b4833224ab374ad858d01158887eed",
-      "non_import_ast_sha256": "fa0d86513772b8aa931a50e0a3247554a21d037f08aa0cd832bc006594573317",
-      "masked_import_lines_sha256": "bc399c4cb92342e617508c5b38065e9fd59bf955b4c9bb28febe20d6f3d42ba1"
+      "non_import_ast_sha256": "006385401b5132996f1a16dac46c7cc5e607baef0ef1672395957c44c54e4e21",
+      "masked_import_lines_sha256": "3d73b36d0b8b9fff9bcfb8db93365cbd3b65c4af366daf4a7276009b468134aa"
     },
     "src/ba_modding_toolkit/naming.py": {
       "blob": "e8c7930c3e97928875babae1577da00eb5c69483",
