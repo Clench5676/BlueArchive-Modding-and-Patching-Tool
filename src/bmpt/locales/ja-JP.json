@@ -507,6 +507,7 @@
 			"done": "完了",
 			"empty": "タスクなし",
 			"other": "バックグラウンド処理",
+			"quitsAnytime": "いつでも終了可",
 			"kind": {
 				"mods.toggle": "Mod の切り替え",
 				"mods.refreshCostumes": "起動時の Mod の確認と再構築",

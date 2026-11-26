@@ -43,6 +43,13 @@ async function loadPrefabs() {
   return prefabs;
 }
 
+/** One full cycle of the ring's TweenRotation in seconds (a ping-pong turns there and back). */
+function turnPeriod(ring) {
+  const tween = ring?.widgets?.find((w) => w.cls === "TweenRotation")?.tween;
+  const duration = tween?.duration || 3;
+  return tween?.style === 2 ? 2 * duration : duration;
+}
+
 async function markRunning() {
   const b = button();
   if (!b) return;
@@ -59,9 +66,11 @@ async function markRunning() {
   try {
     const { ring } = await loadPrefabs();
     if (!ring || !mark.isConnected) return;
-    const tree = { ...structuredClone(ring), pos: [0, 0], scale: [RING_SCALE, RING_SCALE] };
-    const size = 75 * RING_SCALE * S;
-    await NGUI.render(tree, mark, { scale: S, origin: [size / 2, size / 2] });
+    // a loadingRing widget: NGUI.render turns it as the prefab's TweenRotation does
+    const side = 75 * RING_SCALE;
+    const colour = ring.widgets?.find((w) => "sprite" in w)?.color;
+    const tree = NGUI.node("Ring", [0, 0], [{ loadingRing: true, w_: side, h_: side, pivot: 4, color: colour }]);
+    await NGUI.render(tree, mark, { scale: S, origin: [(side * S) / 2, (side * S) / 2] });
   } catch (err) {
     console.error("tasks ring", err);
   }
@@ -82,6 +91,8 @@ async function draw() {
   await NGUI.render(tree, next, { scale: k, origin: [0, 0] });
   if (mine !== revision || !open || !host) return;
   host.replaceChildren(...next.childNodes);
+  // Each redraw makes new rings; they start where the clock says, so they keep turning instead of starting over.
+  host.style.setProperty("--turn-delay", `${-((performance.now() / 1000) % turnPeriod(ring))}s`);
   Object.assign(host.style, { width: `${width * k}px`, height: `${height * k}px` });
   place();
 }

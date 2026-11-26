@@ -507,6 +507,7 @@
 			"done": "Done",
 			"empty": "No tasks",
 			"other": "Background Task",
+			"quitsAnytime": "Safe to Quit",
 			"kind": {
 				"mods.toggle": "Switch Mods",
 				"mods.refreshCostumes": "Check and Rebuild Mods at Start",

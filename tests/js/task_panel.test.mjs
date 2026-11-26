@@ -15,7 +15,7 @@ globalThis.addEventListener ??= () => {};
 globalThis.Image ??= class {};
 // ngui.js reads the page when it loads: imported once the stand-in document is up
 const { setStrings, T } = await import("../../src/bmpt/web/js/core/i18n.js");
-const { PANEL, estimateWidth, jobName, panelTree, panelView } = await import(
+const { PANEL, estimateWidth, isFolded, itemHeight, jobName, panelTree, panelView } = await import(
   "../../src/bmpt/web/js/app/task-panel-layout.js"
 );
 const { topActionLayout } = await import("../../src/bmpt/web/js/window/top-action-layout.js");
@@ -108,6 +108,7 @@ const JOBS = [
     kind: "mods.catalogReapply",
     state: "running",
     writes: "game",
+    resumable: true,
     progress: {
       current: 38,
       total: 245,
@@ -194,6 +195,7 @@ for (const locale of LOCALES)
     assert.equal(find(first, "Btn_Receive").active, false);
     assert.equal(find(first, "Parcel").active, false);
     assert.equal(ring.name, "LoadingIcon");
+    assert.equal(ring.widgets[0].loadingRing, true, "drawn as a turning ring, not the still sprite");
     // the tag fits its text, the title starts after it and keeps the row's right edge
     const tagLabel = text(find(first, "BG/Normal/Label_Tag")),
       tag = sprite(find(first, "BG/Normal/Tag")),
@@ -210,13 +212,13 @@ for (const locale of LOCALES)
     const queued = rest.find((node) => node.name === "NUIMissionContent");
     const tops = [
       first.pos[1] + PANEL.ROW_H / 2,
-      ...items.map((i) => i.pos[1] + PANEL.ITEM_H / 2),
-      queued.pos[1] + PANEL.ROW_H / 2,
+      ...items.map((i, k) => i.pos[1] + itemHeight(view[0].items[k]) / 2),
+      queued.pos[1] + PANEL.FOLDED_H / 2,
     ];
     const bottoms = [
       first.pos[1] - PANEL.ROW_H / 2,
-      ...items.map((i) => i.pos[1] - PANEL.ITEM_H / 2),
-      queued.pos[1] - PANEL.ROW_H / 2,
+      ...items.map((i, k) => i.pos[1] - itemHeight(view[0].items[k]) / 2),
+      queued.pos[1] - PANEL.FOLDED_H / 2,
     ];
     for (let i = 1; i < tops.length; i++) assert.ok(tops[i] <= bottoms[i - 1] + 1e-6, `card ${i} below card ${i - 1}`);
     assert.ok(tops[0] <= -PANEL.TOP + 1e-6);
@@ -224,6 +226,86 @@ for (const locale of LOCALES)
     // a queued job reports no count yet: no Progress line
     assert.equal(find(queued, "Label_Locale_Count").active, false);
     assert.equal(find(queued, "Gauge").active, false);
+  });
+
+// a widget's box in its parent's units: [left, top, right, bottom]
+const PX = [0, 0.5, 1, 0, 0.5, 1, 0, 0.5, 1],
+  PY = [1, 1, 1, 0.5, 0.5, 0.5, 0, 0, 0];
+const box = (node, w, [x, y] = [0, 0]) => {
+  const left = x + node.pos[0] - PX[w.pivot ?? 4] * w.w_,
+    top = y + node.pos[1] + (PY[w.pivot ?? 4] - 1) * -w.h_;
+  return [left, top, left + w.w_, top - w.h_];
+};
+
+for (const locale of LOCALES)
+  test(`the ring, the steps, Done and the quit note end at one right edge, in ${locale}`, () => {
+    use(locale);
+    const view = panelView(JOBS);
+    const { tree } = panelTree(view, PREFABS);
+    const edge = PANEL.PAD + PANEL.ROW_W - PANEL.RIGHT;
+    const ring = tree.children.find((c) => c.name === "LoadingIcon");
+    assert.ok(Math.abs(box(ring, ring.widgets[0])[2] - edge) < 1e-6, "the running ring");
+    const items = tree.children.filter((c) => c.name.startsWith("Item"));
+    for (const item of items) {
+      const step = item.children.find((c) => c.name === "Step");
+      if (!step) continue;
+      const w = text(step);
+      assert.equal(w.align, 3, "right-aligned text");
+      assert.ok(Math.abs(box(step, w, item.pos)[2] - edge) < 1e-6, `${w.text} at the right edge`);
+    }
+    const note = tree.children.find((c) => c.name === "Quits");
+    assert.equal(text(note).text, T("tasks.quitsAnytime"));
+    assert.equal(text(note).align, 3);
+    assert.ok(box(note, text(note))[2] < box(ring, ring.widgets[0])[0], "the quit note left of the ring");
+  });
+
+for (const locale of LOCALES)
+  test(`the item at hand keeps its name clear of its gauge, in ${locale}`, () => {
+    use(locale);
+    const view = panelView(JOBS);
+    const { tree } = panelTree(view, PREFABS);
+    const item = tree.children.filter((c) => c.name.startsWith("Item"))[2];
+    const name = item.children.find((c) => c.name === "Name"),
+      gauge = item.children.find((c) => c.name === "GaugeBack"),
+      card = item.children.find((c) => c.name === "Card");
+    const n = box(name, text(name)),
+      g = box(gauge, sprite(gauge)),
+      c = box(card, sprite(card));
+    assert.ok(n[3] - g[1] >= 12, `${n[3] - g[1]} units between the name and the gauge`);
+    assert.ok(n[1] <= c[1] && g[3] >= c[3], "both inside the card");
+    assert.ok(text(name).ellipsis, "a long name ends in an ellipsis, never under the step");
+    const step = item.children.find((c) => c.name === "Step");
+    assert.ok(n[2] <= box(step, text(step))[0], "the name's box ends before the step's");
+  });
+
+for (const locale of LOCALES)
+  test(`a queued job without a count folds to its title line, in ${locale}`, () => {
+    use(locale);
+    const jobs = [
+      { id: "a", kind: "library.prune", state: "queued", progress: null, done: [] },
+      { id: "b", kind: "mods.retryFailed", state: "queued", resumable: true, progress: null, done: [] },
+      { id: "c", kind: "mods.toggle", state: "queued", progress: { current: 0, total: 4 }, done: [] },
+    ];
+    const view = panelView(jobs);
+    assert.deepEqual(view.map(isFolded), [true, true, false]);
+    const { tree } = panelTree(view, PREFABS);
+    const rows = tree.children.filter((c) => c.name === "NUIMissionContent");
+    const [a, b, c] = rows;
+    assert.equal(sprite(find(a, "BG")).h_, PANEL.FOLDED_H - 4);
+    assert.equal(sprite(find(c, "BG")).h_, PANEL.ROW_H - 4);
+    // the card spans the folded height round the row's middle, the title on that middle
+    const bg = find(a, "BG"),
+      card = box(bg, sprite(bg));
+    assert.ok(Math.abs(card[1] + card[3]) < 1e-6, "card centred on the row");
+    const normal = find(a, "BG/Normal");
+    assert.ok(Math.abs(bg.pos[1] + normal.pos[1]) < 1e-6, "title line on the middle");
+    // the quit note on a folded row shares the title's line, and the title stops before it
+    const note = tree.children.find((n) => n.name === "Quits");
+    assert.ok(Math.abs(note.pos[1] - b.pos[1]) < 1e-6);
+    const title = find(b, "BG/Normal/Label_System");
+    const titleRight = PANEL.PAD + bg.pos[0] + normal.pos[0] + title.pos[0] + text(title).w_;
+    assert.ok(titleRight < box(note, text(note))[0], "the title ends before the note");
+    assert.equal(tree.children.filter((n) => n.name === "Quits").length, 1, "only the resumable job");
   });
 
 test("with no jobs the panel says so, its bottom pattern scaled to the short frame", () => {

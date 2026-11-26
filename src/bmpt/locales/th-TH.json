@@ -507,6 +507,7 @@
 			"done": "เสร็จ",
 			"empty": "ไม่มีงาน",
 			"other": "งานเบื้องหลัง",
+			"quitsAnytime": "ออกได้ทุกเมื่อ",
 			"kind": {
 				"mods.toggle": "เปิด/ปิด Mod",
 				"mods.refreshCostumes": "ตรวจและสร้าง Mod ใหม่ตอนเริ่ม",
